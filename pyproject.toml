@@ -1,0 +1,63 @@
+[project]
+name = "vast"
+version = "0.1.0"
+description = "VAST — controller, pipeline, and core for vibration actuating search task"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=1.21.0",
+    "h5py>=3.0.0",
+    "pandas>=1.3.0",
+    "scipy>=1.7.0",
+    "matplotlib>=3.4.0",
+    "opencv-python>=4.5.0",
+    "tqdm>=4.60.0",
+    "pyserial>=3.5",
+    "vmbpy",
+    "h5grove[flask]",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "vulture>=2.15",
+]
+gui = [
+    "PySide6>=6.0",
+]
+sleap = [
+    "sleap-io",
+    "sleap-nn[torch-cuda130]",
+]
+
+[project.scripts]
+vast-daq = "vast.controller.acquisition.__main__:main"
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu130", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+]
+torchvision = [
+    { index = "pytorch-cu130", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["vast"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

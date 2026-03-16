@@ -1,0 +1,54 @@
+########################################
+# Unified VAST repo ignores
+########################################
+
+# Test temp / output directories
+tests/_tmp/
+out/
+exports/
+
+# Python bytecode / extensions
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# uv / Python version managers
+.python-version
+
+# Logs
+*.log
+sleap_nn_inference.log
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*\[Autosaved\]*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Data / large artifacts (tune as needed)
+*.h5
+
