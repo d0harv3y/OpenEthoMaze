@@ -54,7 +54,7 @@
   },
   "hab_training_duty_pct": 40.0,
   "wait_not_center_duty_pct": 0.0,
-  "output_dir": "C:/Users/admin/code/IMPRESS/vast_controller/out",
+  "output_dir": "C:/Users/admin/code/IMPRESS/VAST/outputs",
   "h5_filename": "trials.h5",
   "run_phase": "VAST",
   "run_mode": "continuous",

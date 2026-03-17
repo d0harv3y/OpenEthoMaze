@@ -370,6 +370,7 @@ def build_xy_table_with_exit(
     exit_zone_radius_cm: float = EXIT_ZONE_RADIUS_CM,
     is_moving: Optional[np.ndarray] = None,
     start_frame: int = 0,
+    trial_start_frame: Optional[int] = None,
 ) -> np.ndarray:
     """
     Build structured XY table with exit-related columns.
@@ -386,6 +387,7 @@ def build_xy_table_with_exit(
         exit_zone_radius_cm: Exit zone radius in cm
         is_moving: Optional boolean array for movement status
         start_frame: Original video frame index of row 0 (for frame_index column)
+        trial_start_frame: If set, frames before this (in row index) are "iti_wait", rest "run".
 
     Returns:
         Structured array matching xy_table_dtype from storage.h5_db
@@ -411,11 +413,17 @@ def build_xy_table_with_exit(
     table["t_s"] = np.arange(n_frames, dtype=np.float64) / fps
     table['x'] = xy[:, 0].astype(np.float32)
     table['y'] = xy[:, 1].astype(np.float32)
-    table['distance_to_exit_px'] = distance_to_exit_px.astype(np.float32)
+    table['dist_to_exit_px'] = distance_to_exit_px.astype(np.float32)
     table['in_exit_zone'] = in_exit_zone.astype(np.uint8)
     table['valid'] = valid.astype(np.uint8)
-    
     if is_moving is not None:
         table['is_moving'] = is_moving.astype(np.uint8)
-    
+
+    # Per-frame trial_state: iti_wait before trial_start_frame, run from trial_start_frame on.
+    if trial_start_frame is not None and trial_start_frame > 0 and trial_start_frame < n_frames:
+        table["trial_state"][:trial_start_frame] = b"iti_wait"
+        table["trial_state"][trial_start_frame:] = b"run"
+    else:
+        table["trial_state"] = b"run"
+
     return table

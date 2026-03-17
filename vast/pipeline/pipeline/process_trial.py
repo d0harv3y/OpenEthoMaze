@@ -28,6 +28,7 @@ from ..config import (
     SPOT_NODE_NAMES,
     AMBIULATION_POINT_NAMES,
     IN_RANGE_POINT_NAME,
+    HYBRID_POINT_NAME,
     TRACE_MAX_GAP_FRAMES,
     FILTER_FRAMES_NO_ANIMAL,
 )
@@ -296,9 +297,47 @@ def _process_with_sleap(
     spot_xy_full = _calculate_spot_xy(processed_traces, n_frames)
     centroid_xy_full = _calculate_centroid_xy(processed_traces, n_frames)
     inrange_xy_full = _get_inrange_xy(processed_traces, n_frames)
+
+    # Valid masks for full-length traces (before analysis-window split)
+    spot_valid_full = ~np.any(np.isnan(spot_xy_full), axis=1)
+    inrange_valid_full = ~np.any(np.isnan(inrange_xy_full), axis=1)
+    if FILTER_FRAMES_NO_ANIMAL:
+        spot_valid_full = spot_valid_full & valid_frames_full
+        inrange_valid_full = inrange_valid_full & valid_frames_full
+
+    # Build hybrid trajectory: SLEAP spot, but replace long SLEAP gaps with in-range when available.
+    # First compute max gap on analysis window (matching existing primary selection logic).
     spot_xy = spot_xy_full[start_frame:]
     centroid_xy = centroid_xy_full[start_frame:]
     inrange_xy = inrange_xy_full[start_frame:]
+
+    # Hybrid valid mask and gap logic over the analysis window
+    spot_valid_analysis = spot_valid_full[start_frame:]
+    max_gap_spot = _max_gap_in_trace(spot_xy, spot_valid_analysis)
+
+    # Per-frame replacement mask: frames inside any invalid run longer than TRACE_MAX_GAP_FRAMES.
+    replace_with_inrange_full = np.zeros(n_frames, dtype=bool)
+    invalid_spot = ~np.asarray(spot_valid_full, dtype=bool)
+    if np.any(invalid_spot):
+        changes = np.diff(np.concatenate([[False], invalid_spot, [False]]).astype(np.int8))
+        starts = np.where(changes == 1)[0]
+        ends = np.where(changes == -1)[0]
+        lengths = ends - starts
+        for s, e, L in zip(starts, ends, lengths):
+            if L > TRACE_MAX_GAP_FRAMES:
+                replace_with_inrange_full[s:e] = True
+
+    use_inrange_here_full = replace_with_inrange_full & inrange_valid_full
+
+    hybrid_xy_full = spot_xy_full.copy()
+    if np.any(use_inrange_here_full):
+        hybrid_xy_full[use_inrange_here_full] = inrange_xy_full[use_inrange_here_full]
+
+    # Expose hybrid trace as another node in processed_traces so downstream code can use it.
+    processed_traces[HYBRID_POINT_NAME] = {
+        "x": hybrid_xy_full[:, 0],
+        "y": hybrid_xy_full[:, 1],
+    }
 
     for point_name in AMBIULATION_POINT_NAMES:
         if point_name == "spot":
@@ -307,6 +346,8 @@ def _process_with_sleap(
             xy_full = centroid_xy_full
         elif point_name == IN_RANGE_POINT_NAME:
             xy_full = inrange_xy_full
+        elif point_name == HYBRID_POINT_NAME:
+            xy_full = hybrid_xy_full
         else:
             xy_full = centroid_xy_full
 
@@ -346,21 +387,26 @@ def _process_with_sleap(
             center_zone_radius_cm=center_zone_radius_cm,
         )
 
+        # Movement bouts for run band (for metrics); expand to full-video mask for xy table.
         is_moving_run = np.zeros(n_analysis, dtype=bool)
         for bout in amb_run.movement_bouts:
             start = bout["start_frame"]
             end = min(bout["end_frame"] + 1, n_analysis)
             is_moving_run[start:end] = True
+        is_moving_full = np.zeros(n_frames, dtype=bool)
+        is_moving_full[start_frame : start_frame + n_analysis] = is_moving_run
 
+        # Build xy table over full video (frame_index 0 .. n_frames-1).
         xy_table = build_xy_table_with_exit(
-            xy=xy_run,
-            valid=valid_run,
+            xy=xy_full,
+            valid=valid_full,
             exit_pos=exit_pos,
             px_per_cm=settings.px_per_cm,
             fps=fps,
             exit_zone_radius_cm=exit_zone_radius_cm,
-            is_moving=is_moving_run,
-            start_frame=start_frame,
+            is_moving=is_moving_full,
+            start_frame=0,
+            trial_start_frame=start_frame,
         )
 
         write_xy_table(db_path, key, point_name, xy_table, fps)
@@ -439,19 +485,18 @@ def _process_with_sleap(
         })
         write_node_summary_by_state(db_path, key, point_name, band_summaries)
 
-    # Primary trajectory for export: use in-range when spot has a gap longer than TRACE_MAX_GAP_FRAMES
+    # Primary trajectory for export: prefer hybrid; record when in-range contributed.
     spot_valid = ~np.any(np.isnan(spot_xy), axis=1)
     if FILTER_FRAMES_NO_ANIMAL:
         spot_valid = spot_valid & valid_frames_analysis
     inrange_valid = ~np.any(np.isnan(inrange_xy), axis=1)
     if FILTER_FRAMES_NO_ANIMAL:
         inrange_valid = inrange_valid & valid_frames_analysis
-    max_gap_spot = _max_gap_in_trace(spot_xy, spot_valid)
     use_inrange_primary = (
         max_gap_spot > TRACE_MAX_GAP_FRAMES
         and np.any(inrange_valid)
     )
-    primary_trajectory = IN_RANGE_POINT_NAME if use_inrange_primary else "spot"
+    primary_trajectory = HYBRID_POINT_NAME
     write_primary_trajectory(db_path, key, primary_trajectory)
 
     # Feedback error (incongruent feedback) from W/M vs distance-to-exit
@@ -483,7 +528,7 @@ def _process_with_sleap(
     if generate_qc:
         try:
             from ..viz.qc_images import generate_trial_qc_images
-            # Heatmap from all nodes (split into iti_wait vs run bands); trajectory from primary point.
+            # Heatmap from all nodes (split into iti_wait vs run bands); trajectory from hybrid point.
             xy_all_nodes_iti: list[tuple[np.ndarray, np.ndarray]] = []
             xy_all_nodes_run: list[tuple[np.ndarray, np.ndarray]] = []
             heatmap_node_names: list[str] = []
@@ -499,11 +544,8 @@ def _process_with_sleap(
                 xy_all_nodes_iti.append((xy_full[:start_frame], valid_full_node[:start_frame]))
                 xy_all_nodes_run.append((xy_full[start_frame:], valid_full_node[start_frame:]))
 
-            # Use primary trajectory for QC overlay (spot or in-range)
-            if primary_trajectory == IN_RANGE_POINT_NAME:
-                xy_traj_full = inrange_xy_full
-            else:
-                xy_traj_full = spot_xy_full
+            # Use hybrid trajectory for QC overlay
+            xy_traj_full = hybrid_xy_full
             traj_valid_full = ~np.any(np.isnan(xy_traj_full), axis=1)
             if FILTER_FRAMES_NO_ANIMAL:
                 traj_valid_full = traj_valid_full & valid_frames_full
@@ -526,17 +568,15 @@ def _process_with_sleap(
                 generate_trial_qc_images(
                     db_path=db_path,
                     key=key,
-                    xy=xy_traj_iti,
-                    valid=valid_traj_iti,
+                    trajectory_xy=xy_traj_iti,
+                    trajectory_valid=valid_traj_iti,
                     exit_pos=exit_pos,
                     arena_center_x_px=settings.arena_center_x_px,
                     arena_center_y_px=settings.arena_center_y_px,
                     arena_radius_px=settings.arena_radius_px,
                     px_per_cm=settings.px_per_cm,
                     fps=fps,
-                    xy_all_nodes=xy_all_nodes_iti if xy_all_nodes_iti else None,
-                    xy_trajectory=xy_traj_iti,
-                    valid_trajectory=valid_traj_iti,
+                    xy_list_heatmap=xy_all_nodes_iti if xy_all_nodes_iti else None,
                     image_name="composite_iti_wait",
                     qc_attrs=qc_attrs,
                 )
@@ -545,17 +585,15 @@ def _process_with_sleap(
             generate_trial_qc_images(
                 db_path=db_path,
                 key=key,
-                xy=xy_traj_run,
-                valid=valid_traj_run,
+                trajectory_xy=xy_traj_run,
+                trajectory_valid=valid_traj_run,
                 exit_pos=exit_pos,
                 arena_center_x_px=settings.arena_center_x_px,
                 arena_center_y_px=settings.arena_center_y_px,
                 arena_radius_px=settings.arena_radius_px,
                 px_per_cm=settings.px_per_cm,
                 fps=fps,
-                xy_all_nodes=xy_all_nodes_run if xy_all_nodes_run else None,
-                xy_trajectory=xy_traj_run,
-                valid_trajectory=valid_traj_run,
+                xy_list_heatmap=xy_all_nodes_run if xy_all_nodes_run else None,
                 image_name="composite_run",
                 qc_attrs=qc_attrs,
             )

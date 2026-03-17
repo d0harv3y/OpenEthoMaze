@@ -21,9 +21,10 @@ import numpy as np
 
 from .config import ControllerConfig
 from vast.core.schema import XY_ROW_DTYPE, FEEDBACK_ROW_DTYPE
-from vast.core.storage import open_db, write_feedback_table, write_xy_table, ensure_trial_group
+from vast.core.storage import open_db, write_feedback_table, write_xy_table
 from .h5_writer import (
     init_database,
+    ensure_trial_group,
     write_trial_settings,
     write_video_meta,
 )

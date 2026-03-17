@@ -719,7 +719,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction("Open profile in editor", self._on_open_profile_in_editor)
         file_menu.addAction("Reload profile", self._on_reload_profile)
         file_menu.addSeparator()
-        file_menu.addAction("Export CSV…", self._on_export_csv)
+        file_menu.addAction("Run exports…", self._on_run_exports)
         file_menu.addAction("Open current DB in h5web", self._on_open_current_db_h5web)
         file_menu.addAction("Open H5 in h5web…", self._on_open_h5web)
         file_menu.addSeparator()
@@ -1465,6 +1465,7 @@ class MainWindow(QMainWindow):
             # Pass choice to recorder so it renames video to the right path (overwrite vs keep_both with new trial path)
             conflict_choice = choice if (video_conflict or choice != "overwrite") else None
 
+        stop_ok = False
         try:
             rec.stop(
                 exit_x_px=exit_x,
@@ -1472,11 +1473,14 @@ class MainWindow(QMainWindow):
                 timestamp_str=timestamp_str,
                 conflict_choice=conflict_choice,
             )
-        except Exception:
-            pass
-        # Capture trial info before clearing recorder (for optional post-trial analysis)
+            stop_ok = True
+        except Exception as e:
+            import traceback
+            print(f"Error in TrialRecorder.stop: {e}")
+            traceback.print_exc()
+        # Capture trial info only when stop() succeeded, so analysis runs on a trial that was actually written
         run_analysis = self._config.run_analysis_after_trial
-        if run_analysis:
+        if run_analysis and stop_ok:
             captured = (
                 rec.db_path,
                 rec.animal_id,
@@ -1840,30 +1844,44 @@ class MainWindow(QMainWindow):
         self._on_stop_run()
         self.statusBar().showMessage("Stopped.")
 
-    def _on_export_csv(self) -> None:
-        if self._db_path is None:
-            path, _ = QFileDialog.getSaveFileName(
-                self, "Export CSV", "", "CSV (*.csv);;All (*)"
-            )
-            if not path:
-                return
-            db_path, _ = QFileDialog.getOpenFileName(
-                self, "Select H5 database", "", "HDF5 (*.h5 *.hdf5);;All (*)"
-            )
-            if not db_path:
-                return
-            self._db_path = Path(db_path)
-        else:
-            path, _ = QFileDialog.getSaveFileName(
-                self, "Export CSV", "", "CSV (*.csv);;All (*)"
-            )
-            if not path:
-                return
+    def _on_run_exports(self) -> None:
+        """Run VAST CSV exports on one or more databases."""
+        if not HAS_QT:
+            return
+        # Default selection: current controller output DB
+        default_dir = self._config.output_dir or ""
+        h5_name = (self._config.h5_filename or "trials.h5").strip() or "trials.h5"
+        if Path(h5_name).name != h5_name:
+            h5_name = Path(h5_name).name
+        start_path = str(Path(default_dir) / h5_name) if default_dir else ""
+
+        paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Select VAST results H5 file(s)",
+            start_path,
+            "HDF5 (*.h5 *.hdf5);;All (*)",
+        )
+        if not paths:
+            return
+
+        # Choose output folder for combined exports
+        out_dir_str = QFileDialog.getExistingDirectory(
+            self,
+            "Select output folder for combined exports",
+            default_dir or "",
+        )
+        if not out_dir_str:
+            return
+        out_dir = Path(out_dir_str)
+
+        from vast.pipeline.exports.csv_trials import export_all_for_dbs
+
         try:
-            export_trials_csv(self._db_path, Path(path))
-            self.statusBar().showMessage(f"Exported {path}")
+            db_paths = [Path(p) for p in paths]
+            exports = export_all_for_dbs(db_paths=db_paths, output_dir=out_dir, include_mistrials=False)
+            self.statusBar().showMessage(f"Exports completed → {out_dir}")
         except Exception as e:
-            self.statusBar().showMessage(f"Export failed: {e}")
+            self.statusBar().showMessage(f"Exports failed: {e}")
 
     def _launch_h5web_for_path(self, h5_path: Path) -> None:
         """Start h5web server and open browser for the given H5 file."""

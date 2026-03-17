@@ -140,8 +140,8 @@ def main() -> None:
         generate_trial_qc_images(
             db_path=db_path,
             key=key,
-            xy=xy_arr,
-            valid=valid_arr,
+            trajectory_xy=xy_arr,
+            trajectory_valid=valid_arr,
             exit_pos=settings.exit_pos,
             arena_center_x_px=settings.arena_center_x_px,
             arena_center_y_px=settings.arena_center_y_px,

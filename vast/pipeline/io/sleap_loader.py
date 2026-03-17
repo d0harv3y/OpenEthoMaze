@@ -390,6 +390,9 @@ def trace_data_from_realtime_xy(
 
     x = np.asarray(xy_table["x"], dtype=np.float64)
     y = np.asarray(xy_table["y"], dtype=np.float64)
+    # # In-range table from controller may store (vertical, horizontal) in (x, y); pipeline/QC expect x=horizontal, y=vertical.
+    # if point_name == IN_RANGE_POINT_NAME:
+    #     x, y = y.copy(), x.copy()
     n = len(x)
     if "valid" in xy_table.dtype.names:
         valid = np.asarray(xy_table["valid"], dtype=np.float64)

@@ -72,9 +72,14 @@ STANDARD_NODE_NAMES = ["nose", "tail", "neck", "hindL", "foreL", "foreR", "hindR
 # Nodes used for computing the "spot" (center-of-mass proxy)
 SPOT_NODE_NAMES = ("nose", "neck", "foreL", "foreR") #, "spine"
 
-# Point names for ambulation/exit metrics (spot = front-body mean, centroid = all nodes mean, in-range = controller/legacy fallback)
+# Point names for ambulation/exit metrics:
+# - spot: front-body mean (SLEAP-only)
+# - centroid: all SLEAP nodes mean
+# - in-range: controller/legacy fallback
+# - spot_hybrid: SLEAP spot with long gaps replaced by in-range when available
 IN_RANGE_POINT_NAME = "in-range"
-AMBIULATION_POINT_NAMES = ("spot", "centroid", "in-range")
+HYBRID_POINT_NAME = "spot_hybrid"
+AMBIULATION_POINT_NAMES = ("spot", "centroid", "in-range", HYBRID_POINT_NAME)
 
 # Skeleton edges for overlay (node name pairs; order matches STANDARD_NODE_NAMES)
 SKELETON_EDGES: tuple[tuple[str, str], ...] = (

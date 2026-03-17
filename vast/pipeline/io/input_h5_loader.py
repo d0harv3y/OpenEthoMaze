@@ -218,8 +218,8 @@ def load_trial_settings(
         roi = parse_roi_string(roi_str)
 
         # Extract arena geometry from ROI string (X,Y = arena center, R = radius)
-        arena_center_y_px = roi.get("x", 0.0)
-        arena_center_x_px = roi.get("y", 0.0)
+        arena_center_x_px = roi.get("x", 0.0)
+        arena_center_y_px = roi.get("y", 0.0)
         arena_radius_px = roi.get("r", 0.0)
         px_per_cm = roi.get("pxcm", DEFAULT_PX_PER_CM)
 
@@ -315,14 +315,15 @@ def load_trial_data(
         
         data = trial_group["data"][:]
         
-        # Extract fields from structured array
+        # Extract fields from structured array (H5 columns X,Y -> TrialData.x = horizontal, .y = vertical)
+        # print("hi")
         return TrialData(
             timer0=data["timer0"].astype(np.float64),
             timer1=data["timer1"].astype(np.float64),
             subtrial=data["subtrial"].astype(np.float64),
             iti=data["iti"].astype(np.float64),
-            y=data["X"].astype(np.float64),
             x=data["Y"].astype(np.float64),
+            y=data["X"].astype(np.float64),
             correct=data["Correct"].astype(np.float64),
             incorrect=data["Incorrect"].astype(np.float64),
             r=data["R"].astype(np.float64),

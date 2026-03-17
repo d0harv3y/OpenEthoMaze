@@ -39,8 +39,8 @@ _COLORMAP = getattr(cv2, "COLORMAP_TURBO", cv2.COLORMAP_JET) if HAS_CV2 else Non
 def generate_trial_qc_images(
     db_path: Path,
     key: TrialKey,
-    xy: np.ndarray,
-    valid: np.ndarray,
+    trajectory_xy: np.ndarray,
+    trajectory_valid: np.ndarray,
     exit_pos: tuple[float, float],
     arena_center_x_px: float,
     arena_center_y_px: float,
@@ -48,9 +48,7 @@ def generate_trial_qc_images(
     px_per_cm: float,
     fps: float = 30.0,
     image_size: int = 512,
-    xy_all_nodes: Optional[XYValidList] = None,
-    xy_trajectory: Optional[np.ndarray] = None,
-    valid_trajectory: Optional[np.ndarray] = None,
+    xy_list_heatmap: Optional[XYValidList] = None,
     image_name: str = "composite",
     qc_attrs: Optional[dict[str, Any]] = None,
 ) -> None:
@@ -61,9 +59,9 @@ def generate_trial_qc_images(
     arena circle at arena center + exit zone at (exit_x, exit_y) with 12.5 cm radius +
     trajectory polyline + colorbar.
 
-    If xy_all_nodes is provided, the heatmap uses all those (xy, valid) series;
-    otherwise the heatmap uses xy/valid. If xy_trajectory/valid_trajectory are
-    provided, the trajectory is drawn from them (e.g. spot only); otherwise xy/valid.
+    trajectory_xy / trajectory_valid: the (x, y) positions and validity mask drawn
+    as the polyline. If xy_list_heatmap is not provided, the same data is used
+    for the dwell heatmap; otherwise the heatmap uses all series in xy_list_heatmap.
 
     qc_attrs: optional dict of string/num attributes stored on the QC image dataset
     (e.g. heatmap_source, trajectory_source, primary_reason) for provenance.
@@ -75,8 +73,8 @@ def generate_trial_qc_images(
         if not arena_radius_px or arena_radius_px <= 0:
             return  # Skip: scale would be invalid
         composite = generate_composite_qc_image(
-            xy=xy,
-            valid=valid,
+            trajectory_xy=trajectory_xy,
+            trajectory_valid=trajectory_valid,
             exit_pos=exit_pos,
             arena_center_x_px=arena_center_x_px,
             arena_center_y_px=arena_center_y_px,
@@ -84,9 +82,7 @@ def generate_trial_qc_images(
             px_per_cm=px_per_cm,
             fps=fps,
             image_size=image_size,
-            xy_list_heatmap=xy_all_nodes,
-            xy_trajectory=xy_trajectory,
-            valid_trajectory=valid_trajectory,
+            xy_list_heatmap=xy_list_heatmap,
         )
         if composite is not None:
             write_qc_image(db_path, key, image_name, composite, attrs=qc_attrs or None)
@@ -123,7 +119,10 @@ def _render_dwell_heatmap_bgr(
         y = float(xy[i, 1])
         if not (np.isfinite(x) and np.isfinite(y)):
             continue
-        # Video px -> image px (arena center at image center)
+        # Video px -> QC image px: place arena center at (center_x, center_y), scale by scale.
+        # Assumes (x,y) and (arena_center_x_px, arena_center_y_px) are in the same coordinate
+        # system (e.g. both full video frame). If trace appears offset, verify ROI and SLEAP
+        # use the same reference (resolution and origin).
         dx = x - arena_center_x_px
         dy = y - arena_center_y_px
         xi = int(round(center_x + dx * scale))
@@ -186,6 +185,7 @@ def _render_dwell_heatmap_bgr_multi(
             y = float(xy[i, 1])
             if not (np.isfinite(x) and np.isfinite(y)):
                 continue
+            # Same transform: arena center at (center_x, center_y), scale by scale
             dx = x - arena_center_x_px
             dy = y - arena_center_y_px
             xi = int(round(center_x + dx * scale))
@@ -231,8 +231,8 @@ def _render_colorbar(
 
 
 def generate_composite_qc_image(
-    xy: np.ndarray,
-    valid: np.ndarray,
+    trajectory_xy: np.ndarray,
+    trajectory_valid: np.ndarray,
     exit_pos: tuple[float, float],
     arena_center_x_px: float,
     arena_center_y_px: float,
@@ -243,8 +243,6 @@ def generate_composite_qc_image(
     margin: int = 20,
     colorbar_width: int = 80,
     xy_list_heatmap: Optional[XYValidList] = None,
-    xy_trajectory: Optional[np.ndarray] = None,
-    valid_trajectory: Optional[np.ndarray] = None,
 ) -> Optional[np.ndarray]:
     """
     Generate a single composite QC image: heatmap + arena + exit zone + trajectory + colorbar.
@@ -253,10 +251,9 @@ def generate_composite_qc_image(
     radius QC_EXIT_ZONE_RADIUS_CM (12.5 cm). Uses ehram-style dwell heatmap
     (compensation_factor, TURBO colormap).
 
-    If xy_list_heatmap is provided, the heatmap is built from all those (xy, valid)
-    series (e.g. all SLEAP nodes). Otherwise the heatmap uses xy/valid.
-    If xy_trajectory/valid_trajectory are provided, the trajectory polyline uses
-    them (e.g. spot only); otherwise uses xy/valid.
+    trajectory_xy / trajectory_valid: polyline to draw (primary point, e.g. spot or in-range).
+    If xy_list_heatmap is provided, the heatmap is built from those series (e.g. all SLEAP nodes);
+    otherwise the heatmap uses trajectory_xy / trajectory_valid.
     """
     if not HAS_CV2:
         return None
@@ -268,7 +265,7 @@ def generate_composite_qc_image(
     center_x = image_size / 2.0
     center_y = image_size / 2.0
 
-    # Base: dwell heatmap (all nodes or single xy)
+    # Base: dwell heatmap (all nodes or trajectory)
     if xy_list_heatmap and len(xy_list_heatmap) > 0:
         base = _render_dwell_heatmap_bgr_multi(
             height=image_size,
@@ -288,8 +285,8 @@ def generate_composite_qc_image(
         base = _render_dwell_heatmap_bgr(
             height=image_size,
             width=image_size,
-            xy=xy,
-            valid=valid,
+            xy=trajectory_xy,
+            valid=trajectory_valid,
             arena_center_x_px=arena_center_x_px,
             arena_center_y_px=arena_center_y_px,
             arena_radius_px=arena_radius_px,
@@ -312,16 +309,14 @@ def generate_composite_qc_image(
     exit_im_y = int(center_y + (exit_y - arena_center_y_px) * scale)
     cv2.circle(base, (exit_im_x, exit_im_y), exit_radius_scaled, (0, 255, 0), 1)
 
-    # Trajectory polyline (spot only when xy_trajectory given, else xy)
-    traj_xy = xy_trajectory if xy_trajectory is not None else xy
-    traj_valid = valid_trajectory if valid_trajectory is not None else valid
+    # Trajectory polyline
     pts = []
     first_valid_coord = None
-    T = min(len(traj_valid), traj_xy.shape[0])
+    T = min(len(trajectory_valid), trajectory_xy.shape[0])
     for i in range(T):
-        if not traj_valid[i]:
+        if not trajectory_valid[i]:
             continue
-        x, y = float(traj_xy[i, 0]), float(traj_xy[i, 1])
+        x, y = float(trajectory_xy[i, 0]), float(trajectory_xy[i, 1])
         if np.isfinite(x) and np.isfinite(y):
             ix = int(center_x + (x - arena_center_x_px) * scale)
             iy = int(center_y + (y - arena_center_y_px) * scale)

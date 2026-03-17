@@ -229,6 +229,7 @@ def write_feedback_series(
     key: TrialKey,
     w: np.ndarray,
     m: np.ndarray,
+    trial_start_frame: Optional[int] = None,
 ) -> None:
     """
     Legacy API: write W (white light) and M (motor) feedback series.
@@ -237,6 +238,8 @@ def write_feedback_series(
     motor_fb is the primary feedback channel and light_fb/sound_fb are optional.
     This function now writes the unified table while preserving its original
     signature so existing scripts (init_db, sync_db) continue to work.
+
+    If trial_start_frame is provided, frames before it are marked "iti_wait", rest "run".
     """
     w = np.asarray(w, dtype=np.float32)
     m = np.asarray(m, dtype=np.float32)
@@ -247,8 +250,11 @@ def write_feedback_series(
         return
     fb = np.zeros(n, dtype=FEEDBACK_ROW_DTYPE)
     fb["frame_index"] = np.arange(n, dtype=np.uint32)
-    # No per-frame trial_state information at this stage; leave as empty bytes.
-    fb["trial_state"] = b""
+    if trial_start_frame is not None and trial_start_frame > 0 and trial_start_frame < n:
+        fb["trial_state"][:trial_start_frame] = b"iti_wait"
+        fb["trial_state"][trial_start_frame:] = b"run"
+    else:
+        fb["trial_state"] = b"run"
     # Store motor feedback in motor_fb; keep light_fb as legacy W for compatibility.
     fb["motor_fb"] = m
     fb["light_fb"] = w
