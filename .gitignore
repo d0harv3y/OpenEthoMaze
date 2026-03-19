@@ -4,8 +4,6 @@
 
 # Test temp / output directories
 tests/_tmp/
-out/
-exports/
 
 # Python bytecode / extensions
 __pycache__/
@@ -51,4 +49,5 @@ desktop.ini
 
 # Data / large artifacts (tune as needed)
 *.h5
+*.mp4
 

@@ -37,6 +37,9 @@ if ($Sleap) {
     Write-Host "SLEAP extra: if you need CUDA, run after sync:"
     Write-Host "  uv pip install torch torchvision --default-index https://download.pytorch.org/whl/cu130 --reinstall"
     Write-Host ""
+    Write-Host "  OR use the smarter fallback:"
+    Write-Host "  .\scripts\archive\install_sleap_torch_cuda_fallback.ps1 -DoSync:$false"
+    Write-Host ""
 }
 
 if (-not $CreateShortcut) {

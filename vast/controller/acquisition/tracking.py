@@ -21,7 +21,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List, Literal, Optional, Tuple
+from typing import Any, List, Literal, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -29,6 +29,9 @@ from . import app_logging
 from .config import ControllerConfig
 
 _LOG = logging.getLogger("vast_controller")
+
+if TYPE_CHECKING:
+    import torch
 
 try:
     import cv2
@@ -292,6 +295,11 @@ class HybridTracker:
         self._sleap_status: SleapStatus = "no_path"
         self._sleap_status_error: Optional[str] = None
         self._sleap_device: Optional[str] = None  # "cuda:0" or "cpu" after successful load
+        self._sleap_lock = threading.Lock()
+        self._sleap_last_attempt_s: float = 0.0
+        self._sleap_last_fail_s: Optional[float] = None
+        # Prevent tight retry loops (and import races) when SLEAP load fails.
+        self._sleap_fail_cooldown_s: float = 2.0
 
     def get_sleap_status(self) -> Tuple[SleapStatus, Optional[str]]:
         """Return (status, error_message). status: ok | no_path | not_single_instance | load_failed.
@@ -309,38 +317,77 @@ class HybridTracker:
             self._sleap_status = "ok"
             self._sleap_status_error = None
             return True
-        try:
-            from sleap_nn.inference.predictors import Predictor
-            from sleap_nn.inference.predictors import SingleInstancePredictor
-            path = Path(self.sleap_model_paths[0])
-            if not path.is_dir():
-                self._sleap_status = "load_failed"
-                self._sleap_status_error = "Path is not a directory"
+
+        # If we recently failed, avoid hammering imports repeatedly.
+        now_s = time.monotonic()
+        if (
+            self._sleap_last_fail_s is not None
+            and (now_s - self._sleap_last_fail_s) < self._sleap_fail_cooldown_s
+        ):
+            return False
+
+        with self._sleap_lock:
+            # Re-check after waiting for the lock.
+            if self._sleap_predictor is not None:
+                self._sleap_status = "ok"
+                self._sleap_status_error = None
+                return True
+            # Another thread may have tried recently while we waited.
+            now_s = time.monotonic()
+            if (
+                self._sleap_last_fail_s is not None
+                and (now_s - self._sleap_last_fail_s) < self._sleap_fail_cooldown_s
+            ):
                 return False
-            import torch
-            if torch.cuda.is_available():
-                device = "cuda:0"  # explicit first GPU for inference
-                try:
-                    device_name = torch.cuda.get_device_name(0)
-                    _LOG.info("SLEAP: using CUDA device 0 (%s)", device_name)
-                except Exception:
-                    _LOG.info("SLEAP: using CUDA device 0")
-            else:
-                device = "cpu"
-                _LOG.warning(
-                    "SLEAP: CUDA not available, using CPU (inference will be slower). "
-                    "Install PyTorch with CUDA (e.g. pip install torch --index-url https://download.pytorch.org/whl/cu121) to use GPU."
+
+            self._sleap_last_attempt_s = now_s
+            try:
+                # Force a clean re-import if a previous attempt left a partially
+                # initialized module in sys.modules.
+                import sys
+
+                sys.modules.pop("sleap_nn.inference.predictors", None)
+
+                # We only support streaming with single-instance models here.
+                # Importing the Predictor base class can fail if the module
+                # partially loads, so we avoid it.
+                from sleap_nn.inference.predictors import SingleInstancePredictor
+
+                path = Path(self.sleap_model_paths[0])
+                if not path.is_dir():
+                    self._sleap_status = "load_failed"
+                    self._sleap_status_error = "Path is not a directory"
+                    return False
+
+                import torch
+
+                if torch.cuda.is_available():
+                    device = "cuda:0"  # explicit first GPU for inference
+                    try:
+                        device_name = torch.cuda.get_device_name(0)
+                        _LOG.info(
+                            "SLEAP: using CUDA device 0 (%s)", device_name
+                        )
+                    except Exception:
+                        _LOG.info("SLEAP: using CUDA device 0")
+                else:
+                    device = "cpu"
+                    _LOG.warning(
+                        "SLEAP: CUDA not available, using CPU (inference will be slower). "
+                        "Install PyTorch with CUDA (e.g. pip install torch --index-url https://download.pytorch.org/whl/cu121) to use GPU."
+                    )
+
+                # Pass empty preprocess_config so sleap-nn never sees None
+                # (avoids 'NoneType' has no attribute 'items')
+                from omegaconf import OmegaConf
+
+                predictor = SingleInstancePredictor.from_trained_models(
+                    confmap_ckpt_path=str(path),
+                    device=device,
+                    batch_size=1,
+                    preprocess_config=OmegaConf.create({}),
                 )
-            # Pass empty preprocess_config so sleap-nn never sees None (avoids 'NoneType' has no attribute 'items')
-            from omegaconf import OmegaConf
-            predictor = Predictor.from_model_paths(
-                list(self.sleap_model_paths),
-                device=device,
-                batch_size=1,
-                preprocess_config=OmegaConf.create({}),
-            )
-            # Only use for streaming when we have a single-instance model (frame-in -> pose-out).
-            if isinstance(predictor, SingleInstancePredictor):
+
                 self._sleap_predictor = predictor
                 actual = next(predictor.confmap_model.parameters()).device
                 self._sleap_device = str(actual)
@@ -348,13 +395,16 @@ class HybridTracker:
                 self._sleap_status = "ok"
                 self._sleap_status_error = None
                 return True
-            self._sleap_status = "not_single_instance"
-            self._sleap_status_error = "Model is not single-instance"
-            return False
-        except Exception as e:
-            self._sleap_status = "load_failed"
-            self._sleap_status_error = str(e)
-            return False
+            except Exception as e:
+                self._sleap_status = "load_failed"
+                import traceback
+
+                self._sleap_last_fail_s = time.monotonic()
+                # Include traceback so Help -> View error log has the real origin.
+                self._sleap_status_error = (
+                    f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+                )
+                return False
 
     def _get_skeleton_node_names(self) -> List[str]:
         """Get node names from predictor skeleton (for spot/fore-nodes overlay)."""
@@ -812,9 +862,17 @@ class TrackingController:
 
         This is typically called from the GUI when the SLEAP path text field or
         "Backup tracking only" checkbox changes.
+
+        If called every frame with the same values (e.g. from the camera tick),
+        this must be a no-op: clearing the cache every frame rebuilds HybridTracker
+        and reloads the SLEAP model, destroying display FPS (~6–7 instead of 30+).
         """
-        self._sleap_path = sleap_path.strip()
-        self._backup_only = bool(backup_only)
+        path = sleap_path.strip()
+        backup = bool(backup_only)
+        if path == self._sleap_path and backup == self._backup_only:
+            return
+        self._sleap_path = path
+        self._backup_only = backup
         self._cached_tracker_key = None
         self._last_tracking_result = None
         self._track_frame_counter = 0
@@ -996,6 +1054,20 @@ class TrackingController:
         if status == "ok":
             dev = getattr(tracker, "_sleap_device", None)
             tip = f"SLEAP model on {dev}" if dev else "SLEAP model load status"
+            # Extra detail when torch is CPU-only: helps diagnose why SLEAP
+            # never selects CUDA even if a GPU is present.
+            if dev == "cpu":
+                try:
+                    import torch  # local import: torch may be optional until SLEAP extra installed
+
+                    tip = (
+                        f"SLEAP model on cpu "
+                        f"(torch={torch.__version__}, "
+                        f"cuda_available={torch.cuda.is_available()}, "
+                        f"torch.version.cuda={getattr(torch.version, 'cuda', None)})"
+                    )
+                except Exception:
+                    pass
             return "ready", tip
         if status == "no_path":
             return "No path", "SLEAP model load status"

@@ -3,7 +3,7 @@ name = "vast"
 version = "0.1.0"
 description = "VAST — controller, pipeline, and core for vibration actuating search task"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = "==3.12.*"
 dependencies = [
     "numpy>=1.21.0",
     "h5py>=3.0.0",
@@ -29,7 +29,16 @@ gui = [
 ]
 sleap = [
     "sleap-io",
-    "sleap-nn[torch-cuda130]",
+    # Force CUDA-enabled PyTorch wheels in the same uv environment.
+    # (Without explicit torch pins, uv may resolve to CPU-only torch.)
+    # CUDA wheels are only available for win32/linux; for other platforms
+    # fall back to CPU wheels so uv's resolver can still find a solution.
+    "sleap-nn[torch-cuda130]; sys_platform == 'win32' or sys_platform == 'linux'",
+    "sleap-nn; sys_platform != 'win32' and sys_platform != 'linux'",
+    "torch==2.10.0+cu130; sys_platform == 'win32' or sys_platform == 'linux'",
+    "torchvision==0.25.0+cu130; sys_platform == 'win32' or sys_platform == 'linux'",
+    "torch==2.10.0; sys_platform != 'win32' and sys_platform != 'linux'",
+    "torchvision==0.25.0; sys_platform != 'win32' and sys_platform != 'linux'",
 ]
 
 [project.scripts]

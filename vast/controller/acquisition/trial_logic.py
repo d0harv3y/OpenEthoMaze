@@ -9,6 +9,7 @@ A single slot index (0 .. num_animals * num_trials - 1) maps to (animal_idx, tri
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, List, Optional, Tuple
@@ -16,7 +17,6 @@ from typing import Any, Callable, List, Optional, Tuple
 from .arena import (
     exit_center_px,
     in_center_region,
-    in_edge_region,
     in_exit_zone,
     latin_square_exit_index,
     distance_to_exit_cm,
@@ -124,6 +124,10 @@ class TrialStateMachine:
     exit_x_px: float = 0.0
     exit_y_px: float = 0.0
     exit_angle_index: int = 0
+    # Optional: when seed is set to the legacy sentinel, the GUI can inject
+    # exit_x/exit_y so exit placement matches a legacy/original trial exactly.
+    legacy_exit_x_px: Optional[float] = None
+    legacy_exit_y_px: Optional[float] = None
     # Callbacks (set by controller)
     on_state_change: Optional[Callable[[TrialState], None]] = None
     on_exit_placed: Optional[Callable[[float, float], None]] = None
@@ -178,7 +182,7 @@ class TrialStateMachine:
             exit_idx = latin_square_exit_index(
                 self.session_id, self.trial_idx,
                 self.config.exit_angles.n_angles,
-                self.config.session.seed,
+                (None if self.config.session.seed == -1 else self.config.session.seed),
             )
             return f"{self.session_key()} {self.trial_key()} #{exit_idx + 1}"
         if self.state in (TrialState.TRIAL_SUCCESS, TrialState.TRIAL_TIMEOUT):
@@ -189,7 +193,7 @@ class TrialStateMachine:
             exit_idx = latin_square_exit_index(
                 self.session_id, next_t,
                 self.config.exit_angles.n_angles,
-                self.config.session.seed,
+                (None if self.config.session.seed == -1 else self.config.session.seed),
             )
             return f"{self.session_key()} T{next_t + 1:02d} #{exit_idx + 1}"
         # Current trial (ITI, WAIT_NOT_CENTER, TRIAL_RUNNING)
@@ -243,8 +247,41 @@ class TrialStateMachine:
     def _place_exit(self, rodent_x: float, rodent_y: float) -> None:
         seed = self.config.session.seed
         n = self.config.exit_angles.n_angles
+        # Legacy mode: copy the exact original exit location.
+        # This bypasses the Latin-square exit selection and uses the GUI-injected
+        # exit_x/exit_y from the original legacy trial.
+        if (
+            seed == -1
+            and self.legacy_exit_x_px is not None
+            and self.legacy_exit_y_px is not None
+        ):
+            ex_target = float(self.legacy_exit_x_px)
+            ey_target = float(self.legacy_exit_y_px)
+            best_idx = 0
+            best_dist = float("inf")
+            for i in range(n):
+                ex_c, ey_c = exit_center_px(
+                    rodent_x,
+                    rodent_y,
+                    i,
+                    self.config.arena,
+                    self.config.exit_angles,
+                )
+                d = math.hypot(ex_c - ex_target, ey_c - ey_target)
+                if d < best_dist:
+                    best_dist = d
+                    best_idx = i
+            self.exit_angle_index = best_idx
+            self.exit_x_px = ex_target
+            self.exit_y_px = ey_target
+            if self.on_exit_placed:
+                self.on_exit_placed(ex_target, ey_target)
+            return
+
+        # Normal mode: compute the exit angle index from (session_id, trial_idx, seed).
+        effective_seed: Optional[int] = None if seed == -1 else seed
         self.exit_angle_index = latin_square_exit_index(
-            self.session_id, self.trial_idx, n, seed
+            self.session_id, self.trial_idx, n, effective_seed
         )
         ex, ey = exit_center_px(
             rodent_x, rodent_y,
@@ -295,28 +332,59 @@ class TrialStateMachine:
         # IDLE must always yield 0 duty regardless of phase or position.
         if self.state == TrialState.IDLE:
             return 0.0
+        # ITI must always yield 0 duty (even in habituation_training).
+        if self.state == TrialState.ITI:
+            return 0.0
         # Only output duty during wait or trial run; otherwise 0 (MC off, GUI "—"),
-        # except in habituation_training where we always want edge duty for previews.
+        # except in habituation_training where we want duty for previews when waiting/running.
         if self.phase != Phase.HABITUATION_TRAINING:
             if self.state not in (TrialState.WAIT_NOT_CENTER, TrialState.TRIAL_RUNNING):
                 return 0.0
-        if self.state == TrialState.WAIT_NOT_CENTER and self.phase in (
-            Phase.VAST,
-            Phase.HABITUATION_TRAINING,
-        ):
+        if self.state == TrialState.WAIT_NOT_CENTER and self.phase == Phase.VAST:
             return cfg.wait_not_center_duty_pct
         if self.phase == Phase.HABITUATION:
             return 0.0
         if self.phase == Phase.HABITUATION_TRAINING:
-            return cfg.hab_training_duty_pct if in_edge_region(x_px, y_px, cfg.arena) else 0.0
+            # In habituation_training, motors should be ON for everything outside the center,
+            # and only go to 0 once the animal enters the center region.
+            # (This matches the observed behavior where leaving the annulus toward outside
+            # the arena perimeter should not immediately disable stimulus.)
+            if self.state in (TrialState.WAIT_NOT_CENTER, TrialState.TRIAL_RUNNING):
+                return cfg.hab_training_duty_pct if not in_center_region(x_px, y_px, cfg.arena) else 0.0
+            return 0.0
         # VAST: distance to exit; min duty at exit zone edge. Map to duty using config limits.
+        # If the animal is outside the calibrated arena radius, project it back onto
+        # the arena boundary so distance-to-exit continues to modulate during rearing.
+        cx = cfg.arena.arena_center_x_px
+        cy = cfg.arena.arena_center_y_px
+        r_px = cfg.arena.radius_px
+        if r_px > 0:
+            d_center_px = math.hypot(x_px - cx, y_px - cy)
+            if d_center_px > r_px:
+                # Project onto arena circle (preserve direction).
+                s = r_px / d_center_px
+                x_px = cx + (x_px - cx) * s
+                y_px = cy + (y_px - cy) * s
+
         d_cm = distance_to_exit_cm(
             x_px, y_px,
             self.exit_x_px, self.exit_y_px,
             cfg.arena.px_per_cm,
         )
-        max_d_cm = cfg.arena.radius_cm
         exit_r_cm = cfg.arena.exit_radius_cm
+        R_cm = cfg.arena.radius_cm
+        ppc = cfg.arena.px_per_cm
+        # Max straight-line distance from exit-zone circle to arena boundary: along the
+        # line through arena center C and exit E, farthest pair is |CE| + exit_r + R.
+        # Duty uses rodent→E distance d_cm; linear span (max_d_cm − exit_r) = |CE| + R,
+        # i.e. exit-zone inner reference to opposite arena rim (matches far wall).
+        if ppc > 0 and R_cm > 0:
+            d_ce_cm = math.hypot(
+                self.exit_x_px - cx, self.exit_y_px - cy
+            ) / ppc
+            max_d_cm = R_cm + d_ce_cm + exit_r_cm
+        else:
+            max_d_cm = R_cm
         if d_cm <= exit_r_cm:
             normalized = 1.0
         elif max_d_cm <= exit_r_cm:
@@ -346,6 +414,8 @@ class TrialStateMachine:
         self.iti_elapsed_s = 0.0
         self.trial_elapsed_s = 0.0
         self.trial_started_for_habituation = False
+        self.legacy_exit_x_px = None
+        self.legacy_exit_y_px = None
         return True
 
     def go_back_one_trial(self) -> bool:
@@ -357,6 +427,8 @@ class TrialStateMachine:
         self.iti_elapsed_s = 0.0
         self.trial_elapsed_s = 0.0
         self.trial_started_for_habituation = False
+        self.legacy_exit_x_px = None
+        self.legacy_exit_y_px = None
         self._sync_exit_index_to_position()
         return True
 
@@ -385,7 +457,7 @@ class TrialStateMachine:
             self.session_id,
             self.trial_idx,
             self.config.exit_angles.n_angles,
-            self.config.session.seed,
+            (None if self.config.session.seed == -1 else self.config.session.seed),
         )
 
     def manual_trial_success(self) -> None:
@@ -426,6 +498,21 @@ class TrialController:
         self._sm: Optional[TrialStateMachine] = None
         self._run_active = False
         self._state_listeners: List[Callable[[TrialState], None]] = []
+        self._pending_legacy_exit_xy: Optional[Tuple[float, float]] = None
+
+    def set_legacy_exit_xy(self, exit_x_px: float, exit_y_px: float) -> None:
+        """Inject legacy/original exit location for the current trial replay."""
+        if self._sm is not None:
+            self._sm.legacy_exit_x_px = float(exit_x_px)
+            self._sm.legacy_exit_y_px = float(exit_y_px)
+        self._pending_legacy_exit_xy = (float(exit_x_px), float(exit_y_px))
+
+    def clear_legacy_exit_xy(self) -> None:
+        """Clear any previously injected legacy exit location."""
+        if self._sm is not None:
+            self._sm.legacy_exit_x_px = None
+            self._sm.legacy_exit_y_px = None
+        self._pending_legacy_exit_xy = None
 
     def get_state_machine(self) -> Optional[TrialStateMachine]:
         return self._sm
@@ -522,6 +609,9 @@ class TrialController:
             config=self._config, phase=phase, mode=mode, session_id=session_id, slot_idx=initial_slot
         )
         self._sm.on_state_change = self._handle_sm_state_change
+        if self._pending_legacy_exit_xy is not None:
+            self._sm.legacy_exit_x_px = self._pending_legacy_exit_xy[0]
+            self._sm.legacy_exit_y_px = self._pending_legacy_exit_xy[1]
 
     def reset(self, session_id: str, trial_idx: int = 0, slot_idx: Optional[int] = None) -> None:
         """Clear state machine and create a new one (e.g. after profile load). If slot_idx given, restore that position."""
@@ -657,7 +747,7 @@ class TrialController:
             exit_idx = latin_square_exit_index(
                 sm.session_id, sm.trial_idx,
                 sm.config.exit_angles.n_angles,
-                sm.config.session.seed,
+                (None if sm.config.session.seed == -1 else sm.config.session.seed),
             )
             out["exit"] = str(exit_idx + 1)
         else:

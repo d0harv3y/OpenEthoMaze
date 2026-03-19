@@ -35,8 +35,11 @@ try:
     from PySide6.QtGui import QCloseEvent, QRegularExpressionValidator
     HAS_QT = True
 except ImportError:
+    # If PySide6 is unavailable or incomplete, fail the import cleanly so
+    # the main window can treat SettingsDialog as unavailable.
     HAS_QT = False
     QCloseEvent = None
+    raise
 
 _SETTINGS_ORG = "VAST"
 _SETTINGS_APP = "Controller"
@@ -47,6 +50,11 @@ def _optional_int(text: str) -> Optional[int]:
     s = (text or "").strip()
     if not s:
         return None
+    # Legacy sentinel:
+    # - `seed == -1` means "use exit_x/exit_y from the original legacy trial"
+    #   (primarily for Virtual acquisition + replay matching).
+    if s.lower() == "legacy":
+        return -1
     try:
         return int(s)
     except ValueError:
@@ -101,6 +109,15 @@ class SettingsDialog(QDialog):
         """Switch to the given settings tab (0-based). No-op if index out of range."""
         if 0 <= index < self._tabs.count():
             self._tabs.setCurrentIndex(index)
+
+    def set_config(self, config: ControllerConfig) -> None:
+        """Replace the backing config object and immediately refresh all fields."""
+        self._config = config
+        self._fill_from_config()
+
+    def refresh_from_config(self) -> None:
+        """Refresh widgets from the current backing config object."""
+        self._fill_from_config()
 
     def _on_tab_changed(self, index: int) -> None:
         s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
@@ -249,7 +266,7 @@ class SettingsDialog(QDialog):
         self._session_iti_s.setSuffix(" s")
         f.addRow("ITI (s):", self._session_iti_s)
         self._session_seed = QLineEdit()
-        self._session_seed.setPlaceholderText("None or integer")
+        self._session_seed.setPlaceholderText("None, integer, or legacy")
         f.addRow("Seed:", self._session_seed)
         out_row = QHBoxLayout()
         self._output_dir_edit = QLineEdit()
@@ -459,7 +476,10 @@ class SettingsDialog(QDialog):
         self._session_num_trials.setValue(sess.num_trials)
         self._session_max_trial_s.setValue(sess.max_trial_duration_s)
         self._session_iti_s.setValue(sess.iti_s)
-        self._session_seed.setText(str(sess.seed) if sess.seed is not None else "")
+        if sess.seed == -1:
+            self._session_seed.setText("legacy")
+        else:
+            self._session_seed.setText(str(sess.seed) if sess.seed is not None else "")
         self._output_dir_edit.setText(c.output_dir or "")
         self._h5_filename_edit.setText(c.h5_filename or "trials.h5")
         parent = self.parent()

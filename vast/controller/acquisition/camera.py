@@ -12,6 +12,7 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Iterator, Optional, Tuple
 
 from . import app_logging
@@ -70,6 +71,10 @@ class BaseCamera(ABC):
         """(height, width) or (height, width, channels)."""
         pass
 
+    # Optional: total frame count if known (used for UI indicators).
+    def total_frames(self) -> Optional[int]:
+        return None
+
 
 class OpenCVCamera(BaseCamera):
     """
@@ -107,8 +112,16 @@ class OpenCVCamera(BaseCamera):
         if self._height is not None:
             self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._height)
         self._cap.set(cv2.CAP_PROP_FPS, self._fps_target)
+        try:
+            total = self._cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            self._total_frames = int(total) if total and total > 0 else None
+        except Exception:
+            self._total_frames = None
         self._start_time = time.monotonic()
         self._frame_index = 0
+
+    def total_frames(self) -> Optional[int]:
+        return getattr(self, "_total_frames", None)
 
     def stop(self) -> None:
         if self._cap is not None:
@@ -142,6 +155,96 @@ class OpenCVCamera(BaseCamera):
         return (h, w, 3)
 
     def __enter__(self) -> "OpenCVCamera":
+        self.start()
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.stop()
+
+
+class VideoFileCamera(BaseCamera):
+    """Read frames from a video file and present them through the BaseCamera API."""
+
+    def __init__(self, video_path: Path | str, fps_target: float = 30.0, loop: bool = True):
+        if not HAS_CV2:
+            raise RuntimeError("opencv-python is required for VideoFileCamera")
+        self._video_path = str(video_path)
+        self._fps_target = float(fps_target)
+        self._loop = bool(loop)
+        self._cap: Optional["cv2.VideoCapture"] = None
+        self._start_time = 0.0
+        self._frame_index = 0
+        self._shape: tuple = (480, 640, 3)
+        self._total_frames: Optional[int] = None
+
+    def start(self) -> None:
+        self._cap = cv2.VideoCapture(self._video_path)
+        if not self._cap.isOpened():
+            raise RuntimeError(f"Could not open video file: {self._video_path}")
+        h = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
+        w = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
+        self._shape = (h, w, 3)
+        try:
+            total = self._cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            self._total_frames = int(total) if total and total > 0 else None
+        except Exception:
+            self._total_frames = None
+        self._start_time = time.monotonic()
+        self._frame_index = 0
+
+    def total_frames(self) -> Optional[int]:
+        return self._total_frames
+
+    def seek_to_start(self) -> None:
+        """Rewind to the beginning of the video file."""
+        if self._cap is None or not self._cap.isOpened():
+            return
+        try:
+            self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        except Exception:
+            pass
+        self._start_time = time.monotonic()
+        self._frame_index = 0
+
+    def stop(self) -> None:
+        if self._cap is not None:
+            try:
+                self._cap.release()
+            except Exception:
+                pass
+        self._cap = None
+
+    def read(self) -> Optional[Frame]:
+        if self._cap is None or not self._cap.isOpened():
+            return None
+        ok, img = self._cap.read()
+        if not ok or img is None:
+            if self._loop:
+                # Seek back to first frame and retry once.
+                try:
+                    self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    ok, img = self._cap.read()
+                except Exception:
+                    ok = False
+            if not ok or img is None:
+                return None
+        ts = time.monotonic() - self._start_time
+        idx = self._frame_index
+        self._frame_index += 1
+        return Frame(image=img, timestamp=ts, frame_index=idx)
+
+    @property
+    def fps(self) -> float:
+        if self._cap is None:
+            return self._fps_target
+        f = float(self._cap.get(cv2.CAP_PROP_FPS))
+        return f if f > 0 else self._fps_target
+
+    @property
+    def shape(self) -> tuple:
+        return self._shape
+
+    def __enter__(self) -> "VideoFileCamera":
         self.start()
         return self
 
@@ -384,8 +487,10 @@ class CameraController:
         self._config = config
         self._camera: Optional[object] = None
         self._last_preview_img_size: Optional[Tuple[int, int]] = None
+        self._last_frame_index: Optional[int] = None
+        self._last_total_frames: Optional[int] = None
 
-    def open(self, source: str, device_index: int) -> None:
+    def open(self, source: str, device_index: int, video_path: Optional[Path] = None) -> None:
         """
         Open the camera for the given source and device index.
 
@@ -395,6 +500,8 @@ class CameraController:
             String label such as "OpenCV" or "GigE (Vimba)".
         device_index:
             Integer device index for the backend.
+        video_path:
+            Required when source == "Virtual (video file)".
         """
         if not HAS_CAMERA:
             app_logging.log_error("CameraController: camera backend unavailable.")
@@ -403,9 +510,15 @@ class CameraController:
         # Always close any existing camera before opening a new one.
         self.close()
 
+        use_virtual = source.startswith("Virtual")
         use_gige = source.startswith("GigE") and HAS_VIMBA and VimbaCamera is not None
         try:
-            if use_gige:
+            if use_virtual:
+                if video_path is None:
+                    raise ValueError("video_path is required for Virtual (video file) source")
+                self._camera = VideoFileCamera(video_path=video_path, fps_target=30.0, loop=True)
+                self._camera.start()
+            elif use_gige:
                 self._camera = VimbaCamera(
                     device_index=device_index,
                     fps_target=30.0,
@@ -462,10 +575,29 @@ class CameraController:
         if frame is None or getattr(frame, "image", None) is None:
             return None
         img = frame.image
+        self._last_frame_index = int(getattr(frame, "frame_index", -1)) if frame is not None else None
+        try:
+            self._last_total_frames = self._camera.total_frames() if hasattr(self._camera, "total_frames") else None
+        except Exception:
+            self._last_total_frames = None
         if isinstance(img, np.ndarray):
             h, w = img.shape[0], img.shape[1]
             self._last_preview_img_size = (w, h)
         return img
+
+    def get_last_frame_info(self) -> Tuple[Optional[int], Optional[int]]:
+        """Return (current_frame_index_0based, total_frames) if known."""
+        return (self._last_frame_index, self._last_total_frames)
+
+    def rewind(self) -> None:
+        """Rewind the underlying camera if it supports seeking (virtual mode)."""
+        cam = self._camera
+        if cam is None:
+            return
+        seek = getattr(cam, "seek_to_start", None)
+        if callable(seek):
+            seek()
+            self._last_frame_index = 0
 
     def get_last_preview_size(self) -> Optional[Tuple[int, int]]:
         """Return the last preview image size as (width, height), if known."""

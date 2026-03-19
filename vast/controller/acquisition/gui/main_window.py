@@ -256,8 +256,8 @@ def _draw_roi_and_tracking_overlay(
             if exit_r_px > 0:
                 _cv2.circle(overlay, (ex_i, ey_i), exit_r_px, (255, 0, 255), 2)
     # Tracking overlay: SLEAP = full skeleton (edges + nodes) + spot; fallback = green dot (same size as node)
-    NODE_MARKER_R = 3  # radius for node circles and fallback dot; outline only (no fill)
-    nose_color = (0, 128, 255)  # BGR green (nose / primary)
+    NODE_MARKER_R = 2  # radius for node circles and fallback dot; outline only (no fill)
+    nose_color = (255, 0, 255)  # BGR pink (nose / primary)
     non_nose_color = (0, 255, 255)  # BGR yellow
     spot_color = (255, 255, 0)  # BGR cyan
     if track_source == "sleap" and pose_xy is not None and pose_edge_inds:
@@ -398,7 +398,16 @@ class MainWindow(QMainWindow):
         self._display_fps_max_samples = 30
         self._last_display_fps: float = 0.0  # latest preview FPS estimate for dev HUD
         self._last_frame_timings: Optional[Tuple[float, float]] = None  # (read_ms, process_ms) for tooltip
+        # Virtual acquisition: during idle (before Start trial), pause video frame advancement
+        # so playback starts exactly when Start trial is pressed.
+        self._virtual_video_path: Optional[Path] = None
+        self._virtual_has_initial_frame: bool = False
+        self._virtual_cached_frame_raw: Optional[np.ndarray] = None
+        # Cached frame index from CameraController during the paused preview.
+        self._virtual_cached_frame_index: Optional[int] = None
         self._gui_error_log: list = []  # list of timestamped error lines for View error log
+        self._last_sleap_device_logged: Optional[str] = None
+        self._last_sleap_log_time_s: Optional[float] = None
         self._trial_controller = TrialController(self._config)
         self._trial_controller.add_state_listener(self._on_trial_state_change)
         self._arduino_stimulus: Optional["ArduinoStimulus"] = None
@@ -423,6 +432,7 @@ class MainWindow(QMainWindow):
         self._camera_source.addItem("OpenCV")
         if HAS_VIMBA:
             self._camera_source.addItem("GigE (Vimba)")
+        self._camera_source.addItem("Virtual (video file)")
         self._camera_source.setToolTip("OpenCV = USB/DirectShow index. GigE = Allied Vision (e.g. Manta) via Vimba.")
         cam_row.addWidget(self._camera_source)
         cam_row.addWidget(QLabel("Device:"))
@@ -485,6 +495,10 @@ class MainWindow(QMainWindow):
         self._track_display_fps_label = QLabel("—")
         self._track_display_fps_label.setToolTip("Preview frame rate")
         arena_track_row.addWidget(self._track_display_fps_label)
+        arena_track_row.addWidget(QLabel("Frame:"))
+        self._frame_counter_label = QLabel("—")
+        self._frame_counter_label.setToolTip("Virtual/preview frame index (and total if known)")
+        arena_track_row.addWidget(self._frame_counter_label)
         arena_track_row.addStretch()
         camera_ly.addLayout(arena_track_row)
         layout.addWidget(camera_section)
@@ -780,6 +794,9 @@ class MainWindow(QMainWindow):
             self._config, session_id, ti, gui, slot = load_profile(self._profile_path)
             session_id_safe = _sanitize_session_id(session_id) if session_id else ""
             self._apply_config_to_ui(gui=gui)
+            dlg = getattr(self, "_settings_dialog", None)
+            if dlg is not None and hasattr(dlg, "set_config"):
+                dlg.set_config(self._config)
             self._trial_controller = TrialController(self._config)
             self._trial_controller.add_state_listener(self._on_trial_state_change)
             self._trial_controller.reset(session_id_safe, ti, slot_idx=slot)
@@ -877,10 +894,44 @@ class MainWindow(QMainWindow):
     def _on_camera_tick(self) -> None:
         if self._camera_controller is None:
             return
-        t0 = time.perf_counter()
-        img_raw = self._camera_controller.grab_frame()
-        t1 = time.perf_counter()
+        virtual_mode = bool(
+            self._camera_source.currentText().startswith("Virtual")
+            if self._camera_source is not None
+            else False
+        )
+        tc = self._trial_controller
+
+        # Virtual pause behavior:
+        # - when not running, freeze *video advancement* but still re-render overlays
+        #   from the cached first frame so settings changes take effect immediately.
+        paused_virtual = virtual_mode and not tc.run_active
+        if paused_virtual:
+            if self._virtual_cached_frame_raw is None:
+                t0 = time.perf_counter()
+                img_raw = self._camera_controller.grab_frame()
+                t1 = time.perf_counter()
+                if img_raw is None:
+                    return
+                self._virtual_cached_frame_raw = img_raw
+                self._virtual_has_initial_frame = True
+                self._virtual_cached_frame_index, _ = self._camera_controller.get_last_frame_info()
+            else:
+                img_raw = self._virtual_cached_frame_raw
+                t0 = time.perf_counter()
+                t1 = t0
+        else:
+            # When running, discard any paused cache so playback resumes from the camera.
+            self._virtual_has_initial_frame = False
+            self._virtual_cached_frame_raw = None
+            self._virtual_cached_frame_index = None
+            t0 = time.perf_counter()
+            img_raw = self._camera_controller.grab_frame()
+            t1 = time.perf_counter()
         if img_raw is not None:
+            if virtual_mode:
+                # In virtual mode, the cached paused frame will be used while paused.
+                # When running, the cache was cleared above.
+                pass
             # Display FPS (rolling average)
             now = time.monotonic()
             self._display_fps_times.append(now)
@@ -893,6 +944,27 @@ class MainWindow(QMainWindow):
                 self._track_display_fps_label.setText(f"{fps:.1f}")
             else:
                 self._track_display_fps_label.setText("—")
+
+            # Frame index indicator (use camera controller's last seen info).
+            if hasattr(self, "_frame_counter_label") and self._frame_counter_label is not None:
+                if virtual_mode:
+                    # Trial-relative: before Start trial, show 0 even if we already grabbed a cached preview frame.
+                    cur_idx, total = self._camera_controller.get_last_frame_info()
+                    if not tc.run_active:
+                        if total is not None and total > 0:
+                            self._frame_counter_label.setText(f"0/{total}")
+                        else:
+                            self._frame_counter_label.setText("0/—")
+                    elif cur_idx is None or cur_idx < 0:
+                        self._frame_counter_label.setText("—")
+                    else:
+                        cur_1b = cur_idx + 1
+                        if total is not None and total > 0:
+                            self._frame_counter_label.setText(f"{cur_1b}/{total}")
+                        else:
+                            self._frame_counter_label.setText(f"{cur_1b}/—")
+                else:
+                    self._frame_counter_label.setText("—")
             # Raw frame for inference (no brightness/contrast); display uses a copy with adjustments
             if self._camera_flip.isChecked() and _cv2 is not None:
                 img_raw = _cv2.flip(img_raw, 1)  # 1 = horizontal (flip x-axis)
@@ -982,6 +1054,23 @@ class MainWindow(QMainWindow):
                     track_xy = getattr(self, "_last_track_xy", None)
                     track_valid = False
                 self._track_source_label.setText(overlay_state["source_label"])
+
+                # Minimal SLEAP device debug (once per session / device change).
+                if (
+                    self._last_sleap_device_logged is None
+                    or (time.monotonic() - (self._last_sleap_log_time_s or 0.0)) > 2.0
+                ):
+                    try:
+                        sleap_label, sleap_tip = self._tracking_controller.get_sleap_status_label()
+                        key = sleap_tip or sleap_label
+                        if key and key != self._last_sleap_device_logged:
+                            # Help->View error log: minimal one-line device info or load failure reason.
+                            self._gui_log_error(f"SLEAP: {sleap_tip}")
+                            self._last_sleap_device_logged = key
+                            self._last_sleap_log_time_s = time.monotonic()
+                    except Exception:
+                        # Best-effort debug; never break preview.
+                        pass
             else:
                 # show_track is False: no tracking overlay
                 self._track_source_label.setText("—")
@@ -1135,13 +1224,33 @@ class MainWindow(QMainWindow):
             return
         self._on_stop_camera()
         source = self._camera_source.currentText()
+        # Reset virtual playback pause state; will be set again if user picks a video.
+        self._virtual_video_path = None
+        self._virtual_has_initial_frame = False
+        self._virtual_cached_frame_raw = None
+        self._virtual_cached_frame_index = None
         try:
             if self._camera_controller is not None:
                 device_index = self._camera_device.value()
-                self._camera_controller.open(source, device_index)
+                video_path = None
+                if source.startswith("Virtual"):
+                    video_path_str, _ = QFileDialog.getOpenFileName(
+                        self,
+                        "Select video file for virtual acquisition",
+                        "",
+                        "Video files (*.mp4 *.avi *.mkv *.mov);;All files (*)",
+                    )
+                    if not video_path_str:
+                        return
+                    video_path = Path(video_path_str)
+                    self._virtual_video_path = video_path
+                self._camera_controller.open(source, device_index, video_path=video_path)
                 # Status message: keep simple for now; detailed backend info can
                 # be added via CameraController hooks in the future.
-                self.statusBar().showMessage(f"Camera {device_index} started ({source}).")
+                if video_path is not None:
+                    self.statusBar().showMessage(f"Virtual video started ({source}): {video_path.name}")
+                else:
+                    self.statusBar().showMessage(f"Camera {device_index} started ({source}).")
             self._camera_timer = QTimer(self)
             self._camera_timer.setTimerType(Qt.TimerType.PreciseTimer)  # better accuracy on Windows for 30 FPS
             self._camera_timer.timeout.connect(self._on_camera_tick)
@@ -1174,6 +1283,10 @@ class MainWindow(QMainWindow):
         self._camera_label.clear()
         self._camera_label.setText("Click Start camera")
         self.statusBar().showMessage("Camera stopped.")
+        self._virtual_video_path = None
+        self._virtual_has_initial_frame = False
+        self._virtual_cached_frame_raw = None
+        self._virtual_cached_frame_index = None
         self._apply_status_and_buttons()
 
     def _on_mc_refresh_ports(self) -> None:
@@ -1369,8 +1482,10 @@ class MainWindow(QMainWindow):
         bs = self._trial_controller.get_button_states()
         video_ok = self._is_video_available()
         mc_ok = self._is_mc_connected()
-        # In dev mode, camera and MC are not required for run buttons
-        run_ok = self._dev_mode or (video_ok and mc_ok)
+        # In dev mode, camera and MC are not required for run buttons.
+        # For virtual acquisition (video file playback), allow running even if MC is not connected.
+        virtual_mode = video_ok and self._camera_source.currentText().startswith("Virtual")
+        run_ok = self._dev_mode or (video_ok and (mc_ok or virtual_mode))
         self._start_trial_btn.setEnabled(bs["start"] and run_ok)
         self._previous_trial_btn.setEnabled(bs["previous"] and run_ok)
         self._next_trial_btn.setEnabled(bs["next"] and run_ok)
@@ -1385,7 +1500,12 @@ class MainWindow(QMainWindow):
             return
         dt = now - self._run_timer_last_s
         self._run_timer_last_s = now
-        x, y = self._last_track_xy if self._last_track_xy else (0.0, 0.0)
+        if self._last_track_xy is not None:
+            x, y = self._last_track_xy
+        else:
+            # Fall back to arena center instead of (0,0) so duty/exit logic
+            # doesn't saturate when tracking is temporarily unavailable.
+            x, y = (self._config.arena.arena_center_x_px, self._config.arena.arena_center_y_px)
         self._trial_controller.tick(x, y, dt)
         self._apply_status_and_buttons()
 
@@ -1514,7 +1634,11 @@ class MainWindow(QMainWindow):
             if not self._is_video_available():
                 self.statusBar().showMessage("Start camera before running trials.")
                 return
-            if not self._is_mc_connected():
+            virtual_mode = (
+                self._camera_source.currentText().startswith("Virtual")
+                and self._is_video_available()
+            )
+            if not self._is_mc_connected() and not virtual_mode:
                 self.statusBar().showMessage("Connect MC before running trials.")
                 return
         self._apply_ui_to_config()
@@ -1522,6 +1646,58 @@ class MainWindow(QMainWindow):
         msg = self._trial_controller.do_start(sid)
         self._apply_status_and_buttons()
         self.statusBar().showMessage(msg)
+
+        # In virtual mode, Start trial should restart playback from frame 0.
+        if (
+            self._camera_source.currentText().startswith("Virtual")
+            and self._camera_controller is not None
+        ):
+            try:
+                self._camera_controller.rewind()
+                self._virtual_has_initial_frame = False
+                self._virtual_cached_frame_raw = None
+                self._virtual_cached_frame_index = None
+            except Exception:
+                # Best-effort only; if rewind fails, playback will continue from current position.
+                pass
+
+        # Optional legacy-exit seeding:
+        # when session seed is "legacy" (-1) and we're in Virtual mode,
+        # copy exit_x/exit_y from the original legacy H5 trial that corresponds
+        # to the selected virtual video.
+        if (
+            self._camera_source.currentText().startswith("Virtual")
+            and self._config.session.seed == -1
+            and self._virtual_video_path is not None
+        ):
+            self._trial_controller.clear_legacy_exit_xy()
+            try:
+                stem_parts = self._virtual_video_path.stem.split("_")
+                if len(stem_parts) >= 3:
+                    animal_id = stem_parts[0]
+                    session_id = stem_parts[1]
+                    trial = "_".join(stem_parts[2:])
+                    base_dir = self._virtual_video_path.parent.parent
+                    h5_name = self._config.h5_filename or "trials.h5"
+                    candidates = [
+                        base_dir / h5_name,
+                        base_dir / "trials.h5",
+                    ]
+                    if self._config.output_dir:
+                        candidates.append(Path(self._config.output_dir) / h5_name)
+                    legacy_db_path = next((p for p in candidates if p.exists()), None)
+                    if legacy_db_path is not None:
+                        with open_db(legacy_db_path, "r") as h5:
+                            grp_path = f"/{animal_id}/{session_id}/{trial}"
+                            if grp_path in h5:
+                                g_trial = h5[grp_path]
+                                if "exit_x" in g_trial.attrs and "exit_y" in g_trial.attrs:
+                                    exit_x = float(g_trial.attrs["exit_x"])
+                                    exit_y = float(g_trial.attrs["exit_y"])
+                                    self._trial_controller.set_legacy_exit_xy(exit_x, exit_y)
+                # Best-effort only: if parsing/lookup fails, fall back to computed exit placement.
+            except Exception as e:
+                self.statusBar().showMessage(f"Legacy exit seed: couldn't load ({e}); using computed exit.")
         if self._trial_controller.run_active:
             if self._run_timer is None or not self._run_timer.isActive():
                 self._run_timer = QTimer(self)
@@ -1539,7 +1715,11 @@ class MainWindow(QMainWindow):
             if not self._is_video_available():
                 self.statusBar().showMessage("Start camera before running trials.")
                 return
-            if not self._is_mc_connected():
+            virtual_mode = (
+                self._camera_source.currentText().startswith("Virtual")
+                and self._is_video_available()
+            )
+            if not self._is_mc_connected() and not virtual_mode:
                 self.statusBar().showMessage("Connect MC before running trials.")
                 return
         sid = self._session_id_edit.text().strip()
@@ -1552,7 +1732,11 @@ class MainWindow(QMainWindow):
             if not self._is_video_available():
                 self.statusBar().showMessage("Start camera before running trials.")
                 return
-            if not self._is_mc_connected():
+            virtual_mode = (
+                self._camera_source.currentText().startswith("Virtual")
+                and self._is_video_available()
+            )
+            if not self._is_mc_connected() and not virtual_mode:
                 self.statusBar().showMessage("Connect MC before running trials.")
                 return
         sid = self._session_id_edit.text().strip()
@@ -1793,6 +1977,9 @@ class MainWindow(QMainWindow):
                 session_id_safe = _sanitize_session_id(session_id) if session_id else ""
                 self._profile_path = Path(path)
                 self._apply_config_to_ui(gui=gui)
+                dlg = getattr(self, "_settings_dialog", None)
+                if dlg is not None and hasattr(dlg, "set_config"):
+                    dlg.set_config(self._config)
                 self._trial_controller = TrialController(self._config)
                 self._trial_controller.add_state_listener(self._on_trial_state_change)
                 self._trial_controller.reset(session_id_safe, ti, slot_idx=slot)
