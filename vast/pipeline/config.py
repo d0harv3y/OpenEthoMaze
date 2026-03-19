@@ -114,7 +114,10 @@ CENTER_ENTRY_DEBOUNCE_S = 0.5  # Min time outside center before re-entry counts 
 # =============================================================================
 MOVEMENT_START_THRESHOLD_M_PER_FRAME = math.sqrt(2) / 150  # ~2 pixels at typical resolution
 MOVEMENT_STOP_THRESHOLD_M_PER_FRAME = math.sqrt(2) / 300   # ~1 pixel
-MIN_MOVEMENT_BOUT_DURATION_S = 0.1  # Minimum bout duration in seconds
+MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES = 3  # Profile B: median window on per-frame distance
+MOVEMENT_ENTRY_DEBOUNCE_FRAMES = 3  # Profile B: require N consecutive above-start frames
+MOVEMENT_EXIT_DEBOUNCE_FRAMES = 3  # Profile B: require N consecutive below-stop frames
+MIN_MOVEMENT_BOUT_DURATION_S = 0.166  # Minimum bout duration in seconds
 MOVEMENT_INTER_BOUT_INTERVAL_S = 0.166  # Merge bouts separated by <= this interval
 
 # =============================================================================
@@ -188,6 +191,9 @@ def get_config_snapshot() -> dict:
         "exit_zone_radius_cm": EXIT_ZONE_RADIUS_CM,
         "movement_start_threshold": MOVEMENT_START_THRESHOLD_M_PER_FRAME,
         "movement_stop_threshold": MOVEMENT_STOP_THRESHOLD_M_PER_FRAME,
+        "movement_speed_median_window_frames": MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES,
+        "movement_entry_debounce_frames": MOVEMENT_ENTRY_DEBOUNCE_FRAMES,
+        "movement_exit_debounce_frames": MOVEMENT_EXIT_DEBOUNCE_FRAMES,
         "min_movement_bout_duration_s": MIN_MOVEMENT_BOUT_DURATION_S,
         "trace_max_gap_frames": TRACE_MAX_GAP_FRAMES,
         "trace_smoothing_window": TRACE_SMOOTHING_WINDOW,

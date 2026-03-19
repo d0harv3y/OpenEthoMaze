@@ -20,6 +20,9 @@ import numpy as np
 from ..config import (
     MOVEMENT_START_THRESHOLD_M_PER_FRAME,
     MOVEMENT_STOP_THRESHOLD_M_PER_FRAME,
+    MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES,
+    MOVEMENT_ENTRY_DEBOUNCE_FRAMES,
+    MOVEMENT_EXIT_DEBOUNCE_FRAMES,
     MIN_MOVEMENT_BOUT_DURATION_S,
     MOVEMENT_INTER_BOUT_INTERVAL_S,
     DEFAULT_FPS,
@@ -46,6 +49,9 @@ def calculate_ambulation_metrics(
     fps: float = DEFAULT_FPS,
     start_threshold_m: float = MOVEMENT_START_THRESHOLD_M_PER_FRAME,
     stop_threshold_m: float = MOVEMENT_STOP_THRESHOLD_M_PER_FRAME,
+    speed_median_window_frames: int = MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES,
+    entry_debounce_frames: int = MOVEMENT_ENTRY_DEBOUNCE_FRAMES,
+    exit_debounce_frames: int = MOVEMENT_EXIT_DEBOUNCE_FRAMES,
     min_bout_duration_s: float = MIN_MOVEMENT_BOUT_DURATION_S,
     inter_bout_interval_s: float = MOVEMENT_INTER_BOUT_INTERVAL_S,
 ) -> AmbulationMetrics:
@@ -59,6 +65,9 @@ def calculate_ambulation_metrics(
         fps: Video frame rate
         start_threshold_m: Movement start threshold (meters per frame)
         stop_threshold_m: Movement stop threshold (meters per frame)
+        speed_median_window_frames: Median filter window for per-frame distance
+        entry_debounce_frames: Frames required above start threshold to enter movement
+        exit_debounce_frames: Frames required below stop threshold to exit movement
         min_bout_duration_s: Minimum movement bout duration
         inter_bout_interval_s: Merge bouts closer than this interval
         
@@ -94,6 +103,9 @@ def calculate_ambulation_metrics(
         fps=fps,
         start_threshold_m=start_threshold_m,
         stop_threshold_m=stop_threshold_m,
+        speed_median_window_frames=speed_median_window_frames,
+        entry_debounce_frames=entry_debounce_frames,
+        exit_debounce_frames=exit_debounce_frames,
         min_bout_duration_s=min_bout_duration_s,
         inter_bout_interval_s=inter_bout_interval_s,
     )
@@ -138,6 +150,9 @@ def _detect_movement_bouts(
     fps: float,
     start_threshold_m: float,
     stop_threshold_m: float,
+    speed_median_window_frames: int,
+    entry_debounce_frames: int,
+    exit_debounce_frames: int,
     min_bout_duration_s: float,
     inter_bout_interval_s: float,
 ) -> tuple[list[dict], np.ndarray]:
@@ -150,6 +165,9 @@ def _detect_movement_bouts(
         fps: Frame rate
         start_threshold_m: Threshold to start movement
         stop_threshold_m: Threshold to stop movement
+        speed_median_window_frames: Median filter window for per-frame distance
+        entry_debounce_frames: Consecutive above-threshold frames needed for entry
+        exit_debounce_frames: Consecutive below-threshold frames needed for exit
         min_bout_duration_s: Minimum bout duration
         inter_bout_interval_s: Merge bouts closer than this
         
@@ -162,25 +180,56 @@ def _detect_movement_bouts(
     if n_transitions == 0:
         return [], np.zeros(n_frames, dtype=bool)
     
-    # Apply hysteresis to determine movement state
+    distances_for_state = _median_filter_1d(
+        distances_m,
+        window=max(1, int(speed_median_window_frames)),
+    )
+
+    entry_debounce_frames = max(1, int(entry_debounce_frames))
+    exit_debounce_frames = max(1, int(exit_debounce_frames))
+
+    # Apply hysteresis with debounce to determine movement state
     movement_state = np.zeros(n_transitions, dtype=bool)
     currently_moving = False
-    
-    for i, dist in enumerate(distances_m):
+    above_start_count = 0
+    below_stop_count = 0
+    pending_start: Optional[int] = None
+
+    for i, dist in enumerate(distances_for_state):
         # Check if both frames are valid
         if not (valid[i] and valid[i + 1]):
             movement_state[i] = False
             currently_moving = False
+            above_start_count = 0
+            below_stop_count = 0
+            pending_start = None
             continue
-        
+
         if not currently_moving:
             if dist >= start_threshold_m:
-                currently_moving = True
+                above_start_count += 1
+                if pending_start is None:
+                    pending_start = i
+                if above_start_count >= entry_debounce_frames:
+                    currently_moving = True
+                    start_idx = pending_start if pending_start is not None else i
+                    movement_state[start_idx:i + 1] = True
+                    above_start_count = 0
+                    pending_start = None
+            else:
+                above_start_count = 0
+                pending_start = None
         else:
+            movement_state[i] = True
             if dist <= stop_threshold_m:
-                currently_moving = False
-        
-        movement_state[i] = currently_moving
+                below_stop_count += 1
+                if below_stop_count >= exit_debounce_frames:
+                    stop_run_start = i - exit_debounce_frames + 1
+                    movement_state[stop_run_start:i + 1] = False
+                    currently_moving = False
+                    below_stop_count = 0
+            else:
+                below_stop_count = 0
     
     # Find bouts (contiguous movement periods)
     raw_bouts = []
@@ -248,6 +297,22 @@ def _detect_movement_bouts(
         is_moving[start:end] = True
     
     return bouts, is_moving
+
+
+def _median_filter_1d(values: np.ndarray, window: int) -> np.ndarray:
+    """Apply a simple 1D median filter with edge padding."""
+    window = max(1, int(window))
+    if window <= 1 or len(values) == 0:
+        return values.copy()
+    if window % 2 == 0:
+        window += 1
+
+    pad = window // 2
+    padded = np.pad(values, (pad, pad), mode="edge")
+    filtered = np.empty_like(values)
+    for i in range(len(values)):
+        filtered[i] = np.median(padded[i:i + window])
+    return filtered
 
 
 def calculate_distance_traveled(

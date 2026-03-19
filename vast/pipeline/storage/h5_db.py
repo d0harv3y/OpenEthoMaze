@@ -964,6 +964,9 @@ def write_config_params(
         # Movement thresholds
         g_trial.attrs["movement_start_threshold"] = float(config.MOVEMENT_START_THRESHOLD_M_PER_FRAME)
         g_trial.attrs["movement_stop_threshold"] = float(config.MOVEMENT_STOP_THRESHOLD_M_PER_FRAME)
+        g_trial.attrs["movement_speed_median_window_frames"] = int(config.MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES)
+        g_trial.attrs["movement_entry_debounce_frames"] = int(config.MOVEMENT_ENTRY_DEBOUNCE_FRAMES)
+        g_trial.attrs["movement_exit_debounce_frames"] = int(config.MOVEMENT_EXIT_DEBOUNCE_FRAMES)
         g_trial.attrs["min_movement_bout_duration_s"] = float(config.MIN_MOVEMENT_BOUT_DURATION_S)
         
         # Trace processing
