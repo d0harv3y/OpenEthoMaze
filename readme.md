@@ -1,4 +1,5 @@
 placeholder for Open Rodent Maze
+its sloppy
 
 things to install  
 vimba sdk (camera dependent)  
@@ -10,12 +11,13 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 
 enable jumbo frames (camera dependent)
 
-cd to repo root  
+
+cd to/your/repo/root  
 uv sync --extra gui --extra sleap --reinstall-package torch --reinstall-package torchvision  
 verify  
 uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.version.cuda,  torch.cuda.device_count())"  
 
 
-to run — cd to/your/repo/root  
+run from root:
 uv run vast-daq  
 
