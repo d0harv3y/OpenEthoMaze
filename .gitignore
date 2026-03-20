@@ -4,6 +4,7 @@
 
 # Test temp / output directories
 tests/_tmp/
+outputs/
 
 # Python bytecode / extensions
 __pycache__/
