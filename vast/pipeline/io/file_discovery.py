@@ -22,13 +22,99 @@ import h5py
 
 from ..config import DATA_DIR, DATA_DIRS, MAX_SESSION_NUM, MAX_TRIAL_NUM, SESSION_RENUMBER
 
+# Canonical CSV column order for trial manifests (discovery, legacy_db, kpMS selection).
+# Labels first (identity + treatment), then QA counts, then paths.
+MANIFEST_CSV_FIELDNAMES: tuple[str, ...] = (
+    "animal_id",
+    "session",
+    "original_session",
+    "trial",
+    "phase",
+    "sex",
+    "strain",
+    "tx",
+    "experiment",
+    "drug",
+    "cohort",
+    "researcher",
+    "inferred_id",
+    "timestamp",
+    "h5_n_frames",
+    "video_n_frames",
+    "frame_diff",
+    "input_h5_path",
+    "video_path",
+    "sleap_path",
+)
+
+
+def trial_manifest_csv_row_values(t: "TrialManifest") -> list[str]:
+    """One CSV data row in :data:`MANIFEST_CSV_FIELDNAMES` order."""
+    timestamp_str = t.timestamp.isoformat() if t.timestamp else ""
+    h5_frames_str = str(t.h5_n_frames) if t.h5_n_frames is not None else ""
+    vid_frames_str = str(t.video_n_frames) if t.video_n_frames is not None else ""
+    if t.h5_n_frames is not None and t.video_n_frames is not None:
+        diff_str = str(t.video_n_frames - t.h5_n_frames)
+    else:
+        diff_str = ""
+    return [
+        t.animal_id,
+        t.session,
+        t.original_session or "",
+        t.trial,
+        t.phase,
+        t.sex or "",
+        t.strain or "",
+        t.tx or "",
+        t.experiment or "",
+        t.drug or "",
+        t.cohort or "",
+        t.researcher or "",
+        t.inferred_id or "",
+        timestamp_str,
+        h5_frames_str,
+        vid_frames_str,
+        diff_str,
+        str(t.input_h5_path),
+        str(t.video_path) if t.video_path else "",
+        str(t.sleap_path) if t.sleap_path else "",
+    ]
+
+
+def enrich_manifests_from_treatment_labels(
+    manifests: list["TrialManifest"],
+    labels_path: Optional[Path] = None,
+) -> None:
+    """
+    Fill missing label fields on each manifest from ``treatment_labels.csv``.
+
+    Only updates attributes that are missing or blank so CSV values win when present.
+    """
+    labels = load_treatment_labels(labels_path)
+    for trial in manifests:
+        if trial.animal_id not in labels:
+            continue
+        label = labels[trial.animal_id]
+        if not (trial.strain or "").strip():
+            trial.strain = label.strain or trial.strain
+        if not (trial.experiment or "").strip():
+            trial.experiment = label.experiment or trial.experiment
+        if not (trial.sex or "").strip():
+            trial.sex = label.sex or trial.sex
+        if not (trial.tx or "").strip():
+            trial.tx = label.tx or trial.tx
+        if not (trial.drug or "").strip():
+            trial.drug = label.drug or trial.drug
+        if not (trial.researcher or "").strip():
+            trial.researcher = label.researcher or trial.researcher
+
 
 @dataclass
 class TrialManifest:
     """Container for a single trial's file paths and metadata."""
     
     animal_id: str
-    session: str  # e.g., "S01", "S05"
+    session: str  # e.g., "S01", "S05", "hS01" (habituation)
     trial: str    # e.g., "T01", "T02"
     
     # File paths
@@ -135,8 +221,13 @@ def _parse_session_range(h5_path: Path) -> tuple[bool, Optional[int], Optional[i
     if exp_match:
         return (False, int(exp_match.group(1)), int(exp_match.group(2)))
 
-    # Fallback: just check for _H or HABITUATION
-    if re.search(r"_H\d", name) or "HABITUATION" in name:
+    # Fallback: check habituation-like tokens in file names.
+    # Includes legacy day-style naming (e.g., "...day45.hdf5").
+    if (
+        re.search(r"_H\d", name)
+        or "HABITUATION" in name
+        or re.search(r"_D\d|_DAY\d", name)
+    ):
         return (True, None, None)
 
     return (False, None, None)
@@ -166,7 +257,30 @@ def _path_looks_habituation(path: Path) -> bool:
         return True
     if re.search(r"_h\d|_h\d+-\d+", s):
         return True
+    if re.search(r"_d\d|_day\d|_day\d+\d+", s):
+        return True
     return False
+
+
+def _normalize_habituation_session(
+    session: str,
+    is_habituation: bool,
+) -> tuple[str, Optional[str]]:
+    """
+    Normalize habituation session names to "hS##" for storage.
+
+    Returns:
+        (normalized_session, original_session_if_changed)
+    """
+    if not is_habituation:
+        return (session, None)
+
+    # Habituation sessions are stored as hS## in the new DB schema.
+    # Keep the original H5-style session (typically S##) for lookup/loading.
+    if re.match(r"^[sS]\d+$", session):
+        return (f"h{session.upper()}", session)
+
+    return (session, None)
 
 
 def _session_in_range(
@@ -470,6 +584,16 @@ def discover_trials(
             if renumbered_match and int(renumbered_match.group()) > MAX_SESSION_NUM:
                 continue
 
+            # Normalize habituation session keys for DB storage (hS##), while
+            # preserving the source key for H5/video/SLEAP lookups.
+            normalized_session, hab_original_session = _normalize_habituation_session(
+                session=session,
+                is_habituation=is_hab,
+            )
+            if hab_original_session and original_session is None:
+                original_session = hab_original_session
+            session = normalized_session
+
             phase = "habituation" if is_hab else "experimental"
             key = (animal_id, phase, session, trial)
 
@@ -582,7 +706,7 @@ def load_treatment_labels(labels_path: Optional[Path] = None) -> dict[str, Treat
     
     if labels_path is None:
         # Default location relative to this module
-        labels_path = Path(__file__).parent.parent.parent / "inputs" / "treatment_labels.csv"
+        labels_path = Path(__file__).parent.parent.parent.parent / "inputs" / "treatment_labels.csv"
     
     labels = {}
     
@@ -885,6 +1009,8 @@ def save_manifest_csv(result: DiscoveryResult, output_path: Path) -> None:
     """
     Save discovery result to a CSV manifest file.
 
+    Column order is :data:`MANIFEST_CSV_FIELDNAMES` (labels, QA counts, paths).
+
     Args:
         result: DiscoveryResult from discover_trials()
         output_path: Path for output CSV file
@@ -893,45 +1019,9 @@ def save_manifest_csv(result: DiscoveryResult, output_path: Path) -> None:
 
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow([
-            "animal_id", "session", "original_session", "trial", "phase",
-            "timestamp",
-            "h5_n_frames", "video_n_frames", "frame_diff",
-            "researcher", "strain", "experiment", "drug", "inferred_id",
-            "input_h5_path", "video_path", "sleap_path"
-        ])
-
+        writer.writerow(list(MANIFEST_CSV_FIELDNAMES))
         for t in sorted(result.trials, key=lambda x: (x.animal_id, x.session, x.trial)):
-            timestamp_str = t.timestamp.isoformat() if t.timestamp else ""
-            h5_frames_str = str(t.h5_n_frames) if t.h5_n_frames is not None else ""
-            vid_frames_str = str(t.video_n_frames) if t.video_n_frames is not None else ""
-
-            # Frame difference: positive = video has more frames
-            if t.h5_n_frames is not None and t.video_n_frames is not None:
-                diff = t.video_n_frames - t.h5_n_frames
-                diff_str = str(diff)
-            else:
-                diff_str = ""
-
-            writer.writerow([
-                t.animal_id,
-                t.session,
-                t.original_session or "",
-                t.trial,
-                t.phase,
-                timestamp_str,
-                h5_frames_str,
-                vid_frames_str,
-                diff_str,
-                t.researcher or "",
-                t.strain or "",
-                t.experiment or "",
-                t.drug or "",
-                t.inferred_id or "",
-                str(t.input_h5_path),
-                str(t.video_path) if t.video_path else "",
-                str(t.sleap_path) if t.sleap_path else "",
-            ])
+            writer.writerow(trial_manifest_csv_row_values(t))
 
     print(f"Saved manifest to {output_path}")
 
@@ -942,15 +1032,18 @@ def load_manifest_csv(
     """
     Load trial manifests from a CSV file (e.g. inputs/trial_manifest.csv).
 
-    The CSV must have the columns written by save_manifest_csv:
-    animal_id, session, original_session, trial, phase, timestamp, ...
-    input_h5_path, video_path, sleap_path
+    Expects headers compatible with :data:`MANIFEST_CSV_FIELDNAMES`; older manifests
+    without ``sex`` / ``tx`` / ``cohort`` columns still load (those fields stay empty).
 
     Returns:
         List of TrialManifest (video_path/sleap_path as Path or None).
     """
     import csv
     from datetime import datetime
+
+    def _cell(row: dict[str, str], key: str) -> Optional[str]:
+        v = (row.get(key) or "").strip()
+        return v if v else None
 
     manifests = []
     with open(manifest_path, "r", encoding="utf-8") as f:
@@ -968,7 +1061,12 @@ def load_manifest_csv(
             manifests.append(
                 TrialManifest(
                     animal_id=row["animal_id"],
-                    session=row["session"],
+                    session=(
+                        _normalize_habituation_session(
+                            row["session"],
+                            (row.get("phase", "") == "habituation"),
+                        )[0]
+                    ),
                     trial=row["trial"],
                     input_h5_path=Path(row.get("input_h5_path", "")),
                     video_path=Path(video_path) if video_path else None,
@@ -978,12 +1076,14 @@ def load_manifest_csv(
                     timestamp=timestamp,
                     h5_n_frames=int(h5_frames) if h5_frames.isdigit() else None,
                     video_n_frames=int(vid_frames) if vid_frames.isdigit() else None,
-                    cohort=row.get("cohort") or None,
-                    researcher=row.get("researcher") or None,
-                    strain=row.get("strain") or None,
-                    experiment=row.get("experiment") or None,
-                    drug=row.get("drug") or None,
-                    inferred_id=row.get("inferred_id") or None,
+                    cohort=_cell(row, "cohort"),
+                    researcher=_cell(row, "researcher"),
+                    strain=_cell(row, "strain"),
+                    experiment=_cell(row, "experiment"),
+                    sex=_cell(row, "sex"),
+                    tx=_cell(row, "tx"),
+                    drug=_cell(row, "drug"),
+                    inferred_id=_cell(row, "inferred_id"),
                 )
             )
     return manifests

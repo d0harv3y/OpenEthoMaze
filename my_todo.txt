@@ -1,0 +1,1 @@
+uv run python -m vast.kpms.fit --project-dir "D:\work sack\vibration maze\kpms" --model-name "orm_kpms_v1" --max-trials 300 --manifest-csv "C:\Users\admin\code\IMPRESS\ORM\outputs\legacy\trial_manifest_legacy.csv"

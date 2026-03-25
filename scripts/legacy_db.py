@@ -4,7 +4,7 @@ treatment_labels.csv; run inference, pipeline, and exports on selected trials.
 
 All outputs go to VAST/outputs/legacy/:
   - vast_results_legacy.h5   (database)
-  - trial_manifest_legacy.csv (manifest)
+  - trial_manifest_legacy.csv (manifest; columns from vast.pipeline.io.file_discovery.MANIFEST_CSV_FIELDNAMES)
   - exports/                 (CSV exports from run-exports)
 
 Uses VAST/inputs/treatment_labels.csv for labels. Discovery uses the same
