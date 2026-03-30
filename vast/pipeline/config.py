@@ -167,6 +167,7 @@ TRACE_SMOOTHING_WINDOW = 3  # Smoothing window size (frames)
 # =============================================================================
 MAX_DWELL_TIME_S = 4.0  # Maximum dwell time for heatmap normalization
 DWELL_HEATMAP_BLUR_SIGMA = 4.0  # Gaussian blur sigma for dwell-time heatmap
+QC_IMAGE_STORE_FORMAT = "png_bytes"  # "png_bytes" (smaller on disk) or "raw"
 
 # =============================================================================
 # Parallelization settings

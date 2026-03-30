@@ -48,6 +48,7 @@ from vast.core.storage import (
     read_feedback_table as core_read_feedback_table,
 )
 from ..config import OUTPUT_H5, get_config_snapshot
+from ..config import QC_IMAGE_STORE_FORMAT
 
 
 @dataclass(frozen=True)
@@ -767,12 +768,31 @@ def write_qc_image(
         if name in g_qc:
             del g_qc[name]
         
-        ds = g_qc.create_dataset(
-            name,
-            data=np.asarray(image, dtype=np.uint8),
-            compression="gzip"
-        )
-        ds.attrs["CLASS"] = "IMAGE"
+        arr = np.asarray(image, dtype=np.uint8)
+        store_format = (QC_IMAGE_STORE_FORMAT or "png_bytes").strip().lower()
+        ds: h5py.Dataset
+        if store_format == "png_bytes":
+            try:
+                import cv2  # local import: optional dependency
+
+                ok, enc = cv2.imencode(".png", arr)
+                if ok and enc is not None:
+                    payload = np.asarray(enc, dtype=np.uint8)
+                    ds = g_qc.create_dataset(name, data=payload, compression="gzip")
+                    ds.attrs["CLASS"] = "IMAGE"
+                    ds.attrs["ENCODING"] = "png"
+                else:
+                    ds = g_qc.create_dataset(name, data=arr, compression="gzip")
+                    ds.attrs["CLASS"] = "IMAGE"
+                    ds.attrs["ENCODING"] = "raw"
+            except Exception:
+                ds = g_qc.create_dataset(name, data=arr, compression="gzip")
+                ds.attrs["CLASS"] = "IMAGE"
+                ds.attrs["ENCODING"] = "raw"
+        else:
+            ds = g_qc.create_dataset(name, data=arr, compression="gzip")
+            ds.attrs["CLASS"] = "IMAGE"
+            ds.attrs["ENCODING"] = "raw"
         
         if attrs:
             for k, v in attrs.items():
@@ -791,7 +811,19 @@ def read_qc_image(
     try:
         with open_db(db_path, "r") as h5:
             g_trial = h5[key.path()]
-            return g_trial["qc_images"][name][:]
+            ds = g_trial["qc_images"][name]
+            enc = _safe_str(ds.attrs.get("ENCODING", "raw")).lower()
+            data = ds[:]
+            if enc == "png":
+                try:
+                    import cv2  # local import: optional dependency
+
+                    decoded = cv2.imdecode(np.asarray(data, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+                    if decoded is not None:
+                        return decoded
+                except Exception:
+                    pass
+            return data
     except (KeyError, ValueError):
         return None
 
@@ -857,6 +889,28 @@ def upsert_trial_manifest_row(db_path: Optional[Path], manifest: "TrialManifest"
             del meta[name]
         chunk = min(64, max(1, len(new_arr)))
         meta.create_dataset(name, data=new_arr, compression="gzip", chunks=(chunk,))
+
+
+def write_trial_manifest_rows(
+    db_path: Optional[Path],
+    manifests: list["TrialManifest"],
+) -> None:
+    """
+    Rewrite ``metadata/trial_manifest`` once from a list of manifests.
+    Use this for init/sync to avoid costly per-trial dataset churn.
+    """
+    from ..io.file_discovery import MANIFEST_CSV_FIELDNAMES, trial_manifest_csv_row_values
+
+    dt = np.dtype([(name, h5py.string_dtype(encoding="utf-8")) for name in MANIFEST_CSV_FIELDNAMES])
+    rows = [tuple(str(v) for v in trial_manifest_csv_row_values(m)) for m in manifests]
+    arr = np.array(rows, dtype=dt)
+    with open_db(db_path, "a") as h5:
+        meta = _ensure_group(h5, "metadata")
+        name = "trial_manifest"
+        if name in meta:
+            del meta[name]
+        chunk = min(256, max(1, len(arr)))
+        meta.create_dataset(name, data=arr, compression="gzip", chunks=(chunk,))
 
 
 def write_animal_label(

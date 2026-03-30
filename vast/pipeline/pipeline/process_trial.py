@@ -68,7 +68,6 @@ from ..storage.h5_db import (
     write_config_params,
     write_primary_trajectory,
     write_animal_notes_attr,
-    upsert_trial_manifest_row,
 )
 
 log = logging.getLogger(__name__)
@@ -218,7 +217,6 @@ def process_trial(
         # Write config params for reproducibility
         write_config_params(db_path, key)
 
-        upsert_trial_manifest_row(db_path, manifest)
         log(f"  Completed: {key.path()}")
         return True
 

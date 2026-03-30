@@ -59,6 +59,7 @@ from vast.pipeline.storage.h5_db import (
     write_trial_settings,
     write_sleap_model_path,
     write_sleap_path,
+    write_trial_manifest_rows,
 )
 from vast.pipeline.pipeline.orchestrator import (
     load_manifests_from_db,
@@ -302,6 +303,7 @@ def cmd_init() -> None:
     print(f"  Wrote labels for {len(unique_animals)} animals")
 
     save_manifest_csv(result, LEGACY_MANIFEST)
+    write_trial_manifest_rows(LEGACY_DB, result.trials)
     print(f"\nDatabase: {LEGACY_DB}")
     print(f"Manifest: {LEGACY_MANIFEST}")
 
@@ -489,6 +491,7 @@ def cmd_sync(
                 except Exception:
                     pass
         save_manifest_csv(result, LEGACY_MANIFEST)
+        write_trial_manifest_rows(LEGACY_DB, result.trials)
         print(f"Manifest saved: {LEGACY_MANIFEST}")
     print(f"Sync complete: {LEGACY_DB}")
 
