@@ -642,8 +642,22 @@ def _calculate_spot_xy(
     y_stack = np.column_stack(y_arrays)
     if x_stack.size == 0:
         return np.full((n_frames, 2), np.nan)
-    spot_x = np.nanmean(x_stack, axis=1)
-    spot_y = np.nanmean(y_stack, axis=1)
+    # Per frame: mean over nodes that are finite. If all NaN for that frame, spot is NaN
+    # (avoids np.nanmean "Mean of empty slice" when every constituent is missing).
+    n_x = np.isfinite(x_stack).sum(axis=1)
+    n_y = np.isfinite(y_stack).sum(axis=1)
+    spot_x = np.divide(
+        np.nansum(x_stack, axis=1),
+        n_x,
+        out=np.full(n_frames, np.nan, dtype=float),
+        where=(n_x > 0),
+    )
+    spot_y = np.divide(
+        np.nansum(y_stack, axis=1),
+        n_y,
+        out=np.full(n_frames, np.nan, dtype=float),
+        where=(n_y > 0),
+    )
     return np.column_stack([spot_x, spot_y])
 
 
@@ -668,8 +682,20 @@ def _calculate_centroid_xy(
     y_stack = np.column_stack(y_arrays)
     if x_stack.size == 0:
         return np.full((n_frames, 2), np.nan)
-    cx = np.nanmean(x_stack, axis=1)
-    cy = np.nanmean(y_stack, axis=1)
+    n_x = np.isfinite(x_stack).sum(axis=1)
+    n_y = np.isfinite(y_stack).sum(axis=1)
+    cx = np.divide(
+        np.nansum(x_stack, axis=1),
+        n_x,
+        out=np.full(n_frames, np.nan, dtype=float),
+        where=(n_x > 0),
+    )
+    cy = np.divide(
+        np.nansum(y_stack, axis=1),
+        n_y,
+        out=np.full(n_frames, np.nan, dtype=float),
+        where=(n_y > 0),
+    )
     return np.column_stack([cx, cy])
 
 
