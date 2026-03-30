@@ -19,13 +19,13 @@ PROCESSING_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
 # =============================================================================
 # Paths
 # =============================================================================
-DATA_DIR = Path(r"E:\videos")
+DATA_DIR = Path(r"D:\work sack\vibration maze")
 # Multiple roots for discovery (add e.g. "az model female" to include another folder)
 DATA_DIRS: list[Path] = [
     DATA_DIR,
     # Path(r"D:\work sack\vibration maze\az model female"),
 ]
-OUTPUT_H5 = Path(r"E:\vast_results.h5")
+OUTPUT_H5 = Path(r"C:\Users\d0harv3y\code\IMPRESS\VAST\vast_results.h5")
 
 # =============================================================================
 # Video / timing defaults
@@ -201,3 +201,8 @@ def get_config_snapshot() -> dict:
         "min_node_confidence_threshold": MIN_NODE_CONFIDENCE_THRESHOLD,
         "min_mean_confidence_per_frame": MIN_MEAN_CONFIDENCE_PER_FRAME,
     }
+
+try:
+    from .config_local import *
+except ImportError:
+    pass
