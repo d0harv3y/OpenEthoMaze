@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -32,7 +32,7 @@ from ..config import (
     TRACE_MAX_GAP_FRAMES,
     FILTER_FRAMES_NO_ANIMAL,
 )
-from ..io.file_discovery import TrialManifest
+from ..io.file_discovery import TrialManifest, load_treatment_labels
 from ..io.input_h5_loader import TrialSettings
 from ..io.sleap_loader import (
     load_sleap_file,
@@ -63,14 +63,24 @@ from ..storage.h5_db import (
     write_analysis_duration,
     write_xy_table,
     write_movement_bouts,
-    write_node_summary,
     write_node_summary_by_state,
     write_feedback_error_summary,
     write_config_params,
     write_primary_trajectory,
+    write_animal_notes_attr,
+    upsert_trial_manifest_row,
 )
 
 log = logging.getLogger(__name__)
+
+
+def _animal_notes_from_treatment_csv(manifest: TrialManifest) -> str:
+    """Resolve notes from ``inputs/treatment_labels.csv`` using animal_id then inferred_id."""
+    labels = load_treatment_labels()
+    for k in (manifest.animal_id, manifest.inferred_id or ""):
+        if k and k.strip() and k in labels:
+            return labels[k].notes or ""
+    return ""
 
 
 def _merge_trace_data(
@@ -147,6 +157,7 @@ def process_trial(
 
     # Create trial key (path = /animal_id/session/trial; phase derived from session)
     key = TrialKey.from_manifest(manifest)
+    write_animal_notes_attr(db_path, key.animal_id, _animal_notes_from_treatment_csv(manifest))
 
     log(f"Processing {key.path()}...")
 
@@ -207,6 +218,7 @@ def process_trial(
         # Write config params for reproducibility
         write_config_params(db_path, key)
 
+        upsert_trial_manifest_row(db_path, manifest)
         log(f"  Completed: {key.path()}")
         return True
 
@@ -430,9 +442,6 @@ def _process_with_sleap(
             "time_in_center_fraction": center_run.time_in_center_fraction,
             "n_center_entries": center_run.n_center_entries,
         }
-
-        # Legacy single-window summary remains run-band for backwards compatibility.
-        write_node_summary(db_path, key, point_name, run_summary)
 
         # Optional iti_wait-band metrics (frames before analysis window).
         band_summaries: list[dict[str, Any]] = []

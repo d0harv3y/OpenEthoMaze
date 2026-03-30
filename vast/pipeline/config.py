@@ -19,13 +19,13 @@ PROCESSING_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
 # =============================================================================
 # Paths
 # =============================================================================
-DATA_DIR = Path(r"D:\work sack\vibration maze")
+DATA_DIR = Path(r"E:\videos")
 # Multiple roots for discovery (add e.g. "az model female" to include another folder)
 DATA_DIRS: list[Path] = [
     DATA_DIR,
     # Path(r"D:\work sack\vibration maze\az model female"),
 ]
-OUTPUT_H5 = Path(r"C:\Users\d0harv3y\code\IMPRESS\VAST\vast_results.h5")
+OUTPUT_H5 = Path(r"E:\vast_results.h5")
 
 # =============================================================================
 # Video / timing defaults

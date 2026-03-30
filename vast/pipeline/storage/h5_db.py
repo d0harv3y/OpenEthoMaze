@@ -7,13 +7,14 @@ Output Structure:
     vast_results.h5
     ├── metadata/
     │   ├── config_snapshot (attrs)
+    │   ├── trial_manifest (dataset: manifest CSV columns)
     │   └── animal_labels/
     ├── {animal_id}/
     │   └── {session}/   (e.g. S01, H01 for habituation)
     │       └── {trial}/
     │               ├── attrs: video_path, sleap_path, sleap_model_path, primary_trajectory, timestamp, etc.
     │               ├── ambulation_metrics/
-    │               │   ├── spot/   [xy, movement_bouts, summary (ambulation+exit)]
+    │               │   ├── spot/   [xy, movement_bouts, summary (banded: iti_wait, run)]
     │               │   ├── centroid/
     │               │   └── in-range/   [xy, movement_bouts, summary] (controller/legacy fallback)
     │               └── qc_images/
@@ -24,7 +25,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from datetime import datetime
+    from ..io.file_discovery import TrialManifest
 
 import h5py
 import numpy as np
@@ -66,7 +71,6 @@ class TrialKey:
     @classmethod
     def from_manifest(cls, manifest: "TrialManifest") -> "TrialKey":
         """Create TrialKey from a TrialManifest."""
-        from ..io.file_discovery import TrialManifest
         return cls(
             animal_id=manifest.animal_id,
             session=manifest.session,
@@ -386,7 +390,7 @@ def read_trial_settings(
 
 def read_trial_meta_for_manifest(
     db_path: Optional[Path], key: TrialKey
-) -> tuple[Optional["datetime"], Optional[int]]:
+) -> tuple[Optional[datetime], Optional[int]]:
     """
     Read timestamp and n_frames from trial attrs for manifest backfill.
     Returns (timestamp, n_frames); timestamp is datetime or None, n_frames is int or None.
@@ -620,47 +624,6 @@ def node_summary_by_state_dtype() -> np.dtype:
     return NODE_SUMMARY_BY_STATE_DTYPE
 
 
-def write_node_summary(
-    db_path: Optional[Path],
-    key: TrialKey,
-    point_name: str,
-    summary: dict[str, Any],
-) -> None:
-    """
-    Write combined ambulation + exit summary for a tracking point to
-    ambulation_metrics/<point_name>/summary.
-    Summary and movement_bouts are computed from the analysis window only (ITI excluded).
-    """
-    with open_db(db_path, "a") as h5:
-        g_trial = h5[key.path()]
-        g_amb = _ensure_group(g_trial, "ambulation_metrics")
-        g_pt = _ensure_group(g_amb, point_name)
-
-        arr = np.zeros((1,), dtype=NODE_SUMMARY_DTYPE)
-        # Ambulation
-        arr["total_distance_m"] = float(summary.get("total_distance_m", 0.0))
-        arr["mean_speed_mps"] = float(summary.get("mean_speed_mps", 0.0))
-        arr["max_speed_mps"] = float(summary.get("max_speed_mps", 0.0))
-        arr["time_moving_s"] = float(summary.get("time_moving_s", 0.0))
-        arr["time_immobile_s"] = float(summary.get("time_immobile_s", 0.0))
-        arr["n_movement_bouts"] = int(summary.get("n_movement_bouts", 0))
-        # Exit
-        arr["latency_to_exit_s"] = float(summary.get("latency_to_exit_s", np.nan))
-        arr["time_in_exit_zone_s"] = float(summary.get("time_in_exit_zone_s", 0.0))
-        arr["time_in_exit_zone_fraction"] = float(summary.get("time_in_exit_zone_fraction", 0.0))
-        arr["mean_distance_to_exit_cm"] = float(summary.get("mean_distance_to_exit_cm", np.nan))
-        arr["min_distance_to_exit_cm"] = float(summary.get("min_distance_to_exit_cm", np.nan))
-        arr["path_efficiency"] = float(summary.get("path_efficiency", np.nan))
-        arr["n_exit_zone_entries"] = int(summary.get("n_exit_zone_entries", 0))
-        arr["time_in_center_s"] = float(summary.get("time_in_center_s", 0.0))
-        arr["time_in_center_fraction"] = float(summary.get("time_in_center_fraction", 0.0))
-        arr["n_center_entries"] = int(summary.get("n_center_entries", 0))
-
-        if "summary" in g_pt:
-            del g_pt["summary"]
-        g_pt.create_dataset("summary", data=arr, compression="gzip")
-
-
 def write_node_summary_by_state(
     db_path: Optional[Path],
     key: TrialKey,
@@ -669,7 +632,7 @@ def write_node_summary_by_state(
 ) -> None:
     """
     Write banded ambulation + exit summary for a tracking point to
-    ambulation_metrics/<point_name>/summary_by_state.
+    ambulation_metrics/<point_name>/summary (multi-row: iti_wait, run, …).
 
     Each element of `summaries` should contain:
       - trial_state: str (e.g. \"iti_wait\" or \"run\")
@@ -690,9 +653,31 @@ def write_node_summary_by_state(
         g_trial = h5[key.path()]
         g_amb = _ensure_group(g_trial, "ambulation_metrics")
         g_pt = _ensure_group(g_amb, point_name)
-        if "summary_by_state" in g_pt:
-            del g_pt["summary_by_state"]
-        g_pt.create_dataset("summary_by_state", data=arr, compression="gzip")
+        for old_name in ("summary", "summary_by_state"):
+            if old_name in g_pt:
+                del g_pt[old_name]
+        g_pt.create_dataset("summary", data=arr, compression="gzip")
+
+
+def _summary_run_row(g_pt: Any) -> Optional[np.ndarray]:
+    """Pick the analysis-window (run) row from a banded summary dataset, if present."""
+    if "summary" not in g_pt:
+        return None
+    arr = g_pt["summary"][:]
+    if arr.shape[0] == 0:
+        return None
+    names = arr.dtype.names or ()
+    if "trial_state" not in names:
+        return arr[0]
+    for i in range(arr.shape[0]):
+        ts = arr["trial_state"][i]
+        if isinstance(ts, bytes):
+            ts = ts.decode("utf-8", errors="replace").strip()
+        else:
+            ts = str(ts).strip()
+        if ts == "run":
+            return arr[i]
+    return arr[arr.shape[0] - 1]
 
 
 def read_exit_metrics(
@@ -702,14 +687,15 @@ def read_exit_metrics(
 ) -> Optional[np.ndarray]:
     """
     Read exit metrics for a trial from ambulation_metrics/<point_name>/summary.
-    Returns a single-row array with exit_metrics_dtype-like fields for backward compatibility.
+    Uses the \"run\" band when summaries are banded (multi-row).
     """
     try:
         with open_db(db_path, "r") as h5:
             g_trial = h5[key.path()]
             g_pt = g_trial["ambulation_metrics"][point_name]
-            summary = g_pt["summary"][0]
-            # Return view with exit fields only (same names as old exit_metrics/summary)
+            summary = _summary_run_row(g_pt)
+            if summary is None:
+                return None
             exit_dtype = np.dtype([
                 ("latency_to_exit_s", np.float64),
                 ("time_in_exit_zone_s", np.float64),
@@ -740,10 +726,6 @@ def exit_metrics_dtype() -> np.dtype:
         ("n_exit_zone_entries", np.int32),
     ])
 
-
-# =============================================================================
-# Ambulation Summary (legacy: use write_node_summary for new code)
-# =============================================================================
 
 def ambulation_summary_dtype() -> np.dtype:
     """Structured dtype for ambulation-only summary (subset of node summary)."""
@@ -818,6 +800,65 @@ def read_qc_image(
 # Animal Labels (Treatment Groups)
 # =============================================================================
 
+
+def write_animal_notes_attr(
+    db_path: Optional[Path],
+    animal_id: str,
+    notes: str,
+) -> None:
+    """Set ``notes`` on the top-level ``/{animal_id}`` group (from treatment_labels CSV)."""
+    with open_db(db_path, "a") as h5:
+        if animal_id in h5:
+            g_animal = h5[animal_id]
+        else:
+            g_animal = h5.create_group(animal_id)
+        g_animal.attrs["notes"] = _safe_str(notes)
+
+
+def upsert_trial_manifest_row(db_path: Optional[Path], manifest: "TrialManifest") -> None:
+    """
+    Append or replace one row in ``metadata/trial_manifest`` (columns match trial manifest CSV).
+    """
+    from ..io.file_discovery import MANIFEST_CSV_FIELDNAMES, trial_manifest_csv_row_values
+
+    vals = trial_manifest_csv_row_values(manifest)
+    # identity = (animal_id, session, trial); CSV column order has original_session at index 2
+    row_key = (str(manifest.animal_id), str(manifest.session), str(manifest.trial))
+    dt = np.dtype([(name, h5py.string_dtype(encoding="utf-8")) for name in MANIFEST_CSV_FIELDNAMES])
+
+    def decode_cell(x: Any) -> str:
+        if isinstance(x, bytes):
+            return x.decode("utf-8", errors="replace")
+        if x is None:
+            return ""
+        return str(x)
+
+    with open_db(db_path, "a") as h5:
+        meta = _ensure_group(h5, "metadata")
+        name = "trial_manifest"
+        rows: list[tuple[str, ...]] = []
+        if name in meta:
+            old = meta[name][:]
+            for i in range(old.shape[0]):
+                t = tuple(decode_cell(old[i][fn]) for fn in MANIFEST_CSV_FIELDNAMES)
+                rows.append(t)
+            replaced = False
+            for i, t in enumerate(rows):
+                if (t[0], t[1], t[3]) == row_key:
+                    rows[i] = tuple(str(v) for v in vals)
+                    replaced = True
+                    break
+            if not replaced:
+                rows.append(tuple(str(v) for v in vals))
+        else:
+            rows.append(tuple(str(v) for v in vals))
+        new_arr = np.array(rows, dtype=dt)
+        if name in meta:
+            del meta[name]
+        chunk = min(64, max(1, len(new_arr)))
+        meta.create_dataset(name, data=new_arr, compression="gzip", chunks=(chunk,))
+
+
 def write_animal_label(
     db_path: Optional[Path],
     animal_id: str,
@@ -875,6 +916,7 @@ def read_animal_label(
             return {
                 "sex": _safe_str(g_animal.attrs.get("sex", "")),
                 "tx": _safe_str(g_animal.attrs.get("tx", "")),
+                "notes": _safe_str(g_animal.attrs.get("notes", "")),
                 "strain": _safe_str(g_animal.attrs.get("strain", "")),
                 "experiment": _safe_str(g_animal.attrs.get("experiment", "")),
                 "researcher": _safe_str(g_animal.attrs.get("researcher", "")),

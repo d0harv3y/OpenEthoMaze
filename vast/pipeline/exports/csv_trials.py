@@ -1,13 +1,16 @@
+"""CSV export for VAST: long-format metrics with trial_state and trajectory_source."""
+
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Optional
 
 import csv
 import math
 import numpy as np
 
-from ..config import IN_RANGE_POINT_NAME, OUTPUT_H5
+from ...core.schema import NODE_SUMMARY_DTYPE
+from ..config import HYBRID_POINT_NAME, OUTPUT_H5
 from ..storage.h5_db import (
     TrialKey,
     list_trials,
@@ -16,253 +19,30 @@ from ..storage.h5_db import (
 )
 
 
-def _iter_trial_keys(db_path: Path) -> Iterable[TrialKey]:
-    """Yield all trials in the database."""
-    return list_trials(db_path)
+def _decode_trial_state(val: Any) -> str:
+    if isinstance(val, bytes):
+        return val.decode("utf-8", errors="replace").strip()
+    return str(val or "").strip()
 
 
-def _read_node_summaries_by_state(g_trial, point_name: str) -> np.ndarray | None:
-    """Read banded node summaries (summary_by_state) if present."""
-    g_amb = g_trial.get("ambulation_metrics")
-    if g_amb is None or point_name not in g_amb:
+def _run_band_summary_row(g_pt: Any) -> Any | None:
+    if "summary" not in g_pt:
         return None
-    g_pt = g_amb[point_name]
-    if "summary_by_state" in g_pt:
-        return g_pt["summary_by_state"][:]
-    return None
-
-
-def _read_node_summary(g_trial, point_name: str) -> np.ndarray | None:
-    """Read legacy single summary dataset for a tracking point."""
-    g_amb = g_trial.get("ambulation_metrics")
-    if g_amb is None or point_name not in g_amb:
+    arr = g_pt["summary"][:]
+    if arr.shape[0] == 0:
         return None
-    g_pt = g_amb[point_name]
-    if "summary" in g_pt:
-        return g_pt["summary"][:]
-    return None
+    names = arr.dtype.names or ()
+    if names and "trial_state" in names:
+        for i in range(arr.shape[0]):
+            if _decode_trial_state(arr["trial_state"][i]) == "run":
+                return arr[i]
+        return arr[arr.shape[0] - 1]
+    return arr[0]
 
 
-def _rows_for_trial(
-    db_path: Path,
-    key: TrialKey,
-    include_mistrials: bool,
-) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    with open_db(db_path, "r") as h5:
-        g_trial = h5[key.path()]
-
-        # Skip mistrials unless explicitly requested.
-        mistrial_reason = g_trial.attrs.get("mistrial_reason", "")
-        if isinstance(mistrial_reason, bytes):
-            mistrial_reason = mistrial_reason.decode("utf-8")
-        if mistrial_reason and not include_mistrials:
-            return []
-
-        primary_trajectory = g_trial.attrs.get("primary_trajectory", "spot")
-        if isinstance(primary_trajectory, bytes):
-            primary_trajectory = primary_trajectory.decode("utf-8")
-
-        # Prefer banded summaries; fall back to single-summary when not available.
-        spot_banded = _read_node_summaries_by_state(g_trial, "spot")
-        inrange_banded = _read_node_summaries_by_state(g_trial, IN_RANGE_POINT_NAME)
-
-        if spot_banded is not None and inrange_banded is not None:
-            # Expect rows for iti_wait and run bands; build CSV rows for each band.
-            for band in ["iti_wait", "run"]:
-                band_bytes = band.encode("utf-8")
-                spot_rows = spot_banded[spot_banded["trial_state"] == band_bytes]
-                inrange_rows = inrange_banded[inrange_banded["trial_state"] == band_bytes]
-                if not len(spot_rows) or not len(inrange_rows):
-                    continue
-                spot_summary = spot_rows[0]
-                inrange_summary = inrange_rows[0]
-                # Primary metrics for this band (use primary_trajectory to pick source).
-                primary = spot_summary if primary_trajectory == "spot" else inrange_summary
-                # Core primary metric: total_distance_m
-                rows.append({
-                    "animal_id": key.animal_id,
-                    "session": key.session,
-                    "trial": key.trial,
-                    "trial_state": band,
-                    "primary_trajectory": primary_trajectory,
-                    "metric": "total_distance_m",
-                    "value": float(primary["total_distance_m"]),
-                })
-                # Per-trajectory extras for this band.
-                rows.append({
-                    "animal_id": key.animal_id,
-                    "session": key.session,
-                    "trial": key.trial,
-                    "trial_state": band,
-                    "primary_trajectory": primary_trajectory,
-                    "metric": "spot_total_distance_m",
-                    "value": float(spot_summary["total_distance_m"]),
-                })
-                rows.append({
-                    "animal_id": key.animal_id,
-                    "session": key.session,
-                    "trial": key.trial,
-                    "trial_state": band,
-                    "primary_trajectory": primary_trajectory,
-                    "metric": f"{IN_RANGE_POINT_NAME}_total_distance_m",
-                    "value": float(inrange_summary["total_distance_m"]),
-                })
-                rows.append({
-                    "animal_id": key.animal_id,
-                    "session": key.session,
-                    "trial": key.trial,
-                    "trial_state": band,
-                    "primary_trajectory": primary_trajectory,
-                    "metric": "spot_latency_to_exit_s",
-                    "value": float(spot_summary["latency_to_exit_s"]),
-                })
-                rows.append({
-                    "animal_id": key.animal_id,
-                    "session": key.session,
-                    "trial": key.trial,
-                    "trial_state": band,
-                    "primary_trajectory": primary_trajectory,
-                    "metric": f"{IN_RANGE_POINT_NAME}_latency_to_exit_s",
-                    "value": float(inrange_summary["latency_to_exit_s"]),
-                })
-        else:
-            # Legacy path: single band (treated as run) without trial_state split.
-            spot_summary_arr = _read_node_summary(g_trial, "spot")
-            inrange_summary_arr = _read_node_summary(g_trial, IN_RANGE_POINT_NAME)
-            if spot_summary_arr is None or inrange_summary_arr is None:
-                return []
-            spot_summary = spot_summary_arr[0]
-            inrange_summary = inrange_summary_arr[0]
-            band = "run"
-            primary = spot_summary if primary_trajectory == "spot" else inrange_summary
-            rows.append({
-                "animal_id": key.animal_id,
-                "session": key.session,
-                "trial": key.trial,
-                "trial_state": band,
-                "primary_trajectory": primary_trajectory,
-                "metric": "total_distance_m",
-                "value": float(primary["total_distance_m"]),
-            })
-            rows.append({
-                "animal_id": key.animal_id,
-                "session": key.session,
-                "trial": key.trial,
-                "trial_state": band,
-                "primary_trajectory": primary_trajectory,
-                "metric": "spot_total_distance_m",
-                "value": float(spot_summary["total_distance_m"]),
-            })
-            rows.append({
-                "animal_id": key.animal_id,
-                "session": key.session,
-                "trial": key.trial,
-                "trial_state": band,
-                "primary_trajectory": primary_trajectory,
-                "metric": f"{IN_RANGE_POINT_NAME}_total_distance_m",
-                "value": float(inrange_summary["total_distance_m"]),
-            })
-            rows.append({
-                "animal_id": key.animal_id,
-                "session": key.session,
-                "trial": key.trial,
-                "trial_state": band,
-                "primary_trajectory": primary_trajectory,
-                "metric": "spot_latency_to_exit_s",
-                "value": float(spot_summary["latency_to_exit_s"]),
-            })
-            rows.append({
-                "animal_id": key.animal_id,
-                "session": key.session,
-                "trial": key.trial,
-                "trial_state": band,
-                "primary_trajectory": primary_trajectory,
-                "metric": f"{IN_RANGE_POINT_NAME}_latency_to_exit_s",
-                "value": float(inrange_summary["latency_to_exit_s"]),
-            })
-    return rows
-
-
-def export_trial_summary(
-    db_path: Path,
-    output_path: Path,
-    include_mistrials: bool = False,
-) -> None:
-    """
-    Export per-trial summary metrics to a CSV file.
-
-    Emits one logical row per (trial, trial_state_band, metric), where
-    trial_state_band is \"iti_wait\" or \"run\" when banded summaries are available.
-    """
-    db_path = Path(db_path)
-    output_path = Path(output_path)
-    all_rows: list[dict[str, Any]] = []
-    for key in _iter_trial_keys(db_path):
-        all_rows.extend(_rows_for_trial(db_path, key, include_mistrials=include_mistrials))
-    if not all_rows:
-        # Still write header for empty export.
-        fieldnames = ["animal_id", "session", "trial", "trial_state", "primary_trajectory", "metric", "value"]
-        with output_path.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-        return
-
-    fieldnames = ["animal_id", "session", "trial", "trial_state", "primary_trajectory", "metric", "value"]
-    with output_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in all_rows:
-            writer.writerow(row)
-
-
-def export_all(
-    db_path: Path,
-    output_dir: Path | None = None,
-    include_mistrials: bool = False,
-) -> Dict[str, Path]:
-    """
-    Export all standard CSV outputs.
-
-    Currently only trial summary CSV is implemented.
-    """
-    db_path = Path(db_path)
-    if output_dir is None:
-        output_dir = db_path.parent
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    summary_csv = output_dir / "vast_trial_summary.csv"
-    export_trial_summary(db_path=db_path, output_path=summary_csv, include_mistrials=include_mistrials)
-    return {"trial_summary": summary_csv}
-
-"""
-CSV export module for VAST pipeline.
-
-Exports trial metrics to a long-format CSV file for downstream analysis.
-Output format:
-    experiment, session, trial, timestamp, animal_id, strain, sex, researcher, drug, treatment, exit#, metric, value
-
-Metrics exported:
-    - trial_duration_s, total_distance_m, time_still_s, avg_speed_mps, n_movement_bout
-    - latency_to_exit_s, time_in_exit_zone_s, mean_distance_to_exit_cm, path_efficiency
-    - time_in_center_s, n_center_entries (center zone with 0.5s debounce)
-    - n_feedback_error_bouts, feedback_error_duration_s (stimuli incongruencies)
-"""
-
-# Mapping of metric names from database to output CSV (primary = from primary_trajectory attr)
+# Trial-level metrics only (not duplicated from spot_hybrid banded summary rows).
 METRIC_MAPPING = {
-    "trial_duration_s": "duration_s",  # database attr name
-    "total_distance_m": "total_distance_m",
-    "time_still_s": "time_immobile_s",
-    "avg_speed_mps": "mean_speed_mps",
-    "n_movement_bout": "n_movement_bouts",
-    "latency_to_exit_s": "latency_to_exit_s",
-    "time_in_exit_zone_s": "time_in_exit_zone_s",
-    "mean_distance_to_exit_cm": "mean_distance_to_exit_cm",
-    "path_efficiency": "path_efficiency",
-    "time_in_center_s": "time_in_center_s",
-    "n_center_entries": "n_center_entries",
+    "trial_duration_s": "duration_s",
     "n_feedback_error_bouts": "n_incongruent_bouts",
     "feedback_error_duration_s": "incongruent_duration_s",
 }
@@ -294,6 +74,40 @@ def _format_value(value: Any) -> str:
         # Format floats with reasonable precision
         return f"{float(value):.6g}"
     return str(value)
+
+
+def _append_hybrid_summary_metric_rows(
+    rows: list[dict[str, Any]],
+    base_row: dict[str, Any],
+    g_trial: Any,
+) -> None:
+    g_amb = g_trial.get("ambulation_metrics")
+    if g_amb is None or HYBRID_POINT_NAME not in g_amb:
+        return
+    g_pt = g_amb[HYBRID_POINT_NAME]
+    if "summary" not in g_pt:
+        return
+    arr = g_pt["summary"][:]
+    if arr.shape[0] == 0 or not arr.dtype.names or "trial_state" not in arr.dtype.names:
+        return
+    for i in range(arr.shape[0]):
+        band = _decode_trial_state(arr["trial_state"][i])
+        for field in NODE_SUMMARY_DTYPE.names:
+            raw = arr[field][i]
+            if isinstance(raw, np.floating):
+                value: Any = float(raw)
+            elif isinstance(raw, np.integer):
+                value = int(raw)
+            else:
+                value = raw
+            if not _is_valid_value(value):
+                continue
+            rows.append({
+                **base_row,
+                "trial_state": band,
+                "metric": field,
+                "value": _format_value(value),
+            })
 
 
 def _format_session(key: TrialKey) -> str:
@@ -337,11 +151,7 @@ def _extract_trial_metrics(db_path: Path, key: TrialKey) -> dict[str, Any]:
         "incongruent_duration_s": None,
         "mistrial_reason": "",
         "sleap_model_path": "",
-        "primary_trajectory": "spot",
-        "spot_total_distance_m": None,
-        "spot_latency_to_exit_s": None,
-        "in_range_total_distance_m": None,
-        "in_range_latency_to_exit_s": None,
+        "trajectory_source": HYBRID_POINT_NAME,
     }
 
     try:
@@ -360,44 +170,30 @@ def _extract_trial_metrics(db_path: Path, key: TrialKey) -> dict[str, Any]:
             if isinstance(_smp, bytes):
                 _smp = _smp.decode("utf-8", errors="replace")
             result["sleap_model_path"] = str(_smp) if _smp else ""
-            _pt = g_trial.attrs.get("primary_trajectory", "spot")
+            _pt = g_trial.attrs.get("primary_trajectory", HYBRID_POINT_NAME)
             if isinstance(_pt, bytes):
                 _pt = _pt.decode("utf-8", errors="replace")
-            result["primary_trajectory"] = str(_pt).strip() or "spot"
-
-            # Ambulation + exit: read spot and in-range summaries; primary metrics from primary_trajectory
-            def _read_summary(g_amb: Any, point_name: str) -> Optional[Any]:
-                if point_name not in g_amb or "summary" not in g_amb[point_name]:
-                    return None
-                return g_amb[point_name]["summary"][0]
+            result["trajectory_source"] = str(_pt).strip() or HYBRID_POINT_NAME
 
             if "ambulation_metrics" in g_trial:
                 g_amb = g_trial["ambulation_metrics"]
-                summary_spot = _read_summary(g_amb, "spot")
-                summary_inrange = _read_summary(g_amb, "in-range")
-                primary = result["primary_trajectory"]
-                summary_primary = summary_inrange if primary == "in-range" else summary_spot
-                if summary_primary is None:
-                    summary_primary = summary_spot or summary_inrange
-                if summary_primary is not None:
-                    result["total_distance_m"] = float(summary_primary["total_distance_m"])
-                    result["mean_speed_mps"] = float(summary_primary["mean_speed_mps"])
-                    result["time_immobile_s"] = float(summary_primary["time_immobile_s"])
-                    result["n_movement_bouts"] = int(summary_primary["n_movement_bouts"])
-                    result["latency_to_exit_s"] = float(summary_primary["latency_to_exit_s"])
-                    result["time_in_exit_zone_s"] = float(summary_primary["time_in_exit_zone_s"])
-                    result["mean_distance_to_exit_cm"] = float(summary_primary["mean_distance_to_exit_cm"])
-                    result["path_efficiency"] = float(summary_primary["path_efficiency"])
-                    if "time_in_center_s" in summary_primary.dtype.names:
-                        result["time_in_center_s"] = float(summary_primary["time_in_center_s"])
-                    if "n_center_entries" in summary_primary.dtype.names:
-                        result["n_center_entries"] = int(summary_primary["n_center_entries"])
-                if summary_spot is not None:
-                    result["spot_total_distance_m"] = float(summary_spot["total_distance_m"])
-                    result["spot_latency_to_exit_s"] = float(summary_spot["latency_to_exit_s"])
-                if summary_inrange is not None:
-                    result["in_range_total_distance_m"] = float(summary_inrange["total_distance_m"])
-                    result["in_range_latency_to_exit_s"] = float(summary_inrange["latency_to_exit_s"])
+                if HYBRID_POINT_NAME in g_amb:
+                    summary_primary = _run_band_summary_row(g_amb[HYBRID_POINT_NAME])
+                    if summary_primary is not None:
+                        result["total_distance_m"] = float(summary_primary["total_distance_m"])
+                        result["mean_speed_mps"] = float(summary_primary["mean_speed_mps"])
+                        result["time_immobile_s"] = float(summary_primary["time_immobile_s"])
+                        result["n_movement_bouts"] = int(summary_primary["n_movement_bouts"])
+                        result["latency_to_exit_s"] = float(summary_primary["latency_to_exit_s"])
+                        result["time_in_exit_zone_s"] = float(summary_primary["time_in_exit_zone_s"])
+                        result["mean_distance_to_exit_cm"] = float(
+                            summary_primary["mean_distance_to_exit_cm"]
+                        )
+                        result["path_efficiency"] = float(summary_primary["path_efficiency"])
+                        if "time_in_center_s" in summary_primary.dtype.names:
+                            result["time_in_center_s"] = float(summary_primary["time_in_center_s"])
+                        if "n_center_entries" in summary_primary.dtype.names:
+                            result["n_center_entries"] = int(summary_primary["n_center_entries"])
 
             # Feedback error (incongruent feedback)
             if "feedback" in g_trial:
@@ -421,11 +217,9 @@ def export_trial_summary(
     """
     Export trial-level summary metrics to long-format CSV.
 
-    Output columns:
-        experiment, session, trial, timestamp, animal_id, strain, sex, researcher, drug, treatment, exit#, metric, value
-
-    Metrics exported:
-        trial_duration_s, total_distance_m, time_still_s, avg_speed_mps, n_movement_bout
+    Output columns include trajectory_source, trial_state, metric, value.
+    Per-point metrics come from ambulation_metrics/spot_hybrid/summary (iti_wait and run).
+    Trial-level metrics use trial_state run.
 
     Rows are only emitted for metrics that have valid data. Trials without
     processed data (no SLEAP tracking) will not have metric rows in the output.
@@ -490,40 +284,30 @@ def export_trial_summary(
             "treatment": treatment,
             "exit#": _format_value(exit_num) if _is_valid_value(exit_num) else "",
             "sleap_model_path": metrics.get("sleap_model_path") or "",
-            "primary_trajectory": metrics.get("primary_trajectory") or "spot",
+            "trajectory_source": metrics.get("trajectory_source") or HYBRID_POINT_NAME,
         }
 
-        # Create one row per metric (long format), skip if no valid value
+        with open_db(db_path, "r") as h5:
+            g_trial = h5[key.path()]
+            _append_hybrid_summary_metric_rows(rows, base_row, g_trial)
+
+        # Trial-level metrics (analysis window / feedback); attribute to run band
         for output_metric, db_field in METRIC_MAPPING.items():
             value = metrics.get(db_field)
             if not _is_valid_value(value):
-                continue  # Skip rows with no data
+                continue
             rows.append({
                 **base_row,
+                "trial_state": "run",
                 "metric": output_metric,
                 "value": _format_value(value),
             })
 
-        # Expose both trajectories (spot and in-range) for key metrics
-        for metric_key, output_name in (
-            ("spot_total_distance_m", "spot_total_distance_m"),
-            ("spot_latency_to_exit_s", "spot_latency_to_exit_s"),
-            ("in_range_total_distance_m", "in_range_total_distance_m"),
-            ("in_range_latency_to_exit_s", "in_range_latency_to_exit_s"),
-        ):
-            value = metrics.get(metric_key)
-            if _is_valid_value(value):
-                rows.append({
-                    **base_row,
-                    "metric": output_name,
-                    "value": _format_value(value),
-                })
-
     # Write CSV
     fieldnames = [
         "experiment", "session", "trial", "timestamp", "animal_id", "strain", "sex",
-        "researcher", "drug", "treatment", "exit#", "sleap_model_path", "primary_trajectory",
-        "metric", "value",
+        "researcher", "drug", "treatment", "exit#", "sleap_model_path", "trajectory_source",
+        "trial_state", "metric", "value",
     ]
 
     with open(output_path, "w", newline="", encoding="utf-8") as f:
@@ -701,35 +485,26 @@ def export_all_for_dbs(
                 "treatment": treatment,
                 "exit#": _format_value(exit_num) if _is_valid_value(exit_num) else "",
                 "sleap_model_path": metrics.get("sleap_model_path") or "",
-                "primary_trajectory": metrics.get("primary_trajectory") or "spot",
+                "trajectory_source": metrics.get("trajectory_source") or HYBRID_POINT_NAME,
             }
+            with open_db(db_path, "r") as h5:
+                g_trial = h5[key.path()]
+                _append_hybrid_summary_metric_rows(all_rows, base_row, g_trial)
             for output_metric, db_field in METRIC_MAPPING.items():
                 value = metrics.get(db_field)
                 if not _is_valid_value(value):
                     continue
                 all_rows.append({
                     **base_row,
+                    "trial_state": "run",
                     "metric": output_metric,
                     "value": _format_value(value),
                 })
-            for metric_key, output_name in (
-                ("spot_total_distance_m", "spot_total_distance_m"),
-                ("spot_latency_to_exit_s", "spot_latency_to_exit_s"),
-                ("in_range_total_distance_m", "in_range_total_distance_m"),
-                ("in_range_latency_to_exit_s", "in_range_latency_to_exit_s"),
-            ):
-                value = metrics.get(metric_key)
-                if _is_valid_value(value):
-                    all_rows.append({
-                        **base_row,
-                        "metric": output_name,
-                        "value": _format_value(value),
-                    })
 
     fieldnames = [
         "experiment", "session", "trial", "timestamp", "animal_id", "strain", "sex",
-        "researcher", "drug", "treatment", "exit#", "sleap_model_path", "primary_trajectory",
-        "metric", "value",
+        "researcher", "drug", "treatment", "exit#", "sleap_model_path", "trajectory_source",
+        "trial_state", "metric", "value",
     ]
     with summary_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

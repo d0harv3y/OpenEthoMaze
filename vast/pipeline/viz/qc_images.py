@@ -72,7 +72,7 @@ def generate_trial_qc_images(
     try:
         if not arena_radius_px or arena_radius_px <= 0:
             return  # Skip: scale would be invalid
-        composite = generate_composite_qc_image(
+        out = generate_composite_qc_image(
             trajectory_xy=trajectory_xy,
             trajectory_valid=trajectory_valid,
             exit_pos=exit_pos,
@@ -84,14 +84,18 @@ def generate_trial_qc_images(
             image_size=image_size,
             xy_list_heatmap=xy_list_heatmap,
         )
-        if composite is not None:
-            write_qc_image(db_path, key, image_name, composite, attrs=qc_attrs or None)
+        if out is not None:
+            composite, cb_min_s, cb_max_s = out
+            merged = dict(qc_attrs or {})
+            merged["colorbar_min_s"] = float(cb_min_s)
+            merged["colorbar_max_s"] = float(cb_max_s)
+            write_qc_image(db_path, key, image_name, composite, attrs=merged)
     except Exception as e:
         import warnings
         warnings.warn(f"QC composite skipped for {key.path()}: {e}", stacklevel=1)
 
 
-def _render_dwell_heatmap_bgr(
+def _render_dwell_heatmap_bgr(  # returns (bgr, colorbar_min_s, colorbar_max_s)
     height: int,
     width: int,
     xy: np.ndarray,
@@ -105,7 +109,7 @@ def _render_dwell_heatmap_bgr(
     scale: float,
     center_x: float,
     center_y: float,
-) -> np.ndarray:
+) -> tuple[np.ndarray, float, float]:
     """
     Build dwell-time heatmap in image space. Accumulate in frame counts,
     convert to seconds, blur, apply compensation_factor, normalize, colormap.
@@ -141,18 +145,20 @@ def _render_dwell_heatmap_bgr(
         dwell_time_s = dwell_time_s * compensation_factor
 
     if max_dwell_time_s > 0:
+        scale_max = float(max_dwell_time_s)
         heat8 = np.clip(
-            (dwell_time_s / float(max_dwell_time_s)) * 255.0, 0, 255
+            (dwell_time_s / scale_max) * 255.0, 0, 255
         ).astype(np.uint8)
     else:
         max_val = float(np.nanmax(dwell_time_s))
+        scale_max = max_val if max_val > 0 else 0.0
         heat8 = (
             np.clip((dwell_time_s / max_val) * 255.0, 0, 255).astype(np.uint8)
             if max_val > 0
             else np.zeros((height, width), dtype=np.uint8)
         )
 
-    return cv2.applyColorMap(heat8, _COLORMAP)
+    return cv2.applyColorMap(heat8, _COLORMAP), 0.0, scale_max
 
 
 def _render_dwell_heatmap_bgr_multi(
@@ -168,7 +174,7 @@ def _render_dwell_heatmap_bgr_multi(
     scale: float,
     center_x: float,
     center_y: float,
-) -> np.ndarray:
+) -> tuple[np.ndarray, float, float]:
     """
     Build dwell-time heatmap from multiple (xy, valid) series (e.g. all nodes).
     Accumulates every valid (x, y) across all nodes and frames into one heat grid.
@@ -204,18 +210,20 @@ def _render_dwell_heatmap_bgr_multi(
         dwell_time_s = dwell_time_s * compensation_factor
 
     if max_dwell_time_s > 0:
+        scale_max = float(max_dwell_time_s)
         heat8 = np.clip(
-            (dwell_time_s / float(max_dwell_time_s)) * 255.0, 0, 255
+            (dwell_time_s / scale_max) * 255.0, 0, 255
         ).astype(np.uint8)
     else:
         max_val = float(np.nanmax(dwell_time_s))
+        scale_max = max_val if max_val > 0 else 0.0
         heat8 = (
             np.clip((dwell_time_s / max_val) * 255.0, 0, 255).astype(np.uint8)
             if max_val > 0
             else np.zeros((height, width), dtype=np.uint8)
         )
 
-    return cv2.applyColorMap(heat8, _COLORMAP)
+    return cv2.applyColorMap(heat8, _COLORMAP), 0.0, scale_max
 
 
 def _render_colorbar(
@@ -243,7 +251,7 @@ def generate_composite_qc_image(
     margin: int = 20,
     colorbar_width: int = 80,
     xy_list_heatmap: Optional[XYValidList] = None,
-) -> Optional[np.ndarray]:
+) -> Optional[tuple[np.ndarray, float, float]]:
     """
     Generate a single composite QC image: heatmap + arena + exit zone + trajectory + colorbar.
 
@@ -267,7 +275,7 @@ def generate_composite_qc_image(
 
     # Base: dwell heatmap (all nodes or trajectory)
     if xy_list_heatmap and len(xy_list_heatmap) > 0:
-        base = _render_dwell_heatmap_bgr_multi(
+        base, cb_min_s, cb_max_s = _render_dwell_heatmap_bgr_multi(
             height=image_size,
             width=image_size,
             xy_valid_list=xy_list_heatmap,
@@ -282,7 +290,7 @@ def generate_composite_qc_image(
             center_y=center_y,
         )
     else:
-        base = _render_dwell_heatmap_bgr(
+        base, cb_min_s, cb_max_s = _render_dwell_heatmap_bgr(
             height=image_size,
             width=image_size,
             xy=trajectory_xy,
@@ -345,4 +353,4 @@ def generate_composite_qc_image(
     composite[:, :image_size] = base
     composite[:, image_size:] = colorbar
 
-    return composite
+    return composite, cb_min_s, cb_max_s
