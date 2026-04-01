@@ -125,6 +125,7 @@ def _session_to_dict(c: SessionConfig) -> Dict[str, Any]:
         "max_trial_duration_s": c.max_trial_duration_s,
         "iti_s": c.iti_s,
         "seed": c.seed,
+        "legacy_seed_db_path": c.legacy_seed_db_path,
         "animals": [_animal_to_dict(a) for a in c.animals],
     }
 
@@ -137,6 +138,7 @@ def _session_from_dict(d: Dict[str, Any]) -> SessionConfig:
         max_trial_duration_s=float(d.get("max_trial_duration_s", 300.0)),
         iti_s=float(d.get("iti_s", 30.0)),
         seed=d.get("seed"),
+        legacy_seed_db_path=d.get("legacy_seed_db_path"),
         animals=animals,
     )
 
@@ -191,6 +193,8 @@ def config_to_dict(config: ControllerConfig) -> Dict[str, Any]:
         "fallback_tracking": _fallback_tracking_to_dict(config.fallback_tracking),
         "sleap_confidence_pct": config.sleap_confidence_pct,
         "sleap_every_n": config.sleap_every_n,
+        "sleap_exit_min_keypoints": config.sleap_exit_min_keypoints,
+        "fallback_exit_blob_overlap_pct": config.fallback_exit_blob_overlap_pct,
         "sleap_model_path": config.sleap_model_path or "",
         "track_show": config.track_show,
         "track_async": config.track_async,
@@ -270,6 +274,8 @@ def config_from_dict(d: Dict[str, Any]) -> ControllerConfig:
         fallback_tracking=_fallback_tracking_from_dict(d.get("fallback_tracking", {})),
         sleap_confidence_pct=int(d.get("sleap_confidence_pct", 50)),
         sleap_every_n=max(1, min(5, int(d.get("sleap_every_n", 1)))),
+        sleap_exit_min_keypoints=max(1, int(d.get("sleap_exit_min_keypoints", 2))),
+        fallback_exit_blob_overlap_pct=max(0.0, min(100.0, float(d.get("fallback_exit_blob_overlap_pct", 15.0)))),
         sleap_model_path=str(d.get("sleap_model_path", "") or "").strip(),
         track_show=bool(d.get("track_show", True)),
         track_async=bool(d.get("track_async", False)),

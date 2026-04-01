@@ -25,6 +25,7 @@ from vast.core.storage import open_db, write_feedback_table, write_xy_table
 from .h5_writer import (
     init_database,
     ensure_trial_group,
+    write_animal_label,
     write_trial_settings,
     write_video_meta,
 )
@@ -43,6 +44,12 @@ class XYRow:
     t_s: float
     x: float
     y: float
+    spot_x: float
+    spot_y: float
+    in_range_x: float
+    in_range_y: float
+    centroid_x: float
+    centroid_y: float
     dist_to_exit_px: float
     trial_state: str  # "iti" | "wait" | "run"
     in_exit_zone: bool
@@ -138,6 +145,9 @@ class TrialRecorder:
         in_exit_zone: bool,
         valid: bool,
         duty_pct: float,
+        spot_xy: Optional[Tuple[float, float]] = None,
+        in_range_xy: Optional[Tuple[float, float]] = None,
+        centroid_xy: Optional[Tuple[float, float]] = None,
     ) -> None:
         if self._video_writer is not None:
             if image.ndim == 2:
@@ -151,6 +161,12 @@ class TrialRecorder:
                 frame_index=frame_index,
                 t_s=t_s,
                 x=x_px, y=y_px,
+                spot_x=float(spot_xy[0]) if spot_xy is not None else np.nan,
+                spot_y=float(spot_xy[1]) if spot_xy is not None else np.nan,
+                in_range_x=float(in_range_xy[0]) if in_range_xy is not None else np.nan,
+                in_range_y=float(in_range_xy[1]) if in_range_xy is not None else np.nan,
+                centroid_x=float(centroid_xy[0]) if centroid_xy is not None else np.nan,
+                centroid_y=float(centroid_xy[1]) if centroid_xy is not None else np.nan,
                 dist_to_exit_px=dist_to_exit_px,
                 trial_state=trial_state,
                 in_exit_zone=in_exit_zone,
@@ -222,6 +238,22 @@ class TrialRecorder:
         run_phase = self.config.run_phase or "habituation"
         run_mode = self.config.run_mode or "continuous"
         with open_db(self.db_path, "a") as h5:
+            animal_meta = next(
+                (a for a in self.config.session.animals if str(a.animal_id) == str(self.animal_id)),
+                None,
+            )
+            if animal_meta is not None:
+                write_animal_label(
+                    h5,
+                    self.animal_id,
+                    sex=animal_meta.sex,
+                    tx=animal_meta.tx,
+                    strain=animal_meta.strain,
+                    experiment=None,
+                    researcher=None,
+                    drug=animal_meta.drug,
+                    notes=animal_meta.notes,
+                )
             g = ensure_trial_group(
                 h5,
                 self.animal_id,
@@ -233,6 +265,14 @@ class TrialRecorder:
                 run_mode=run_mode,
             )
             arena = self.config.arena
+            # Align pipeline band splitting with controller state labels.
+            # Use the first recorded frame whose state is "run" as trial_start_frame.
+            # This keeps controller and legacy processing on the same pipeline path.
+            trial_start_frame = 0
+            for i, row in enumerate(self._xy_rows):
+                if (row.trial_state or "").strip().lower() == "run":
+                    trial_start_frame = i
+                    break
             write_trial_settings(
                 g,
                 arena_radius_px=arena.radius_px,
@@ -244,25 +284,41 @@ class TrialRecorder:
                 run_mode=run_mode,
                 exit_x=exit_x_px,
                 exit_y=exit_y_px,
-                trial_start_frame=0,
+                trial_start_frame=trial_start_frame,
             )
             n = len(self._xy_rows)
             duration_s = self._xy_rows[-1].t_s if self._xy_rows else 0.0
             write_video_meta(g, self._fps, n, duration_s)
             if self._xy_rows:
-                arr = np.zeros(n, dtype=XY_ROW_DTYPE)
+                arr_spot = np.zeros(n, dtype=XY_ROW_DTYPE)
+                arr_in_range = np.zeros(n, dtype=XY_ROW_DTYPE)
+                arr_centroid = np.zeros(n, dtype=XY_ROW_DTYPE)
                 for i, r in enumerate(self._xy_rows):
-                    arr[i]["frame_index"] = r.frame_index
-                    arr[i]["t_s"] = r.t_s
-                    arr[i]["x"] = r.x
-                    arr[i]["y"] = r.y
-                    arr[i]["dist_to_exit_px"] = r.dist_to_exit_px
-                    arr[i]["trial_state"] = r.trial_state.encode("utf-8")
-                    arr[i]["in_exit_zone"] = 1 if r.in_exit_zone else 0
-                    arr[i]["valid"] = 1 if r.valid else 0
-                    arr[i]["is_moving"] = 1 if r.is_moving else 0
-                write_xy_table(g, "spot", arr, self._fps)
-                write_xy_table(g, "in-range", arr, self._fps)
+                    # Shared per-frame metadata
+                    for arr in (arr_spot, arr_in_range, arr_centroid):
+                        arr[i]["frame_index"] = r.frame_index
+                        arr[i]["t_s"] = r.t_s
+                        arr[i]["dist_to_exit_px"] = r.dist_to_exit_px
+                        arr[i]["trial_state"] = r.trial_state.encode("utf-8")
+                        arr[i]["in_exit_zone"] = 1 if r.in_exit_zone else 0
+                        arr[i]["is_moving"] = 1 if r.is_moving else 0
+
+                    # Point-specific coordinates/validity
+                    arr_spot[i]["x"] = r.spot_x
+                    arr_spot[i]["y"] = r.spot_y
+                    arr_spot[i]["valid"] = 1 if (np.isfinite(r.spot_x) and np.isfinite(r.spot_y)) else 0
+
+                    arr_in_range[i]["x"] = r.in_range_x
+                    arr_in_range[i]["y"] = r.in_range_y
+                    arr_in_range[i]["valid"] = 1 if (np.isfinite(r.in_range_x) and np.isfinite(r.in_range_y)) else 0
+
+                    arr_centroid[i]["x"] = r.centroid_x
+                    arr_centroid[i]["y"] = r.centroid_y
+                    arr_centroid[i]["valid"] = 1 if (np.isfinite(r.centroid_x) and np.isfinite(r.centroid_y)) else 0
+
+                write_xy_table(g, "spot", arr_spot, self._fps)
+                write_xy_table(g, "in-range", arr_in_range, self._fps)
+                write_xy_table(g, "centroid", arr_centroid, self._fps)
                 # Unified per-frame feedback table (frame_index, trial_state, motor_fb, light_fb, sound_fb).
                 fb = np.zeros(n, dtype=FEEDBACK_ROW_DTYPE)
                 for i, r in enumerate(self._xy_rows):

@@ -9,7 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@h5web/app": "^16.0.0",
+    "@h5web/app": "16.0.1",
+    "axios": "^1.7.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
   },

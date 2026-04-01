@@ -14,8 +14,9 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 
 
 cd to/your/repo/root  
-uv sync --extra gui --extra sleap --extra kpms --reinstall-package torch --reinstall-package torchvision  
-verify  
+uv lock --upgrade
+uv sync --extra sleap --extra kpms --reinstall-package torch --reinstall-package torchvision   # --extra gui
+verify gpu/cuda
 uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.version.cuda,  torch.cuda.device_count())"  
 
 

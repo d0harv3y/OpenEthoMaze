@@ -3,7 +3,7 @@
 ########################################
 
 # Test temp / output directories
-tests/_tmp/
+tests/
 outputs/
 
 # Python bytecode / extensions

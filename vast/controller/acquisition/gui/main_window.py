@@ -7,6 +7,7 @@ Reference: VAST/legacy_sss.pdf for control layout inspiration.
 from __future__ import annotations
 
 import csv
+import re
 import shutil
 import subprocess
 import sys
@@ -44,6 +45,87 @@ _SESSION_ID_ALLOWED_CHARS = frozenset(
 def _sanitize_session_id(value: str) -> str:
     """Return value with only filename-safe characters (for Session ID field)."""
     return "".join(c for c in value if c in _SESSION_ID_ALLOWED_CHARS)
+
+
+def _parse_virtual_video_identity(stem: str) -> Optional[Tuple[str, str, str]]:
+    """Parse virtual video stem into (animal_id, session_id, trial)."""
+    parts = stem.split("_")
+    if len(parts) >= 3:
+        return (parts[0], parts[1], "_".join(parts[2:]))
+    if len(parts) == 2:
+        m = re.match(r"^(h?S\d+)(T\d+)$", parts[1], flags=re.IGNORECASE)
+        if m:
+            session_id, trial = m.group(1), m.group(2)
+            return (parts[0], session_id, trial)
+    return None
+
+
+def _count_sleap_keypoints_in_exit(
+    pose_xy: Optional[np.ndarray],
+    pose_node_valid: Optional[np.ndarray],
+    pose_node_names: Optional[list],
+    exit_x_px: float,
+    exit_y_px: float,
+    exit_radius_px: float,
+) -> int:
+    """Count valid SLEAP keypoints (plus synthetic spot when available) inside exit."""
+    if pose_xy is None or pose_node_valid is None or pose_xy.size == 0:
+        return 0
+    if pose_xy.ndim != 2 or pose_xy.shape[1] != 2 or pose_node_valid.shape != (pose_xy.shape[0],):
+        return 0
+    if exit_radius_px <= 0:
+        return 0
+    pts = pose_xy[pose_node_valid]
+    # Include synthetic centroid of all valid SLEAP nodes.
+    if pts.size > 0 and np.all(np.isfinite(pts)):
+        centroid = np.array([[float(np.mean(pts[:, 0])), float(np.mean(pts[:, 1]))]])
+        pts = np.vstack([pts, centroid])
+    # Include synthetic "spot" (mean of valid foreL/foreR/nose/neck) in success counting.
+    if pose_node_names is not None and len(pose_node_names) >= pose_xy.shape[0]:
+        fore_inds = [
+            i
+            for i in range(pose_xy.shape[0])
+            if pose_node_valid[i] and str(pose_node_names[i]).strip().lower() in _SPOT_FORE_NODES
+        ]
+        if fore_inds:
+            fore_pts = pose_xy[fore_inds]
+            if np.all(np.isfinite(fore_pts)):
+                spot = np.array([[float(np.mean(fore_pts[:, 0])), float(np.mean(fore_pts[:, 1]))]])
+                pts = np.vstack([pts, spot])
+    if pts.size == 0:
+        return 0
+    dx = pts[:, 0] - float(exit_x_px)
+    dy = pts[:, 1] - float(exit_y_px)
+    in_zone = (dx * dx + dy * dy) <= float(exit_radius_px * exit_radius_px)
+    return int(np.count_nonzero(in_zone))
+
+
+def _blob_exit_overlap_fraction(
+    blob_mask: Optional[np.ndarray],
+    blob_crop_rect: Optional[Tuple[int, int, int, int]],
+    exit_x_px: float,
+    exit_y_px: float,
+    exit_radius_px: float,
+) -> float:
+    """Return overlap fraction: blob pixels inside exit circle / all blob pixels."""
+    if blob_mask is None or blob_mask.ndim != 2 or exit_radius_px <= 0:
+        return 0.0
+    blob_n = int(np.count_nonzero(blob_mask))
+    if blob_n <= 0:
+        return 0.0
+    h, w = blob_mask.shape
+    if blob_crop_rect is not None:
+        x0, y0, _, _ = blob_crop_rect
+        cx = int(round(exit_x_px - x0))
+        cy = int(round(exit_y_px - y0))
+    else:
+        cx = int(round(exit_x_px))
+        cy = int(round(exit_y_px))
+    yy, xx = np.ogrid[:h, :w]
+    rr2 = float(exit_radius_px * exit_radius_px)
+    exit_mask = ((xx - cx) ** 2 + (yy - cy) ** 2) <= rr2
+    overlap = np.count_nonzero((blob_mask > 0) & exit_mask)
+    return float(overlap) / float(blob_n)
 
 
 try:
@@ -499,6 +581,10 @@ class MainWindow(QMainWindow):
         self._frame_counter_label = QLabel("—")
         self._frame_counter_label.setToolTip("Virtual/preview frame index (and total if known)")
         arena_track_row.addWidget(self._frame_counter_label)
+        arena_track_row.addWidget(QLabel("Video:"))
+        self._video_filename_label = QLabel("—")
+        self._video_filename_label.setToolTip("Current virtual video filename")
+        arena_track_row.addWidget(self._video_filename_label)
         arena_track_row.addStretch()
         camera_ly.addLayout(arena_track_row)
         layout.addWidget(camera_section)
@@ -1032,6 +1118,7 @@ class MainWindow(QMainWindow):
                 pose_node_names = overlay_state["pose_node_names"]
                 pose_node_valid_from_res = overlay_state["pose_node_valid"]
                 blob_mask_res = overlay_state["blob_mask"]
+                in_range_xy_res = overlay_state.get("in_range_xy")
                 # If we cropped, convert from crop coords to full-image coords.
                 # Pass small blob_mask + crop rect so overlay blends only in that slice (no full-frame alloc).
                 if did_crop:
@@ -1100,7 +1187,51 @@ class MainWindow(QMainWindow):
                     blob_mask=blob_mask,
                     blob_crop_rect=blob_crop_rect,
                 )
+            else:
+                pose_node_valid = None
+            # Source-specific VAST success criteria:
+            # - SLEAP: N valid keypoints in exit zone.
+            # - Fallback: minimum blob overlap fraction in exit zone.
+            # None => trial logic falls back to point-in-exit (track_xy).
+            exit_success_override: Optional[bool] = None
             tc = self._trial_controller
+            exit_x_px, exit_y_px = tc.get_exit_position_px()
+            exit_radius_px = self._config.arena.exit_radius_cm * self._config.arena.px_per_cm
+            if track_source == "sleap":
+                n_in_exit = _count_sleap_keypoints_in_exit(
+                    pose_xy=pose_xy,
+                    pose_node_valid=pose_node_valid,
+                    pose_node_names=pose_node_names,
+                    exit_x_px=exit_x_px,
+                    exit_y_px=exit_y_px,
+                    exit_radius_px=exit_radius_px,
+                )
+                required = max(1, int(getattr(self._config, "sleap_exit_min_keypoints", 2)))
+                exit_success_override = n_in_exit >= required
+            elif track_source == "fallback":
+                if blob_mask is not None:
+                    frac = _blob_exit_overlap_fraction(
+                        blob_mask=blob_mask,
+                        blob_crop_rect=blob_crop_rect,
+                        exit_x_px=exit_x_px,
+                        exit_y_px=exit_y_px,
+                        exit_radius_px=exit_radius_px,
+                    )
+                    min_frac = max(
+                        0.0,
+                        min(1.0, float(getattr(self._config, "fallback_exit_blob_overlap_pct", 15.0)) / 100.0),
+                    )
+                    exit_success_override = frac >= min_frac
+                elif track_xy is not None:
+                    # Safety fallback when blob overlay is disabled/unavailable.
+                    exit_success_override = in_exit_zone(
+                        float(track_xy[0]),
+                        float(track_xy[1]),
+                        exit_x_px,
+                        exit_y_px,
+                        self._config.arena,
+                    )
+            tc.set_exit_success_override(exit_success_override)
             x_px = float(self._last_track_xy[0]) if self._last_track_xy is not None else (roi_cx or 0.0)
             y_px = float(self._last_track_xy[1]) if self._last_track_xy is not None else (roi_cy or 0.0)
             duty_pct = tc.get_duty_for_position(x_px, y_px)
@@ -1150,6 +1281,68 @@ class MainWindow(QMainWindow):
                     self._record_frame_index = 0
                 if self._trial_recorder is not None:
                     try:
+                        spot_xy_for_record: Optional[Tuple[float, float]] = None
+                        in_range_xy_for_record: Optional[Tuple[float, float]] = None
+                        centroid_xy_for_record: Optional[Tuple[float, float]] = None
+                        if (
+                            in_range_xy_res is not None
+                            and len(in_range_xy_res) == 2
+                            and np.isfinite(float(in_range_xy_res[0]))
+                            and np.isfinite(float(in_range_xy_res[1]))
+                        ):
+                            in_range_xy_for_record = (
+                                float(in_range_xy_res[0]),
+                                float(in_range_xy_res[1]),
+                            )
+                        if track_valid and track_xy is not None:
+                            if track_source == "sleap":
+                                # Prefer SLEAP front-node mean for spot trajectory.
+                                if (
+                                    pose_xy is not None
+                                    and pose_node_names is not None
+                                    and pose_xy.ndim == 2
+                                    and pose_xy.shape[1] == 2
+                                    and len(pose_node_names) >= pose_xy.shape[0]
+                                ):
+                                    fore_names = {"nose", "neck", "foreL", "foreR"}
+                                    pts: list[tuple[float, float]] = []
+                                    for j in range(pose_xy.shape[0]):
+                                        name = str(pose_node_names[j])
+                                        if name not in fore_names:
+                                            continue
+                                        if pose_node_valid is not None and j < pose_node_valid.shape[0] and not bool(pose_node_valid[j]):
+                                            continue
+                                        xj = float(pose_xy[j, 0])
+                                        yj = float(pose_xy[j, 1])
+                                        if np.isfinite(xj) and np.isfinite(yj):
+                                            pts.append((xj, yj))
+                                    if pts:
+                                        xs, ys = zip(*pts)
+                                        spot_xy_for_record = (float(np.mean(xs)), float(np.mean(ys)))
+                                # SLEAP centroid from all valid nodes.
+                                if (
+                                    pose_xy is not None
+                                    and pose_xy.ndim == 2
+                                    and pose_xy.shape[1] == 2
+                                ):
+                                    pts_all: list[tuple[float, float]] = []
+                                    for j in range(pose_xy.shape[0]):
+                                        if pose_node_valid is not None and j < pose_node_valid.shape[0] and not bool(pose_node_valid[j]):
+                                            continue
+                                        xj = float(pose_xy[j, 0])
+                                        yj = float(pose_xy[j, 1])
+                                        if np.isfinite(xj) and np.isfinite(yj):
+                                            pts_all.append((xj, yj))
+                                    if pts_all:
+                                        xs_all, ys_all = zip(*pts_all)
+                                        centroid_xy_for_record = (
+                                            float(np.mean(xs_all)),
+                                            float(np.mean(ys_all)),
+                                        )
+                                # Fallback to tracker point if front nodes aren't available this frame.
+                                if spot_xy_for_record is None:
+                                    spot_xy_for_record = (float(track_xy[0]), float(track_xy[1]))
+
                         self._trial_recorder.write_frame(
                             image=img_raw,
                             frame_index=self._record_frame_index,
@@ -1160,6 +1353,9 @@ class MainWindow(QMainWindow):
                             in_exit_zone=in_exit,
                             valid=track_valid,
                             duty_pct=duty_pct,
+                            spot_xy=spot_xy_for_record,
+                            in_range_xy=in_range_xy_for_record,
+                            centroid_xy=centroid_xy_for_record,
                         )
                         self._record_frame_index += 1
                     except Exception:
@@ -1244,6 +1440,11 @@ class MainWindow(QMainWindow):
                         return
                     video_path = Path(video_path_str)
                     self._virtual_video_path = video_path
+                    self._video_filename_label.setText(video_path.name)
+                    self._video_filename_label.setToolTip(str(video_path))
+                else:
+                    self._video_filename_label.setText("—")
+                    self._video_filename_label.setToolTip("Current virtual video filename")
                 self._camera_controller.open(source, device_index, video_path=video_path)
                 # Status message: keep simple for now; detailed backend info can
                 # be added via CameraController hooks in the future.
@@ -1284,6 +1485,8 @@ class MainWindow(QMainWindow):
         self._camera_label.setText("Click Start camera")
         self.statusBar().showMessage("Camera stopped.")
         self._virtual_video_path = None
+        self._video_filename_label.setText("—")
+        self._video_filename_label.setToolTip("Current virtual video filename")
         self._virtual_has_initial_frame = False
         self._virtual_cached_frame_raw = None
         self._virtual_cached_frame_index = None
@@ -1491,6 +1694,8 @@ class MainWindow(QMainWindow):
         self._next_trial_btn.setEnabled(bs["next"] and run_ok)
         self._end_trial_btn.setEnabled(bs["end_trial"] and run_ok)
         self._stop_btn.setEnabled(bs["stop"] and run_ok)
+        # Lock flip while session is active so coordinate space is stable for tracking/exit/H5.
+        self._camera_flip.setEnabled(not self._trial_controller.run_active)
 
     def _on_run_timer(self) -> None:
         now = time.monotonic()
@@ -1643,9 +1848,7 @@ class MainWindow(QMainWindow):
                 return
         self._apply_ui_to_config()
         sid = self._session_id_edit.text().strip()
-        msg = self._trial_controller.do_start(sid)
-        self._apply_status_and_buttons()
-        self.statusBar().showMessage(msg)
+        lookup_status: Optional[str] = None
 
         # In virtual mode, Start trial should restart playback from frame 0.
         if (
@@ -1672,19 +1875,21 @@ class MainWindow(QMainWindow):
         ):
             self._trial_controller.clear_legacy_exit_xy()
             try:
-                stem_parts = self._virtual_video_path.stem.split("_")
-                if len(stem_parts) >= 3:
-                    animal_id = stem_parts[0]
-                    session_id = stem_parts[1]
-                    trial = "_".join(stem_parts[2:])
-                    base_dir = self._virtual_video_path.parent.parent
-                    h5_name = self._config.h5_filename or "trials.h5"
-                    candidates = [
-                        base_dir / h5_name,
-                        base_dir / "trials.h5",
-                    ]
-                    if self._config.output_dir:
-                        candidates.append(Path(self._config.output_dir) / h5_name)
+                parsed = _parse_virtual_video_identity(self._virtual_video_path.stem)
+                if parsed is not None:
+                    animal_id, session_id, trial = parsed
+                    explicit_legacy_db = (self._config.session.legacy_seed_db_path or "").strip()
+                    if explicit_legacy_db:
+                        candidates = [Path(explicit_legacy_db)]
+                    else:
+                        base_dir = self._virtual_video_path.parent.parent
+                        h5_name = self._config.h5_filename or "trials.h5"
+                        candidates = [
+                            base_dir / h5_name,
+                            base_dir / "trials.h5",
+                        ]
+                        if self._config.output_dir:
+                            candidates.append(Path(self._config.output_dir) / h5_name)
                     legacy_db_path = next((p for p in candidates if p.exists()), None)
                     if legacy_db_path is not None:
                         with open_db(legacy_db_path, "r") as h5:
@@ -1695,9 +1900,35 @@ class MainWindow(QMainWindow):
                                     exit_x = float(g_trial.attrs["exit_x"])
                                     exit_y = float(g_trial.attrs["exit_y"])
                                     self._trial_controller.set_legacy_exit_xy(exit_x, exit_y)
-                # Best-effort only: if parsing/lookup fails, fall back to computed exit placement.
+                                    loaded_exit_idx = None
+                                    for key_name in ("exit_angle_index", "exit_idx", "exit_index"):
+                                        if key_name in g_trial.attrs:
+                                            try:
+                                                loaded_exit_idx = int(g_trial.attrs[key_name]) + 1
+                                            except Exception:
+                                                loaded_exit_idx = None
+                                            break
+                                    if loaded_exit_idx is not None:
+                                        lookup_status = (
+                                            f"Legacy exit lookup: loaded from {legacy_db_path} "
+                                            f"(exit #{loaded_exit_idx})."
+                                        )
+                                    else:
+                                        lookup_status = f"Legacy exit lookup: loaded from {legacy_db_path}."
+                                else:
+                                    lookup_status = "Legacy exit lookup: exit_x/exit_y missing; using computed exit."
+                            else:
+                                lookup_status = "Legacy exit lookup: trial not found; using computed exit."
+                    else:
+                        lookup_status = "Legacy exit lookup: H5 not found; using computed exit."
+                else:
+                    lookup_status = "Legacy exit lookup: couldn't parse video name; using computed exit."
             except Exception as e:
-                self.statusBar().showMessage(f"Legacy exit seed: couldn't load ({e}); using computed exit.")
+                lookup_status = f"Legacy exit lookup failed ({e}); using computed exit."
+
+        msg = self._trial_controller.do_start(sid, lookup_status=lookup_status)
+        self._apply_status_and_buttons()
+        self.statusBar().showMessage(msg)
         if self._trial_controller.run_active:
             if self._run_timer is None or not self._run_timer.isActive():
                 self._run_timer = QTimer(self)

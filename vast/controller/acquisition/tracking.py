@@ -62,6 +62,8 @@ class TrackingResult:
     sleap_confidence: Optional[float] = None  # raw SLEAP conf when fallback due to low conf
     # Fallback only: binary mask (H, W) of the selected blob for overlay; None otherwise
     blob_mask: Optional[np.ndarray] = None
+    # Independent fallback trajectory for "in-range" stream (when available).
+    in_range_xy: Optional[Tuple[float, float]] = None
 
 
 def _ensure_grayscale(img: np.ndarray) -> np.ndarray:
@@ -254,8 +256,13 @@ class AdaptiveThresholdTracker:
             cx, cy, valid,
         )
         return TrackingResult(
-            x_px=cx, y_px=cy, valid=valid, source="fallback", confidence=0.9 if valid else 0.0,
+            x_px=cx,
+            y_px=cy,
+            valid=valid,
+            source="fallback",
+            confidence=0.9 if valid else 0.0,
             blob_mask=blob_mask,
+            in_range_xy=(float(cx), float(cy)) if valid else None,
         )
 
 
@@ -529,6 +536,8 @@ class HybridTracker:
             return None
 
     def track(self, image: np.ndarray) -> TrackingResult:
+        # Always compute fallback so "in-range" can be recorded continuously.
+        fallback_res = self._fallback.track(image)
         if self._ensure_sleap() and self._sleap_predictor is not None:
             res = self._predict_frame_sleap(image)
             if res is not None:
@@ -567,11 +576,12 @@ class HybridTracker:
                     pose_node_names=self._get_skeleton_node_names(),
                     pose_node_valid=pose_node_valid,
                     inference_time_s=inference_time_s,
+                    in_range_xy=fallback_res.in_range_xy,
                 )
             _LOG.debug("SLEAP: _predict_frame_sleap returned None, using fallback")
         else:
             _LOG.debug("SLEAP: not available (_ensure_sleap=False or no predictor), using fallback")
-        return self._fallback.track(image)
+        return fallback_res
 
 
 # -----------------------------------------------------------------------------
@@ -1001,6 +1011,7 @@ class TrackingController:
                 "pose_node_names": None,
                 "pose_node_valid": None,
                 "blob_mask": None,
+                "in_range_xy": None,
                 "source_label": "—",
                 "conf_label": "—",
                 "inference_label": "—",
@@ -1033,6 +1044,7 @@ class TrackingController:
             "pose_node_names": getattr(res, "pose_node_names", None),
             "pose_node_valid": getattr(res, "pose_node_valid", None),
             "blob_mask": getattr(res, "blob_mask", None),
+            "in_range_xy": getattr(res, "in_range_xy", None),
             "source_label": track_source,
             "conf_label": conf_label,
             "inference_label": inference_label,

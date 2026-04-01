@@ -692,6 +692,9 @@ class TreatmentLabel:
     notes: str = ""
 
 
+_TREATMENT_LABELS_CACHE: dict[Path, tuple[float, dict[str, "TreatmentLabel"]]] = {}
+
+
 def load_treatment_labels(labels_path: Optional[Path] = None) -> dict[str, TreatmentLabel]:
     """
     Load treatment labels from CSV file.
@@ -708,11 +711,18 @@ def load_treatment_labels(labels_path: Optional[Path] = None) -> dict[str, Treat
         # Default location relative to this module
         labels_path = Path(__file__).parent.parent.parent.parent / "inputs" / "treatment_labels.csv"
     
-    labels = {}
+    labels: dict[str, TreatmentLabel] = {}
     
+    labels_path = Path(labels_path).resolve()
+
     if not labels_path.exists():
         print(f"Warning: Treatment labels file not found: {labels_path}")
         return labels
+
+    mtime = labels_path.stat().st_mtime
+    cached = _TREATMENT_LABELS_CACHE.get(labels_path)
+    if cached is not None and cached[0] == mtime:
+        return dict(cached[1])
     
     with open(labels_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -731,6 +741,7 @@ def load_treatment_labels(labels_path: Optional[Path] = None) -> dict[str, Treat
             labels[row["key"]] = label
     
     print(f"Loaded {len(labels)} treatment labels from {labels_path}")
+    _TREATMENT_LABELS_CACHE[labels_path] = (mtime, dict(labels))
     return labels
 
 

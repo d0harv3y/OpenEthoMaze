@@ -133,3 +133,32 @@ def write_video_meta(g_trial: h5py.Group, fps: float, n_frames: int, duration_s:
     g_trial.attrs["fps"] = float(fps)
     g_trial.attrs["n_frames"] = int(n_frames)
     g_trial.attrs["duration_s"] = float(duration_s)
+
+
+def write_animal_label(
+    h5: h5py.File,
+    animal_id: str,
+    sex: Optional[str] = None,
+    tx: Optional[str] = None,
+    strain: Optional[str] = None,
+    experiment: Optional[str] = None,
+    researcher: Optional[str] = None,
+    drug: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> None:
+    """Write per-animal metadata attributes on ``/{animal_id}``."""
+    g_animal = _ensure_group(h5, animal_id)
+    if sex is not None:
+        g_animal.attrs["sex"] = _safe_str(sex)
+    if tx is not None:
+        g_animal.attrs["tx"] = _safe_str(tx)
+    if strain is not None:
+        g_animal.attrs["strain"] = _safe_str(strain)
+    if experiment is not None:
+        g_animal.attrs["experiment"] = _safe_str(experiment)
+    if researcher is not None:
+        g_animal.attrs["researcher"] = _safe_str(researcher)
+    if drug is not None:
+        g_animal.attrs["drug"] = _safe_str(drug)
+    if notes is not None:
+        g_animal.attrs["notes"] = _safe_str(notes)

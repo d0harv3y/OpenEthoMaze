@@ -4,7 +4,8 @@ Settings dialog: all config fields in tabs (Arena, Exit angles, Stimulus, Sessio
 
 from __future__ import annotations
 
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Tuple
 
 from ..config import ControllerConfig, AnimalInfo, FallbackTrackingConfig, FT_TO_CM, M_TO_CM
 from ..trial_logic import Phase, TrialMode
@@ -46,19 +47,20 @@ _SETTINGS_APP = "Controller"
 _KEY_LAST_SETTINGS_TAB = "last_settings_tab"
 
 
-def _optional_int(text: str) -> Optional[int]:
+def _parse_seed(text: str) -> Tuple[Optional[int], Optional[str]]:
     s = (text or "").strip()
     if not s:
-        return None
+        return (None, None)
     # Legacy sentinel:
     # - `seed == -1` means "use exit_x/exit_y from the original legacy trial"
     #   (primarily for Virtual acquisition + replay matching).
     if s.lower() == "legacy":
-        return -1
+        return (-1, None)
     try:
-        return int(s)
+        return (int(s), None)
     except ValueError:
-        return None
+        # Treat any non-integer value as explicit legacy DB path and enable legacy mode.
+        return (-1, str(Path(s)))
 
 
 class SettingsDialog(QDialog):
@@ -266,7 +268,7 @@ class SettingsDialog(QDialog):
         self._session_iti_s.setSuffix(" s")
         f.addRow("ITI (s):", self._session_iti_s)
         self._session_seed = QLineEdit()
-        self._session_seed.setPlaceholderText("None, integer, or legacy")
+        self._session_seed.setPlaceholderText("None, integer, legacy, or path to legacy .h5")
         f.addRow("Seed:", self._session_seed)
         out_row = QHBoxLayout()
         self._output_dir_edit = QLineEdit()
@@ -420,6 +422,18 @@ class SettingsDialog(QDialog):
         self._fallback_node_max_jump.setSpecialValueText("Off")
         self._fallback_node_max_jump.setToolTip("SLEAP nodes: invalidate a node if it moves more than this (px) from previous frame. 0 = off.")
         sleap_f.addRow("Node max jump (px, 0=off):", self._fallback_node_max_jump)
+        self._sleap_exit_min_keypoints = QSpinBox()
+        self._sleap_exit_min_keypoints.setRange(1, 64)
+        self._sleap_exit_min_keypoints.setValue(2)
+        self._sleap_exit_min_keypoints.setToolTip("VAST success with SLEAP source: require at least this many valid keypoints inside the exit zone.")
+        sleap_f.addRow("Exit success min keypoints:", self._sleap_exit_min_keypoints)
+        self._fallback_exit_blob_overlap_pct = QDoubleSpinBox()
+        self._fallback_exit_blob_overlap_pct.setRange(0.0, 100.0)
+        self._fallback_exit_blob_overlap_pct.setDecimals(1)
+        self._fallback_exit_blob_overlap_pct.setSuffix(" %")
+        self._fallback_exit_blob_overlap_pct.setValue(15.0)
+        self._fallback_exit_blob_overlap_pct.setToolTip("VAST success with fallback source: minimum percent of blob pixels overlapping the exit zone.")
+        sleap_f.addRow("Fallback blob overlap for success:", self._fallback_exit_blob_overlap_pct)
         layout.addWidget(sleap_g)
 
         layout.addStretch()
@@ -476,7 +490,9 @@ class SettingsDialog(QDialog):
         self._session_num_trials.setValue(sess.num_trials)
         self._session_max_trial_s.setValue(sess.max_trial_duration_s)
         self._session_iti_s.setValue(sess.iti_s)
-        if sess.seed == -1:
+        if sess.seed == -1 and sess.legacy_seed_db_path:
+            self._session_seed.setText(sess.legacy_seed_db_path)
+        elif sess.seed == -1:
             self._session_seed.setText("legacy")
         else:
             self._session_seed.setText(str(sess.seed) if sess.seed is not None else "")
@@ -544,6 +560,8 @@ class SettingsDialog(QDialog):
         # SLEAP
         self._sleap_confidence_pct.setValue(getattr(c, "sleap_confidence_pct", 50))
         self._sleap_every_n.setValue(max(1, min(5, getattr(c, "sleap_every_n", 1))))
+        self._sleap_exit_min_keypoints.setValue(max(1, int(getattr(c, "sleap_exit_min_keypoints", 2))))
+        self._fallback_exit_blob_overlap_pct.setValue(max(0.0, min(100.0, float(getattr(c, "fallback_exit_blob_overlap_pct", 15.0)))))
 
     def _write_to_config(self) -> None:
         c = self._config
@@ -570,7 +588,7 @@ class SettingsDialog(QDialog):
         c.session.num_trials = self._session_num_trials.value()
         c.session.max_trial_duration_s = self._session_max_trial_s.value()
         c.session.iti_s = self._session_iti_s.value()
-        c.session.seed = _optional_int(self._session_seed.text())
+        c.session.seed, c.session.legacy_seed_db_path = _parse_seed(self._session_seed.text())
         c.output_dir = self._output_dir_edit.text().strip() or None
         c.h5_filename = self._h5_filename_edit.text().strip() or "trials.h5"
         c.hab_training_duty_pct = self._hab_duty.value()
@@ -630,6 +648,8 @@ class SettingsDialog(QDialog):
         # SLEAP
         c.sleap_confidence_pct = max(0, min(100, self._sleap_confidence_pct.value()))
         c.sleap_every_n = max(1, min(5, self._sleap_every_n.value()))
+        c.sleap_exit_min_keypoints = max(1, self._sleap_exit_min_keypoints.value())
+        c.fallback_exit_blob_overlap_pct = max(0.0, min(100.0, self._fallback_exit_blob_overlap_pct.value()))
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self._save_last_tab()

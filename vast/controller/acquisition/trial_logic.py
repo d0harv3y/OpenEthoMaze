@@ -128,6 +128,9 @@ class TrialStateMachine:
     # exit_x/exit_y so exit placement matches a legacy/original trial exactly.
     legacy_exit_x_px: Optional[float] = None
     legacy_exit_y_px: Optional[float] = None
+    # Optional GUI-provided success predicate for VAST trials.
+    # None -> use geometric in_exit_zone(track_xy, exit_center).
+    exit_success_override: Optional[bool] = None
     # Callbacks (set by controller)
     on_state_change: Optional[Callable[[TrialState], None]] = None
     on_exit_placed: Optional[Callable[[float, float], None]] = None
@@ -318,7 +321,10 @@ class TrialStateMachine:
             self._enter_center_iti()
             return self.state
         if self.phase == Phase.VAST:
-            if in_exit_zone(x_px, y_px, self.exit_x_px, self.exit_y_px, self.config.arena):
+            in_exit = self.exit_success_override
+            if in_exit is None:
+                in_exit = in_exit_zone(x_px, y_px, self.exit_x_px, self.exit_y_px, self.config.arena)
+            if in_exit:
                 self._set_state(TrialState.TRIAL_SUCCESS)
                 return self.state
         return None
@@ -499,6 +505,7 @@ class TrialController:
         self._run_active = False
         self._state_listeners: List[Callable[[TrialState], None]] = []
         self._pending_legacy_exit_xy: Optional[Tuple[float, float]] = None
+        self._pending_exit_success_override: Optional[bool] = None
 
     def set_legacy_exit_xy(self, exit_x_px: float, exit_y_px: float) -> None:
         """Inject legacy/original exit location for the current trial replay."""
@@ -513,6 +520,12 @@ class TrialController:
             self._sm.legacy_exit_x_px = None
             self._sm.legacy_exit_y_px = None
         self._pending_legacy_exit_xy = None
+
+    def set_exit_success_override(self, in_exit: Optional[bool]) -> None:
+        """Set optional VAST success predicate computed from tracking source-specific criteria."""
+        if self._sm is not None:
+            self._sm.exit_success_override = in_exit
+        self._pending_exit_success_override = in_exit
 
     def get_state_machine(self) -> Optional[TrialStateMachine]:
         return self._sm
@@ -612,6 +625,7 @@ class TrialController:
         if self._pending_legacy_exit_xy is not None:
             self._sm.legacy_exit_x_px = self._pending_legacy_exit_xy[0]
             self._sm.legacy_exit_y_px = self._pending_legacy_exit_xy[1]
+        self._sm.exit_success_override = self._pending_exit_success_override
 
     def reset(self, session_id: str, trial_idx: int = 0, slot_idx: Optional[int] = None) -> None:
         """Clear state machine and create a new one (e.g. after profile load). If slot_idx given, restore that position."""
@@ -650,7 +664,7 @@ class TrialController:
             return 0
         return self._sm.trial_idx
 
-    def do_start(self, session_id: str) -> str:
+    def do_start(self, session_id: str, lookup_status: Optional[str] = None) -> str:
         """Handle Start button. Returns status bar message."""
         if self._sm is not None and self._run_active:
             if self._sm.state in (TrialState.TRIAL_SUCCESS, TrialState.TRIAL_TIMEOUT):
@@ -660,7 +674,9 @@ class TrialController:
         if self._sm is None:
             return "Could not create state machine."
         self.start_run()
-        return "Trial session started. Use Next trial when ready."
+        if lookup_status:
+            return f"Trial started. {lookup_status}"
+        return "Trial started."
 
     def do_previous(self, session_id: str) -> str:
         """Handle Previous button. Returns status bar message."""

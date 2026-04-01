@@ -116,6 +116,8 @@ class SessionConfig:
     max_trial_duration_s: float = 120.0
     iti_s: float = 10.0
     seed: Optional[int] = None
+    # Optional explicit DB path used when seed == -1 (legacy mode) for exit lookup.
+    legacy_seed_db_path: Optional[str] = None
     animals: list[AnimalInfo] = field(default_factory=list)
 
     def ensure_animals(self) -> None:
@@ -171,6 +173,11 @@ class ControllerConfig:
     # SLEAP: per-node confidence threshold (0–100 %); run model every N frames (1=every frame)
     sleap_confidence_pct: int = 50
     sleap_every_n: int = 1
+    # Exit success criteria:
+    # - SLEAP source: at least this many valid keypoints must be inside the exit zone.
+    sleap_exit_min_keypoints: int = 2
+    # - Fallback source: minimum blob overlap with exit zone (% of blob pixels).
+    fallback_exit_blob_overlap_pct: float = 15.0
     # SLEAP model directory (single-instance; empty = backup tracker only)
     sleap_model_path: str = ""
     # Tracking display/behavior (moved from main GUI to Settings → Tracking)

@@ -14,7 +14,8 @@ dependencies = [
     "tqdm>=4.60.0",
     "pyserial>=3.5",
     "vmbpy",
-    "h5grove[flask]",
+    "h5grove[flask]>=4.0.0rc0",
+    "PySide6>=6.0.0",
 ]
 
 [project.optional-dependencies]
@@ -24,9 +25,9 @@ dev = [
     "ruff>=0.1.0",
     "vulture>=2.15",
 ]
-gui = [
-    "PySide6>=6.0",
-]
+# gui = [
+#     "PySide6>=6.0",
+# ]
 sleap = [
     "sleap-io",
     # Force CUDA-enabled PyTorch wheels in the same uv environment.

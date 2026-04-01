@@ -13,7 +13,7 @@ from pathlib import Path
 # =============================================================================
 # Pipeline metadata
 # =============================================================================
-PIPELINE_VERSION = "vast_v0.1"
+PIPELINE_VERSION = "vast_v0.10"
 PROCESSING_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
 
 # =============================================================================
@@ -167,7 +167,13 @@ TRACE_SMOOTHING_WINDOW = 3  # Smoothing window size (frames)
 # =============================================================================
 MAX_DWELL_TIME_S = 4.0  # Maximum dwell time for heatmap normalization
 DWELL_HEATMAP_BLUR_SIGMA = 4.0  # Gaussian blur sigma for dwell-time heatmap
-QC_IMAGE_STORE_FORMAT = "png_bytes"  # "png_bytes" (smaller on disk) or "raw"
+# QC image storage:
+# - "raw": write uint8 image arrays (best h5web UX)
+# - "png_bytes": write encoded PNG bytes (smaller but not natively previewable in h5web)
+QC_IMAGE_STORE_FORMAT = "raw"
+# If set (>0), raw QC images are downscaled so max(height, width) <= this value before writing.
+# Keeps h5web preview support while reducing file size.
+QC_IMAGE_PREVIEW_MAX_DIM = 256
 
 # =============================================================================
 # Parallelization settings

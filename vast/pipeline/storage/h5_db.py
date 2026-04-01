@@ -48,7 +48,7 @@ from vast.core.storage import (
     read_feedback_table as core_read_feedback_table,
 )
 from ..config import OUTPUT_H5, get_config_snapshot
-from ..config import QC_IMAGE_STORE_FORMAT
+from ..config import QC_IMAGE_PREVIEW_MAX_DIM, QC_IMAGE_STORE_FORMAT
 
 
 @dataclass(frozen=True)
@@ -769,6 +769,27 @@ def write_qc_image(
             del g_qc[name]
         
         arr = np.asarray(image, dtype=np.uint8)
+        # Optional downscale for raw image storage to reduce DB size while preserving h5web preview.
+        max_dim = int(QC_IMAGE_PREVIEW_MAX_DIM) if QC_IMAGE_PREVIEW_MAX_DIM else 0
+        if max_dim > 0:
+            h = int(arr.shape[0]) if arr.ndim >= 2 else 0
+            w = int(arr.shape[1]) if arr.ndim >= 2 else 0
+            cur_max = max(h, w)
+            if cur_max > max_dim and h > 0 and w > 0:
+                scale = float(max_dim) / float(cur_max)
+                new_w = max(1, int(round(w * scale)))
+                new_h = max(1, int(round(h * scale)))
+                try:
+                    import cv2
+
+                    arr = cv2.resize(arr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                except Exception:
+                    # Fallback nearest-neighbor subsampling if cv2 isn't available.
+                    step = max(1, int(np.ceil(cur_max / max_dim)))
+                    if arr.ndim == 3:
+                        arr = arr[::step, ::step, :]
+                    else:
+                        arr = arr[::step, ::step]
         store_format = (QC_IMAGE_STORE_FORMAT or "png_bytes").strip().lower()
         ds: h5py.Dataset
         if store_format == "png_bytes":

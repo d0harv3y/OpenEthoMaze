@@ -249,7 +249,7 @@ def generate_composite_qc_image(
     fps: float = 30.0,
     image_size: int = 512,
     margin: int = 20,
-    colorbar_width: int = 80,
+    colorbar_width: int = 50,
     xy_list_heatmap: Optional[XYValidList] = None,
 ) -> Optional[tuple[np.ndarray, float, float]]:
     """

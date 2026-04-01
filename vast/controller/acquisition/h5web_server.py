@@ -34,7 +34,12 @@ def get_h5web_static_dir() -> Optional[Path]:
 
 
 def create_app(h5_base_dir: Path, static_dir: Path) -> Flask:
-    """Flask app: h5grove API under /api + static files for the h5web frontend at /."""
+    """Flask app: h5grove API under /api + static files for the h5web frontend at /.
+
+    Keep h5grove (Python) on the same major line as the embedded @h5web/app build
+    (see ``vast/controller/web/h5web/package.json``); rebuild ``web/h5web_dist``
+    after bumping the npm package.
+    """
     app = Flask(__name__)
     app.config["H5_BASE_DIR"] = str(h5_base_dir.resolve())
 

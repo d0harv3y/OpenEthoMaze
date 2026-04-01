@@ -58,6 +58,7 @@ from ..storage.h5_db import (
     TrialKey,
     read_trial_settings,
     read_feedback_series,
+    read_xy_table,
     write_mistrial_reason,
     write_video_meta,
     write_analysis_duration,
@@ -68,6 +69,7 @@ from ..storage.h5_db import (
     write_config_params,
     write_primary_trajectory,
     write_animal_notes_attr,
+    read_animal_label,
 )
 
 log = logging.getLogger(__name__)
@@ -80,6 +82,15 @@ def _animal_notes_from_treatment_csv(manifest: TrialManifest) -> str:
         if k and k.strip() and k in labels:
             return labels[k].notes or ""
     return ""
+
+
+def _animal_notes(manifest: TrialManifest, db_path: Path) -> str:
+    """Resolve animal notes from DB attrs first, then fallback CSV labels."""
+    db_labels = read_animal_label(db_path, manifest.animal_id)
+    notes = (db_labels.get("notes", "") or "").strip()
+    if notes:
+        return notes
+    return _animal_notes_from_treatment_csv(manifest)
 
 
 def _merge_trace_data(
@@ -128,6 +139,27 @@ def _merge_trace_data(
     )
 
 
+def _infer_trial_start_from_xy_state(db_path: Path, key: TrialKey) -> int:
+    """
+    Infer trial_start_frame from existing controller xy trial_state labels.
+    Returns first frame index whose trial_state == "run", or 0 if unavailable.
+    """
+    for point_name in (IN_RANGE_POINT_NAME, "spot"):
+        xy = read_xy_table(db_path, key, point_name=point_name)
+        if xy is None or xy.shape[0] == 0:
+            continue
+        names = xy.dtype.names or ()
+        if "trial_state" not in names:
+            continue
+        for i in range(xy.shape[0]):
+            ts = xy["trial_state"][i]
+            if isinstance(ts, bytes):
+                ts = ts.decode("utf-8", errors="replace")
+            if str(ts).strip().lower() == "run":
+                return int(i)
+    return 0
+
+
 def process_trial(
     manifest: TrialManifest,
     db_path: Optional[Path] = None,
@@ -156,7 +188,7 @@ def process_trial(
 
     # Create trial key (path = /animal_id/session/trial; phase derived from session)
     key = TrialKey.from_manifest(manifest)
-    write_animal_notes_attr(db_path, key.animal_id, _animal_notes_from_treatment_csv(manifest))
+    write_animal_notes_attr(db_path, key.animal_id, _animal_notes(manifest, db_path))
 
     log(f"Processing {key.path()}...")
 
@@ -165,6 +197,8 @@ def process_trial(
         settings, h5_fps, trial_start_frame = read_trial_settings(db_path, key)
         if h5_fps is None:
             h5_fps = DEFAULT_FPS
+        if trial_start_frame <= 0:
+            trial_start_frame = _infer_trial_start_from_xy_state(db_path, key)
 
         # Step 2: Load tracking data (SLEAP + in-range when available; merge into one TraceData)
         trace_data_sleap = None
@@ -178,8 +212,23 @@ def process_trial(
             else:
                 log("  Warning: Failed to load SLEAP data")
 
+        trace_data_realtime_spot = None
+        trace_data_realtime_centroid = None
         trace_data_inrange = None
         # In-range: from output DB (controller-written) or legacy input H5
+        if trace_data_sleap is None:
+            trace_data_realtime_spot = trace_data_from_realtime_xy(
+                db_path,
+                key,
+                point_name="spot",
+                fps=h5_fps or DEFAULT_FPS,
+            )
+            trace_data_realtime_centroid = trace_data_from_realtime_xy(
+                db_path,
+                key,
+                point_name="centroid",
+                fps=h5_fps or DEFAULT_FPS,
+            )
         trace_data_inrange = trace_data_from_realtime_xy(
             db_path,
             key,
@@ -195,7 +244,14 @@ def process_trial(
                 fps=h5_fps or DEFAULT_FPS,
             )
 
-        trace_data = _merge_trace_data(trace_data_sleap, trace_data_inrange, IN_RANGE_POINT_NAME)
+        base_trace = trace_data_sleap if trace_data_sleap is not None else trace_data_realtime_spot
+        trace_data = _merge_trace_data(base_trace, trace_data_inrange, IN_RANGE_POINT_NAME)
+        if trace_data is not None and trace_data_realtime_centroid is not None:
+            cnode = trace_data_realtime_centroid.traces.get("centroid")
+            if cnode is not None:
+                trace_data.traces["centroid"] = cnode
+                if "centroid" not in trace_data.node_names:
+                    trace_data.node_names.append("centroid")
         if trace_data is None:
             log("  No tracking data (SLEAP and in-range unavailable); skipping full write.")
             write_mistrial_reason(db_path, key, REASON_NO_TRACKING)
@@ -635,13 +691,12 @@ def _calculate_spot_xy(
             y_arrays.append(traces[node_name]['y'])
     
     if not x_arrays:
-        # Fall back to any available nodes (exclude in-range; spot is SLEAP-derived only)
+        # Fall back to any available SLEAP nodes first.
         for node_name in traces:
             if node_name == IN_RANGE_POINT_NAME:
                 continue
             x_arrays.append(traces[node_name]['x'])
             y_arrays.append(traces[node_name]['y'])
-
     if not x_arrays:
         return np.full((n_frames, 2), np.nan)
 
@@ -676,6 +731,9 @@ def _calculate_centroid_xy(
     Calculate centroid position (mean of all SLEAP nodes) from processed traces.
     Excludes in-range node so centroid is SLEAP-only.
     """
+    if "centroid" in traces:
+        node = traces["centroid"]
+        return np.column_stack([node["x"], node["y"]])
     x_arrays = []
     y_arrays = []
     for node_name in traces:
