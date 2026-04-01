@@ -20,5 +20,8 @@ uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available
 
 
 run from root:
-uv run vast-daq  
+uv run maze-daq
+
+radial arm scaffold:
+uv run maze-ram-daq
 

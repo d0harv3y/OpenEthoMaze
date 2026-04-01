@@ -1,0 +1,236 @@
+from __future__ import annotations
+
+from typing import Optional, Tuple
+
+import numpy as np
+
+from maze.core.anatomy import is_spot_node_name
+
+from ..trial_logic import OverlayInfo, Phase, TrialState
+
+try:
+    import cv2
+
+    HAS_CV2 = True
+except ImportError:
+    HAS_CV2 = False
+
+
+def count_sleap_keypoints_in_exit(
+    pose_xy: Optional[np.ndarray],
+    pose_node_valid: Optional[np.ndarray],
+    pose_node_names: Optional[list],
+    exit_x_px: float,
+    exit_y_px: float,
+    exit_radius_px: float,
+) -> int:
+    """Count valid SLEAP keypoints plus synthetic centroid/spot inside the exit."""
+    if pose_xy is None or pose_node_valid is None or pose_xy.size == 0:
+        return 0
+    if pose_xy.ndim != 2 or pose_xy.shape[1] != 2 or pose_node_valid.shape != (pose_xy.shape[0],):
+        return 0
+    if exit_radius_px <= 0:
+        return 0
+    pts = pose_xy[pose_node_valid]
+    if pts.size > 0 and np.all(np.isfinite(pts)):
+        centroid = np.array([[float(np.mean(pts[:, 0])), float(np.mean(pts[:, 1]))]])
+        pts = np.vstack([pts, centroid])
+    if pose_node_names is not None and len(pose_node_names) >= pose_xy.shape[0]:
+        fore_inds = [
+            i
+            for i in range(pose_xy.shape[0])
+            if pose_node_valid[i] and is_spot_node_name(str(pose_node_names[i]))
+        ]
+        if fore_inds:
+            fore_pts = pose_xy[fore_inds]
+            if np.all(np.isfinite(fore_pts)):
+                spot = np.array([[float(np.mean(fore_pts[:, 0])), float(np.mean(fore_pts[:, 1]))]])
+                pts = np.vstack([pts, spot])
+    if pts.size == 0:
+        return 0
+    dx = pts[:, 0] - float(exit_x_px)
+    dy = pts[:, 1] - float(exit_y_px)
+    in_zone = (dx * dx + dy * dy) <= float(exit_radius_px * exit_radius_px)
+    return int(np.count_nonzero(in_zone))
+
+
+def blob_exit_overlap_fraction(
+    blob_mask: Optional[np.ndarray],
+    blob_crop_rect: Optional[Tuple[int, int, int, int]],
+    exit_x_px: float,
+    exit_y_px: float,
+    exit_radius_px: float,
+) -> float:
+    """Return overlap fraction: blob pixels inside exit circle / all blob pixels."""
+    if blob_mask is None or blob_mask.ndim != 2 or exit_radius_px <= 0:
+        return 0.0
+    blob_n = int(np.count_nonzero(blob_mask))
+    if blob_n <= 0:
+        return 0.0
+    h, w = blob_mask.shape
+    if blob_crop_rect is not None:
+        x0, y0, _, _ = blob_crop_rect
+        cx = int(round(exit_x_px - x0))
+        cy = int(round(exit_y_px - y0))
+    else:
+        cx = int(round(exit_x_px))
+        cy = int(round(exit_y_px))
+    yy, xx = np.ogrid[:h, :w]
+    rr2 = float(exit_radius_px * exit_radius_px)
+    exit_mask = ((xx - cx) ** 2 + (yy - cy) ** 2) <= rr2
+    overlap = np.count_nonzero((blob_mask > 0) & exit_mask)
+    return float(overlap) / float(blob_n)
+
+
+def apply_brightness_contrast(
+    img: np.ndarray,
+    brightness: int,
+    contrast_pct: int,
+) -> np.ndarray:
+    """Apply display-only brightness and contrast adjustments."""
+    if not HAS_CV2 or (brightness == 0 and contrast_pct == 100):
+        return img
+    out = img.astype(np.float64)
+    scale = contrast_pct / 100.0
+    out = (out - 128.0) * scale + 128.0 + float(brightness)
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def blend_blob_mask_into_overlay(
+    overlay: np.ndarray,
+    blob_mask: Optional[np.ndarray],
+    blob_crop_rect: Optional[Tuple[int, int, int, int]],
+) -> None:
+    """Semi-transparent green tint where ``blob_mask`` is nonzero."""
+    if not HAS_CV2 or blob_mask is None or blob_mask.ndim != 2:
+        return
+    blob_alpha = 0.35
+    green_bgr = (0, 255, 0)
+    if blob_crop_rect is not None:
+        x0, y0, x1, y1 = blob_crop_rect
+        if x1 > x0 and y1 > y0 and blob_mask.shape == (y1 - y0, x1 - x0):
+            overlay_slice = overlay[y0:y1, x0:x1]
+            green_slice = np.empty_like(overlay_slice)
+            green_slice[:] = green_bgr
+            blended = cv2.addWeighted(green_slice, blob_alpha, overlay_slice, 1.0 - blob_alpha, 0)
+            cv2.copyTo(blended, blob_mask, overlay_slice)
+    elif blob_mask.shape[:2] == overlay.shape[:2]:
+        green_layer = np.empty_like(overlay)
+        green_layer[:] = green_bgr
+        blended = cv2.addWeighted(green_layer, blob_alpha, overlay, 1.0 - blob_alpha, 0)
+        cv2.copyTo(blended, blob_mask, overlay)
+
+
+def draw_roi_and_tracking_overlay(
+    img: np.ndarray,
+    roi_center_xy: Optional[Tuple[float, float]],
+    roi_radius_px: float,
+    track_xy: Optional[Tuple[float, float]],
+    track_valid: bool,
+    overlay_opacity: float,
+    overlay_info: Optional[OverlayInfo] = None,
+    track_source: str = "fallback",
+    pose_xy: Optional[np.ndarray] = None,
+    pose_scores: Optional[np.ndarray] = None,
+    pose_edge_inds: Optional[list] = None,
+    pose_node_names: Optional[list] = None,
+    pose_node_valid: Optional[np.ndarray] = None,
+    blob_mask: Optional[np.ndarray] = None,
+    blob_crop_rect: Optional[Tuple[int, int, int, int]] = None,
+) -> np.ndarray:
+    """Draw ROI, state overlays, SLEAP skeleton, and fallback position marker."""
+    if not HAS_CV2:
+        return img
+    out = np.asarray(img, dtype=np.uint8).copy()
+    if out.ndim == 2:
+        out = cv2.cvtColor(out, cv2.COLOR_GRAY2BGR)
+    elif out.ndim == 3 and out.shape[2] == 1:
+        out = cv2.cvtColor(out.squeeze(axis=2), cv2.COLOR_GRAY2BGR)
+    overlay = out.copy()
+    cx_i = int(roi_center_xy[0]) if roi_center_xy else None
+    cy_i = int(roi_center_xy[1]) if roi_center_xy else None
+    if roi_center_xy is not None and roi_radius_px > 0:
+        cv2.circle(overlay, (cx_i, cy_i), int(roi_radius_px), (0, 255, 255), 1)
+    if overlay_info is not None and cx_i is not None and cy_i is not None:
+        arena = overlay_info.arena
+        state = overlay_info.state
+        phase = overlay_info.phase
+        show_center_edge = (
+            state == TrialState.WAIT_NOT_CENTER
+            or phase == Phase.HABITUATION
+            or phase == Phase.HABITUATION_TRAINING
+        )
+        if show_center_edge and arena.center_radius_px > 0 and arena.radius_px > 0:
+            cv2.circle(overlay, (cx_i, cy_i), int(arena.center_radius_px), (255, 255, 0), 1)
+        if state == TrialState.TRIAL_RUNNING and arena.px_per_cm > 0:
+            ex_i = int(overlay_info.exit_x_px)
+            ey_i = int(overlay_info.exit_y_px)
+            exit_r_px = int(arena.exit_radius_cm * arena.px_per_cm)
+            if exit_r_px > 0:
+                cv2.circle(overlay, (ex_i, ey_i), exit_r_px, (255, 0, 255), 2)
+    blend_blob_mask_into_overlay(overlay, blob_mask, blob_crop_rect)
+    node_marker_r = 2
+    nose_color = (255, 0, 255)
+    non_nose_color = (0, 255, 255)
+    spot_color = (255, 255, 0)
+    if track_source == "sleap" and pose_xy is not None and pose_edge_inds:
+        n_nodes = pose_xy.shape[0]
+        node_valid = (
+            pose_node_valid
+            if pose_node_valid is not None and pose_node_valid.shape == (n_nodes,)
+            else np.ones(n_nodes, dtype=bool)
+        )
+        for a, b in pose_edge_inds:
+            if a >= n_nodes or b >= n_nodes or not node_valid[a] or not node_valid[b]:
+                continue
+            xa, ya = float(pose_xy[a, 0]), float(pose_xy[a, 1])
+            xb, yb = float(pose_xy[b, 0]), float(pose_xy[b, 1])
+            if np.isfinite(xa) and np.isfinite(ya) and np.isfinite(xb) and np.isfinite(yb):
+                cv2.line(
+                    overlay,
+                    (int(round(xa)), int(round(ya))),
+                    (int(round(xb)), int(round(yb))),
+                    non_nose_color,
+                    1,
+                    cv2.LINE_AA,
+                )
+        for i in range(n_nodes):
+            if not node_valid[i]:
+                continue
+            x, y = float(pose_xy[i, 0]), float(pose_xy[i, 1])
+            if np.isfinite(x) and np.isfinite(y):
+                color = nose_color if i == 0 else non_nose_color
+                cv2.circle(
+                    overlay,
+                    (int(round(x)), int(round(y))),
+                    node_marker_r,
+                    color,
+                    1,
+                    cv2.LINE_AA,
+                )
+        if pose_node_names is not None and len(pose_node_names) >= n_nodes:
+            fore_inds = [
+                i
+                for i in range(n_nodes)
+                if node_valid[i] and is_spot_node_name(pose_node_names[i])
+            ]
+            if fore_inds:
+                pts = pose_xy[fore_inds]
+                if np.all(np.isfinite(pts)):
+                    sx = float(np.mean(pts[:, 0]))
+                    sy = float(np.mean(pts[:, 1]))
+                    cv2.circle(
+                        overlay,
+                        (int(round(sx)), int(round(sy))),
+                        node_marker_r,
+                        spot_color,
+                        1,
+                        cv2.LINE_AA,
+                    )
+    if track_xy is not None:
+        tx, ty = int(track_xy[0]), int(track_xy[1])
+        color = (0, 255, 0) if track_valid else (128, 128, 128)
+        cv2.circle(overlay, (tx, ty), node_marker_r, color, 1, cv2.LINE_AA)
+    alpha = max(0.0, min(1.0, overlay_opacity))
+    cv2.addWeighted(overlay, alpha, out, 1.0 - alpha, 0, out)
+    return out

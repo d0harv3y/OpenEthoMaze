@@ -4,11 +4,11 @@ treatment_labels.csv; run inference, pipeline, and exports on selected trials.
 
 All outputs go to VAST/outputs/legacy/:
   - vast_results_legacy.h5   (database)
-  - trial_manifest_legacy.csv (manifest; columns from vast.pipeline.io.file_discovery.MANIFEST_CSV_FIELDNAMES)
+  - trial_manifest_legacy.csv (manifest; columns from maze.pipeline.io.file_discovery.MANIFEST_CSV_FIELDNAMES)
   - exports/                 (CSV exports from run-exports)
 
 Uses VAST/inputs/treatment_labels.csv for labels. Discovery uses the same
-DATA_DIRS as the main pipeline (vast.pipeline.config).
+DATA_DIRS as the main pipeline (maze.pipeline.config).
 
 Usage:
   uv run python scripts/legacy_db.py init
@@ -32,8 +32,8 @@ from typing import Optional
 # -----------------------------------------------------------------------------
 # Imports (unified vast package)
 # -----------------------------------------------------------------------------
-from vast.pipeline.config import DATA_DIRS
-from vast.pipeline.io.file_discovery import (
+from maze.pipeline.config import DATA_DIRS
+from maze.pipeline.io.file_discovery import (
     TrialManifest,
     apply_treatment_labels,
     check_duplicates,
@@ -43,8 +43,8 @@ from vast.pipeline.io.file_discovery import (
     save_manifest_csv,
     update_treatment_labels_from_discovery,
 )
-from vast.pipeline.io.input_h5_loader import load_trial_data, load_trial_settings
-from vast.pipeline.storage.h5_db import (
+from maze.pipeline.io.input_h5_loader import load_trial_data, load_trial_settings
+from maze.pipeline.storage.h5_db import (
     TrialKey,
     delete_animal_group,
     delete_trial_group,
@@ -61,12 +61,12 @@ from vast.pipeline.storage.h5_db import (
     write_sleap_path,
     write_trial_manifest_rows,
 )
-from vast.pipeline.pipeline.orchestrator import (
+from maze.pipeline.pipeline.orchestrator import (
     load_manifests_from_db,
     run_pipeline,
     run_single_trial,
 )
-from vast.pipeline.exports import export_all
+from maze.pipeline.exports import export_all
 
 # VAST project root (parent of scripts/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

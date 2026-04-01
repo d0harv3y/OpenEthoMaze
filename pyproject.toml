@@ -1,5 +1,5 @@
 [project]
-name = "vast"
+name = "maze"
 version = "0.1.0"
 description = "VAST — controller, pipeline, and core for vibration actuating search task"
 readme = "README.md"
@@ -45,7 +45,9 @@ kpms = [
 ]
 
 [project.scripts]
-vast-daq = "vast.controller.acquisition.__main__:main"
+maze-daq = "maze.controller.acquisition.__main__:main"
+vast-daq = "maze.controller.acquisition.__main__:main"
+maze-ram-daq = "maze.controller.acquisition_ram.__main__:main"
 
 [tool.uv.sources]
 torch = [
@@ -65,7 +67,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["vast"]
+packages = ["maze"]
 
 [tool.ruff]
 line-length = 100

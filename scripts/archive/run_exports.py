@@ -13,8 +13,8 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from vast.pipeline.exports import export_all
-from vast.pipeline.config import OUTPUT_H5
+from maze.pipeline.exports import export_all
+from maze.pipeline.config import OUTPUT_H5
 
 
 def main():
