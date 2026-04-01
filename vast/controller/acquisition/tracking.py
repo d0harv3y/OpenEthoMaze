@@ -60,7 +60,8 @@ class TrackingResult:
     # Performance and fallback-reason indicators
     inference_time_s: float = 0.0  # time in SLEAP inference this frame; 0 for fallback
     sleap_confidence: Optional[float] = None  # raw SLEAP conf when fallback due to low conf
-    # Fallback only: binary mask (H, W) of the selected blob for overlay; None otherwise
+    # Binary mask (H, W) of the selected blob for overlay when fallback builds it; also attached
+    # to SLEAP results when show_blob_overlay is enabled so the GUI can draw blob + skeleton.
     blob_mask: Optional[np.ndarray] = None
     # Independent fallback trajectory for "in-range" stream (when available).
     in_range_xy: Optional[Tuple[float, float]] = None
@@ -577,6 +578,7 @@ class HybridTracker:
                     pose_node_valid=pose_node_valid,
                     inference_time_s=inference_time_s,
                     in_range_xy=fallback_res.in_range_xy,
+                    blob_mask=fallback_res.blob_mask,
                 )
             _LOG.debug("SLEAP: _predict_frame_sleap returned None, using fallback")
         else:

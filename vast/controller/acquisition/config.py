@@ -141,6 +141,9 @@ class FallbackTrackingConfig:
     range_low: int = 0  # intensity range threshold: min (0-255); pixel on if range_low <= intensity <= range_high
     range_high: int = 255  # intensity range threshold: max (0-255)
     node_max_jump_px: float = 0.0  # SLEAP nodes: 0 = off; invalidate node if it moves more than this from previous frame
+    # Per-node: if a node exceeds node_max_jump_px for this many consecutive frames, reset all node jump state
+    # (re-init from current pose). 1 = reset on first over-threshold frame. 2+ debounces single-frame spikes.
+    node_jump_confirm_frames: int = 2
     min_sleap_nodes: int = 1  # SLEAP: use backup tracker if fewer than this many nodes pass confidence threshold
     # When True, build and draw the fallback blob mask overlay (green tint where blob detected). Disable for better FPS.
     show_blob_overlay: bool = True
@@ -178,6 +181,9 @@ class ControllerConfig:
     sleap_exit_min_keypoints: int = 2
     # - Fallback source: minimum blob overlap with exit zone (% of blob pixels).
     fallback_exit_blob_overlap_pct: float = 15.0
+    # When True, trial success uses SLEAP keypoint criterion OR fallback blob/point criterion each frame,
+    # regardless of which source is currently driving the overlay.
+    track_exit_either_success: bool = False
     # SLEAP model directory (single-instance; empty = backup tracker only)
     sleap_model_path: str = ""
     # Tracking display/behavior (moved from main GUI to Settings → Tracking)

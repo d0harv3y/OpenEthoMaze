@@ -569,6 +569,12 @@ class TrialController:
             TrialState.TRIAL_RUNNING,
         )
 
+    def is_trial_running_phase(self) -> bool:
+        """True during TRIAL_RUNNING (timed VAST phase), not during ITI/wait or whole-session idle."""
+        if self._sm is None:
+            return False
+        return self._sm.state == TrialState.TRIAL_RUNNING
+
     def get_duty_for_position(self, x_px: float, y_px: float) -> float:
         """Duty % for given position; 0.0 if no SM."""
         if self._sm is None:

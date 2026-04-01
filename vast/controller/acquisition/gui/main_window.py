@@ -285,6 +285,31 @@ def _apply_brightness_contrast(
 _SPOT_FORE_NODES = frozenset({"forel", "forer", "nose", "neck"})
 
 
+def _blend_blob_mask_into_overlay(
+    overlay: np.ndarray,
+    blob_mask: Optional[np.ndarray],
+    blob_crop_rect: Optional[Tuple[int, int, int, int]],
+) -> None:
+    """Semi-transparent green tint where ``blob_mask`` is nonzero; mutates ``overlay`` in place."""
+    if _cv2 is None or blob_mask is None or blob_mask.ndim != 2:
+        return
+    blob_alpha = 0.35
+    green_bgr = (0, 255, 0)
+    if blob_crop_rect is not None:
+        x0, y0, x1, y1 = blob_crop_rect
+        if x1 > x0 and y1 > y0 and blob_mask.shape == (y1 - y0, x1 - x0):
+            overlay_slice = overlay[y0:y1, x0:x1]
+            green_slice = np.empty_like(overlay_slice)
+            green_slice[:] = green_bgr
+            blended = _cv2.addWeighted(green_slice, blob_alpha, overlay_slice, 1.0 - blob_alpha, 0)
+            _cv2.copyTo(blended, blob_mask, overlay_slice)
+    elif blob_mask.shape[:2] == overlay.shape[:2]:
+        green_layer = np.empty_like(overlay)
+        green_layer[:] = green_bgr
+        blended = _cv2.addWeighted(green_layer, blob_alpha, overlay, 1.0 - blob_alpha, 0)
+        _cv2.copyTo(blended, blob_mask, overlay)
+
+
 def _draw_roi_and_tracking_overlay(
     img: np.ndarray,
     roi_center_xy: Optional[Tuple[float, float]],
@@ -302,7 +327,7 @@ def _draw_roi_and_tracking_overlay(
     blob_mask: Optional[np.ndarray] = None,
     blob_crop_rect: Optional[Tuple[int, int, int, int]] = None,
 ) -> np.ndarray:
-    """Draw ROI circle, state-dependent regions, and tracking (skeleton for SLEAP, spot, target marker + blob mask for fallback). Returns BGR.
+    """Draw ROI circle, state-dependent regions, blob tint (if any), then tracking (SLEAP skeleton and/or fallback dot). Returns BGR.
     When blob_crop_rect (x0,y0,x1,y1) is set, blob_mask is in crop coords and we blend only in that slice (no full-frame alloc)."""
     if _cv2 is None:
         return img
@@ -337,6 +362,8 @@ def _draw_roi_and_tracking_overlay(
             exit_r_px = int(arena.exit_radius_cm * arena.px_per_cm)
             if exit_r_px > 0:
                 _cv2.circle(overlay, (ex_i, ey_i), exit_r_px, (255, 0, 255), 2)
+    # Fallback blob tint (under skeleton/track markers when both are shown)
+    _blend_blob_mask_into_overlay(overlay, blob_mask, blob_crop_rect)
     # Tracking overlay: SLEAP = full skeleton (edges + nodes) + spot; fallback = green dot (same size as node)
     NODE_MARKER_R = 2  # radius for node circles and fallback dot; outline only (no fill)
     nose_color = (255, 0, 255)  # BGR pink (nose / primary)
@@ -378,24 +405,6 @@ def _draw_roi_and_tracking_overlay(
         tx, ty = int(track_xy[0]), int(track_xy[1])
         color = (0, 255, 0) if track_valid else (128, 128, 128)  # BGR green vs dim gray
         _cv2.circle(overlay, (tx, ty), NODE_MARKER_R, color, 1, _cv2.LINE_AA)
-    # Fallback blob mask overlay: semi-transparent green where blob was detected.
-    # Use cv2.addWeighted + copyTo to avoid slow per-pixel fancy indexing (better FPS).
-    if blob_mask is not None and blob_mask.ndim == 2:
-        blob_alpha = 0.35
-        green_bgr = (0, 255, 0)
-        if blob_crop_rect is not None:
-            x0, y0, x1, y1 = blob_crop_rect
-            if x1 > x0 and y1 > y0 and blob_mask.shape == (y1 - y0, x1 - x0):
-                overlay_slice = overlay[y0:y1, x0:x1]
-                green_slice = np.empty_like(overlay_slice)
-                green_slice[:] = green_bgr
-                blended = _cv2.addWeighted(green_slice, blob_alpha, overlay_slice, 1.0 - blob_alpha, 0)
-                _cv2.copyTo(blended, blob_mask, overlay_slice)
-        elif blob_mask.shape[:2] == overlay.shape[:2]:
-            green_layer = np.empty_like(overlay)
-            green_layer[:] = green_bgr
-            blended = _cv2.addWeighted(green_layer, blob_alpha, overlay, 1.0 - blob_alpha, 0)
-            _cv2.copyTo(blended, blob_mask, overlay)
     alpha = max(0.0, min(1.0, overlay_opacity))
     _cv2.addWeighted(overlay, alpha, out, 1.0 - alpha, 0, out)
     return out
@@ -487,6 +496,14 @@ class MainWindow(QMainWindow):
         self._virtual_cached_frame_raw: Optional[np.ndarray] = None
         # Cached frame index from CameraController during the paused preview.
         self._virtual_cached_frame_index: Optional[int] = None
+        # Virtual playback: previous OpenCV frame index while advancing (detect loop / seek-back).
+        self._last_virtual_playback_frame_idx: Optional[int] = None
+        # Per-node consecutive frames beyond node_max_jump_px (same length as nodes); SLEAP overlay only.
+        self._node_jump_streak: Optional[np.ndarray] = None
+        # Last overlay track_source ("sleap" / "fallback") to detect pipeline switches.
+        self._last_overlay_track_source: Optional[str] = None
+        # Prior **Flip image** checkbox state; toggling resets pose jump memory (coordinate mirror).
+        self._last_preview_flip_checked: Optional[bool] = None
         self._gui_error_log: list = []  # list of timestamped error lines for View error log
         self._last_sleap_device_logged: Optional[str] = None
         self._last_sleap_log_time_s: Optional[float] = None
@@ -756,39 +773,84 @@ class MainWindow(QMainWindow):
     def _on_track_opacity_changed(self, value: int) -> None:
         self._track_opacity_label.setText(f"{value}%")
 
+    def _reset_sleap_node_jump_state(self) -> None:
+        """Clear GUI-side SLEAP node max-jump memory (``_last_pose_xy`` and per-node streaks).
+
+        Call sites should match any event that invalidates comparing the current pose to a stored
+        reference in image space:
+
+        - Virtual file playback: OpenCV frame index decreases (loop or seek backward).
+        - **Confirmed** per-node teleport: a keypoint stays beyond ``node_max_jump_px`` for
+          ``node_jump_confirm_frames`` consecutive frames (see ``_update_pose_last_and_valid``).
+        - Settings Apply / ``_invalidate_tracker_cache`` (model path, backup-only, confidence, etc.).
+        - Toggling **Flip image** (horizontal mirror swaps x).
+        - Overlay ``track_source`` switches between ``sleap`` and ``fallback``.
+        - Skeleton / node count change is handled by re-init when ``pose_xy`` shape mismatches
+          ``_last_pose_xy`` (equivalent to clearing state).
+        """
+        self._last_pose_xy = None
+        self._node_jump_streak = None
+
     def _invalidate_tracker_cache(self) -> None:
-        self._last_pose_xy = None  # node count may change with different model
+        self._reset_sleap_node_jump_state()
         if self._tracking_controller is not None:
             path = self._config.sleap_model_path or ""
             backup_only = self._config.track_backup_only
             self._tracking_controller.set_sleap_params(path.strip(), backup_only)
 
     def _update_pose_last_and_valid(
-        self, pose_xy: Optional[np.ndarray], node_max_jump_px: float
+        self,
+        pose_xy: Optional[np.ndarray],
+        node_max_jump_px: float,
+        node_jump_confirm_frames: int,
     ) -> Optional[np.ndarray]:
-        """Update _last_pose_xy from pose_xy; return node_valid (True where node is finite and within max jump)."""
+        """Update ``_last_pose_xy``; return per-node validity (finite and within max jump, or debounced).
+
+        When ``node_max_jump_px > 0``, a node that moves farther than that vs the last accepted
+        position is marked invalid for up to ``node_jump_confirm_frames - 1`` consecutive frames.
+        After that many consecutive over-threshold frames, all jump state is reset from the
+        current pose (same effect as Apply). ``node_jump_confirm_frames == 1`` resets on the
+        first over-threshold frame.
+        """
         if pose_xy is None or pose_xy.shape[0] == 0:
             return None
         n = pose_xy.shape[0]
         finite = np.isfinite(pose_xy).all(axis=1)
+        confirm_n = max(1, int(node_jump_confirm_frames))
+        if node_max_jump_px <= 0:
+            self._last_pose_xy = np.asarray(pose_xy, dtype=np.float64)
+            self._node_jump_streak = None
+            return finite
         if self._last_pose_xy is None or self._last_pose_xy.shape[0] != n:
             self._last_pose_xy = np.asarray(pose_xy, dtype=np.float64)
+            self._node_jump_streak = np.zeros(n, dtype=np.int32)
             return finite
+        if self._node_jump_streak is None or self._node_jump_streak.shape[0] != n:
+            self._node_jump_streak = np.zeros(n, dtype=np.int32)
         node_valid = finite.copy()
-        if node_max_jump_px > 0:
-            for i in range(n):
-                if not finite[i]:
-                    node_valid[i] = False
-                    continue
-                dx = float(pose_xy[i, 0]) - float(self._last_pose_xy[i, 0])
-                dy = float(pose_xy[i, 1]) - float(self._last_pose_xy[i, 1])
-                if (dx * dx + dy * dy) ** 0.5 > node_max_jump_px:
-                    node_valid[i] = False
-                    continue
+        max_sq = float(node_max_jump_px) * float(node_max_jump_px)
+        force_reset = False
+        for i in range(n):
+            if not finite[i]:
+                node_valid[i] = False
+                self._node_jump_streak[i] = 0
+                continue
+            dx = float(pose_xy[i, 0]) - float(self._last_pose_xy[i, 0])
+            dy = float(pose_xy[i, 1]) - float(self._last_pose_xy[i, 1])
+            if dx * dx + dy * dy <= max_sq:
                 self._last_pose_xy[i, 0] = float(pose_xy[i, 0])
                 self._last_pose_xy[i, 1] = float(pose_xy[i, 1])
-        else:
+                self._node_jump_streak[i] = 0
+            else:
+                self._node_jump_streak[i] += 1
+                if self._node_jump_streak[i] >= confirm_n:
+                    force_reset = True
+                    break
+                node_valid[i] = False
+        if force_reset:
             self._last_pose_xy = np.asarray(pose_xy, dtype=np.float64)
+            self._node_jump_streak = np.zeros(n, dtype=np.int32)
+            return finite
         return node_valid
 
     def _on_display_brightness_changed(self, value: int) -> None:
@@ -921,12 +983,14 @@ class MainWindow(QMainWindow):
         if dlg is not None and dlg.isVisible():
             dlg.raise_()
             dlg.activateWindow()
+            self._sync_settings_apply_enabled()
             return
         dlg = SettingsDialog(self._config, self, initial_tab_index=None)
         self._settings_dialog = dlg
         dlg.accepted.connect(lambda: self.statusBar().showMessage("Settings applied."))
         dlg.show()
         dlg.raise_()
+        self._sync_settings_apply_enabled()
 
     def _on_open_settings_to_tab(self, tab_index: int) -> None:
         if not HAS_SETTINGS_DIALOG or SettingsDialog is None:
@@ -944,9 +1008,17 @@ class MainWindow(QMainWindow):
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()
+        self._sync_settings_apply_enabled()
 
     def _on_analysis_finished(self, success: bool, message: str) -> None:
+        # Join before dropping the last ref — otherwise QThread can be destroyed
+        # while C++/Python is still unwinding the worker, which crashes (stderr:
+        # "QThread: Destroyed while thread is still running"), often after modal
+        # dialogs e.g. trial overwrite.
+        w = self._analysis_worker
         self._analysis_worker = None
+        if w is not None:
+            w.wait()
         self.statusBar().showMessage(message if message else ("Analysis done" if success else "Analysis failed"))
 
     def _on_end_trial(self) -> None:
@@ -1010,6 +1082,7 @@ class MainWindow(QMainWindow):
             self._virtual_has_initial_frame = False
             self._virtual_cached_frame_raw = None
             self._virtual_cached_frame_index = None
+            self._last_virtual_playback_frame_idx = None
             t0 = time.perf_counter()
             img_raw = self._camera_controller.grab_frame()
             t1 = time.perf_counter()
@@ -1052,10 +1125,22 @@ class MainWindow(QMainWindow):
                 else:
                     self._frame_counter_label.setText("—")
             # Raw frame for inference (no brightness/contrast); display uses a copy with adjustments
-            if self._camera_flip.isChecked() and _cv2 is not None:
+            flip_now = self._camera_flip.isChecked()
+            if self._last_preview_flip_checked is not None and flip_now != self._last_preview_flip_checked:
+                self._reset_sleap_node_jump_state()
+            self._last_preview_flip_checked = flip_now
+            if flip_now and _cv2 is not None:
                 img_raw = _cv2.flip(img_raw, 1)  # 1 = horizontal (flip x-axis)
             h, w = img_raw.shape[0], img_raw.shape[1]
             self._last_preview_img_size = (w, h)
+            # Virtual file playback: frame index went backward → video looped or seek; reset GUI pose-jump state.
+            if virtual_mode and not paused_virtual and self._camera_controller is not None:
+                playback_cur_idx, _ = self._camera_controller.get_last_frame_info()
+                if playback_cur_idx is not None and self._last_virtual_playback_frame_idx is not None:
+                    if playback_cur_idx < self._last_virtual_playback_frame_idx:
+                        self._reset_sleap_node_jump_state()
+                if playback_cur_idx is not None:
+                    self._last_virtual_playback_frame_idx = playback_cur_idx
             # Display copy: brightness/contrast and BGR for overlay
             img_display = apply_display_adjustments(
                 img_raw.copy(),
@@ -1141,6 +1226,9 @@ class MainWindow(QMainWindow):
                     track_xy = getattr(self, "_last_track_xy", None)
                     track_valid = False
                 self._track_source_label.setText(overlay_state["source_label"])
+                if self._last_overlay_track_source is not None and track_source != self._last_overlay_track_source:
+                    self._reset_sleap_node_jump_state()
+                self._last_overlay_track_source = track_source
 
                 # Minimal SLEAP device debug (once per session / device change).
                 if (
@@ -1161,11 +1249,15 @@ class MainWindow(QMainWindow):
             else:
                 # show_track is False: no tracking overlay
                 self._track_source_label.setText("—")
+                self._last_overlay_track_source = None
             opacity = self._track_opacity.value() / 100.0
             if show_track or (roi_center is not None and roi_r > 0):
                 ft = self._config.fallback_tracking
                 node_max_jump_px = ft.node_max_jump_px
-                pose_node_valid = self._update_pose_last_and_valid(pose_xy, node_max_jump_px)
+                node_jump_confirm = max(1, int(getattr(ft, "node_jump_confirm_frames", 2)))
+                pose_node_valid = self._update_pose_last_and_valid(
+                    pose_xy, node_max_jump_px, node_jump_confirm
+                )
                 # Combine confidence-based validity (from tracker) with jump-based validity
                 if (
                     pose_node_valid_from_res is not None
@@ -1191,13 +1283,22 @@ class MainWindow(QMainWindow):
                 pose_node_valid = None
             # Source-specific VAST success criteria:
             # - SLEAP: N valid keypoints in exit zone.
-            # - Fallback: minimum blob overlap fraction in exit zone.
+            # - Fallback: minimum blob overlap fraction in exit zone (else track point in exit).
+            # - track_exit_either_success: OR of both rules, independent of overlay primary source.
             # None => trial logic falls back to point-in-exit (track_xy).
             exit_success_override: Optional[bool] = None
             tc = self._trial_controller
             exit_x_px, exit_y_px = tc.get_exit_position_px()
             exit_radius_px = self._config.arena.exit_radius_cm * self._config.arena.px_per_cm
-            if track_source == "sleap":
+            required_kp = max(1, int(getattr(self._config, "sleap_exit_min_keypoints", 2)))
+            min_frac = max(
+                0.0,
+                min(1.0, float(getattr(self._config, "fallback_exit_blob_overlap_pct", 15.0)) / 100.0),
+            )
+
+            def _sleap_exit_success() -> bool:
+                if pose_xy is None or pose_xy.size == 0:
+                    return False
                 n_in_exit = _count_sleap_keypoints_in_exit(
                     pose_xy=pose_xy,
                     pose_node_valid=pose_node_valid,
@@ -1206,9 +1307,9 @@ class MainWindow(QMainWindow):
                     exit_y_px=exit_y_px,
                     exit_radius_px=exit_radius_px,
                 )
-                required = max(1, int(getattr(self._config, "sleap_exit_min_keypoints", 2)))
-                exit_success_override = n_in_exit >= required
-            elif track_source == "fallback":
+                return n_in_exit >= required_kp
+
+            def _fallback_exit_success() -> bool:
                 if blob_mask is not None:
                     frac = _blob_exit_overlap_fraction(
                         blob_mask=blob_mask,
@@ -1217,20 +1318,23 @@ class MainWindow(QMainWindow):
                         exit_y_px=exit_y_px,
                         exit_radius_px=exit_radius_px,
                     )
-                    min_frac = max(
-                        0.0,
-                        min(1.0, float(getattr(self._config, "fallback_exit_blob_overlap_pct", 15.0)) / 100.0),
-                    )
-                    exit_success_override = frac >= min_frac
-                elif track_xy is not None:
-                    # Safety fallback when blob overlay is disabled/unavailable.
-                    exit_success_override = in_exit_zone(
+                    return frac >= min_frac
+                if track_xy is not None:
+                    return in_exit_zone(
                         float(track_xy[0]),
                         float(track_xy[1]),
                         exit_x_px,
                         exit_y_px,
                         self._config.arena,
                     )
+                return False
+
+            if getattr(self._config, "track_exit_either_success", False):
+                exit_success_override = _sleap_exit_success() or _fallback_exit_success()
+            elif track_source == "sleap":
+                exit_success_override = _sleap_exit_success()
+            elif track_source == "fallback":
+                exit_success_override = _fallback_exit_success()
             tc.set_exit_success_override(exit_success_override)
             x_px = float(self._last_track_xy[0]) if self._last_track_xy is not None else (roi_cx or 0.0)
             y_px = float(self._last_track_xy[1]) if self._last_track_xy is not None else (roi_cy or 0.0)
@@ -1653,6 +1757,11 @@ class MainWindow(QMainWindow):
             self._mc_status_label.setText("Disconnected")
             self._mc_status_label.setStyleSheet("color: gray;")
         self._on_stop_camera()
+        w = self._analysis_worker
+        if w is not None and w.isRunning():
+            # Avoid destroying MainWindow while AnalysisWorker QThread is still running.
+            w.wait(300_000)
+        self._analysis_worker = None
         super().closeEvent(event)
 
     def _is_video_available(self) -> bool:
@@ -1696,6 +1805,14 @@ class MainWindow(QMainWindow):
         self._stop_btn.setEnabled(bs["stop"] and run_ok)
         # Lock flip while session is active so coordinate space is stable for tracking/exit/H5.
         self._camera_flip.setEnabled(not self._trial_controller.run_active)
+        self._sync_settings_apply_enabled()
+
+    def _sync_settings_apply_enabled(self) -> None:
+        dlg = getattr(self, "_settings_dialog", None)
+        if dlg is None or not hasattr(dlg, "set_apply_enabled"):
+            return
+        tc = self._trial_controller
+        dlg.set_apply_enabled(not tc.is_trial_running_phase())
 
     def _on_run_timer(self) -> None:
         now = time.monotonic()
@@ -1830,7 +1947,10 @@ class MainWindow(QMainWindow):
                 video_path=video_path,
                 run_phase=run_phase,
             )
-            self._analysis_worker.finished.connect(self._on_analysis_finished)
+            self._analysis_worker.finished.connect(
+                self._on_analysis_finished,
+                Qt.ConnectionType.QueuedConnection,
+            )
             self._analysis_worker.start()
             self.statusBar().showMessage("Analyzing trial…")
 

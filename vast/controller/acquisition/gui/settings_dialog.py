@@ -99,6 +99,7 @@ class SettingsDialog(QDialog):
             | QDialogButtonBox.StandardButton.Cancel
         )
         apply_btn = bbox.button(QDialogButtonBox.StandardButton.Apply)
+        self._apply_btn = apply_btn
         apply_btn.clicked.connect(self._on_apply)
         apply_btn.setDefault(True)
         apply_btn.setAutoDefault(True)
@@ -120,6 +121,14 @@ class SettingsDialog(QDialog):
     def refresh_from_config(self) -> None:
         """Refresh widgets from the current backing config object."""
         self._fill_from_config()
+
+    def set_apply_enabled(self, enabled: bool) -> None:
+        """Enable Apply; disabled e.g. while TRIAL_RUNNING so settings are not applied mid-maze."""
+        self._apply_btn.setEnabled(enabled)
+        if enabled:
+            self._apply_btn.setToolTip("Apply changes without closing this window.")
+        else:
+            self._apply_btn.setToolTip("Apply is disabled while a trial is running (VAST phase).")
 
     def _on_tab_changed(self, index: int) -> None:
         s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
@@ -330,6 +339,13 @@ class SettingsDialog(QDialog):
         self._track_backup_only_cb = QCheckBox("Backup tracking only (ignore SLEAP model)")
         self._track_backup_only_cb.setToolTip("Use only the adaptive-threshold backup tracker.")
         options_ly.addWidget(self._track_backup_only_cb)
+        self._track_exit_either_success_cb = QCheckBox("Use either success condition")
+        self._track_exit_either_success_cb.setToolTip(
+            "When enabled, a trial succeeds if either the SLEAP exit rule (min keypoints in exit zone) "
+            "or the fallback rule (blob overlap with exit, or track point in exit if no blob) is satisfied, "
+            "no matter which source is primary for the overlay."
+        )
+        options_ly.addWidget(self._track_exit_either_success_cb)
         layout.addWidget(options_g)
 
         # Fallback section
@@ -386,6 +402,16 @@ class SettingsDialog(QDialog):
         self._fallback_max_contours.setSpecialValueText("No limit")
         self._fallback_max_contours.setToolTip("Max contours to consider per frame (0 = no limit). Keeps largest by area. Can reduce FPS drops when many in-range pixels.")
         f.addRow("Max contours (0=off):", self._fallback_max_contours)
+        self._fallback_exit_blob_overlap_pct = QDoubleSpinBox()
+        self._fallback_exit_blob_overlap_pct.setRange(0.0, 100.0)
+        self._fallback_exit_blob_overlap_pct.setDecimals(1)
+        self._fallback_exit_blob_overlap_pct.setSuffix(" %")
+        self._fallback_exit_blob_overlap_pct.setValue(15.0)
+        self._fallback_exit_blob_overlap_pct.setToolTip(
+            "VAST success when using the fallback rule: minimum fraction of blob pixels overlapping the exit zone. "
+            "If there is no blob mask, the track point in/out of exit is used instead."
+        )
+        f.addRow("Exit success blob overlap:", self._fallback_exit_blob_overlap_pct)
         layout.addWidget(fallback_g)
 
         # SLEAP section
@@ -420,20 +446,26 @@ class SettingsDialog(QDialog):
         self._fallback_node_max_jump.setRange(0, 500)
         self._fallback_node_max_jump.setDecimals(0)
         self._fallback_node_max_jump.setSpecialValueText("Off")
-        self._fallback_node_max_jump.setToolTip("SLEAP nodes: invalidate a node if it moves more than this (px) from previous frame. 0 = off.")
+        self._fallback_node_max_jump.setToolTip(
+            "SLEAP nodes: invalidate a node if it moves more than this (px) from the last accepted position. 0 = off."
+        )
         sleap_f.addRow("Node max jump (px, 0=off):", self._fallback_node_max_jump)
+        self._node_jump_confirm_frames = QSpinBox()
+        self._node_jump_confirm_frames.setRange(1, 30)
+        self._node_jump_confirm_frames.setValue(2)
+        self._node_jump_confirm_frames.setToolTip(
+            "Per-node: if a node stays beyond node max jump for this many frames in a row, reset all node jump "
+            "state from the current pose (like Apply). 1 = reset on first over-threshold frame. 2+ ignores "
+            "single-frame spikes. Also resets on virtual loop, Apply, flip image, and SLEAP↔fallback switch."
+        )
+        sleap_f.addRow("Node jump confirm (frames):", self._node_jump_confirm_frames)
         self._sleap_exit_min_keypoints = QSpinBox()
         self._sleap_exit_min_keypoints.setRange(1, 64)
         self._sleap_exit_min_keypoints.setValue(2)
-        self._sleap_exit_min_keypoints.setToolTip("VAST success with SLEAP source: require at least this many valid keypoints inside the exit zone.")
+        self._sleap_exit_min_keypoints.setToolTip(
+            "VAST success when using the SLEAP rule: require at least this many valid keypoints inside the exit zone."
+        )
         sleap_f.addRow("Exit success min keypoints:", self._sleap_exit_min_keypoints)
-        self._fallback_exit_blob_overlap_pct = QDoubleSpinBox()
-        self._fallback_exit_blob_overlap_pct.setRange(0.0, 100.0)
-        self._fallback_exit_blob_overlap_pct.setDecimals(1)
-        self._fallback_exit_blob_overlap_pct.setSuffix(" %")
-        self._fallback_exit_blob_overlap_pct.setValue(15.0)
-        self._fallback_exit_blob_overlap_pct.setToolTip("VAST success with fallback source: minimum percent of blob pixels overlapping the exit zone.")
-        sleap_f.addRow("Fallback blob overlap for success:", self._fallback_exit_blob_overlap_pct)
         layout.addWidget(sleap_g)
 
         layout.addStretch()
@@ -549,6 +581,7 @@ class SettingsDialog(QDialog):
         self._fallback_range_low.setValue(getattr(ft, "range_low", 0))
         self._fallback_range_high.setValue(getattr(ft, "range_high", 255))
         self._fallback_node_max_jump.setValue(getattr(ft, "node_max_jump_px", 0.0))
+        self._node_jump_confirm_frames.setValue(max(1, int(getattr(ft, "node_jump_confirm_frames", 2))))
         self._fallback_min_sleap_nodes.setValue(getattr(ft, "min_sleap_nodes", 1))
         self._fallback_show_blob_cb.setChecked(getattr(ft, "show_blob_overlay", True))
         self._fallback_max_contours.setValue(getattr(ft, "max_contours", 0))
@@ -556,6 +589,7 @@ class SettingsDialog(QDialog):
         self._track_show_cb.setChecked(getattr(c, "track_show", True))
         self._track_async_cb.setChecked(getattr(c, "track_async", False))
         self._track_backup_only_cb.setChecked(getattr(c, "track_backup_only", False))
+        self._track_exit_either_success_cb.setChecked(getattr(c, "track_exit_either_success", False))
         self._sleap_model_path_edit.setText(getattr(c, "sleap_model_path", "") or "")
         # SLEAP
         self._sleap_confidence_pct.setValue(getattr(c, "sleap_confidence_pct", 50))
@@ -637,6 +671,7 @@ class SettingsDialog(QDialog):
         ft.range_low = self._fallback_range_low.value()
         ft.range_high = self._fallback_range_high.value()
         ft.node_max_jump_px = self._fallback_node_max_jump.value()
+        ft.node_jump_confirm_frames = max(1, self._node_jump_confirm_frames.value())
         ft.min_sleap_nodes = self._fallback_min_sleap_nodes.value()
         ft.show_blob_overlay = self._fallback_show_blob_cb.isChecked()
         ft.max_contours = max(0, self._fallback_max_contours.value())
@@ -644,6 +679,7 @@ class SettingsDialog(QDialog):
         c.track_show = self._track_show_cb.isChecked()
         c.track_async = self._track_async_cb.isChecked()
         c.track_backup_only = self._track_backup_only_cb.isChecked()
+        c.track_exit_either_success = self._track_exit_either_success_cb.isChecked()
         c.sleap_model_path = (self._sleap_model_path_edit.text() or "").strip()
         # SLEAP
         c.sleap_confidence_pct = max(0, min(100, self._sleap_confidence_pct.value()))
