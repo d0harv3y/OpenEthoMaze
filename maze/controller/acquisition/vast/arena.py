@@ -12,27 +12,18 @@ from typing import Optional, Tuple
 from .config import ArenaConfig, ExitAngleConfig
 
 
-def distance_px(
-    x1: float, y1: float,
-    x2: float, y2: float
-) -> float:
+def distance_px(x1: float, y1: float, x2: float, y2: float) -> float:
     return math.hypot(x2 - x1, y2 - y1)
 
 
-def in_center_region(
-    x_px: float, y_px: float,
-    config: ArenaConfig
-) -> bool:
+def in_center_region(x_px: float, y_px: float, config: ArenaConfig) -> bool:
     """True if (x_px, y_px) is inside the center circle."""
     cx, cy = config.arena_center_x_px, config.arena_center_y_px
     d = distance_px(x_px, y_px, cx, cy)
     return d <= config.center_radius_px
 
 
-def in_edge_region(
-    x_px: float, y_px: float,
-    config: ArenaConfig
-) -> bool:
+def in_edge_region(x_px: float, y_px: float, config: ArenaConfig) -> bool:
     """True if (x_px, y_px) is in the edge annulus (outside center, inside arena)."""
     cx, cy = config.arena_center_x_px, config.arena_center_y_px
     d = distance_px(x_px, y_px, cx, cy)
@@ -40,9 +31,11 @@ def in_edge_region(
 
 
 def in_exit_zone(
-    x_px: float, y_px: float,
-    exit_x_px: float, exit_y_px: float,
-    config: ArenaConfig
+    x_px: float,
+    y_px: float,
+    exit_x_px: float,
+    exit_y_px: float,
+    config: ArenaConfig,
 ) -> bool:
     """True if (x_px, y_px) is within exit_radius_cm of exit center."""
     exit_radius_px = config.exit_radius_cm * config.px_per_cm
@@ -51,9 +44,11 @@ def in_exit_zone(
 
 
 def distance_to_exit_cm(
-    x_px: float, y_px: float,
-    exit_x_px: float, exit_y_px: float,
-    px_per_cm: float
+    x_px: float,
+    y_px: float,
+    exit_x_px: float,
+    exit_y_px: float,
+    px_per_cm: float,
 ) -> float:
     d_px = distance_px(x_px, y_px, exit_x_px, exit_y_px)
     return d_px / px_per_cm
@@ -66,10 +61,11 @@ def angle_from_center_deg(cx: float, cy: float, x: float, y: float) -> float:
 
 
 def exit_center_px(
-    rodent_x_px: float, rodent_y_px: float,
+    rodent_x_px: float,
+    rodent_y_px: float,
     exit_angle_index: int,
     arena: ArenaConfig,
-    exit_angles: ExitAngleConfig
+    exit_angles: ExitAngleConfig,
 ) -> Tuple[float, float]:
     """
     Place exit in center region: opposite side from rodent, then snap to trial angle.
@@ -100,17 +96,14 @@ def _session_id_hash(session_id: str, seed: Optional[int]) -> int:
 
 
 def latin_square_exit_index(
-    session_id: str, trial_idx: int,
-    n_angles: int, seed: Optional[int]
+    session_id: str,
+    trial_idx: int,
+    n_angles: int,
+    seed: Optional[int],
 ) -> int:
-    """Return exit angle index 0..n_angles-1 for this session/trial (Latin square style).
-
-    When seed is an int: permutation is deterministic for that seed (reproducible across runs).
-    When seed is None: permutation is derived from session_id only (same session_id always
-    gets the same order; deterministic per session across runs).
-    """
+    """Return exit angle index 0..n_angles-1 for this session/trial (Latin square style)."""
     import random
-    # Option C: session-deterministic when seed is None (same session_id → same permutation)
+
     effective_seed = seed if seed is not None else _session_id_hash(session_id, None)
     rng = random.Random(effective_seed)
     base = list(range(n_angles))

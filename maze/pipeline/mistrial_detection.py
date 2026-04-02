@@ -7,7 +7,6 @@ frame mismatch). Does not infer behavioral mistrials.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Optional
 
 from .io.file_discovery import TrialManifest

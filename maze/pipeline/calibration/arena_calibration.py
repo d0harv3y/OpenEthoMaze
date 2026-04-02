@@ -9,11 +9,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
-from ..config import DEFAULT_PX_PER_CM
+from ..defaults import DEFAULT_PX_PER_CM
 
 
 @dataclass

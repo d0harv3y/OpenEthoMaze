@@ -20,8 +20,8 @@ from typing import Any, Optional
 import numpy as np
 
 from ...core.anatomy import SPOT_NODE_NAMES
-from ..config import (
-    OUTPUT_H5,
+from ...core.trial_settings import TrialSettings
+from ..defaults import (
     DEFAULT_FPS,
     EXIT_ZONE_RADIUS_CM,
     CENTER_ZONE_RADIUS_FRACTION,
@@ -32,8 +32,8 @@ from ..config import (
     TRACE_MAX_GAP_FRAMES,
     FILTER_FRAMES_NO_ANIMAL,
 )
+from ..paths import OUTPUT_H5
 from ..io.file_discovery import TrialManifest, load_treatment_labels
-from ..io.input_h5_loader import TrialSettings
 from ..io.sleap_loader import (
     load_sleap_file,
     apply_jump_filter,
@@ -46,7 +46,7 @@ from ..tracking.trace_processing import (
     filter_frames_no_animal,
     TraceProcessingParams,
 )
-from ..metrics.ambulation import calculate_ambulation_metrics, AmbulationMetrics
+from ..metrics.ambulation import calculate_ambulation_metrics
 from ..metrics.exit_metrics import (
     build_xy_table_with_exit,
 )
@@ -332,8 +332,6 @@ def _process_with_sleap(
         n_frames,
     )
     valid_frames_analysis = valid_frames_full[start_frame:]  # length n_analysis
-    valid_frames_iti_wait = valid_frames_full[:start_frame]  # frames before analysis window
-
     # Process traces (interpolation, smoothing) full length
     params = TraceProcessingParams()
     processed_traces = process_trace_data(
@@ -375,7 +373,6 @@ def _process_with_sleap(
     # Build hybrid trajectory: SLEAP spot, but replace long SLEAP gaps with in-range when available.
     # First compute max gap on analysis window (matching existing primary selection logic).
     spot_xy = spot_xy_full[start_frame:]
-    centroid_xy = centroid_xy_full[start_frame:]
     inrange_xy = inrange_xy_full[start_frame:]
 
     # Hybrid valid mask and gap logic over the analysis window

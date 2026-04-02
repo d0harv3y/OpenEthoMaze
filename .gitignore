@@ -3,7 +3,7 @@
 ########################################
 
 # Test temp / output directories
-tests/_tmp/
+tests/
 outputs/
 
 # Python bytecode / extensions
@@ -53,4 +53,3 @@ desktop.ini
 *.mp4
 
 # local config
-vast/pipeline/config_local.py

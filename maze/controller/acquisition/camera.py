@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Iterator, Optional, Tuple
 
 from . import app_logging
-from .config import ControllerConfig
+from .vast.config import ControllerConfig
 
 import numpy as np
 

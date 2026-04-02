@@ -24,7 +24,7 @@ from h5grove.flask_utils import (
 
 def get_h5web_static_dir() -> Optional[Path]:
     """Return path to web/h5web_dist (built React app), or None if not found."""
-    # Package dir: vast_controller/vast_controller/; repo root: parent of that
+    # Package dir: maze/controller/acquisition/; repo root is one level up from there.
     package_dir = Path(__file__).resolve().parent
     repo_root = package_dir.parent
     static_dir = repo_root / "web" / "h5web_dist"
@@ -36,8 +36,8 @@ def get_h5web_static_dir() -> Optional[Path]:
 def create_app(h5_base_dir: Path, static_dir: Path) -> Flask:
     """Flask app: h5grove API under /api + static files for the h5web frontend at /.
 
-    Keep h5grove (Python) on the same major line as the embedded @h5web/app build
-    (see ``vast/controller/web/h5web/package.json``); rebuild ``web/h5web_dist``
+    Keep h5grove (Python) on the same major line as the embedded @h5web/app build;
+    rebuild ``web/h5web_dist``
     after bumping the npm package.
     """
     app = Flask(__name__)

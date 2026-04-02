@@ -1,8 +1,8 @@
 """
-Circular open field rodent behavior controller.
+Shared acquisition shell plus task-local behavior modules.
 
-Warmer/colder style task: vibration guides rodent to a pseudo-random exit
-in the center; trial ends on exit or max duration.
+The acquisition root owns the shared GUI/runtime spine, while task packages like
+`vast/` and `radial_arm/` own their flow and geometry details.
 """
 
 __version__ = "0.1.0"

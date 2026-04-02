@@ -85,4 +85,5 @@ FEEDBACK_TABLE_DATASET = "table"
 
 AMBULATION_GROUP = "ambulation_metrics"
 XY_DATASET_NAME = "xy"
+TASK_DATA_GROUP = "task_data"
 

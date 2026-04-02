@@ -1,49 +1,53 @@
 """
 Main controller GUI: profile, calibration, config, run, export.
 
-Reference: VAST/legacy_sss.pdf for control layout inspiration.
 """
 
 from __future__ import annotations
 
-import shutil
-import subprocess
-import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal, Optional, Tuple, Union
+from typing import Optional, Tuple
 
 import numpy as np
-from maze.core.anatomy import is_spot_node_name
 
-from ..arena import distance_px, in_exit_zone
-from ..config import ControllerConfig
+from ..vast.arena import distance_px, in_exit_zone
 from ..profile import load_profile, save_profile, gui_to_dict
 from ..h5_writer import open_db
 from ..recording import TrialRecorder
 from .. import app_logging
-from ..trial_logic import (
-    OverlayInfo,
-    Phase,
-    TrialMode,
-    TrialState,
-    TrialController,
-    parse_phase_mode_from_config,
+from ..task_registry import AcquisitionMode, get_task_spec
+from ..vast import (
+    VastPhase,
+    VastTrialMode,
+    parse_vast_phase_mode_from_config,
 )
 from .analysis_worker import AnalysisWorker
 from .file_actions import (
     ask_trial_overwrite_merged,
-    export_trials_csv,
     launch_h5web_for_path,
     next_keep_both_suffix,
 )
 from .identity import parse_virtual_video_identity, sanitize_session_id
+from .mc_actions import flash_firmware, refresh_serial_ports, toggle_mc_connection
+from .menus import build_main_window_menus
 from .overlay_helpers import (
-    apply_brightness_contrast,
-    blob_exit_overlap_fraction,
-    count_sleap_keypoints_in_exit,
     draw_roi_and_tracking_overlay,
+    resolve_exit_success_override,
 )
+from .pose_jump_state import PoseJumpState
+from .profile_settings import (
+    HAS_QT as HAS_QT_SETTINGS,
+    read_last_profile_path,
+    read_reload_last_profile,
+    save_last_profile_path,
+    write_reload_last_profile,
+)
+from .qt_preview import frame_to_pixmap
+
+QT_ERROR_MESSAGE = "PySide6 is required for the GUI. Install with: pip install PySide6"
+DEFAULT_WINDOW_SIZE = (500, 400)
 
 
 try:
@@ -67,8 +71,8 @@ try:
         QVBoxLayout,
         QWidget,
     )
-    from PySide6.QtCore import Qt, QRegularExpression, QTimer, QEvent, QUrl, QSettings, QThread, Signal
-    from PySide6.QtGui import QImage, QPixmap, QRegularExpressionValidator
+    from PySide6.QtCore import Qt, QRegularExpression, QTimer, QEvent, QUrl
+    from PySide6.QtGui import QRegularExpressionValidator
     HAS_QT = True
 except ImportError:
     HAS_QT = False
@@ -126,39 +130,22 @@ except ImportError:
     SectionWithSettings = None
     HAS_SETTINGS_DIALOG = False
 
-_SETTINGS_ORG = "VAST"
-_SETTINGS_APP = "Controller"
-_KEY_RELOAD_LAST_PROFILE = "reload_last_profile"
-_KEY_LAST_PROFILE_PATH = "last_profile_path"
-
-def _frame_to_pixmap(img):
-    """Convert OpenCV image (BGR (H,W,3) or gray (H,W)) to QPixmap. Keeps a copy for Qt."""
-    if _cv2 is None or img is None:
-        return None
-    if img.ndim == 2:
-        h, w = img.shape
-        qimg = QImage(img.data, w, h, w, QImage.Format.Format_Grayscale8).copy()
-    else:
-        rgb = _cv2.cvtColor(img, _cv2.COLOR_BGR2RGB)
-        h, w, c = rgb.shape
-        qimg = QImage(rgb.data, w, h, w * c, QImage.Format.Format_RGB888).copy()
-    return QPixmap.fromImage(qimg)
-
-
 class MainWindow(QMainWindow):
     """Main window: profile, calibration, run, export."""
 
-    def __init__(self, dev: bool = False) -> None:
+    def __init__(self, task_mode: AcquisitionMode = "vast", dev: bool = False) -> None:
         super().__init__()
+        self._task_mode = task_mode
+        self._task_spec = get_task_spec(task_mode)
         self._dev_mode = dev
-        self._config = ControllerConfig()
+        self._config = self._task_spec.config_factory()
         self._profile_path: Optional[Path] = None
         self._db_path: Optional[Path] = None
         self._update_window_title()
         self._camera_timer: Optional[QTimer] = None
         self._last_preview_img_size: Optional[Tuple[int, int]] = None  # (width, height) for click mapping
         self._last_track_xy: Optional[Tuple[float, float]] = None  # latest valid tracking position for run loop
-        self._last_pose_xy: Optional[np.ndarray] = None  # (nodes, 2) for node max-jump invalidation; SLEAP only
+        self._pose_jump_state = PoseJumpState()
         self._tracking_controller = TrackingController(self._config) if HAS_TRACKING and TrackingController is not None else None
         self._camera_controller = CameraController(self._config) if HAS_CAMERA else None
         self._display_fps_times: list = []  # ring of frame timestamps for display FPS (max 30)
@@ -175,7 +162,6 @@ class MainWindow(QMainWindow):
         # Virtual playback: previous OpenCV frame index while advancing (detect loop / seek-back).
         self._last_virtual_playback_frame_idx: Optional[int] = None
         # Per-node consecutive frames beyond node_max_jump_px (same length as nodes); SLEAP overlay only.
-        self._node_jump_streak: Optional[np.ndarray] = None
         # Last overlay track_source ("sleap" / "fallback") to detect pipeline switches.
         self._last_overlay_track_source: Optional[str] = None
         # Prior **Flip image** checkbox state; toggling resets pose jump memory (coordinate mirror).
@@ -183,7 +169,7 @@ class MainWindow(QMainWindow):
         self._gui_error_log: list = []  # list of timestamped error lines for View error log
         self._last_sleap_device_logged: Optional[str] = None
         self._last_sleap_log_time_s: Optional[float] = None
-        self._trial_controller = TrialController(self._config)
+        self._trial_controller = self._task_spec.controller_factory(self._config)
         self._trial_controller.add_state_listener(self._on_trial_state_change)
         self._arduino_stimulus: Optional["ArduinoStimulus"] = None
         self._trial_recorder: Optional[TrialRecorder] = None
@@ -197,7 +183,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(self._central)
 
         # Camera preview
-        camera_section = SectionWithSettings("Camera", "Open Settings → Arena") if SectionWithSettings else QGroupBox("Camera")
+        camera_section = SectionWithSettings("Camera", "Open Settings → Task") if SectionWithSettings else QGroupBox("Camera")
         camera_ly = camera_section.content_layout() if SectionWithSettings else QVBoxLayout()
         if not SectionWithSettings:
             camera_section.setLayout(camera_ly)
@@ -260,7 +246,12 @@ class MainWindow(QMainWindow):
         camera_ly.addWidget(self._camera_label)
         # Set arena checkbox and tracking indicators on one row
         arena_track_row = QHBoxLayout()
-        self._roi_set_center_click = QCheckBox("Set arena center from next click on preview")
+        roi_click_text = (
+            "Place RAM template from next click on preview"
+            if self._task_mode == "ram"
+            else "Set arena center from next click on preview"
+        )
+        self._roi_set_center_click = QCheckBox(roi_click_text)
         arena_track_row.addWidget(self._roi_set_center_click)
         arena_track_row.addWidget(QLabel("Source:"))
         self._track_source_label = QLabel("—")
@@ -282,7 +273,9 @@ class MainWindow(QMainWindow):
         camera_ly.addLayout(arena_track_row)
         layout.addWidget(camera_section)
         if SectionWithSettings:
-            camera_section.settings_clicked.connect(lambda: self._on_open_settings_to_tab(0))
+            camera_section.settings_clicked.connect(
+                lambda: self._on_open_settings_to_tab("task")
+            )
 
         # MC (microcontroller) panel: COM port, Connect, status
         mc_section = QGroupBox("MC")
@@ -330,7 +323,9 @@ class MainWindow(QMainWindow):
         out_ly.addWidget(self._output_browse_btn)
         layout.addWidget(out_section)
         if SectionWithSettings:
-            out_section.settings_clicked.connect(lambda: self._on_open_settings_to_tab(3))
+            out_section.settings_clicked.connect(
+                lambda: self._on_open_settings_to_tab("session")
+            )
 
         # Session controls (session ID, run mode)
         session_section = SectionWithSettings("Session controls", "Open Settings → Session") if SectionWithSettings else QGroupBox("Session controls")
@@ -356,12 +351,12 @@ class MainWindow(QMainWindow):
         session_ly.addWidget(self._session_id_edit)
         session_ly.addWidget(QLabel("Phase:"))
         self._phase_combo = QComboBox()
-        for p in Phase:
+        for p in VastPhase:
             self._phase_combo.addItem(p.value.replace("_", " ").title(), p)
         session_ly.addWidget(self._phase_combo)
         session_ly.addWidget(QLabel("Mode:"))
         self._mode_combo = QComboBox()
-        for m in TrialMode:
+        for m in VastTrialMode:
             self._mode_combo.addItem(m.value.replace("_", " ").title(), m)
         session_ly.addWidget(self._mode_combo)
         self._session_id_edit.textChanged.connect(self._on_session_controls_changed)
@@ -370,7 +365,9 @@ class MainWindow(QMainWindow):
         self._h5_filename_edit.textChanged.connect(self._on_session_controls_changed)
         layout.addWidget(session_section)
         if SectionWithSettings:
-            session_section.settings_clicked.connect(lambda: self._on_open_settings_to_tab(3))
+            session_section.settings_clicked.connect(
+                lambda: self._on_open_settings_to_tab("session")
+            )
 
         # Status (state, trial, exit, animal, timers, duty)
         status_g = QGroupBox("Status")
@@ -387,7 +384,7 @@ class MainWindow(QMainWindow):
         self._status_trial = QLabel("—")
         status_row1.addWidget(self._status_trial)
         # status_row2 = QHBoxLayout()
-        status_row1.addWidget(QLabel("Exit #:"))
+        status_row1.addWidget(QLabel(self._task_spec.exit_status_label))
         self._status_exit = QLabel("—")
         status_row1.addWidget(self._status_exit)
         status_row1.addWidget(QLabel("ITI:"))
@@ -441,10 +438,11 @@ class MainWindow(QMainWindow):
         self._apply_startup_profile()
 
     def _update_window_title(self) -> None:
+        prefix = f"{self._task_spec.window_title} ({self._task_spec.display_name})"
         if self._profile_path:
-            self.setWindowTitle(f"VAST Controller — {self._profile_path}")
+            self.setWindowTitle(f"{prefix} — {self._profile_path}")
         else:
-            self.setWindowTitle("VAST Controller — Unsaved")
+            self.setWindowTitle(f"{prefix} — Unsaved")
 
     def _on_track_opacity_changed(self, value: int) -> None:
         self._track_opacity_label.setText(f"{value}%")
@@ -464,8 +462,7 @@ class MainWindow(QMainWindow):
         - Skeleton / node count change is handled by re-init when ``pose_xy`` shape mismatches
           ``_last_pose_xy`` (equivalent to clearing state).
         """
-        self._last_pose_xy = None
-        self._node_jump_streak = None
+        self._pose_jump_state.reset()
 
     def _invalidate_tracker_cache(self) -> None:
         self._reset_sleap_node_jump_state()
@@ -488,46 +485,11 @@ class MainWindow(QMainWindow):
         current pose (same effect as Apply). ``node_jump_confirm_frames == 1`` resets on the
         first over-threshold frame.
         """
-        if pose_xy is None or pose_xy.shape[0] == 0:
-            return None
-        n = pose_xy.shape[0]
-        finite = np.isfinite(pose_xy).all(axis=1)
-        confirm_n = max(1, int(node_jump_confirm_frames))
-        if node_max_jump_px <= 0:
-            self._last_pose_xy = np.asarray(pose_xy, dtype=np.float64)
-            self._node_jump_streak = None
-            return finite
-        if self._last_pose_xy is None or self._last_pose_xy.shape[0] != n:
-            self._last_pose_xy = np.asarray(pose_xy, dtype=np.float64)
-            self._node_jump_streak = np.zeros(n, dtype=np.int32)
-            return finite
-        if self._node_jump_streak is None or self._node_jump_streak.shape[0] != n:
-            self._node_jump_streak = np.zeros(n, dtype=np.int32)
-        node_valid = finite.copy()
-        max_sq = float(node_max_jump_px) * float(node_max_jump_px)
-        force_reset = False
-        for i in range(n):
-            if not finite[i]:
-                node_valid[i] = False
-                self._node_jump_streak[i] = 0
-                continue
-            dx = float(pose_xy[i, 0]) - float(self._last_pose_xy[i, 0])
-            dy = float(pose_xy[i, 1]) - float(self._last_pose_xy[i, 1])
-            if dx * dx + dy * dy <= max_sq:
-                self._last_pose_xy[i, 0] = float(pose_xy[i, 0])
-                self._last_pose_xy[i, 1] = float(pose_xy[i, 1])
-                self._node_jump_streak[i] = 0
-            else:
-                self._node_jump_streak[i] += 1
-                if self._node_jump_streak[i] >= confirm_n:
-                    force_reset = True
-                    break
-                node_valid[i] = False
-        if force_reset:
-            self._last_pose_xy = np.asarray(pose_xy, dtype=np.float64)
-            self._node_jump_streak = np.zeros(n, dtype=np.int32)
-            return finite
-        return node_valid
+        return self._pose_jump_state.update(
+            pose_xy=pose_xy,
+            node_max_jump_px=node_max_jump_px,
+            node_jump_confirm_frames=node_jump_confirm_frames,
+        )
 
     def _on_display_brightness_changed(self, value: int) -> None:
         self._display_brightness_label.setText(str(value))
@@ -542,31 +504,10 @@ class MainWindow(QMainWindow):
             self._config.output_dir = path
 
     def _build_menus(self) -> None:
-        menubar = self.menuBar()
-        file_menu = menubar.addMenu("&File")
-        self._reload_last_profile_action = file_menu.addAction(
-            "Reload last profile on startup"
+        build_main_window_menus(
+            self,
+            reload_last_profile_checked=read_reload_last_profile(),
         )
-        self._reload_last_profile_action.setCheckable(True)
-        self._reload_last_profile_action.setChecked(self._read_reload_last_profile())
-        self._reload_last_profile_action.triggered.connect(self._on_toggle_reload_last_profile)
-        file_menu.addSeparator()
-        file_menu.addAction("Load profile…", self._on_load_profile)
-        file_menu.addAction("Save profile", self._on_save_profile)
-        file_menu.addAction("Save profile as…", self._on_save_profile_as)
-        file_menu.addAction("Open profile in editor", self._on_open_profile_in_editor)
-        file_menu.addAction("Reload profile", self._on_reload_profile)
-        file_menu.addSeparator()
-        file_menu.addAction("Run exports…", self._on_run_exports)
-        file_menu.addAction("Open current DB in h5web", self._on_open_current_db_h5web)
-        file_menu.addAction("Open H5 in h5web…", self._on_open_h5web)
-        file_menu.addSeparator()
-        file_menu.addAction("Exit", self._on_file_exit)
-        settings_menu = menubar.addMenu("&Settings")
-        settings_menu.addAction("Settings…", self._on_settings)
-        help_menu = menubar.addMenu("&Help")
-        help_menu.addAction("View error log", self._on_view_error_log)
-        help_menu.addAction("Open log folder", self._on_open_log_folder)
 
     def _on_save_profile_as(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
@@ -621,7 +562,7 @@ class MainWindow(QMainWindow):
             dlg = getattr(self, "_settings_dialog", None)
             if dlg is not None and hasattr(dlg, "set_config"):
                 dlg.set_config(self._config)
-            self._trial_controller = TrialController(self._config)
+            self._trial_controller = self._task_spec.controller_factory(self._config)
             self._trial_controller.add_state_listener(self._on_trial_state_change)
             self._trial_controller.reset(session_id_safe, ti, slot_idx=slot)
             if session_id_safe:
@@ -646,10 +587,7 @@ class MainWindow(QMainWindow):
                 return
         self.close()
 
-    _SETTINGS_TAB_NAMES = (
-        "Arena", "Exit angles", "Stimulus", "Session",
-        "Animals", "Tracking",
-    )
+    _SETTINGS_TAB_NAMES = ("Task", "Session", "Animals", "Tracking")
 
     def _on_settings(self) -> None:
         if not HAS_SETTINGS_DIALOG or SettingsDialog is None:
@@ -661,20 +599,40 @@ class MainWindow(QMainWindow):
             dlg.activateWindow()
             self._sync_settings_apply_enabled()
             return
-        dlg = SettingsDialog(self._config, self, initial_tab_index=None)
+        dlg = SettingsDialog(
+            self._config,
+            self,
+            task_mode=self._task_mode,
+            initial_tab_index=None,
+        )
         self._settings_dialog = dlg
         dlg.accepted.connect(lambda: self.statusBar().showMessage("Settings applied."))
         dlg.show()
         dlg.raise_()
         self._sync_settings_apply_enabled()
 
-    def _on_open_settings_to_tab(self, tab_index: int) -> None:
+    def _on_open_settings_to_tab(self, tab_name: str | int) -> None:
         if not HAS_SETTINGS_DIALOG or SettingsDialog is None:
             self.statusBar().showMessage("Settings dialog unavailable.")
             return
+        if isinstance(tab_name, str):
+            normalized = tab_name.strip().lower()
+            tab_index = {
+                "task": 0,
+                "session": 1,
+                "animals": 2,
+                "tracking": 3,
+            }.get(normalized, 0)
+        else:
+            tab_index = int(tab_name)
         dlg = getattr(self, "_settings_dialog", None)
         if dlg is None:
-            dlg = SettingsDialog(self._config, self, initial_tab_index=tab_index)
+            dlg = SettingsDialog(
+                self._config,
+                self,
+                task_mode=self._task_mode,
+                initial_tab_index=tab_index,
+            )
             self._settings_dialog = dlg
             dlg.accepted.connect(lambda: (self._apply_config_to_ui(), self.statusBar().showMessage("Settings applied.")))
         else:
@@ -721,8 +679,14 @@ class MainWindow(QMainWindow):
                         )
                         self._config.arena.arena_center_x_px = float(ix)
                         self._config.arena.arena_center_y_px = float(iy)
+                        if self._task_mode == "ram" and hasattr(self._config, "radial_arm"):
+                            self._config.radial_arm.calibration.template_center_x_px = float(ix)
+                            self._config.radial_arm.calibration.template_center_y_px = float(iy)
+                            message = f"RAM template center set to ({ix}, {iy})"
+                        else:
+                            message = f"Arena center set to ({ix}, {iy})"
                         self._roi_set_center_click.setChecked(False)
-                        self.statusBar().showMessage(f"Arena center set to ({ix}, {iy})")
+                        self.statusBar().showMessage(message)
         return super().eventFilter(obj, event)
 
     def _on_camera_tick(self) -> None:
@@ -957,60 +921,48 @@ class MainWindow(QMainWindow):
                 )
             else:
                 pose_node_valid = None
-            # Source-specific VAST success criteria:
-            # - SLEAP: N valid keypoints in exit zone.
-            # - Fallback: minimum blob overlap fraction in exit zone (else track point in exit).
-            # - track_exit_either_success: OR of both rules, independent of overlay primary source.
-            # None => trial logic falls back to point-in-exit (track_xy).
-            exit_success_override: Optional[bool] = None
             tc = self._trial_controller
             exit_x_px, exit_y_px = tc.get_exit_position_px()
-            exit_radius_px = self._config.arena.exit_radius_cm * self._config.arena.px_per_cm
-            required_kp = max(1, int(getattr(self._config, "sleap_exit_min_keypoints", 2)))
-            min_frac = max(
-                0.0,
-                min(1.0, float(getattr(self._config, "fallback_exit_blob_overlap_pct", 15.0)) / 100.0),
-            )
-
-            def _sleap_exit_success() -> bool:
-                if pose_xy is None or pose_xy.size == 0:
-                    return False
-                    n_in_exit = count_sleap_keypoints_in_exit(
+            exit_success_override = None
+            if self._task_mode == "vast":
+                exit_radius_px = (
+                    self._config.arena.exit_radius_cm * self._config.arena.px_per_cm
+                )
+                required_kp = max(
+                    1, int(getattr(self._config, "sleap_exit_min_keypoints", 2))
+                )
+                min_frac = max(
+                    0.0,
+                    min(
+                        1.0,
+                        float(
+                            getattr(
+                                self._config,
+                                "fallback_exit_blob_overlap_pct",
+                                15.0,
+                            )
+                        )
+                        / 100.0,
+                    ),
+                )
+                exit_success_override = resolve_exit_success_override(
                     pose_xy=pose_xy,
                     pose_node_valid=pose_node_valid,
                     pose_node_names=pose_node_names,
+                    blob_mask=blob_mask,
+                    blob_crop_rect=blob_crop_rect,
+                    track_xy=track_xy,
+                    track_source=track_source,
                     exit_x_px=exit_x_px,
                     exit_y_px=exit_y_px,
                     exit_radius_px=exit_radius_px,
+                    arena=self._config.arena,
+                    required_keypoints=required_kp,
+                    min_blob_overlap_fraction=min_frac,
+                    allow_either_success=bool(
+                        getattr(self._config, "track_exit_either_success", False)
+                    ),
                 )
-                return n_in_exit >= required_kp
-
-            def _fallback_exit_success() -> bool:
-                if blob_mask is not None:
-                    frac = blob_exit_overlap_fraction(
-                        blob_mask=blob_mask,
-                        blob_crop_rect=blob_crop_rect,
-                        exit_x_px=exit_x_px,
-                        exit_y_px=exit_y_px,
-                        exit_radius_px=exit_radius_px,
-                    )
-                    return frac >= min_frac
-                if track_xy is not None:
-                    return in_exit_zone(
-                        float(track_xy[0]),
-                        float(track_xy[1]),
-                        exit_x_px,
-                        exit_y_px,
-                        self._config.arena,
-                    )
-                return False
-
-            if getattr(self._config, "track_exit_either_success", False):
-                exit_success_override = _sleap_exit_success() or _fallback_exit_success()
-            elif track_source == "sleap":
-                exit_success_override = _sleap_exit_success()
-            elif track_source == "fallback":
-                exit_success_override = _fallback_exit_success()
             tc.set_exit_success_override(exit_success_override)
             x_px = float(self._last_track_xy[0]) if self._last_track_xy is not None else (roi_cx or 0.0)
             y_px = float(self._last_track_xy[1]) if self._last_track_xy is not None else (roi_cy or 0.0)
@@ -1177,7 +1129,7 @@ class MainWindow(QMainWindow):
                     # HUD is best-effort; never break preview if debug drawing fails
                     pass
 
-            pix = _frame_to_pixmap(img_display)
+            pix = frame_to_pixmap(img_display)
             if pix is not None:
                 self._camera_label.setPixmap(pix.scaled(
                     self._camera_label.size(),
@@ -1274,144 +1226,38 @@ class MainWindow(QMainWindow):
 
     def _on_mc_refresh_ports(self) -> None:
         """Repopulate COM port combo from serial.tools.list_ports."""
-        if _list_ports is None:
-            return
-        current = self._mc_port_combo.currentData() or self._mc_port_combo.currentText()
-        self._mc_port_combo.clear()
-        self._mc_port_combo.addItem("— Select port —", "")
-        for port in _list_ports.comports():
-            label = f"{port.device}" + (f" ({port.description})" if port.description else "")
-            self._mc_port_combo.addItem(label, port.device)
-        idx = self._mc_port_combo.findData(current)
-        if idx >= 0:
-            self._mc_port_combo.setCurrentIndex(idx)
-        elif current:
-            self._mc_port_combo.addItem(current, current)
-            self._mc_port_combo.setCurrentIndex(self._mc_port_combo.count() - 1)
+        refresh_serial_ports(self._mc_port_combo, _list_ports)
 
     def _on_mc_connect(self) -> None:
         """Toggle MC connection: connect if disconnected, disconnect if connected."""
-        if self._arduino_stimulus is not None and self._arduino_stimulus.connected:
-            self._arduino_stimulus.disconnect()
-            self._mc_connect_btn.setText("Connect")
-            self._mc_status_label.setText("Disconnected")
-            self._mc_status_label.setStyleSheet("color: gray;")
-            self.statusBar().showMessage("MC disconnected.")
-            self._apply_status_and_buttons()
+        if ArduinoStimulus is None:
+            self.statusBar().showMessage("MC serial support unavailable.")
             return
-        port = self._mc_port_combo.currentData() or (self._mc_port_combo.currentText().strip() or None)
-        if not port or port == "— Select port —":
-            self.statusBar().showMessage("Select a COM port.")
-            return
-        s = self._config.stimulus
         try:
-            self._arduino_stimulus = ArduinoStimulus(
-                port=port,
-                baud=9600,
-                min_duty_pct=s.min_duty_pct,
-                max_duty_pct=s.max_duty_pct,
+            result = toggle_mc_connection(
+                current_stimulus=self._arduino_stimulus,
+                arduino_cls=ArduinoStimulus,
+                port_combo=self._mc_port_combo,
+                stimulus_config=self._config.stimulus,
+                config=self._config,
             )
-            if self._arduino_stimulus.connect(port):
-                self._config.arduino_port = port
-                self._mc_connect_btn.setText("Disconnect")
-                self._mc_status_label.setText("Connected")
-                self._mc_status_label.setStyleSheet("color: green;")
-                self.statusBar().showMessage(f"MC connected on {port}")
-                self._apply_status_and_buttons()
-            else:
-                self._arduino_stimulus = None
-                self.statusBar().showMessage(
-                    "Wrong firmware or no response. Load firmware/vast_controller_duty.ino on the MC."
-                )
+            self._arduino_stimulus = result.stimulus
+            self._mc_connect_btn.setText(result.button_text)
+            self._mc_status_label.setText(result.status_label)
+            self._mc_status_label.setStyleSheet(result.status_style)
+            self.statusBar().showMessage(result.status_message)
+            self._apply_status_and_buttons()
         except Exception as e:
             self._arduino_stimulus = None
             self.statusBar().showMessage(f"MC connect failed: {e}")
 
     def _on_mc_flash(self) -> None:
         """Compile and upload firmware via arduino-cli (dev only)."""
-        if not self._dev_mode:
-            return
-        cli = shutil.which("arduino-cli")
-        if not cli:
-            QMessageBox.warning(
-                self,
-                "Flash firmware",
-                "arduino-cli not found. Install from https://arduino.github.io/arduino-cli/ and add it to PATH.",
-            )
-            return
-        port = (self._mc_port_combo.currentData() or self._mc_port_combo.currentText() or "").strip()
-        if not port or port == "— Select port —":
-            self.statusBar().showMessage("Select a COM port first.")
-            QMessageBox.warning(self, "Flash firmware", "Select a COM port first.")
-            return
-        # Sketch dir: firmware/vast_controller_duty/ (folder name must match .ino for arduino-cli)
-        try:
-            firmware_dir = Path(__file__).resolve().parent.parent.parent / "firmware" / "vast_controller_duty"
-        except Exception:
-            firmware_dir = None
-        if not firmware_dir or not firmware_dir.is_dir() or not (firmware_dir / "vast_controller_duty.ino").exists():
-            QMessageBox.warning(
-                self,
-                "Flash firmware",
-                f"Firmware folder not found (expected {firmware_dir} with vast_controller_duty.ino).",
-            )
-            return
-        fqbn = "arduino:avr:uno"
-        self.statusBar().showMessage("Compiling firmware…")
-        try:
-            r = subprocess.run(
-                [cli, "compile", "--fqbn", fqbn, str(firmware_dir)],
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-        except subprocess.TimeoutExpired:
-            self.statusBar().showMessage("Compile timed out.")
-            QMessageBox.warning(self, "Flash firmware", "Compile timed out (120 s).")
-            return
-        except Exception as e:
-            self.statusBar().showMessage(f"Compile failed: {e}")
-            QMessageBox.warning(self, "Flash firmware", f"Compile failed: {e}")
-            return
-        if r.returncode != 0:
-            self.statusBar().showMessage("Compile failed.")
-            out = (r.stdout or "") + (r.stderr or "")
-            QMessageBox.warning(
-                self,
-                "Flash firmware",
-                "Compile failed.\n\n" + (out.strip() or "No output"),
-            )
-            return
-        self.statusBar().showMessage("Uploading firmware…")
-        try:
-            r = subprocess.run(
-                [cli, "upload", "-p", port, "--fqbn", fqbn, str(firmware_dir)],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-        except subprocess.TimeoutExpired:
-            self.statusBar().showMessage("Upload timed out.")
-            QMessageBox.warning(self, "Flash firmware", "Upload timed out (60 s).")
-            return
-        except Exception as e:
-            self.statusBar().showMessage(f"Upload failed: {e}")
-            QMessageBox.warning(self, "Flash firmware", f"Upload failed: {e}")
-            return
-        if r.returncode != 0:
-            self.statusBar().showMessage("Upload failed.")
-            out = (r.stdout or "") + (r.stderr or "")
-            QMessageBox.warning(
-                self,
-                "Flash firmware",
-                "Upload failed.\n\n" + (out.strip() or "No output"),
-            )
-            return
-        self.statusBar().showMessage(f"Firmware flashed to {port}. Reconnect to use.")
-        QMessageBox.information(
-            self,
-            "Flash firmware",
-            f"Firmware uploaded to {port}. Disconnect and reconnect the MC to use the new firmware.",
+        flash_firmware(
+            parent=self,
+            dev_mode=self._dev_mode,
+            port_combo=self._mc_port_combo,
+            status_cb=self.statusBar().showMessage,
         )
 
     def closeEvent(self, event) -> None:
@@ -1473,7 +1319,12 @@ class MainWindow(QMainWindow):
         # In dev mode, camera and MC are not required for run buttons.
         # For virtual acquisition (video file playback), allow running even if MC is not connected.
         virtual_mode = video_ok and self._camera_source.currentText().startswith("Virtual")
-        run_ok = self._dev_mode or (video_ok and (mc_ok or virtual_mode))
+        device_ready = (
+            (mc_ok or virtual_mode)
+            if self._task_spec.requires_mc_connection
+            else True
+        )
+        run_ok = self._dev_mode or (video_ok and device_ready)
         self._start_trial_btn.setEnabled(bs["start"] and run_ok)
         self._previous_trial_btn.setEnabled(bs["previous"] and run_ok)
         self._next_trial_btn.setEnabled(bs["next"] and run_ok)
@@ -1518,9 +1369,10 @@ class MainWindow(QMainWindow):
         self._trial_controller.stop_run()
         self._apply_status_and_buttons()
 
-    def _on_trial_state_change(self, new_state: TrialState) -> None:
+    def _on_trial_state_change(self, new_state) -> None:
         """When trial ends (SUCCESS or TIMEOUT), advance slot first (so motors stop), then flush/clear recorder (may show duplicate popup)."""
-        if new_state not in (TrialState.TRIAL_SUCCESS, TrialState.TRIAL_TIMEOUT):
+        state_value = getattr(new_state, "value", str(new_state))
+        if state_value not in {"trial_success", "trial_timeout"}:
             return
         # Advance trial so state is ITI/IDLE before any modal dialog; motors stop immediately
         self._trial_controller.stop_run()
@@ -1597,7 +1449,7 @@ class MainWindow(QMainWindow):
             print(f"Error in TrialRecorder.stop: {e}")
             traceback.print_exc()
         # Capture trial info only when stop() succeeded, so analysis runs on a trial that was actually written
-        run_analysis = self._config.run_analysis_after_trial
+        run_analysis = self._task_mode == "vast" and self._config.run_analysis_after_trial
         if run_analysis and stop_ok:
             captured = (
                 rec.db_path,
@@ -1639,7 +1491,11 @@ class MainWindow(QMainWindow):
                 self._camera_source.currentText().startswith("Virtual")
                 and self._is_video_available()
             )
-            if not self._is_mc_connected() and not virtual_mode:
+            if (
+                self._task_spec.requires_mc_connection
+                and not self._is_mc_connected()
+                and not virtual_mode
+            ):
                 self.statusBar().showMessage("Connect MC before running trials.")
                 return
         self._apply_ui_to_config()
@@ -1665,9 +1521,12 @@ class MainWindow(QMainWindow):
         # copy exit_x/exit_y from the original legacy H5 trial that corresponds
         # to the selected virtual video.
         if (
+            self._task_mode == "vast"
+            and (
             self._camera_source.currentText().startswith("Virtual")
             and self._config.session.seed == -1
             and self._virtual_video_path is not None
+            )
         ):
             self._trial_controller.clear_legacy_exit_xy()
             try:
@@ -1746,7 +1605,11 @@ class MainWindow(QMainWindow):
                 self._camera_source.currentText().startswith("Virtual")
                 and self._is_video_available()
             )
-            if not self._is_mc_connected() and not virtual_mode:
+            if (
+                self._task_spec.requires_mc_connection
+                and not self._is_mc_connected()
+                and not virtual_mode
+            ):
                 self.statusBar().showMessage("Connect MC before running trials.")
                 return
         sid = self._session_id_edit.text().strip()
@@ -1763,7 +1626,11 @@ class MainWindow(QMainWindow):
                 self._camera_source.currentText().startswith("Virtual")
                 and self._is_video_available()
             )
-            if not self._is_mc_connected() and not virtual_mode:
+            if (
+                self._task_spec.requires_mc_connection
+                and not self._is_mc_connected()
+                and not virtual_mode
+            ):
                 self.statusBar().showMessage("Connect MC before running trials.")
                 return
         sid = self._session_id_edit.text().strip()
@@ -1787,7 +1654,7 @@ class MainWindow(QMainWindow):
         # Invalidate tracker cache so next frame uses updated config (e.g. fallback_tracking)
         if self._tracking_controller is not None:
             self._tracking_controller.set_config(self._config)
-        phase_enum, mode_enum = parse_phase_mode_from_config(self._config)
+        phase_enum, mode_enum = parse_vast_phase_mode_from_config(self._config)
         idx = self._phase_combo.findData(phase_enum)
         if idx >= 0:
             self._phase_combo.setCurrentIndex(idx)
@@ -1869,22 +1736,15 @@ class MainWindow(QMainWindow):
         self._config.run_analysis_after_trial = self._run_analysis_after_trial_cb.isChecked()
 
     def _read_reload_last_profile(self) -> bool:
-        if not HAS_QT:
-            return True
-        s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
-        return s.value(_KEY_RELOAD_LAST_PROFILE, True, type=bool)
+        return read_reload_last_profile()
 
     def _save_last_profile_path(self) -> None:
-        if not HAS_QT or not self._profile_path:
-            return
-        s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
-        s.setValue(_KEY_LAST_PROFILE_PATH, str(self._profile_path))
+        save_last_profile_path(self._profile_path)
 
     def _on_toggle_reload_last_profile(self) -> None:
-        if not HAS_QT:
+        if not HAS_QT_SETTINGS:
             return
-        s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
-        s.setValue(_KEY_RELOAD_LAST_PROFILE, self._reload_last_profile_action.isChecked())
+        write_reload_last_profile(self._reload_last_profile_action.isChecked())
 
     def _gui_log_error(self, message: str) -> None:
         """Append a message to the GUI error log (View error log) and to the rotating file log."""
@@ -1954,28 +1814,26 @@ class MainWindow(QMainWindow):
 
     def _apply_startup_profile(self) -> None:
         """On startup: optionally load last profile and restore position; else ensure state machine at (0,0)."""
-        if not self._read_reload_last_profile():
+        if not read_reload_last_profile():
             self._trial_controller.ensure_created(
                 self._session_id_edit.text().strip(), 0
             )
             self._apply_status_and_buttons()
             return
-        if not HAS_QT:
+        if not HAS_QT_SETTINGS:
             self._trial_controller.ensure_created(
                 self._session_id_edit.text().strip(), 0
             )
             self._apply_status_and_buttons()
             return
-        s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
-        path_str = s.value(_KEY_LAST_PROFILE_PATH, "", type=str)
-        path = Path(path_str) if path_str else None
+        path = read_last_profile_path()
         if path and path.exists():
             try:
                 self._config, session_id, ti, gui, slot = load_profile(path)
                 session_id_safe = sanitize_session_id(session_id) if session_id else ""
                 self._profile_path = path
                 self._apply_config_to_ui(gui=gui)
-                self._trial_controller = TrialController(self._config)
+                self._trial_controller = self._task_spec.controller_factory(self._config)
                 self._trial_controller.add_state_listener(self._on_trial_state_change)
                 self._trial_controller.reset(session_id_safe, ti, slot_idx=slot)
                 if session_id_safe:
@@ -2007,7 +1865,7 @@ class MainWindow(QMainWindow):
                 dlg = getattr(self, "_settings_dialog", None)
                 if dlg is not None and hasattr(dlg, "set_config"):
                     dlg.set_config(self._config)
-                self._trial_controller = TrialController(self._config)
+                self._trial_controller = self._task_spec.controller_factory(self._config)
                 self._trial_controller.add_state_listener(self._on_trial_state_change)
                 self._trial_controller.reset(session_id_safe, ti, slot_idx=slot)
                 if session_id_safe:
@@ -2060,6 +1918,9 @@ class MainWindow(QMainWindow):
 
     def _on_run_exports(self) -> None:
         """Run VAST CSV exports on one or more databases."""
+        if self._task_mode != "vast":
+            self.statusBar().showMessage("Exports are only available for VAST right now.")
+            return
         if not HAS_QT:
             return
         # Default selection: current controller output DB
@@ -2092,7 +1953,11 @@ class MainWindow(QMainWindow):
 
         try:
             db_paths = [Path(p) for p in paths]
-            exports = export_all_for_dbs(db_paths=db_paths, output_dir=out_dir, include_mistrials=False)
+            export_all_for_dbs(
+                db_paths=db_paths,
+                output_dir=out_dir,
+                include_mistrials=False,
+            )
             self.statusBar().showMessage(f"Exports completed → {out_dir}")
         except Exception as e:
             self.statusBar().showMessage(f"Exports failed: {e}")
@@ -2122,13 +1987,22 @@ class MainWindow(QMainWindow):
         launch_h5web_for_path(Path(h5_path_str), self.statusBar().showMessage)
 
 
-def run_gui(debug_log: bool = False, dev: bool = False) -> int:
+def run_gui(
+    debug_log: bool = False,
+    dev: bool = False,
+    *,
+    task_mode: AcquisitionMode = "vast",
+) -> int:
+    from ..app_shell import run_mode_gui
+
+    return run_mode_gui(task_mode, debug_log=debug_log, dev=dev)
+
+
+def build_window(
+    dev: bool = False,
+    *,
+    task_mode: AcquisitionMode = "vast",
+) -> MainWindow:
     if not HAS_QT:
-        print("PySide6 is required for the GUI. Install with: pip install PySide6")
-        return 1
-    app_logging.init_app_logging(debug_log=debug_log)
-    app = QApplication(sys.argv)
-    win = MainWindow(dev=dev)
-    win.resize(500, 400)
-    win.show()
-    return app.exec()
+        raise RuntimeError(QT_ERROR_MESSAGE)
+    return MainWindow(task_mode=task_mode, dev=dev)

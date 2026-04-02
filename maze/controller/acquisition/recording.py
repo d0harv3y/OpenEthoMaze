@@ -10,25 +10,28 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, List, Literal, Optional, Tuple, Union
 
+import numpy as np
+
+from maze.core.schema import FEEDBACK_ROW_DTYPE, XY_ROW_DTYPE
+from maze.core.storage import open_db, write_feedback_table, write_xy_table
+
+from .vast.config import ControllerConfig
+from .radial_arm.config import RadialArmControllerConfig
+from .h5_writer import (
+    init_database,
+    ensure_trial_group,
+    write_animal_label,
+    write_trial_settings,
+    write_radial_arm_trial_settings,
+    write_video_meta,
+)
+
 # Return type for on_video_path_conflict callback: overwrite, discard, or keep_both with suffix.
 VideoPathConflictChoice = Union[
     Literal["overwrite"],
     Literal["discard"],
     Tuple[Literal["keep_both"], str],
 ]
-
-import numpy as np
-
-from .config import ControllerConfig
-from maze.core.schema import XY_ROW_DTYPE, FEEDBACK_ROW_DTYPE
-from maze.core.storage import open_db, write_feedback_table, write_xy_table
-from .h5_writer import (
-    init_database,
-    ensure_trial_group,
-    write_animal_label,
-    write_trial_settings,
-    write_video_meta,
-)
 
 try:
     import cv2
@@ -273,19 +276,31 @@ class TrialRecorder:
                 if (row.trial_state or "").strip().lower() == "run":
                     trial_start_frame = i
                     break
-            write_trial_settings(
-                g,
-                arena_radius_px=arena.radius_px,
-                px_per_cm=arena.px_per_cm,
-                arena_center_x_px=arena.arena_center_x_px,
-                arena_center_y_px=arena.arena_center_y_px,
-                timestamp=timestamp_str,
-                phase=run_phase,
-                run_mode=run_mode,
-                exit_x=exit_x_px,
-                exit_y=exit_y_px,
-                trial_start_frame=trial_start_frame,
-            )
+            if self.config.arena_type == "radial_arm" and isinstance(
+                self.config, RadialArmControllerConfig
+            ):
+                write_radial_arm_trial_settings(
+                    g,
+                    self.config,
+                    timestamp=timestamp_str,
+                    phase=run_phase,
+                    run_mode=run_mode,
+                    trial_start_frame=trial_start_frame,
+                )
+            else:
+                write_trial_settings(
+                    g,
+                    arena_radius_px=arena.radius_px,
+                    px_per_cm=arena.px_per_cm,
+                    arena_center_x_px=arena.arena_center_x_px,
+                    arena_center_y_px=arena.arena_center_y_px,
+                    timestamp=timestamp_str,
+                    phase=run_phase,
+                    run_mode=run_mode,
+                    exit_x=exit_x_px,
+                    exit_y=exit_y_px,
+                    trial_start_frame=trial_start_frame,
+                )
             n = len(self._xy_rows)
             duration_s = self._xy_rows[-1].t_s if self._xy_rows else 0.0
             write_video_meta(g, self._fps, n, duration_s)

@@ -1,7 +1,7 @@
 [project]
 name = "maze"
 version = "0.1.0"
-description = "VAST — controller, pipeline, and core for vibration actuating search task"
+description = "ORM — controller, pipeline, and core for rodent behavior maze tasks"
 readme = "README.md"
 requires-python = "==3.12.*"
 dependencies = [
@@ -14,7 +14,7 @@ dependencies = [
     "tqdm>=4.60.0",
     "pyserial>=3.5",
     "vmbpy",
-    "h5grove[flask]",
+    "h5grove[flask]>=4.0.0rc0",
 ]
 
 [project.optional-dependencies]
@@ -47,7 +47,7 @@ kpms = [
 [project.scripts]
 maze-daq = "maze.controller.acquisition.__main__:main"
 vast-daq = "maze.controller.acquisition.__main__:main"
-maze-ram-daq = "maze.controller.acquisition_ram.__main__:main"
+maze-ram-daq = "maze.controller.acquisition.radial_arm.__main__:main"
 
 [tool.uv.sources]
 torch = [

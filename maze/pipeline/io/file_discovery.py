@@ -20,7 +20,7 @@ from typing import Optional, Union
 
 import h5py
 
-from ..config import DATA_DIR, DATA_DIRS, MAX_SESSION_NUM, MAX_TRIAL_NUM, SESSION_RENUMBER
+from ..paths import DATA_DIR, DATA_DIRS, MAX_SESSION_NUM, MAX_TRIAL_NUM, SESSION_RENUMBER
 
 # Canonical CSV column order for trial manifests (discovery, legacy_db, kpMS selection).
 # Labels first (identity + treatment), then QA counts, then paths.

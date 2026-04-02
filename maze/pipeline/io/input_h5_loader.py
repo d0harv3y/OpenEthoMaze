@@ -18,55 +18,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import h5py
 import numpy as np
 
-from ..config import DEFAULT_PX_PER_CM
-
-
-@dataclass
-class TrialSettings:
-    """Container for trial settings parsed from input H5 file."""
-
-    # Arena geometry from ROI string (X,Y = arena center, R = radius)
-    arena_center_x_px: float
-    arena_center_y_px: float
-    arena_radius_px: float
-    px_per_cm: float
-
-    # Trial metadata
-    stage: str
-    color: str
-    timestamp: Optional[datetime]
-
-    # Exit position from settings array (row 1)
-    exit_number: Optional[int] = None  # From settings[1, 7]
-    exit_x: Optional[float] = None  # From settings[1, 1] - actual exit X coord
-    exit_y: Optional[float] = None  # From settings[1, 2] - actual exit Y coord
-
-    # Original ROI string for debugging/verification
-    roi_old: Optional[str] = None
-
-    @property
-    def exit_pos(self) -> Optional[tuple[float, float]]:
-        """Exit position as tuple, or None if not available."""
-        if self.exit_x is not None and self.exit_y is not None:
-            return (self.exit_x, self.exit_y)
-        return None
-
-    @property
-    def arena_radius_cm(self) -> float:
-        """Arena radius in cm."""
-        return self.arena_radius_px / self.px_per_cm
-
-    @property
-    def cm_per_px(self) -> float:
-        """Inverse of px_per_cm for convenience."""
-        return 1.0 / self.px_per_cm if self.px_per_cm > 0 else 0.0
+from ...core.trial_settings import TrialSettings, parse_timestamp
+from ..defaults import DEFAULT_PX_PER_CM
 
 
 @dataclass
@@ -146,32 +104,6 @@ def parse_roi_string(roi_str: str) -> dict[str, float]:
         result[key] = value
     
     return result
-
-
-def parse_timestamp(timestamp_str: str) -> Optional[datetime]:
-    """
-    Parse timestamp string from H5 settings.
-    
-    Args:
-        timestamp_str: String like "9/25/2023 5:35:42 PM"
-        
-    Returns:
-        datetime object or None if parsing fails
-    """
-    formats = [
-        "%m/%d/%Y %I:%M:%S %p",  # 9/25/2023 5:35:42 PM
-        "%m/%d/%Y %H:%M:%S",      # 9/25/2023 17:35:42
-        "%Y-%m-%d %H:%M:%S",      # 2023-09-25 17:35:42
-        "%Y-%m-%dT%H:%M:%S",      # 2023-09-25T17:35:42
-    ]
-    
-    for fmt in formats:
-        try:
-            return datetime.strptime(timestamp_str.strip(), fmt)
-        except ValueError:
-            continue
-    
-    return None
 
 
 def load_trial_settings(
@@ -391,7 +323,7 @@ def get_trial_list(h5_path: Path) -> list[tuple[str, str, str]]:
 
 if __name__ == "__main__":
     # Test loading
-    from ..config import DATA_DIR
+    from ..paths import DATA_DIR
     
     test_h5 = DATA_DIR / "Kevan Lim" / "VASTcontKL_AZ_male_S1-10.hdf5"
     

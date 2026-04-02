@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from ...core.tasks import ARENA_TYPE_CIRCULAR
+from ....core.tasks import ARENA_TYPE_CIRCULAR
 
 
 # Feet to cm (for arena diameter)
@@ -59,7 +59,6 @@ class ArenaConfig:
     def center_radius_px(self) -> float:
         return self.center_radius_cm * self.px_per_cm
 
-    # Default multiplier when tracking_radius_px is 0 (tracking region larger than calibration ROI)
     TRACKING_RADIUS_DEFAULT_MULTIPLIER = 1.2
 
     @property
@@ -75,8 +74,8 @@ class ExitAngleConfig:
     """Exit positions: n angles relative to opposite the rat, clockwise."""
 
     n_angles: int = 4
-    offset_deg: float = -30.0  # first angle relative to opposite
-    step_deg: float = 20.0  # angle_i = offset_deg + i * step_deg
+    offset_deg: float = -30.0
+    step_deg: float = 20.0
 
     def angle_deg(self, index: int) -> float:
         """Return angle in degrees for exit index 0..n_angles-1."""
@@ -92,7 +91,7 @@ class ExitAngleConfig:
 class StimulusConfig:
     """Stimulus (vibration) duty limits and polarity. Duty mapping is in TrialStateMachine.duty_for_position."""
 
-    min_at_exit: bool = True  # True = colder (min duty when at exit)
+    min_at_exit: bool = True
     min_duty_pct: float = 35.0
     max_duty_pct: float = 85.0
 
@@ -118,38 +117,31 @@ class SessionConfig:
     max_trial_duration_s: float = 120.0
     iti_s: float = 10.0
     seed: Optional[int] = None
-    # Optional explicit DB path used when seed == -1 (legacy mode) for exit lookup.
     legacy_seed_db_path: Optional[str] = None
     animals: list[AnimalInfo] = field(default_factory=list)
 
     def ensure_animals(self) -> None:
         """Ensure animals list has at least num_animals entries."""
         while len(self.animals) < self.num_animals:
-            self.animals.append(
-                AnimalInfo(animal_id=str(1000 + len(self.animals)))
-            )
+            self.animals.append(AnimalInfo(animal_id=str(1000 + len(self.animals))))
 
 
 @dataclass
 class FallbackTrackingConfig:
     """Parameters for the backup (in-range threshold + morphology) tracker when SLEAP is unavailable or low confidence."""
 
-    min_area: int = 80  # minimum contour area (px) to count as a blob
-    max_area: int = 0  # maximum contour area (px); 0 = no limit (reject huge blobs if set)
-    morph_kernel_size: int = 5  # morphology ellipse kernel size (odd)
-    max_jump_px: float = 0.0  # if > 0, reject closest blob if farther than this from last position
-    selection_mode: str = "closest_else_largest"  # "largest" | "closest" | "closest_else_largest"
-    min_circularity: float = 0.0  # 0 = off; filter contours with 4*pi*area/perim^2 below this (0..1)
-    range_low: int = 0  # intensity range threshold: min (0-255); pixel on if range_low <= intensity <= range_high
-    range_high: int = 255  # intensity range threshold: max (0-255)
-    node_max_jump_px: float = 0.0  # SLEAP nodes: 0 = off; invalidate node if it moves more than this from previous frame
-    # Per-node: if a node exceeds node_max_jump_px for this many consecutive frames, reset all node jump state
-    # (re-init from current pose). 1 = reset on first over-threshold frame. 2+ debounces single-frame spikes.
+    min_area: int = 80
+    max_area: int = 0
+    morph_kernel_size: int = 5
+    max_jump_px: float = 0.0
+    selection_mode: str = "closest_else_largest"
+    min_circularity: float = 0.0
+    range_low: int = 0
+    range_high: int = 255
+    node_max_jump_px: float = 0.0
     node_jump_confirm_frames: int = 2
-    min_sleap_nodes: int = 1  # SLEAP: use backup tracker if fewer than this many nodes pass confidence threshold
-    # When True, build and draw the fallback blob mask overlay (green tint where blob detected). Disable for better FPS.
+    min_sleap_nodes: int = 1
     show_blob_overlay: bool = True
-    # Max contours to consider per frame (0 = no limit). Keeps largest by area; can reduce FPS drops when many in-range pixels.
     max_contours: int = 0
 
 
@@ -161,40 +153,23 @@ class ControllerConfig:
     exit_angles: ExitAngleConfig = field(default_factory=ExitAngleConfig)
     stimulus: StimulusConfig = field(default_factory=StimulusConfig)
     session: SessionConfig = field(default_factory=SessionConfig)
-    # Habituation training: constant duty when in edge
     hab_training_duty_pct: float = 60.0
-    # VAST / habituation_training: stimulus intensity during wait_not_center (default 0)
     wait_not_center_duty_pct: float = 0.0
-    # Output base directory for H5 and per-trial videos (persisted in profile)
     output_dir: Optional[str] = None
-    # H5 database filename inside output_dir (e.g. trials.h5)
     h5_filename: str = "trials.h5"
-    # Phase (stimulus/exit behaviour) and mode (trial ordering).
     arena_type: str = ARENA_TYPE_CIRCULAR
-    run_phase: str = "habituation"  # habituation | habituation_training | VAST
-    run_mode: str = "continuous"    # continuous | alternating (trial order)
-
-    # Backup (fallback) tracking: in-range threshold + morphology
+    run_phase: str = "habituation"
+    run_mode: str = "continuous"
     fallback_tracking: FallbackTrackingConfig = field(default_factory=FallbackTrackingConfig)
-    # SLEAP: per-node confidence threshold (0–100 %); run model every N frames (1=every frame)
     sleap_confidence_pct: int = 50
     sleap_every_n: int = 1
-    # Exit success criteria:
-    # - SLEAP source: at least this many valid keypoints must be inside the exit zone.
     sleap_exit_min_keypoints: int = 2
-    # - Fallback source: minimum blob overlap with exit zone (% of blob pixels).
     fallback_exit_blob_overlap_pct: float = 15.0
-    # When True, trial success uses SLEAP keypoint criterion OR fallback blob/point criterion each frame,
-    # regardless of which source is currently driving the overlay.
     track_exit_either_success: bool = False
-    # SLEAP model directory (single-instance; empty = backup tracker only)
     sleap_model_path: str = ""
-    # Tracking display/behavior (moved from main GUI to Settings → Tracking)
     track_show: bool = True
     track_async: bool = False
     track_backup_only: bool = False
     overlay_opacity_pct: int = 70
-    # MC (Arduino) serial port for vibration stimulus; empty = not set
     arduino_port: Optional[str] = None
-    # Run VAST pipeline analysis (metrics, heatmap, movement bouts) after each trial completes.
     run_analysis_after_trial: bool = False

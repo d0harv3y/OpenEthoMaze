@@ -19,7 +19,7 @@ from typing import Optional
 
 import numpy as np
 
-from ..config import (
+from ..defaults import (
     CENTER_ENTRY_DEBOUNCE_S,
     CENTER_ZONE_RADIUS_CM,
     DEFAULT_FPS,
@@ -106,7 +106,6 @@ def calculate_exit_metrics(
     in_exit_zone = distance_to_exit_px <= exit_zone_radius_px
     
     # Only consider valid frames
-    valid_distance = np.where(valid, distance_to_exit_cm, np.nan)
     valid_in_exit = in_exit_zone & valid
     
     # Calculate latency to first reach exit zone
@@ -190,12 +189,8 @@ def _calculate_path_efficiency(
         return np.nan
     
     first_valid = valid_indices[0]
-    last_valid = valid_indices[-1]
-    
     # Get start and end positions
     start_pos = xy[first_valid]
-    end_pos = xy[last_valid]
-    
     # Calculate straight-line distance from start to exit
     straight_line_to_exit = np.sqrt(
         (exit_pos[0] - start_pos[0])**2 + 

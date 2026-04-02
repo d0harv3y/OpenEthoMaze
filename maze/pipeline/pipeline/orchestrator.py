@@ -7,16 +7,22 @@ Coordinates batch processing of trials across the dataset.
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
 from tqdm import tqdm
 
-from ..config import OUTPUT_H5, MAX_WORKERS, PARALLEL_ENABLED
+from ..paths import MAX_WORKERS, OUTPUT_H5, PARALLEL_ENABLED
 from ..io.file_discovery import TrialManifest
-from ..mistrial_detection import detect_mistrial
-from ..storage.h5_db import TrialKey, init_database, list_trials, open_db, write_mistrial_reason
+from ..storage.h5_db import (
+    TrialKey,
+    init_database,
+    list_trials,
+    open_db,
+    read_arena_type,
+    write_mistrial_reason,
+)
+from ..task_policy import detect_task_mistrial, expected_frame_diff, trial_matches_frame_policy
 from .process_trial import process_trial
 
 
@@ -105,6 +111,7 @@ def run_pipeline(
     # Initialize database
     print("Initializing database...")
     init_database(db_path)
+    arena_type = read_arena_type(db_path)
 
     # Load trial list from output DB (no input H5 or file scan)
     print("Loading trial list from database...")
@@ -125,30 +132,29 @@ def run_pipeline(
     if trial_names is not None and len(trial_names) > 0:
         trials = [t for t in trials if t.trial in trial_names]
 
-    # Only include trials where video_n_frames - h5_n_frames == -1 (expected off-by-one)
+    # Task-specific frame-count policy.
     n_before_frame_filter = len(trials)
-    trials = [
-        t
-        for t in trials
-        if t.h5_n_frames is not None
-        and t.video_n_frames is not None
-        and (t.video_n_frames - t.h5_n_frames) == -1
-    ]
+    trials = [t for t in trials if trial_matches_frame_policy(t, arena_type)]
     n_excluded_frame_diff = n_before_frame_filter - len(trials)
     if n_excluded_frame_diff > 0:
-        print(
-            f"Excluded {n_excluded_frame_diff} trial(s) where frame_diff (video - h5) != -1."
-        )
+        expected_diff = expected_frame_diff(arena_type)
+        if expected_diff is None:
+            print(f"Excluded {n_excluded_frame_diff} trial(s) by task-specific frame policy.")
+        else:
+            print(
+                f"Excluded {n_excluded_frame_diff} trial(s) where frame_diff "
+                f"(video - h5) != {expected_diff}."
+            )
 
     if not trials:
-        print("No trials match the given filters (or none have frame_diff == -1).")
+        print("No trials match the given filters after task-specific frame filtering.")
         return {"total": 0, "success": 0, "failed": 0, "skipped": 0}
 
     # Mistrial detection: missing video, missing frame counts, frame mismatch, missing SLEAP
     mistrial_trials: list[tuple[TrialManifest, str]] = []
     processable: list[TrialManifest] = []
     for t in trials:
-        reason = detect_mistrial(t)
+        reason = detect_task_mistrial(t, arena_type)
         if reason is not None:
             mistrial_trials.append((t, reason))
         else:
@@ -192,7 +198,7 @@ def run_pipeline(
             trials, db_path, generate_qc, stats
         )
     
-    print(f"\nPipeline complete:")
+    print("\nPipeline complete:")
     print(f"  Total: {stats['total']}")
     print(f"  Success: {stats['success']}")
     print(f"  Failed: {stats['failed']}")
@@ -272,7 +278,7 @@ def _run_parallel(
     """Run trials in parallel."""
     # Note: HDF5 doesn't support parallel writes, so we use sequential writes
     # but parallel processing for CPU-bound operations
-    print(f"Warning: Parallel mode uses sequential HDF5 writes")
+    print("Warning: Parallel mode uses sequential HDF5 writes")
     
     # For now, fall back to sequential
     # TODO: Implement proper parallel processing with write queue

@@ -17,7 +17,7 @@ from typing import Optional
 
 import numpy as np
 
-from ..config import (
+from ..defaults import (
     MOVEMENT_START_THRESHOLD_M_PER_FRAME,
     MOVEMENT_STOP_THRESHOLD_M_PER_FRAME,
     MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES,

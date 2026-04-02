@@ -18,7 +18,7 @@ from typing import Optional
 import numpy as np
 
 from ...core.anatomy import STANDARD_NODE_NAMES
-from ..config import (
+from ..defaults import (
     IN_RANGE_POINT_NAME,
     TRACE_INTERPOLATE_NANS,
     TRACE_MAX_GAP_FRAMES,

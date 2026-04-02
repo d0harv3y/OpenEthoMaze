@@ -21,7 +21,7 @@ except ImportError:
     HAS_CV2 = False
 
 from ...core.anatomy import STANDARD_NODE_NAMES
-from ..config import QC_EXIT_ZONE_RADIUS_CM
+from ..defaults import QC_EXIT_ZONE_RADIUS_CM
 from ..io.sleap_loader import (
     apply_jump_filter,
     get_skeleton_edges,

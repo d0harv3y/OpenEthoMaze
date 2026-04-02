@@ -14,15 +14,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-LOG_NAME = "vast_controller"
+LOG_NAME = "maze_acquisition"
 _current_log_path: Optional[Path] = None
 
-# Log directory: Windows LOCALAPPDATA/VAST Controller/logs, else ~/.vast_controller/logs
+# Log directory: Windows LOCALAPPDATA/Maze Acquisition/logs, else ~/.maze_acquisition/logs
 def _log_dir() -> Path:
     if os.name == "nt" and os.environ.get("LOCALAPPDATA"):
-        base = Path(os.environ["LOCALAPPDATA"]) / "VAST Controller"
+        base = Path(os.environ["LOCALAPPDATA"]) / "Maze Acquisition"
     else:
-        base = Path.home() / ".vast_controller"
+        base = Path.home() / ".maze_acquisition"
     log_dir = base / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir
@@ -39,7 +39,7 @@ def init_app_logging(debug_log: bool = False) -> Optional[Path]:
     try:
         log_dir = _log_dir()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_path = log_dir / f"vast_controller_{timestamp}.log"
+        log_path = log_dir / f"maze_acquisition_{timestamp}.log"
         handler = logging.FileHandler(log_path, encoding="utf-8")
         file_level = logging.DEBUG if debug_log else logging.INFO
         handler.setLevel(file_level)

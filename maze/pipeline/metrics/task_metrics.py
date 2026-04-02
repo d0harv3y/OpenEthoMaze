@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from ...core.tasks import ARENA_TYPE_CIRCULAR, ARENA_TYPE_RADIAL_ARM
+from ...core.tasks import ARENA_TYPE_RADIAL_ARM
 from .exit_metrics import (
     CenterMetrics,
     ExitMetrics,
@@ -21,6 +21,17 @@ class TaskMetricsResult:
     exit_metrics: ExitMetrics
     center_metrics: CenterMetrics
     extra_trial_attrs: dict[str, Any] = field(default_factory=dict)
+
+
+def radial_arm_metric_defaults() -> dict[str, Any]:
+    """Return the first RAM metric contract persisted before full analytics land."""
+    return {
+        "task_metrics_status": "radial_arm_contract_ready",
+        "working_memory_errors": np.nan,
+        "reference_memory_errors": np.nan,
+        "reference_memory_successes": np.nan,
+        "exit_arm": -1,
+    }
 
 
 def calculate_task_metrics(
@@ -40,9 +51,7 @@ def calculate_task_metrics(
         return TaskMetricsResult(
             exit_metrics=ExitMetrics(),
             center_metrics=CenterMetrics(),
-            extra_trial_attrs={
-                "task_metrics_status": "radial_arm_metrics_not_implemented",
-            },
+            extra_trial_attrs=radial_arm_metric_defaults(),
         )
 
     return TaskMetricsResult(

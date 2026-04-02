@@ -22,12 +22,11 @@ import h5py
 import numpy as np
 
 from ...core.anatomy import (
-    FALLBACK_NODE_INDEX,
     SPOT_NODE_NAMES,
     STANDARD_NODE_NAMES,
     skeleton_edge_indices,
 )
-from ..config import IN_RANGE_POINT_NAME
+from ..defaults import IN_RANGE_POINT_NAME
 
 
 def get_skeleton_edges() -> list[tuple[int, int]]:

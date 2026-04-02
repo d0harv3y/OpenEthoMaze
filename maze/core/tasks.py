@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""Supported arena/task labels shared across controller and pipeline code.
+
+Task identity lives here, while task-specific arena geometry should live under
+``maze.controller.acquisition`` task modules or future task packages. This keeps arena
+layout choices separate from shared anatomy constants in ``maze.core.anatomy``.
+"""
+
 ARENA_TYPE_CIRCULAR = "circular"
 ARENA_TYPE_RADIAL_ARM = "radial_arm"
 

@@ -1,5 +1,5 @@
 """
-Settings dialog: all config fields in tabs (Arena, Exit angles, Stimulus, Session, Animals, Tracking). Session tab includes Session ID, Phase, Mode. Habituation settings live in Stimulus tab.
+Settings dialog: one task-specific tab plus shared Session, Animals, and Tracking tabs.
 """
 
 from __future__ import annotations
@@ -7,8 +7,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional, Tuple
 
-from ..config import ControllerConfig, AnimalInfo, FallbackTrackingConfig, FT_TO_CM, M_TO_CM
-from ..trial_logic import Phase, TrialMode
+from ..vast.config import (
+    AnimalInfo,
+    ControllerConfig,
+    FallbackTrackingConfig,
+    FT_TO_CM,
+    M_TO_CM,
+)
+from ..radial_arm.config import RadialArmControllerConfig
+from ..task_registry import AcquisitionMode, get_task_spec
+from ..vast import VastPhase, VastTrialMode
 
 try:
     from PySide6.QtWidgets import (
@@ -42,8 +50,8 @@ except ImportError:
     QCloseEvent = None
     raise
 
-_SETTINGS_ORG = "VAST"
-_SETTINGS_APP = "Controller"
+_SETTINGS_ORG = "Maze"
+_SETTINGS_APP = "Acquisition"
 _KEY_LAST_SETTINGS_TAB = "last_settings_tab"
 
 
@@ -70,17 +78,19 @@ class SettingsDialog(QDialog):
         self,
         config: ControllerConfig,
         parent: Optional[QWidget] = None,
+        *,
+        task_mode: AcquisitionMode = "vast",
         initial_tab_index: Optional[int] = None,
     ) -> None:
         super().__init__(parent)
         self._config = config
+        self._task_mode = task_mode
+        self._task_spec = get_task_spec(task_mode)
         self.setWindowTitle("Settings")
         self.setWindowModality(Qt.WindowModality.NonModal)
         layout = QVBoxLayout(self)
         self._tabs = QTabWidget()
-        self._tabs.addTab(self._arena_tab(), "Arena")
-        self._tabs.addTab(self._exit_angles_tab(), "Exit angles")
-        self._tabs.addTab(self._stimulus_tab(), "Stimulus")
+        self._tabs.addTab(self._task_tab(), self._task_spec.task_tab_label)
         self._tabs.addTab(self._session_tab(), "Session")
         self._tabs.addTab(self._animals_tab(), "Animals")
         self._tabs.addTab(self._tracking_tab(), "Tracking")
@@ -128,7 +138,7 @@ class SettingsDialog(QDialog):
         if enabled:
             self._apply_btn.setToolTip("Apply changes without closing this window.")
         else:
-            self._apply_btn.setToolTip("Apply is disabled while a trial is running (VAST phase).")
+            self._apply_btn.setToolTip("Apply is disabled while a trial is running.")
 
     def _on_tab_changed(self, index: int) -> None:
         s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
@@ -137,6 +147,106 @@ class SettingsDialog(QDialog):
     def _save_last_tab(self) -> None:
         s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
         s.setValue(_KEY_LAST_SETTINGS_TAB, self._tabs.currentIndex())
+
+    def _task_tab(self) -> QWidget:
+        if self._task_mode == "ram":
+            return self._ram_task_tab()
+        return self._vast_task_tab()
+
+    def _vast_task_tab(self) -> QWidget:
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.addWidget(self._wrap_task_group("Arena", self._arena_tab()))
+        layout.addWidget(self._wrap_task_group("Exit angles", self._exit_angles_tab()))
+        layout.addWidget(self._wrap_task_group("Stimulus", self._stimulus_tab()))
+        layout.addStretch()
+        return w
+
+    def _wrap_task_group(self, title: str, widget: QWidget) -> QGroupBox:
+        box = QGroupBox(title)
+        layout = QVBoxLayout(box)
+        layout.addWidget(widget)
+        return box
+
+    def _ram_task_tab(self) -> QWidget:
+        w = QWidget()
+        layout = QVBoxLayout(w)
+
+        template_g = QGroupBox("Template geometry")
+        template_f = QFormLayout(template_g)
+        self._ram_center_midedge_cm = QDoubleSpinBox()
+        self._ram_center_midedge_cm.setRange(1.0, 500.0)
+        self._ram_center_midedge_cm.setSuffix(" cm")
+        template_f.addRow("Center mid-edge span:", self._ram_center_midedge_cm)
+        self._ram_arm_length_cm = QDoubleSpinBox()
+        self._ram_arm_length_cm.setRange(1.0, 500.0)
+        self._ram_arm_length_cm.setSuffix(" cm")
+        template_f.addRow("Arm length:", self._ram_arm_length_cm)
+        self._ram_arm_width_cm = QDoubleSpinBox()
+        self._ram_arm_width_cm.setRange(1.0, 200.0)
+        self._ram_arm_width_cm.setSuffix(" cm")
+        template_f.addRow("Arm width:", self._ram_arm_width_cm)
+        self._ram_arm_split_cm = QDoubleSpinBox()
+        self._ram_arm_split_cm.setRange(0.0, 500.0)
+        self._ram_arm_split_cm.setSuffix(" cm")
+        template_f.addRow("Arm split:", self._ram_arm_split_cm)
+        self._ram_hole_arm_index = QSpinBox()
+        self._ram_hole_arm_index.setRange(0, 7)
+        template_f.addRow("Hole arm index:", self._ram_hole_arm_index)
+        self._ram_hole_radius_cm = QDoubleSpinBox()
+        self._ram_hole_radius_cm.setRange(0.1, 50.0)
+        self._ram_hole_radius_cm.setSuffix(" cm")
+        template_f.addRow("Hole radius:", self._ram_hole_radius_cm)
+        self._ram_hole_inset_cm = QDoubleSpinBox()
+        self._ram_hole_inset_cm.setRange(0.0, 100.0)
+        self._ram_hole_inset_cm.setSuffix(" cm")
+        template_f.addRow("Hole inset from arm end:", self._ram_hole_inset_cm)
+        layout.addWidget(template_g)
+
+        calibration_g = QGroupBox("Placement and editing")
+        calibration_f = QFormLayout(calibration_g)
+        self._ram_template_center_x = QDoubleSpinBox()
+        self._ram_template_center_x.setRange(-10000.0, 10000.0)
+        calibration_f.addRow("Template center X (px):", self._ram_template_center_x)
+        self._ram_template_center_y = QDoubleSpinBox()
+        self._ram_template_center_y.setRange(-10000.0, 10000.0)
+        calibration_f.addRow("Template center Y (px):", self._ram_template_center_y)
+        self._ram_template_rotation_deg = QDoubleSpinBox()
+        self._ram_template_rotation_deg.setRange(-360.0, 360.0)
+        self._ram_template_rotation_deg.setSuffix(" deg")
+        calibration_f.addRow("Template rotation:", self._ram_template_rotation_deg)
+        self._ram_px_per_cm = QDoubleSpinBox()
+        self._ram_px_per_cm.setRange(0.0, 100.0)
+        self._ram_px_per_cm.setDecimals(4)
+        calibration_f.addRow("px/cm:", self._ram_px_per_cm)
+        self._ram_edit_region_name = QLineEdit()
+        self._ram_edit_region_name.setPlaceholderText("e.g. arm0_front")
+        calibration_f.addRow("Active edit region:", self._ram_edit_region_name)
+        layout.addWidget(calibration_g)
+
+        trial_g = QGroupBox("Task and stimulus")
+        trial_f = QFormLayout(trial_g)
+        self._ram_exit_arm_index = QSpinBox()
+        self._ram_exit_arm_index.setRange(0, 7)
+        trial_f.addRow("Exit arm index:", self._ram_exit_arm_index)
+        self._ram_rewarded_arm_index = QSpinBox()
+        self._ram_rewarded_arm_index.setRange(0, 7)
+        trial_f.addRow("Rewarded arm index:", self._ram_rewarded_arm_index)
+        self._ram_stimulus_enabled = QCheckBox("Enable speaker stimulus")
+        trial_f.addRow(self._ram_stimulus_enabled)
+        self._ram_speaker_device_name = QLineEdit()
+        trial_f.addRow("Speaker device:", self._ram_speaker_device_name)
+        self._ram_speaker_volume_pct = QDoubleSpinBox()
+        self._ram_speaker_volume_pct.setRange(0.0, 100.0)
+        self._ram_speaker_volume_pct.setSuffix(" %")
+        trial_f.addRow("Speaker volume:", self._ram_speaker_volume_pct)
+        self._ram_stimulus_frequency_hz = QDoubleSpinBox()
+        self._ram_stimulus_frequency_hz.setRange(0.0, 50000.0)
+        self._ram_stimulus_frequency_hz.setSuffix(" Hz")
+        trial_f.addRow("Stimulus frequency:", self._ram_stimulus_frequency_hz)
+        layout.addWidget(trial_g)
+        layout.addStretch()
+        return w
 
     def _arena_tab(self) -> QWidget:
         w = QWidget()
@@ -254,11 +364,12 @@ class SettingsDialog(QDialog):
             self._session_id_edit.setValidator(QRegularExpressionValidator(QRegularExpression(r"^[a-zA-Z0-9.\-]*$")))
         f.addRow("Session ID:", self._session_id_edit)
         self._phase_combo = QComboBox()
-        for p in Phase:
+        for p in VastPhase:
             self._phase_combo.addItem(p.value.replace("_", " ").title(), p)
-        f.addRow("Phase:", self._phase_combo)
+        if self._task_mode == "vast":
+            f.addRow("Phase:", self._phase_combo)
         self._mode_combo = QComboBox()
-        for m in TrialMode:
+        for m in VastTrialMode:
             self._mode_combo.addItem(m.value.replace("_", " ").title(), m)
         f.addRow("Mode:", self._mode_combo)
         self._session_num_animals = QSpinBox()
@@ -493,6 +604,28 @@ class SettingsDialog(QDialog):
 
     def _fill_from_config(self) -> None:
         c = self._config
+        if self._task_mode == "ram" and isinstance(c, RadialArmControllerConfig):
+            ram = c.radial_arm
+            template = ram.template
+            calibration = ram.calibration
+            self._ram_center_midedge_cm.setValue(template.center_midedge_to_midedge_cm)
+            self._ram_arm_length_cm.setValue(template.arm_length_cm)
+            self._ram_arm_width_cm.setValue(template.arm_width_cm)
+            self._ram_arm_split_cm.setValue(template.arm_split_cm)
+            self._ram_hole_arm_index.setValue(template.hole_arm_index)
+            self._ram_hole_radius_cm.setValue(template.hole_radius_cm)
+            self._ram_hole_inset_cm.setValue(template.hole_inset_from_arm_end_cm)
+            self._ram_template_center_x.setValue(calibration.template_center_x_px)
+            self._ram_template_center_y.setValue(calibration.template_center_y_px)
+            self._ram_template_rotation_deg.setValue(calibration.template_rotation_deg)
+            self._ram_px_per_cm.setValue(calibration.px_per_cm)
+            self._ram_edit_region_name.setText(calibration.edit_region_name)
+            self._ram_exit_arm_index.setValue(ram.exit_arm_index)
+            self._ram_rewarded_arm_index.setValue(ram.rewarded_arm_index)
+            self._ram_stimulus_enabled.setChecked(ram.stimulus_enabled)
+            self._ram_speaker_device_name.setText(ram.speaker_device_name)
+            self._ram_speaker_volume_pct.setValue(ram.speaker_volume_pct)
+            self._ram_stimulus_frequency_hz.setValue(ram.stimulus_frequency_hz)
         a = c.arena
         unit = a.diameter_display_unit or "ft"
         if unit == "m":
@@ -537,9 +670,9 @@ class SettingsDialog(QDialog):
         self._wait_not_center_duty.setValue(c.wait_not_center_duty_pct)
         run_phase = c.run_phase or "habituation"
         try:
-            phase_enum = Phase(run_phase)
+            phase_enum = VastPhase(run_phase)
         except ValueError:
-            phase_enum = Phase.HABITUATION
+            phase_enum = VastPhase.HABITUATION
         idx = self._phase_combo.findData(phase_enum)
         if idx >= 0:
             self._phase_combo.setCurrentIndex(idx)
@@ -547,9 +680,9 @@ class SettingsDialog(QDialog):
             self._phase_combo.setCurrentIndex(0)
         run_mode = c.run_mode or "continuous"
         try:
-            mode_enum = TrialMode(run_mode.lower())
+            mode_enum = VastTrialMode(run_mode.lower())
         except ValueError:
-            mode_enum = TrialMode.CONTINUOUS
+            mode_enum = VastTrialMode.CONTINUOUS
         idx = self._mode_combo.findData(mode_enum)
         if idx >= 0:
             self._mode_combo.setCurrentIndex(idx)
@@ -599,6 +732,26 @@ class SettingsDialog(QDialog):
 
     def _write_to_config(self) -> None:
         c = self._config
+        if self._task_mode == "ram" and isinstance(c, RadialArmControllerConfig):
+            ram = c.radial_arm
+            ram.template.center_midedge_to_midedge_cm = self._ram_center_midedge_cm.value()
+            ram.template.arm_length_cm = self._ram_arm_length_cm.value()
+            ram.template.arm_width_cm = self._ram_arm_width_cm.value()
+            ram.template.arm_split_cm = self._ram_arm_split_cm.value()
+            ram.template.hole_arm_index = self._ram_hole_arm_index.value()
+            ram.template.hole_radius_cm = self._ram_hole_radius_cm.value()
+            ram.template.hole_inset_from_arm_end_cm = self._ram_hole_inset_cm.value()
+            ram.calibration.template_center_x_px = self._ram_template_center_x.value()
+            ram.calibration.template_center_y_px = self._ram_template_center_y.value()
+            ram.calibration.template_rotation_deg = self._ram_template_rotation_deg.value()
+            ram.calibration.px_per_cm = self._ram_px_per_cm.value()
+            ram.calibration.edit_region_name = self._ram_edit_region_name.text().strip()
+            ram.exit_arm_index = self._ram_exit_arm_index.value()
+            ram.rewarded_arm_index = self._ram_rewarded_arm_index.value()
+            ram.stimulus_enabled = self._ram_stimulus_enabled.isChecked()
+            ram.speaker_device_name = self._ram_speaker_device_name.text().strip()
+            ram.speaker_volume_pct = self._ram_speaker_volume_pct.value()
+            ram.stimulus_frequency_hz = self._ram_stimulus_frequency_hz.value()
         unit = self._arena_diameter_unit.currentData() or "ft"
         val = self._arena_diameter_value.value()
         if unit == "m":

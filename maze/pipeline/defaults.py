@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 import math
-from pathlib import Path
 
 PIPELINE_VERSION = "maze_v0.10"
 PROCESSING_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
-
-DEFAULT_DATA_DIR = Path("inputs")
-DEFAULT_OUTPUT_H5 = Path("outputs") / "maze_results.h5"
 
 DEFAULT_FPS = 26.7
 EPOCH_LENGTH_S = 30.0
@@ -54,8 +50,27 @@ DWELL_HEATMAP_BLUR_SIGMA = 4.0
 QC_IMAGE_STORE_FORMAT = "raw"
 QC_IMAGE_PREVIEW_MAX_DIM = 256
 
-MAX_WORKERS = 4
-PARALLEL_ENABLED = True
-PARALLEL_HDF5_WRITE = False
+IN_RANGE_POINT_NAME = "in-range"
+HYBRID_POINT_NAME = "spot_hybrid"
+AMBIULATION_POINT_NAMES = ("spot", "centroid", "in-range", HYBRID_POINT_NAME)
 
-ANIMAL_INFO: dict[str, dict[str, str]] = {}
+
+def get_config_snapshot() -> dict:
+    """Return a reproducible snapshot of algorithm-facing pipeline settings."""
+    return {
+        "pipeline_version": PIPELINE_VERSION,
+        "default_fps": DEFAULT_FPS,
+        "epoch_length_s": EPOCH_LENGTH_S,
+        "exit_zone_radius_cm": EXIT_ZONE_RADIUS_CM,
+        "movement_start_threshold": MOVEMENT_START_THRESHOLD_M_PER_FRAME,
+        "movement_stop_threshold": MOVEMENT_STOP_THRESHOLD_M_PER_FRAME,
+        "movement_speed_median_window_frames": MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES,
+        "movement_entry_debounce_frames": MOVEMENT_ENTRY_DEBOUNCE_FRAMES,
+        "movement_exit_debounce_frames": MOVEMENT_EXIT_DEBOUNCE_FRAMES,
+        "min_movement_bout_duration_s": MIN_MOVEMENT_BOUT_DURATION_S,
+        "trace_max_gap_frames": TRACE_MAX_GAP_FRAMES,
+        "trace_smoothing_window": TRACE_SMOOTHING_WINDOW,
+        "min_confident_nodes_per_frame": MIN_CONFIDENT_NODES_PER_FRAME,
+        "min_node_confidence_threshold": MIN_NODE_CONFIDENCE_THRESHOLD,
+        "min_mean_confidence_per_frame": MIN_MEAN_CONFIDENCE_PER_FRAME,
+    }

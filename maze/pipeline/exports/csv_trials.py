@@ -10,7 +10,8 @@ import math
 import numpy as np
 
 from ...core.schema import NODE_SUMMARY_DTYPE
-from ..config import HYBRID_POINT_NAME, OUTPUT_H5
+from ..defaults import HYBRID_POINT_NAME
+from ..paths import OUTPUT_H5
 from ..storage.h5_db import (
     TrialKey,
     list_trials,

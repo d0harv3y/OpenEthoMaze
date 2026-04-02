@@ -1,16 +1,14 @@
 """
-VAST-compatible HDF5 writer (Option B): trial groups, settings, feedback, xy.
+Shared acquisition HDF5 writer for controller-recorded trials.
 
-Schema matches maze.pipeline.storage.h5_db so the offline pipeline can read the file.
-
-Per-frame xy table includes trial_state ("iti" | "wait" | "run"). Downstream pipeline
-analysis should restrict to frames with trial_state == "run" for now.
+The layout matches ``maze.pipeline.storage.h5_db`` so the offline pipeline can read
+either VAST or RAM trials from the same shared container structure.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import h5py
 import numpy as np
@@ -18,28 +16,43 @@ import numpy as np
 from maze.core.schema import (
     XY_ROW_DTYPE,
     FEEDBACK_ROW_DTYPE,
-    FEEDBACK_GROUP,
-    FEEDBACK_TABLE_DATASET,
 )
-from maze.core.storage import open_db
-from maze.core.tasks import ARENA_TYPE_CIRCULAR, normalize_arena_type
+from maze.core.storage import (
+    ensure_group,
+    ensure_task_group,
+    ensure_trial_group as core_ensure_trial_group,
+    init_task_database,
+    open_db,
+    safe_str,
+    write_feedback_table as core_write_feedback_table,
+    write_group_attrs,
+    write_json_attr,
+    write_xy_table as core_write_xy_table,
+)
+from maze.core.tasks import ARENA_TYPE_CIRCULAR, ARENA_TYPE_RADIAL_ARM, normalize_arena_type
+from .radial_arm.config import RadialArmControllerConfig
+from .radial_arm.geometry import build_template_from_params
 
-
-def _ensure_group(parent: h5py.Group, name: str) -> h5py.Group:
-    return parent[name] if name in parent else parent.create_group(name)
-
-
-def _safe_str(x: Any) -> str:
-    return "" if x is None else str(x)
+__all__ = [
+    "open_db",
+    "init_database",
+    "ensure_trial_group",
+    "write_trial_settings",
+    "write_feedback_table",
+    "write_xy_table",
+    "write_video_meta",
+    "write_animal_label",
+    "write_radial_arm_trial_settings",
+]
 
 
 def init_database(db_path: Path, arena_type: str = ARENA_TYPE_CIRCULAR) -> None:
-    """Create metadata structure."""
-    with open_db(db_path, "a") as h5:
-        meta = _ensure_group(h5, "metadata")
-        meta.attrs["controller_schema_version"] = "v1"
-        arena = _ensure_group(meta, "arena_info")
-        arena.attrs["type"] = normalize_arena_type(arena_type)
+    """Compatibility wrapper around the shared database bootstrap path."""
+    init_task_database(
+        db_path,
+        arena_type=normalize_arena_type(arena_type),
+        controller_schema_version="v1",
+    )
 
 
 def ensure_trial_group(
@@ -58,24 +71,21 @@ def ensure_trial_group(
     - run_phase: habituation | habituation_training | VAST
     - run_mode: continuous | alternating
     """
-    path = f"/{animal_id}/{session_id}/{trial}"
-    if path in h5:
-        g = h5[path]
-        g_session = g.parent
-    else:
-        g_animal = _ensure_group(h5, animal_id)
-        g_session = _ensure_group(g_animal, session_id)
-        g = _ensure_group(g_session, trial)
-    if run_phase is not None:
-        g_session.attrs["run_phase"] = _safe_str(run_phase)
-    if run_mode is not None:
-        g_session.attrs["run_mode"] = _safe_str(run_mode)
-    if video_path is not None:
-        g.attrs["video_path"] = _safe_str(video_path)
-    if sleap_path is not None:
-        g.attrs["sleap_path"] = _safe_str(sleap_path)
-    _ensure_group(g, "ambulation_metrics")
-    _ensure_group(g, "qc_images")
+    g = core_ensure_trial_group(
+        h5,
+        animal_id,
+        session_id,
+        trial,
+        video_path=safe_str(video_path) if video_path is not None else None,
+        sleap_path=safe_str(sleap_path) if sleap_path is not None else None,
+    )
+    write_group_attrs(
+        g.parent,
+        {
+            "run_phase": safe_str(run_phase) if run_phase is not None else None,
+            "run_mode": safe_str(run_mode) if run_mode is not None else None,
+        },
+    )
     return g
 
 
@@ -92,28 +102,120 @@ def write_trial_settings(
     exit_y: Optional[float] = None,
     trial_start_frame: int = 0,
 ) -> None:
-    g_trial.attrs["arena_radius_px"] = float(arena_radius_px)
-    g_trial.attrs["px_per_cm"] = float(px_per_cm)
-    g_trial.attrs["arena_center_x_px"] = float(arena_center_x_px)
-    g_trial.attrs["arena_center_y_px"] = float(arena_center_y_px)
-    if timestamp:
-        g_trial.attrs["timestamp"] = _safe_str(timestamp)
-    g_trial.attrs["phase"] = _safe_str(phase)
-    g_trial.attrs["run_mode"] = _safe_str(run_mode)
-    if exit_x is not None:
-        g_trial.attrs["exit_x"] = float(exit_x)
-    if exit_y is not None:
-        g_trial.attrs["exit_y"] = float(exit_y)
-    g_trial.attrs["trial_start_frame"] = int(trial_start_frame)
+    write_group_attrs(
+        g_trial,
+        {
+            "arena_radius_px": float(arena_radius_px),
+            "px_per_cm": float(px_per_cm),
+            "arena_center_x_px": float(arena_center_x_px),
+            "arena_center_y_px": float(arena_center_y_px),
+            "timestamp": safe_str(timestamp) if timestamp else None,
+            "phase": safe_str(phase),
+            "stage": safe_str(phase),
+            "run_mode": safe_str(run_mode),
+            "exit_x": float(exit_x) if exit_x is not None else None,
+            "exit_y": float(exit_y) if exit_y is not None else None,
+            "trial_start_frame": int(trial_start_frame),
+        },
+    )
+
+
+def write_radial_arm_trial_settings(
+    g_trial: h5py.Group,
+    config: RadialArmControllerConfig,
+    *,
+    timestamp: Optional[str] = None,
+    phase: str = "radial_arm",
+    run_mode: str = "continuous",
+    trial_start_frame: int = 0,
+) -> None:
+    """Persist RAM trial attrs plus a task-local geometry payload."""
+    ram = config.radial_arm
+    calibration = ram.calibration
+    template_cfg = ram.template
+    write_group_attrs(
+        g_trial,
+        {
+            "phase": safe_str(phase),
+            "stage": safe_str(phase),
+            "run_mode": safe_str(run_mode),
+            "timestamp": safe_str(timestamp) if timestamp else None,
+            "arena_type": ARENA_TYPE_RADIAL_ARM,
+            "trial_start_frame": int(trial_start_frame),
+            "template_center_x_px": float(calibration.template_center_x_px),
+            "template_center_y_px": float(calibration.template_center_y_px),
+            "template_rotation_deg": float(calibration.template_rotation_deg),
+            "px_per_cm": float(calibration.px_per_cm),
+            "exit_arm_index": int(ram.exit_arm_index),
+            "rewarded_arm_index": int(ram.rewarded_arm_index),
+            "speaker_device_name": safe_str(ram.speaker_device_name),
+            "speaker_volume_pct": float(ram.speaker_volume_pct),
+            "stimulus_frequency_hz": float(ram.stimulus_frequency_hz),
+            "stimulus_enabled": int(bool(ram.stimulus_enabled)),
+            "active_edit_region": safe_str(calibration.edit_region_name),
+        },
+    )
+    g_task = ensure_task_group(g_trial, ARENA_TYPE_RADIAL_ARM)
+    template = build_template_from_params(
+        center_midedge_to_midedge_cm=template_cfg.center_midedge_to_midedge_cm,
+        arm_length_cm=template_cfg.arm_length_cm,
+        arm_width_cm=template_cfg.arm_width_cm,
+        arm_split_cm=template_cfg.arm_split_cm,
+        hole_arm_index=template_cfg.hole_arm_index,
+        hole_radius_cm=template_cfg.hole_radius_cm,
+        hole_inset_from_arm_end_cm=template_cfg.hole_inset_from_arm_end_cm,
+    )
+    write_group_attrs(
+        g_task,
+        {
+            "task_name": ARENA_TYPE_RADIAL_ARM,
+            "exit_arm_index": int(ram.exit_arm_index),
+            "rewarded_arm_index": int(ram.rewarded_arm_index),
+            "speaker_device_name": safe_str(ram.speaker_device_name),
+            "speaker_volume_pct": float(ram.speaker_volume_pct),
+            "stimulus_frequency_hz": float(ram.stimulus_frequency_hz),
+            "stimulus_enabled": int(bool(ram.stimulus_enabled)),
+            "edit_region_name": safe_str(calibration.edit_region_name),
+        },
+    )
+    write_json_attr(
+        g_task,
+        "template_params",
+        {
+            "center_midedge_to_midedge_cm": template_cfg.center_midedge_to_midedge_cm,
+            "arm_length_cm": template_cfg.arm_length_cm,
+            "arm_width_cm": template_cfg.arm_width_cm,
+            "arm_split_cm": template_cfg.arm_split_cm,
+            "hole_arm_index": template_cfg.hole_arm_index,
+            "hole_radius_cm": template_cfg.hole_radius_cm,
+            "hole_inset_from_arm_end_cm": template_cfg.hole_inset_from_arm_end_cm,
+        },
+    )
+    write_json_attr(
+        g_task,
+        "calibration",
+        {
+            "template_center_x_px": calibration.template_center_x_px,
+            "template_center_y_px": calibration.template_center_y_px,
+            "template_rotation_deg": calibration.template_rotation_deg,
+            "px_per_cm": calibration.px_per_cm,
+            "edit_region_name": calibration.edit_region_name,
+        },
+    )
+    write_json_attr(
+        g_task,
+        "template_regions_cm",
+        {
+            name: np.asarray(poly, dtype=float).tolist()
+            for name, poly in template.regions_cm.items()
+        },
+    )
 
 
 def write_feedback_table(g_trial: h5py.Group, fb_table: np.ndarray) -> None:
     """Write unified per-frame feedback table under /feedback/table."""
     fb_table = np.asarray(fb_table, dtype=FEEDBACK_ROW_DTYPE)
-    g_fb = _ensure_group(g_trial, FEEDBACK_GROUP)
-    if FEEDBACK_TABLE_DATASET in g_fb:
-        del g_fb[FEEDBACK_TABLE_DATASET]
-    g_fb.create_dataset(FEEDBACK_TABLE_DATASET, data=fb_table, compression="gzip")
+    core_write_feedback_table(g_trial, fb_table)
 
 
 def write_xy_table(
@@ -122,18 +224,19 @@ def write_xy_table(
     xy_table: np.ndarray,
     fps: float,
 ) -> None:
-    g_amb = _ensure_group(g_trial, "ambulation_metrics")
-    g_pt = _ensure_group(g_amb, point_name)
-    if "xy" in g_pt:
-        del g_pt["xy"]
-    g_pt.create_dataset("xy", data=np.asarray(xy_table, dtype=XY_ROW_DTYPE), compression="gzip")
-    g_pt["xy"].attrs["fps"] = float(fps)
+    core_write_xy_table(
+        g_trial,
+        point_name,
+        np.asarray(xy_table, dtype=XY_ROW_DTYPE),
+        fps,
+    )
 
 
 def write_video_meta(g_trial: h5py.Group, fps: float, n_frames: int, duration_s: float) -> None:
-    g_trial.attrs["fps"] = float(fps)
-    g_trial.attrs["n_frames"] = int(n_frames)
-    g_trial.attrs["duration_s"] = float(duration_s)
+    write_group_attrs(
+        g_trial,
+        {"fps": float(fps), "n_frames": int(n_frames), "duration_s": float(duration_s)},
+    )
 
 
 def write_animal_label(
@@ -148,18 +251,16 @@ def write_animal_label(
     notes: Optional[str] = None,
 ) -> None:
     """Write per-animal metadata attributes on ``/{animal_id}``."""
-    g_animal = _ensure_group(h5, animal_id)
-    if sex is not None:
-        g_animal.attrs["sex"] = _safe_str(sex)
-    if tx is not None:
-        g_animal.attrs["tx"] = _safe_str(tx)
-    if strain is not None:
-        g_animal.attrs["strain"] = _safe_str(strain)
-    if experiment is not None:
-        g_animal.attrs["experiment"] = _safe_str(experiment)
-    if researcher is not None:
-        g_animal.attrs["researcher"] = _safe_str(researcher)
-    if drug is not None:
-        g_animal.attrs["drug"] = _safe_str(drug)
-    if notes is not None:
-        g_animal.attrs["notes"] = _safe_str(notes)
+    g_animal = ensure_group(h5, animal_id)
+    write_group_attrs(
+        g_animal,
+        {
+            "sex": safe_str(sex) if sex is not None else None,
+            "tx": safe_str(tx) if tx is not None else None,
+            "strain": safe_str(strain) if strain is not None else None,
+            "experiment": safe_str(experiment) if experiment is not None else None,
+            "researcher": safe_str(researcher) if researcher is not None else None,
+            "drug": safe_str(drug) if drug is not None else None,
+            "notes": safe_str(notes) if notes is not None else None,
+        },
+    )

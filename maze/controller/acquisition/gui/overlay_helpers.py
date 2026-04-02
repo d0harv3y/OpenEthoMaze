@@ -6,7 +6,8 @@ import numpy as np
 
 from maze.core.anatomy import is_spot_node_name
 
-from ..trial_logic import OverlayInfo, Phase, TrialState
+from ..vast import VastOverlayInfo, VastPhase, VastTrialState
+from ..vast.arena import in_exit_zone
 
 try:
     import cv2
@@ -82,6 +83,67 @@ def blob_exit_overlap_fraction(
     return float(overlap) / float(blob_n)
 
 
+def resolve_exit_success_override(
+    *,
+    pose_xy: Optional[np.ndarray],
+    pose_node_valid: Optional[np.ndarray],
+    pose_node_names: Optional[list],
+    blob_mask: Optional[np.ndarray],
+    blob_crop_rect: Optional[Tuple[int, int, int, int]],
+    track_xy: Optional[Tuple[float, float]],
+    track_source: str,
+    exit_x_px: float,
+    exit_y_px: float,
+    exit_radius_px: float,
+    arena,
+    required_keypoints: int,
+    min_blob_overlap_fraction: float,
+    allow_either_success: bool,
+) -> Optional[bool]:
+    """Resolve source-specific exit success for the run loop."""
+
+    def sleap_exit_success() -> bool:
+        if pose_xy is None or pose_xy.size == 0:
+            return False
+        n_in_exit = count_sleap_keypoints_in_exit(
+            pose_xy=pose_xy,
+            pose_node_valid=pose_node_valid,
+            pose_node_names=pose_node_names,
+            exit_x_px=exit_x_px,
+            exit_y_px=exit_y_px,
+            exit_radius_px=exit_radius_px,
+        )
+        return n_in_exit >= max(1, int(required_keypoints))
+
+    def fallback_exit_success() -> bool:
+        if blob_mask is not None:
+            frac = blob_exit_overlap_fraction(
+                blob_mask=blob_mask,
+                blob_crop_rect=blob_crop_rect,
+                exit_x_px=exit_x_px,
+                exit_y_px=exit_y_px,
+                exit_radius_px=exit_radius_px,
+            )
+            return frac >= float(min_blob_overlap_fraction)
+        if track_xy is not None:
+            return in_exit_zone(
+                float(track_xy[0]),
+                float(track_xy[1]),
+                exit_x_px,
+                exit_y_px,
+                arena,
+            )
+        return False
+
+    if allow_either_success:
+        return sleap_exit_success() or fallback_exit_success()
+    if track_source == "sleap":
+        return sleap_exit_success()
+    if track_source == "fallback":
+        return fallback_exit_success()
+    return None
+
+
 def apply_brightness_contrast(
     img: np.ndarray,
     brightness: int,
@@ -128,7 +190,7 @@ def draw_roi_and_tracking_overlay(
     track_xy: Optional[Tuple[float, float]],
     track_valid: bool,
     overlay_opacity: float,
-    overlay_info: Optional[OverlayInfo] = None,
+    overlay_info: Optional[VastOverlayInfo] = None,
     track_source: str = "fallback",
     pose_xy: Optional[np.ndarray] = None,
     pose_scores: Optional[np.ndarray] = None,
@@ -156,13 +218,13 @@ def draw_roi_and_tracking_overlay(
         state = overlay_info.state
         phase = overlay_info.phase
         show_center_edge = (
-            state == TrialState.WAIT_NOT_CENTER
-            or phase == Phase.HABITUATION
-            or phase == Phase.HABITUATION_TRAINING
+            state == VastTrialState.WAIT_NOT_CENTER
+            or phase == VastPhase.HABITUATION
+            or phase == VastPhase.HABITUATION_TRAINING
         )
         if show_center_edge and arena.center_radius_px > 0 and arena.radius_px > 0:
             cv2.circle(overlay, (cx_i, cy_i), int(arena.center_radius_px), (255, 255, 0), 1)
-        if state == TrialState.TRIAL_RUNNING and arena.px_per_cm > 0:
+        if state == VastTrialState.TRIAL_RUNNING and arena.px_per_cm > 0:
             ex_i = int(overlay_info.exit_x_px)
             ey_i = int(overlay_info.exit_y_px)
             exit_r_px = int(arena.exit_radius_cm * arena.px_per_cm)

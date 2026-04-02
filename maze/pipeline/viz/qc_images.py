@@ -15,6 +15,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
+from ..defaults import (
+    DWELL_HEATMAP_BLUR_SIGMA,
+    MAX_DWELL_TIME_S,
+    QC_EXIT_ZONE_RADIUS_CM,
+)
+from ..storage.h5_db import TrialKey, write_qc_image
 
 # For heatmap from all nodes: list of (xy (n_frames, 2), valid (n_frames,))
 XYValidList = list[tuple[np.ndarray, np.ndarray]]
@@ -24,13 +30,6 @@ try:
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
-
-from ..config import (
-    DWELL_HEATMAP_BLUR_SIGMA,
-    MAX_DWELL_TIME_S,
-    QC_EXIT_ZONE_RADIUS_CM,
-)
-from ..storage.h5_db import TrialKey, write_qc_image
 
 # Colormap: TURBO if available (OpenCV 4.1+), else JET
 _COLORMAP = getattr(cv2, "COLORMAP_TURBO", cv2.COLORMAP_JET) if HAS_CV2 else None

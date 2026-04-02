@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from .config import (
+from .vast.config import (
     ArenaConfig,
     ControllerConfig,
     ExitAngleConfig,
@@ -18,6 +18,13 @@ from .config import (
     StimulusConfig,
     AnimalInfo,
 )
+from .radial_arm.config import (
+    RadialArmCalibrationConfig,
+    RadialArmControllerConfig,
+    RadialArmTaskConfig,
+    RadialArmTemplateConfig,
+)
+from ...core.tasks import ARENA_TYPE_RADIAL_ARM, normalize_arena_type
 
 
 def _arena_to_dict(c: ArenaConfig) -> Dict[str, Any]:
@@ -179,8 +186,74 @@ def _fallback_tracking_from_dict(d: Dict[str, Any]) -> "FallbackTrackingConfig":
     )
 
 
-def config_to_dict(config: ControllerConfig) -> Dict[str, Any]:
+def _radial_arm_task_to_dict(c: RadialArmTaskConfig) -> Dict[str, Any]:
     return {
+        "template": {
+            "center_midedge_to_midedge_cm": c.template.center_midedge_to_midedge_cm,
+            "arm_length_cm": c.template.arm_length_cm,
+            "arm_width_cm": c.template.arm_width_cm,
+            "arm_split_cm": c.template.arm_split_cm,
+            "hole_arm_index": c.template.hole_arm_index,
+            "hole_radius_cm": c.template.hole_radius_cm,
+            "hole_inset_from_arm_end_cm": c.template.hole_inset_from_arm_end_cm,
+        },
+        "calibration": {
+            "template_center_x_px": c.calibration.template_center_x_px,
+            "template_center_y_px": c.calibration.template_center_y_px,
+            "template_rotation_deg": c.calibration.template_rotation_deg,
+            "px_per_cm": c.calibration.px_per_cm,
+            "edit_region_name": c.calibration.edit_region_name,
+        },
+        "exit_arm_index": c.exit_arm_index,
+        "rewarded_arm_index": c.rewarded_arm_index,
+        "speaker_device_name": c.speaker_device_name,
+        "speaker_volume_pct": c.speaker_volume_pct,
+        "stimulus_frequency_hz": c.stimulus_frequency_hz,
+        "stimulus_enabled": c.stimulus_enabled,
+    }
+
+
+def _radial_arm_task_from_dict(d: Dict[str, Any]) -> RadialArmTaskConfig:
+    template_d = d.get("template", {}) if isinstance(d, dict) else {}
+    calibration_d = d.get("calibration", {}) if isinstance(d, dict) else {}
+    return RadialArmTaskConfig(
+        template=RadialArmTemplateConfig(
+            center_midedge_to_midedge_cm=float(
+                template_d.get("center_midedge_to_midedge_cm", 80.0)
+            ),
+            arm_length_cm=float(template_d.get("arm_length_cm", 55.0)),
+            arm_width_cm=float(template_d.get("arm_width_cm", 15.0)),
+            arm_split_cm=float(template_d.get("arm_split_cm", 27.5)),
+            hole_arm_index=int(template_d.get("hole_arm_index", 0)),
+            hole_radius_cm=float(template_d.get("hole_radius_cm", 5.0)),
+            hole_inset_from_arm_end_cm=float(
+                template_d.get("hole_inset_from_arm_end_cm", 10.0)
+            ),
+        ),
+        calibration=RadialArmCalibrationConfig(
+            template_center_x_px=float(
+                calibration_d.get("template_center_x_px", 0.0)
+            ),
+            template_center_y_px=float(
+                calibration_d.get("template_center_y_px", 0.0)
+            ),
+            template_rotation_deg=float(
+                calibration_d.get("template_rotation_deg", 0.0)
+            ),
+            px_per_cm=float(calibration_d.get("px_per_cm", 0.0)),
+            edit_region_name=str(calibration_d.get("edit_region_name", "") or ""),
+        ),
+        exit_arm_index=int(d.get("exit_arm_index", 0)),
+        rewarded_arm_index=int(d.get("rewarded_arm_index", 0)),
+        speaker_device_name=str(d.get("speaker_device_name", "") or ""),
+        speaker_volume_pct=float(d.get("speaker_volume_pct", 100.0)),
+        stimulus_frequency_hz=float(d.get("stimulus_frequency_hz", 5000.0)),
+        stimulus_enabled=bool(d.get("stimulus_enabled", False)),
+    )
+
+
+def config_to_dict(config: ControllerConfig) -> Dict[str, Any]:
+    data = {
         "arena": _arena_to_dict(config.arena),
         "exit_angles": _exit_angles_to_dict(config.exit_angles),
         "stimulus": _stimulus_to_dict(config.stimulus),
@@ -205,8 +278,11 @@ def config_to_dict(config: ControllerConfig) -> Dict[str, Any]:
         "track_backup_only": config.track_backup_only,
         "overlay_opacity_pct": config.overlay_opacity_pct,
         "arduino_port": config.arduino_port,
-        "schema_version": 1,
+        "schema_version": 2,
     }
+    if isinstance(config, RadialArmControllerConfig):
+        data["radial_arm"] = _radial_arm_task_to_dict(config.radial_arm)
+    return data
 
 
 def gui_to_dict(
@@ -263,7 +339,7 @@ def _run_mode_from_dict(d: Dict[str, Any]) -> str:
 
 def config_from_dict(d: Dict[str, Any]) -> ControllerConfig:
     out_dir = d.get("output_dir")
-    return ControllerConfig(
+    common_kwargs = dict(
         arena=_arena_from_dict(d.get("arena", {})),
         exit_angles=_exit_angles_from_dict(d.get("exit_angles", {})),
         stimulus=_stimulus_from_dict(d.get("stimulus", {})),
@@ -289,6 +365,12 @@ def config_from_dict(d: Dict[str, Any]) -> ControllerConfig:
         overlay_opacity_pct=max(0, min(100, int(d.get("overlay_opacity_pct", 70)))),
         arduino_port=d.get("arduino_port") or None,
     )
+    if normalize_arena_type(str(d.get("arena_type", "circular") or "circular")) == ARENA_TYPE_RADIAL_ARM:
+        return RadialArmControllerConfig(
+            **common_kwargs,
+            radial_arm=_radial_arm_task_from_dict(d.get("radial_arm", {})),
+        )
+    return ControllerConfig(**common_kwargs)
 
 
 def save_profile(

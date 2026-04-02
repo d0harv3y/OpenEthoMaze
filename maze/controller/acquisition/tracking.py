@@ -26,9 +26,9 @@ from typing import Any, List, Literal, Optional, Tuple, TYPE_CHECKING
 import numpy as np
 
 from . import app_logging
-from .config import ControllerConfig
+from .vast.config import ControllerConfig
 
-_LOG = logging.getLogger("vast_controller")
+_LOG = logging.getLogger("maze_acquisition")
 
 if TYPE_CHECKING:
     import torch
@@ -712,8 +712,7 @@ def _tracking_worker_loop(
     """
     Background thread: get (frame, tracker) from queue, run track(), store result and timestamp.
 
-    This is adapted from the `_tracking_worker_loop` implementation in
-    `vast_controller.gui.main_window`, but is defined here so that it can be
+    This is adapted from the original acquisition GUI worker loop, but is defined here so that it can be
     owned and managed by `TrackingController`.
     """
     while running_holder[0]:
