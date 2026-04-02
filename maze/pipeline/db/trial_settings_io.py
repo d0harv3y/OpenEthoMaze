@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 from typing import Any, Optional
 
-import numpy as np
-
 from maze.core.trial_settings import TrialSettings, parse_timestamp
 from maze.core.h5_layout import ensure_task_group, write_group_attrs
+from ...controller.acquisition.radial_arm.geometry import (
+    build_template_from_params,
+    exit_hole_xyr_px,
+    max_template_radius_cm,
+)
 from ._shared import open_db, safe_str
 from .trial_key import TrialKey
 
@@ -27,26 +29,6 @@ def _load_json_attr(group, attr_name: str) -> dict[str, Any]:
     except (TypeError, ValueError, json.JSONDecodeError):
         return {}
     return loaded if isinstance(loaded, dict) else {}
-
-
-def _transform_template_point_to_px(
-    point_cm: tuple[float, float],
-    *,
-    center_x_px: float,
-    center_y_px: float,
-    rotation_deg: float,
-    px_per_cm: float,
-) -> tuple[float, float]:
-    px, py = point_cm
-    theta = math.radians(float(rotation_deg))
-    cos_t = math.cos(theta)
-    sin_t = math.sin(theta)
-    x_rot = (float(px) * cos_t) - (float(py) * sin_t)
-    y_rot = (float(px) * sin_t) + (float(py) * cos_t)
-    return (
-        float(center_x_px) + (x_rot * float(px_per_cm)),
-        float(center_y_px) + (y_rot * float(px_per_cm)),
-    )
 
 
 def _radial_arm_shared_attr_fallback(g_trial) -> dict[str, Any]:
@@ -103,24 +85,25 @@ def _radial_arm_shared_attr_fallback(g_trial) -> dict[str, Any]:
         or 0
     )
 
-    max_radius_cm = 0.0
-    exit_point_cm = (0.0, 0.0)
-    for name, poly in template_regions_cm.items():
-        arr = np.asarray(poly, dtype=float)
-        if arr.size == 0:
-            continue
-        radii = np.linalg.norm(arr, axis=1)
-        if radii.size:
-            max_radius_cm = max(max_radius_cm, float(np.max(radii)))
-        if name in (f"arm{exit_arm_index}_back", f"arm{exit_arm_index}_front") and arr.shape[0] >= 2:
-            farthest = arr[np.argsort(radii)[-2:]]
-            exit_point_cm = (
-                float(np.mean(farthest[:, 0])),
-                float(np.mean(farthest[:, 1])),
-            )
-
-    exit_x_px, exit_y_px = _transform_template_point_to_px(
-        exit_point_cm,
+    template_params = geometry_payload.get("template_params", {}) or _load_json_attr(
+        g_task, "template_params"
+    )
+    template = build_template_from_params(
+        center_midedge_to_midedge_cm=float(
+            template_params.get("center_midedge_to_midedge_cm", 80.0)
+        ),
+        arm_length_cm=float(template_params.get("arm_length_cm", 55.0)),
+        arm_width_cm=float(template_params.get("arm_width_cm", 15.0)),
+        arm_split_cm=float(template_params.get("arm_split_cm", 27.5)),
+        hole_arm_index=int(template_params.get("hole_arm_index", 0)),
+        hole_radius_cm=float(template_params.get("hole_radius_cm", 5.0)),
+        hole_inset_from_arm_end_cm=float(
+            template_params.get("hole_inset_from_arm_end_cm", 10.0)
+        ),
+    )
+    exit_x_px, exit_y_px, exit_radius_px = exit_hole_xyr_px(
+        template,
+        exit_arm_index=exit_arm_index,
         center_x_px=center_x_px,
         center_y_px=center_y_px,
         rotation_deg=rotation_deg,
@@ -129,11 +112,12 @@ def _radial_arm_shared_attr_fallback(g_trial) -> dict[str, Any]:
     return {
         "arena_center_x_px": center_x_px,
         "arena_center_y_px": center_y_px,
-        "arena_radius_px": float(max_radius_cm * px_per_cm),
+        "arena_radius_px": float(max_template_radius_cm(template) * px_per_cm),
         "px_per_cm": px_per_cm,
         "exit_number": exit_arm_index + 1,
         "exit_x": exit_x_px,
         "exit_y": exit_y_px,
+        "exit_radius_px": exit_radius_px,
     }
 
 
@@ -150,6 +134,7 @@ def write_trial_settings(
     exit_number: Optional[int] = None,
     exit_x: Optional[float] = None,
     exit_y: Optional[float] = None,
+    exit_radius_px: Optional[float] = None,
     roi_old: Optional[str] = None,
     h5_fps: Optional[float] = None,
     trial_start_frame: Optional[int] = None,
@@ -175,6 +160,8 @@ def write_trial_settings(
             g_trial.attrs["exit_x"] = float(exit_x)
         if exit_y is not None:
             g_trial.attrs["exit_y"] = float(exit_y)
+        if exit_radius_px is not None:
+            g_trial.attrs["exit_radius_px"] = float(exit_radius_px)
         if roi_old is not None:
             g_trial.attrs["roi_old"] = safe_str(roi_old)
         if h5_fps is not None:
@@ -254,6 +241,15 @@ def read_trial_settings(
                 else (
                     float(fallback_attrs["exit_y"])
                     if "exit_y" in fallback_attrs
+                    else None
+                )
+            ),
+            exit_radius_px=(
+                float(attrs["exit_radius_px"])
+                if "exit_radius_px" in attrs
+                else (
+                    float(fallback_attrs["exit_radius_px"])
+                    if "exit_radius_px" in fallback_attrs
                     else None
                 )
             ),

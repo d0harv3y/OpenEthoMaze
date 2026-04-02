@@ -60,6 +60,114 @@ def _rect_along_axis(
     return np.array([p0, p1, p2, p3], dtype=float)
 
 
+def transform_template_point_to_px(
+    point_cm: Point,
+    *,
+    center_x_px: float,
+    center_y_px: float,
+    rotation_deg: float,
+    px_per_cm: float,
+) -> Point:
+    """Project one template-space point into image space."""
+    px, py = point_cm
+    theta = np.deg2rad(float(rotation_deg))
+    cos_t = float(np.cos(theta))
+    sin_t = float(np.sin(theta))
+    x_rot = (float(px) * cos_t) - (float(py) * sin_t)
+    y_rot = (float(px) * sin_t) + (float(py) * cos_t)
+    return (
+        float(center_x_px) + (x_rot * float(px_per_cm)),
+        float(center_y_px) + (y_rot * float(px_per_cm)),
+    )
+
+
+def max_template_radius_cm(template: RadialArmTemplateGeometry) -> float:
+    """Return the farthest template vertex distance from the template origin."""
+    max_radius_cm = 0.0
+    for poly in template.regions_cm.values():
+        arr = np.asarray(poly, dtype=float)
+        if arr.size == 0:
+            continue
+        radii = np.linalg.norm(arr, axis=1)
+        if radii.size:
+            max_radius_cm = max(max_radius_cm, float(np.max(radii)))
+    return max_radius_cm
+
+
+def exit_hole_center_cm(
+    template: RadialArmTemplateGeometry,
+    *,
+    exit_arm_index: int,
+) -> Point:
+    """Return the configured exit-hole center in template centimeter coordinates."""
+    arm_index = int(max(0, min(7, exit_arm_index)))
+    angle = float(template.arm_angles_rad[arm_index])
+    ux = float(np.cos(angle))
+    uy = float(np.sin(angle))
+    base_mid = (template.apothem_cm * ux, template.apothem_cm * uy)
+    end_mid = (
+        base_mid[0] + (ux * float(template.arm_length_cm)),
+        base_mid[1] + (uy * float(template.arm_length_cm)),
+    )
+    return (
+        end_mid[0] - (ux * float(template.hole_inset_from_arm_end_cm)),
+        end_mid[1] - (uy * float(template.hole_inset_from_arm_end_cm)),
+    )
+
+
+def exit_hole_xyr_px(
+    template: RadialArmTemplateGeometry,
+    *,
+    exit_arm_index: int,
+    center_x_px: float,
+    center_y_px: float,
+    rotation_deg: float,
+    px_per_cm: float,
+) -> tuple[float, float, float]:
+    """Project the configured exit-hole center and radius into image space."""
+    exit_x_px, exit_y_px = transform_template_point_to_px(
+        exit_hole_center_cm(template, exit_arm_index=exit_arm_index),
+        center_x_px=center_x_px,
+        center_y_px=center_y_px,
+        rotation_deg=rotation_deg,
+        px_per_cm=px_per_cm,
+    )
+    return (
+        float(exit_x_px),
+        float(exit_y_px),
+        float(template.hole_radius_cm * float(px_per_cm)),
+    )
+
+
+def projected_region_polygons_px(
+    template: RadialArmTemplateGeometry,
+    *,
+    center_x_px: float,
+    center_y_px: float,
+    rotation_deg: float,
+    px_per_cm: float,
+) -> dict[str, np.ndarray]:
+    """Project all template polygons into image-space pixels."""
+    projected: dict[str, np.ndarray] = {}
+    for name, poly in template.regions_cm.items():
+        arr = np.asarray(poly, dtype=float)
+        px_poly = np.asarray(
+            [
+                transform_template_point_to_px(
+                    (float(point[0]), float(point[1])),
+                    center_x_px=center_x_px,
+                    center_y_px=center_y_px,
+                    rotation_deg=rotation_deg,
+                    px_per_cm=px_per_cm,
+                )
+                for point in arr
+            ],
+            dtype=np.float32,
+        )
+        projected[name] = px_poly
+    return projected
+
+
 def build_template_from_params(
     *,
     center_midedge_to_midedge_cm: float = 80.0,

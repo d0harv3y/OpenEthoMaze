@@ -14,9 +14,10 @@ import numpy as np
 
 from ..profile import load_profile, save_profile, gui_to_dict
 from ..h5_writer import open_db
+from ..playback_loader import PlaybackHydration, load_playback_hydration
 from ..recording import TrialRecorder
 from .. import app_logging
-from ..shared_controller import config_center_xy
+from ..shared_controller import config_center_xy, config_tracking_roi
 from ..task_registry import AcquisitionMode, get_task_spec
 from .analysis_worker import AnalysisWorker
 from .file_actions import (
@@ -150,6 +151,7 @@ class MainWindow(QMainWindow):
         # Virtual acquisition: during idle (before Start trial), pause video frame advancement
         # so playback starts exactly when Start trial is pressed.
         self._virtual_video_path: Optional[Path] = None
+        self._playback_hydration: Optional[PlaybackHydration] = None
         self._virtual_has_initial_frame: bool = False
         self._virtual_cached_frame_raw: Optional[np.ndarray] = None
         # Cached frame index from CameraController during the paused preview.
@@ -789,10 +791,7 @@ class MainWindow(QMainWindow):
             if _cv2 is not None and img_display.ndim == 2:
                 img_display = _cv2.cvtColor(img_display, _cv2.COLOR_GRAY2BGR)
             show_track = self._config.track_show and HAS_TRACKING and AdaptiveThresholdTracker is not None
-            a = self._config.arena
-            roi_cx = a.arena_center_x_px
-            roi_cy = a.arena_center_y_px
-            roi_r = a.radius_px
+            roi_cx, roi_cy, roi_r = config_tracking_roi(self._config)
             roi_center = (roi_cx, roi_cy) if roi_r > 0 else None
             track_xy, track_valid = None, False
             track_source = "fallback"
@@ -802,7 +801,11 @@ class MainWindow(QMainWindow):
             blob_crop_rect = None
             if show_track and self._tracking_controller is not None:
                 to_track = img_raw  # inference sees raw image (no brightness/contrast)
-                track_r = a.tracking_mask_radius_px
+                track_r = (
+                    self._config.arena.tracking_mask_radius_px
+                    if hasattr(self._config, "arena")
+                    else roi_r
+                )
                 did_crop = False
                 crop_x0, crop_y0 = 0, 0  # offset to add to tracker coords when we crop
                 if _cv2 is not None and track_r > 0:
@@ -955,13 +958,17 @@ class MainWindow(QMainWindow):
                     exit_x_px=exit_x_px,
                     exit_y_px=exit_y_px,
                     exit_radius_px=exit_radius_px,
-                    arena=self._config.arena,
                     required_keypoints=required_kp,
                     min_blob_overlap_fraction=min_frac,
                     allow_either_success=bool(
                         getattr(self._config, "track_exit_either_success", False)
                     ),
                 )
+            elif self._task_mode == "ram":
+                fallback_x = float(track_xy[0]) if track_xy is not None else float(roi_cx)
+                fallback_y = float(track_xy[1]) if track_xy is not None else float(roi_cy)
+                _, in_exit = tc.get_recording_frame_metrics(fallback_x, fallback_y)
+                exit_success_override = bool(in_exit)
             tc.set_exit_success_override(exit_success_override)
             x_px = float(self._last_track_xy[0]) if self._last_track_xy is not None else (roi_cx or 0.0)
             y_px = float(self._last_track_xy[1]) if self._last_track_xy is not None else (roi_cy or 0.0)
@@ -1152,6 +1159,7 @@ class MainWindow(QMainWindow):
         source = self._camera_source.currentText()
         # Reset virtual playback pause state; will be set again if user picks a video.
         self._virtual_video_path = None
+        self._playback_hydration = None
         self._virtual_has_initial_frame = False
         self._virtual_cached_frame_raw = None
         self._virtual_cached_frame_index = None
@@ -1176,9 +1184,19 @@ class MainWindow(QMainWindow):
                     self._video_filename_label.setText("—")
                     self._video_filename_label.setToolTip("Current virtual video filename")
                 self._camera_controller.open(source, device_index, video_path=video_path)
+                if video_path is not None:
+                    self._playback_hydration = load_playback_hydration(
+                        video_path,
+                        task_mode=self._task_mode,
+                        config=self._config,
+                    )
+                    if self._playback_hydration is not None:
+                        self._session_id_edit.setText(self._playback_hydration.session_id)
                 # Status message: keep simple for now; detailed backend info can
                 # be added via CameraController hooks in the future.
-                if video_path is not None:
+                if video_path is not None and self._playback_hydration is not None:
+                    self.statusBar().showMessage(self._playback_hydration.status)
+                elif video_path is not None:
                     self.statusBar().showMessage(f"Virtual video started ({source}): {video_path.name}")
                 else:
                     self.statusBar().showMessage(f"Camera {device_index} started ({source}).")
@@ -1215,6 +1233,7 @@ class MainWindow(QMainWindow):
         self._camera_label.setText("Click Start camera")
         self.statusBar().showMessage("Camera stopped.")
         self._virtual_video_path = None
+        self._playback_hydration = None
         self._video_filename_label.setText("—")
         self._video_filename_label.setToolTip("Current virtual video filename")
         self._virtual_has_initial_frame = False
@@ -1578,6 +1597,27 @@ class MainWindow(QMainWindow):
                     lookup_status = "Legacy exit lookup: couldn't parse video name; using computed exit."
             except Exception as e:
                 lookup_status = f"Legacy exit lookup failed ({e}); using computed exit."
+
+        if (
+            self._camera_source.currentText().startswith("Virtual")
+            and self._playback_hydration is not None
+        ):
+            sid = self._playback_hydration.session_id or sid
+            if hasattr(self._trial_controller, "clear_legacy_exit_xy"):
+                self._trial_controller.clear_legacy_exit_xy()
+            if (
+                self._playback_hydration.legacy_exit_xy is not None
+                and hasattr(self._trial_controller, "set_legacy_exit_xy")
+            ):
+                self._trial_controller.set_legacy_exit_xy(
+                    self._playback_hydration.legacy_exit_xy[0],
+                    self._playback_hydration.legacy_exit_xy[1],
+                )
+            self._trial_controller.reset(
+                sid,
+                trial_idx=self._playback_hydration.trial_idx,
+                slot_idx=self._playback_hydration.slot_idx,
+            )
 
         msg = self._trial_controller.do_start(sid, lookup_status=lookup_status)
         self._apply_status_and_buttons()

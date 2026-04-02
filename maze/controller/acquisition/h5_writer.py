@@ -7,7 +7,6 @@ either VAST or RAM trials from the same shared container structure.
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import Optional
 
@@ -32,7 +31,11 @@ from maze.core.h5_layout import (
 )
 from maze.core.tasks import ARENA_TYPE_CIRCULAR, ARENA_TYPE_RADIAL_ARM, normalize_arena_type
 from .radial_arm.config import RadialArmControllerConfig
-from .radial_arm.geometry import build_template_from_params
+from .radial_arm.geometry import (
+    build_template_from_params,
+    exit_hole_xyr_px,
+    max_template_radius_cm,
+)
 
 __all__ = [
     "open_db",
@@ -45,60 +48,6 @@ __all__ = [
     "write_animal_label",
     "write_radial_arm_trial_settings",
 ]
-
-
-def _max_region_radius_cm(regions_cm: dict[str, np.ndarray]) -> float:
-    """Return the farthest template vertex distance from the template origin."""
-    max_radius_cm = 0.0
-    for poly in regions_cm.values():
-        arr = np.asarray(poly, dtype=float)
-        if arr.size == 0:
-            continue
-        radii = np.linalg.norm(arr, axis=1)
-        if radii.size:
-            max_radius_cm = max(max_radius_cm, float(np.max(radii)))
-    return max_radius_cm
-
-
-def _transform_template_point_to_px(
-    point_cm: tuple[float, float],
-    *,
-    center_x_px: float,
-    center_y_px: float,
-    rotation_deg: float,
-    px_per_cm: float,
-) -> tuple[float, float]:
-    """Project one template-space point into image space."""
-    px, py = point_cm
-    theta = math.radians(float(rotation_deg))
-    cos_t = math.cos(theta)
-    sin_t = math.sin(theta)
-    x_rot = (float(px) * cos_t) - (float(py) * sin_t)
-    y_rot = (float(px) * sin_t) + (float(py) * cos_t)
-    return (
-        float(center_x_px) + (x_rot * float(px_per_cm)),
-        float(center_y_px) + (y_rot * float(px_per_cm)),
-    )
-
-
-def _radial_arm_exit_point_cm(
-    regions_cm: dict[str, np.ndarray],
-    exit_arm_index: int,
-) -> tuple[float, float]:
-    """Approximate the exit target as the midpoint of the arm's outer edge."""
-    for region_name in (
-        f"arm{int(exit_arm_index)}_back",
-        f"arm{int(exit_arm_index)}_front",
-    ):
-        if region_name not in regions_cm:
-            continue
-        arr = np.asarray(regions_cm[region_name], dtype=float)
-        if arr.shape[0] < 2:
-            continue
-        radii = np.linalg.norm(arr, axis=1)
-        farthest = arr[np.argsort(radii)[-2:]]
-        return (float(np.mean(farthest[:, 0])), float(np.mean(farthest[:, 1])))
-    return (0.0, 0.0)
 
 
 def init_database(db_path: Path, arena_type: str = ARENA_TYPE_CIRCULAR) -> None:
@@ -155,6 +104,7 @@ def write_trial_settings(
     run_mode: str = "continuous",
     exit_x: Optional[float] = None,
     exit_y: Optional[float] = None,
+    exit_radius_px: Optional[float] = None,
     trial_start_frame: int = 0,
 ) -> None:
     write_group_attrs(
@@ -170,6 +120,7 @@ def write_trial_settings(
             "run_mode": safe_str(run_mode),
             "exit_x": float(exit_x) if exit_x is not None else None,
             "exit_y": float(exit_y) if exit_y is not None else None,
+            "exit_radius_px": float(exit_radius_px) if exit_radius_px is not None else None,
             "trial_start_frame": int(trial_start_frame),
         },
     )
@@ -201,11 +152,11 @@ def write_radial_arm_trial_settings(
         name: np.asarray(poly, dtype=float).tolist()
         for name, poly in template.regions_cm.items()
     }
-    max_radius_cm = _max_region_radius_cm(template.regions_cm)
+    max_radius_cm = max_template_radius_cm(template)
     exit_arm_index = int(ram.exit_arm_index)
-    exit_point_cm = _radial_arm_exit_point_cm(template.regions_cm, exit_arm_index)
-    exit_x_px, exit_y_px = _transform_template_point_to_px(
-        exit_point_cm,
+    exit_x_px, exit_y_px, exit_radius_px = exit_hole_xyr_px(
+        template,
+        exit_arm_index=exit_arm_index,
         center_x_px=calibration.template_center_x_px,
         center_y_px=calibration.template_center_y_px,
         rotation_deg=calibration.template_rotation_deg,
@@ -230,6 +181,7 @@ def write_radial_arm_trial_settings(
             "exit_number": exit_arm_index + 1,
             "exit_x": float(exit_x_px),
             "exit_y": float(exit_y_px),
+            "exit_radius_px": float(exit_radius_px),
             "exit_arm_index": exit_arm_index,
             "rewarded_arm_index": int(ram.rewarded_arm_index),
             "speaker_device_name": safe_str(ram.speaker_device_name),

@@ -1,0 +1,96 @@
+{
+  "schema_version": 3,
+  "common": {
+    "session": {
+      "num_animals": 1,
+      "num_trials": 9,
+      "max_trial_duration_s": 120.0,
+      "iti_s": 10.0,
+      "seed": null,
+      "legacy_seed_db_path": null,
+      "animals": [
+        {
+          "animal_id": "1000",
+          "tx": null,
+          "strain": null,
+          "sex": null,
+          "drug": null,
+          "notes": null
+        }
+      ]
+    },
+    "output_dir": null,
+    "h5_filename": "ram_trials.h5",
+    "arena_type": "radial_arm",
+    "run_mode": "continuous",
+    "run_analysis_after_trial": false,
+    "fallback_tracking": {
+      "min_area": 50,
+      "max_area": 1000,
+      "morph_kernel_size": 5,
+      "max_jump_px": 0.0,
+      "selection_mode": "closest_else_largest",
+      "min_circularity": 0.4,
+      "range_low": 16,
+      "range_high": 45,
+      "node_max_jump_px": 0.0,
+      "node_jump_confirm_frames": 2,
+      "min_sleap_nodes": 1,
+      "show_blob_overlay": true,
+      "max_contours": 0
+    },
+    "sleap_confidence_pct": 50,
+    "sleap_every_n": 1,
+    "sleap_exit_min_keypoints": 2,
+    "fallback_exit_blob_overlap_pct": 15.0,
+    "track_exit_either_success": false,
+    "sleap_model_path": "D:/work sack/combo_maze_001",
+    "track_show": true,
+    "track_async": false,
+    "track_backup_only": false,
+    "overlay_opacity_pct": 70,
+    "arduino_port": null
+  },
+  "radial_arm": {
+    "template": {
+      "center_midedge_to_midedge_cm": 80.0,
+      "arm_length_cm": 55.0,
+      "arm_width_cm": 15.0,
+      "arm_split_cm": 27.5,
+      "hole_arm_index": 0,
+      "hole_radius_cm": 5.0,
+      "hole_inset_from_arm_end_cm": 10.0
+    },
+    "calibration": {
+      "template_center_x_px": 0.0,
+      "template_center_y_px": 0.0,
+      "template_rotation_deg": 0.0,
+      "px_per_cm": 0.0,
+      "edit_region_name": ""
+    },
+    "exit_arm_index": 0,
+    "rewarded_arm_index": 0,
+    "speaker_device_name": "",
+    "speaker_volume_pct": 100.0,
+    "stimulus_frequency_hz": 5000.0,
+    "stimulus_enabled": false
+  },
+  "last_session_id": "",
+  "last_trial_idx": 0,
+  "last_slot_idx": 0,
+  "gui": {
+    "track_show": true,
+    "track_async": false,
+    "track_backup_only": false,
+    "track_sleap_path": "D:/work sack/combo_maze_001",
+    "track_confidence": 50,
+    "track_sleap_every_n": 1,
+    "track_opacity": 70,
+    "display_brightness": 68,
+    "display_contrast": 123,
+    "camera_flip": false,
+    "camera_source": "Virtual (video file)",
+    "camera_device": 0,
+    "arduino_port": "— Select port —"
+  }
+}

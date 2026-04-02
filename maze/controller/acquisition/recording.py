@@ -299,6 +299,7 @@ class TrialRecorder:
                     run_mode=run_mode,
                     exit_x=exit_x_px,
                     exit_y=exit_y_px,
+                    exit_radius_px=arena.exit_radius_cm * arena.px_per_cm,
                     trial_start_frame=trial_start_frame,
                 )
             n = len(self._xy_rows)

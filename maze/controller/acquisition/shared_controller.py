@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .shared_config import AcquisitionConfig
+from .radial_arm.geometry import build_template_from_params, max_template_radius_cm
 
 
 def normalize_run_mode_value(
@@ -51,3 +52,31 @@ def config_center_xy(config: AcquisitionConfig) -> tuple[float, float]:
             float(calibration.template_center_y_px),
         )
     return (0.0, 0.0)
+
+
+def config_tracking_roi(config: AcquisitionConfig) -> tuple[float, float, float]:
+    """Return task-specific preview ROI center/radius used by shared tracking."""
+    if hasattr(config, "arena"):
+        arena = config.arena
+        return (
+            float(arena.arena_center_x_px),
+            float(arena.arena_center_y_px),
+            float(arena.radius_px),
+        )
+    if hasattr(config, "radial_arm"):
+        calibration = config.radial_arm.calibration
+        template = build_template_from_params(
+            center_midedge_to_midedge_cm=config.radial_arm.template.center_midedge_to_midedge_cm,
+            arm_length_cm=config.radial_arm.template.arm_length_cm,
+            arm_width_cm=config.radial_arm.template.arm_width_cm,
+            arm_split_cm=config.radial_arm.template.arm_split_cm,
+            hole_arm_index=config.radial_arm.template.hole_arm_index,
+            hole_radius_cm=config.radial_arm.template.hole_radius_cm,
+            hole_inset_from_arm_end_cm=config.radial_arm.template.hole_inset_from_arm_end_cm,
+        )
+        return (
+            float(calibration.template_center_x_px),
+            float(calibration.template_center_y_px),
+            float(max_template_radius_cm(template) * float(calibration.px_per_cm)),
+        )
+    return (0.0, 0.0, 0.0)

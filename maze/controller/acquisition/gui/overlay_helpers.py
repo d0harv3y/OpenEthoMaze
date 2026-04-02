@@ -7,7 +7,6 @@ import numpy as np
 from maze.core.anatomy import is_spot_node_name
 
 from ..vast import VastOverlayInfo, VastPhase, VastTrialState
-from ..vast.arena import in_exit_zone
 
 try:
     import cv2
@@ -95,7 +94,6 @@ def resolve_exit_success_override(
     exit_x_px: float,
     exit_y_px: float,
     exit_radius_px: float,
-    arena,
     required_keypoints: int,
     min_blob_overlap_fraction: float,
     allow_either_success: bool,
@@ -126,13 +124,9 @@ def resolve_exit_success_override(
             )
             return frac >= float(min_blob_overlap_fraction)
         if track_xy is not None:
-            return in_exit_zone(
-                float(track_xy[0]),
-                float(track_xy[1]),
-                exit_x_px,
-                exit_y_px,
-                arena,
-            )
+            dx = float(track_xy[0]) - float(exit_x_px)
+            dy = float(track_xy[1]) - float(exit_y_px)
+            return (dx * dx + dy * dy) <= float(exit_radius_px * exit_radius_px)
         return False
 
     if allow_either_success:

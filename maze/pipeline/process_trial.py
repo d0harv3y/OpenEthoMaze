@@ -58,6 +58,7 @@ from .trial_quality import (
 from .db import (
     TrialKey,
     read_arena_type,
+    read_radial_arm_trial_settings,
     read_trial_settings,
     read_feedback_series,
     read_xy_table,
@@ -357,7 +358,7 @@ def _process_with_sleap(
         exit_pos = (settings.arena_center_x_px, settings.arena_center_y_px)
         exit_zone_radius_cm = CENTER_ZONE_RADIUS_FRACTION * settings.arena_radius_cm
     else:
-        exit_zone_radius_cm = EXIT_ZONE_RADIUS_CM
+        exit_zone_radius_cm = settings.exit_radius_cm or EXIT_ZONE_RADIUS_CM
 
     # Center zone (for center entries): 70% of arena radius from H5, else fallback
     if settings.arena_radius_px > 0:
@@ -407,6 +408,27 @@ def _process_with_sleap(
         "x": hybrid_xy_full[:, 0],
         "y": hybrid_xy_full[:, 1],
     }
+    hybrid_valid_full = ~np.any(np.isnan(hybrid_xy_full), axis=1)
+    if FILTER_FRAMES_NO_ANIMAL:
+        hybrid_valid_full = hybrid_valid_full & valid_frames_full
+    hybrid_xy_run = hybrid_xy_full[start_frame:]
+    hybrid_valid_run = hybrid_valid_full[start_frame:]
+    hybrid_xy_iti = hybrid_xy_full[:start_frame]
+    hybrid_valid_iti = hybrid_valid_full[:start_frame]
+    task_context: dict[str, Any] | None = None
+    if arena_type == ARENA_TYPE_RADIAL_ARM:
+        radial_arm_payload = read_radial_arm_trial_settings(db_path, key)
+        task_context = {
+            "geometry_payload": radial_arm_payload.get("geometry_payload", {}),
+            "exit_arm_index": radial_arm_payload.get("task_attrs", {}).get(
+                "exit_arm_index",
+                radial_arm_payload.get("trial_attrs", {}).get("exit_arm_index", -1),
+            ),
+            "rewarded_arm_index": radial_arm_payload.get("task_attrs", {}).get(
+                "rewarded_arm_index",
+                radial_arm_payload.get("trial_attrs", {}).get("rewarded_arm_index", 0),
+            ),
+        }
 
     for point_name in AMBIULATION_POINT_NAMES:
         if point_name == "spot":
@@ -439,16 +461,19 @@ def _process_with_sleap(
             fps=fps,
         )
         arena_center = (settings.arena_center_x_px, settings.arena_center_y_px)
+        task_xy_run = hybrid_xy_run if arena_type == ARENA_TYPE_RADIAL_ARM else xy_run
+        task_valid_run = hybrid_valid_run if arena_type == ARENA_TYPE_RADIAL_ARM else valid_run
         task_run = calculate_task_metrics(
             arena_type=arena_type,
-            xy=xy_run,
-            valid=valid_run,
+            xy=task_xy_run,
+            valid=task_valid_run,
             exit_pos=exit_pos,
             arena_center_pos=arena_center,
             px_per_cm=settings.px_per_cm,
             fps=fps,
             exit_zone_radius_cm=exit_zone_radius_cm,
             center_zone_radius_cm=center_zone_radius_cm,
+            task_context=task_context,
         )
         exit_run = task_run.exit_metrics
         center_run = task_run.center_metrics
@@ -501,16 +526,19 @@ def _process_with_sleap(
                 px_per_cm=settings.px_per_cm,
                 fps=fps,
             )
+            task_xy_iti = hybrid_xy_iti if arena_type == ARENA_TYPE_RADIAL_ARM else xy_iti
+            task_valid_iti = hybrid_valid_iti if arena_type == ARENA_TYPE_RADIAL_ARM else valid_iti
             task_iti = calculate_task_metrics(
                 arena_type=arena_type,
-                xy=xy_iti,
-                valid=valid_iti,
+                xy=task_xy_iti,
+                valid=task_valid_iti,
                 exit_pos=exit_pos,
                 arena_center_pos=arena_center,
                 px_per_cm=settings.px_per_cm,
                 fps=fps,
                 exit_zone_radius_cm=exit_zone_radius_cm,
                 center_zone_radius_cm=center_zone_radius_cm,
+                task_context=task_context,
             )
             band_summaries.append({
                 "trial_state": "iti_wait",

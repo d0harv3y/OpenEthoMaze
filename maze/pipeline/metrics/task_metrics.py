@@ -12,6 +12,11 @@ from .exit_metrics import (
     calculate_center_metrics,
     calculate_exit_metrics,
 )
+from .radial_arm_regions import (
+    bounds_from_geometry_payload,
+    compute_arm_memory_metrics,
+    region_codes_from_trajectory,
+)
 
 
 @dataclass(frozen=True)
@@ -45,13 +50,52 @@ def calculate_task_metrics(
     fps: float,
     exit_zone_radius_cm: float,
     center_zone_radius_cm: float,
+    task_context: dict[str, Any] | None = None,
 ) -> TaskMetricsResult:
     """Dispatch task-specific metric calculations for a trajectory band."""
     if arena_type == ARENA_TYPE_RADIAL_ARM:
+        geometry_payload = (
+            dict(task_context.get("geometry_payload", {}))
+            if isinstance(task_context, dict)
+            else {}
+        )
+        exit_arm_index = int(task_context.get("exit_arm_index", -1)) if isinstance(task_context, dict) else -1
+        rewarded_arm_index = int(task_context.get("rewarded_arm_index", 0)) if isinstance(task_context, dict) else 0
+        extra_attrs = radial_arm_metric_defaults()
+        if geometry_payload and exit_arm_index >= 0:
+            bounds = bounds_from_geometry_payload(
+                geometry_payload,
+                exit_arm_index=exit_arm_index,
+                rewarded_arm_index=rewarded_arm_index,
+            )
+            if bounds is not None:
+                region_codes = region_codes_from_trajectory(xy, valid, bounds)
+                extra_attrs.update(
+                    compute_arm_memory_metrics(
+                        region_codes,
+                        exit_arm_index=exit_arm_index,
+                    )
+                )
+                extra_attrs["task_metrics_status"] = "ok"
+                extra_attrs["exit_arm"] = int(exit_arm_index)
         return TaskMetricsResult(
-            exit_metrics=ExitMetrics(),
-            center_metrics=CenterMetrics(),
-            extra_trial_attrs=radial_arm_metric_defaults(),
+            exit_metrics=calculate_exit_metrics(
+                xy=xy,
+                valid=valid,
+                exit_pos=exit_pos,
+                px_per_cm=px_per_cm,
+                fps=fps,
+                exit_zone_radius_cm=exit_zone_radius_cm,
+            ),
+            center_metrics=calculate_center_metrics(
+                xy=xy,
+                valid=valid,
+                arena_center_pos=arena_center_pos,
+                px_per_cm=px_per_cm,
+                fps=fps,
+                center_zone_radius_cm=center_zone_radius_cm,
+            ),
+            extra_trial_attrs=extra_attrs,
         )
 
     return TaskMetricsResult(
@@ -82,20 +126,6 @@ def summary_fields_for_task(
     center_metrics: CenterMetrics,
 ) -> dict[str, float | int]:
     """Map task-specific metrics to the shared summary dtype."""
-    if arena_type == ARENA_TYPE_RADIAL_ARM:
-        return {
-            "latency_to_exit_s": np.nan,
-            "time_in_exit_zone_s": 0.0,
-            "time_in_exit_zone_fraction": 0.0,
-            "mean_distance_to_exit_cm": np.nan,
-            "min_distance_to_exit_cm": np.nan,
-            "path_efficiency": np.nan,
-            "n_exit_zone_entries": 0,
-            "time_in_center_s": 0.0,
-            "time_in_center_fraction": 0.0,
-            "n_center_entries": 0,
-        }
-
     return {
         "latency_to_exit_s": exit_metrics.latency_to_exit_s,
         "time_in_exit_zone_s": exit_metrics.time_in_exit_zone_s,

@@ -13,6 +13,7 @@ from ....core.session_slots import (
 )
 from ..shared_controller import build_run_button_states, normalize_run_mode_value
 from .config import RadialArmControllerConfig
+from .geometry import build_template_from_params, exit_hole_xyr_px
 
 
 class RamTrialMode(Enum):
@@ -208,7 +209,26 @@ class RadialArmTrialController:
         return self._sm.session_id, self._sm.trial_idx, self._sm.slot_idx
 
     def get_exit_position_px(self) -> tuple[float, float]:
-        return (0.0, 0.0)
+        ram = self._config.radial_arm
+        calibration = ram.calibration
+        template = build_template_from_params(
+            center_midedge_to_midedge_cm=ram.template.center_midedge_to_midedge_cm,
+            arm_length_cm=ram.template.arm_length_cm,
+            arm_width_cm=ram.template.arm_width_cm,
+            arm_split_cm=ram.template.arm_split_cm,
+            hole_arm_index=ram.template.hole_arm_index,
+            hole_radius_cm=ram.template.hole_radius_cm,
+            hole_inset_from_arm_end_cm=ram.template.hole_inset_from_arm_end_cm,
+        )
+        exit_x, exit_y, _ = exit_hole_xyr_px(
+            template,
+            exit_arm_index=ram.exit_arm_index,
+            center_x_px=calibration.template_center_x_px,
+            center_y_px=calibration.template_center_y_px,
+            rotation_deg=calibration.template_rotation_deg,
+            px_per_cm=calibration.px_per_cm,
+        )
+        return (float(exit_x), float(exit_y))
 
     def get_overlay_info(self) -> None:
         return None
@@ -257,10 +277,32 @@ class RadialArmTrialController:
         return state_to_name.get(self._sm.state)
 
     def get_recording_frame_metrics(self, x_px: float, y_px: float) -> tuple[float, bool]:
-        del x_px, y_px
         if self._sm is None:
             return (0.0, False)
-        return (0.0, bool(self._sm.success_override))
+        ram = self._config.radial_arm
+        calibration = ram.calibration
+        template = build_template_from_params(
+            center_midedge_to_midedge_cm=ram.template.center_midedge_to_midedge_cm,
+            arm_length_cm=ram.template.arm_length_cm,
+            arm_width_cm=ram.template.arm_width_cm,
+            arm_split_cm=ram.template.arm_split_cm,
+            hole_arm_index=ram.template.hole_arm_index,
+            hole_radius_cm=ram.template.hole_radius_cm,
+            hole_inset_from_arm_end_cm=ram.template.hole_inset_from_arm_end_cm,
+        )
+        exit_x, exit_y, exit_radius_px = exit_hole_xyr_px(
+            template,
+            exit_arm_index=ram.exit_arm_index,
+            center_x_px=calibration.template_center_x_px,
+            center_y_px=calibration.template_center_y_px,
+            rotation_deg=calibration.template_rotation_deg,
+            px_per_cm=calibration.px_per_cm,
+        )
+        dx = float(x_px) - float(exit_x)
+        dy = float(y_px) - float(exit_y)
+        dist = float((dx * dx + dy * dy) ** 0.5)
+        in_exit = dist <= float(exit_radius_px)
+        return (dist, in_exit)
 
     def ensure_created(
         self,

@@ -21,6 +21,7 @@ class TrialSettings:
     exit_number: Optional[int] = None
     exit_x: Optional[float] = None
     exit_y: Optional[float] = None
+    exit_radius_px: Optional[float] = None
     roi_old: Optional[str] = None
 
     @property
@@ -32,6 +33,12 @@ class TrialSettings:
     @property
     def arena_radius_cm(self) -> float:
         return self.arena_radius_px / self.px_per_cm
+
+    @property
+    def exit_radius_cm(self) -> Optional[float]:
+        if self.exit_radius_px is None or self.px_per_cm <= 0:
+            return None
+        return self.exit_radius_px / self.px_per_cm
 
     @property
     def cm_per_px(self) -> float:
