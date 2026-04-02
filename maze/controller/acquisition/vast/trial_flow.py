@@ -19,14 +19,16 @@ from ....core.session_slots import (
     slot_for_trial_index,
     slot_to_animal_trial,
 )
+from ..shared_controller import build_run_button_states, normalize_run_mode_value
 from .arena import (
+    distance_px,
     distance_to_exit_cm,
     exit_center_px,
     in_center_region,
     in_exit_zone,
     latin_square_exit_index,
 )
-from .config import ArenaConfig, ControllerConfig
+from .config import ArenaConfig, VastControllerConfig
 
 
 @dataclass
@@ -69,7 +71,7 @@ def _parse_phase_mode(
         phase = Phase.HABITUATION
     if run_mode is not None and run_mode.strip():
         try:
-            mode = TrialMode(run_mode.strip().lower())
+            mode = TrialMode(normalize_run_mode_value(run_mode))
         except ValueError:
             mode = TrialMode.CONTINUOUS
     else:
@@ -77,7 +79,7 @@ def _parse_phase_mode(
     return phase, mode
 
 
-def parse_phase_mode_from_config(config: ControllerConfig) -> tuple[Phase, TrialMode]:
+def parse_phase_mode_from_config(config: VastControllerConfig) -> tuple[Phase, TrialMode]:
     """Single source of truth: parse run_phase/run_mode from config to (Phase, TrialMode)."""
     return _parse_phase_mode(
         run_phase=config.run_phase or None,
@@ -98,7 +100,7 @@ class TrialState(Enum):
 class TrialStateMachine:
     """State machine for one session. Position is slot_idx; (animal_idx, trial_idx) derived by mode. Stimulus/exit by phase."""
 
-    config: ControllerConfig
+    config: VastControllerConfig
     phase: Phase = Phase.HABITUATION
     mode: TrialMode = TrialMode.CONTINUOUS
     session_id: str = ""
@@ -444,7 +446,7 @@ _RUNNING_STATES = (
 class TrialController:
     """Holds trial state machine and run logic; GUI-agnostic."""
 
-    def __init__(self, config: ControllerConfig) -> None:
+    def __init__(self, config: VastControllerConfig) -> None:
         self._config = config
         self._sm: Optional[TrialStateMachine] = None
         self._run_active = False
@@ -532,6 +534,15 @@ class TrialController:
             TrialState.TRIAL_RUNNING: "run",
         }
         return state_to_str.get(self._sm.state, "iti")
+
+    def get_recording_frame_metrics(self, x_px: float, y_px: float) -> tuple[float, bool]:
+        if self._sm is None:
+            return (0.0, False)
+        exit_x_px, exit_y_px = self.get_exit_position_px()
+        return (
+            distance_px(x_px, y_px, exit_x_px, exit_y_px),
+            in_exit_zone(x_px, y_px, exit_x_px, exit_y_px, self._config.arena),
+        )
 
     def add_state_listener(self, callback: Callable[[TrialState], None]) -> None:
         self._state_listeners.append(callback)
@@ -654,22 +665,12 @@ class TrialController:
         return "Trial ended (manual success)."
 
     def get_button_states(self) -> dict[str, bool]:
-        out: dict[str, bool] = {
-            "start": True,
-            "previous": True,
-            "next": True,
-            "end_trial": False,
-            "stop": self._run_active,
-        }
-        if self._sm is None:
-            return out
-        state = self._sm.state
-        out["start"] = state in _CAN_START_PREV_NEXT
-        out["previous"] = state in _CAN_START_PREV_NEXT
-        out["next"] = state in _CAN_START_PREV_NEXT
-        out["end_trial"] = state in _RUNNING_STATES
-        out["stop"] = self._run_active
-        return out
+        return build_run_button_states(
+            state=(None if self._sm is None else self._sm.state),
+            run_active=self._run_active,
+            can_start_prev_next_states=_CAN_START_PREV_NEXT,
+            running_states=_RUNNING_STATES,
+        )
 
     def get_status_dict(self, x_px: float, y_px: float) -> dict[str, Any]:
         empty = {

@@ -6,7 +6,7 @@ from typing import Optional
 import numpy as np
 
 from maze.core.schema import FEEDBACK_GROUP, FEEDBACK_ROW_DTYPE
-from maze.core.storage import (
+from maze.core.h5_layout import (
     read_feedback_table as core_read_feedback_table,
     write_feedback_table as core_write_feedback_table,
 )

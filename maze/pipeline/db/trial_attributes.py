@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from maze.core.schema import TASK_DATA_GROUP
-from maze.core.storage import ensure_task_group, write_group_attrs
+from maze.core.h5_layout import ensure_task_group, write_group_attrs
 from maze.core.tasks import normalize_arena_type
 
 from ._shared import open_db, safe_str

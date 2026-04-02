@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Iterator, Optional, Tuple
 
 from . import app_logging
-from .vast.config import ControllerConfig
+from .shared_config import AcquisitionConfig
 
 import numpy as np
 
@@ -477,13 +477,13 @@ class CameraController:
 
     The controller is UI-agnostic: it does not depend on Qt widgets. The GUI
     should:
-    - Construct it with a `ControllerConfig`.
+    - Construct it with an `AcquisitionConfig`.
     - Call `open` / `close`.
     - On each timer tick, call `grab_frame()` and then apply any display-only
       adjustments or overlays for preview.
     """
 
-    def __init__(self, config: ControllerConfig) -> None:
+    def __init__(self, config: AcquisitionConfig) -> None:
         self._config = config
         self._camera: Optional[object] = None
         self._last_preview_img_size: Optional[Tuple[int, int]] = None

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional
 import h5py
 
 from maze.core.trial_settings import parse_timestamp
-from maze.core.storage import ensure_trial_group as core_ensure_trial_group
+from maze.core.h5_layout import ensure_trial_group as core_ensure_trial_group
 
 from ._shared import open_db, safe_str
 from .trial_key import TrialKey

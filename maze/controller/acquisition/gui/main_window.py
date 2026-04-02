@@ -12,17 +12,12 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from ..vast.arena import distance_px, in_exit_zone
 from ..profile import load_profile, save_profile, gui_to_dict
 from ..h5_writer import open_db
 from ..recording import TrialRecorder
 from .. import app_logging
+from ..shared_controller import config_center_xy
 from ..task_registry import AcquisitionMode, get_task_spec
-from ..vast import (
-    VastPhase,
-    VastTrialMode,
-    parse_vast_phase_mode_from_config,
-)
 from .analysis_worker import AnalysisWorker
 from .file_actions import (
     ask_trial_overwrite_merged,
@@ -349,16 +344,20 @@ class MainWindow(QMainWindow):
             )
             self._session_id_edit.setValidator(session_id_validator)
         session_ly.addWidget(self._session_id_edit)
-        session_ly.addWidget(QLabel("Phase:"))
+        self._phase_label = QLabel(self._task_spec.phase_label or "Phase:")
+        session_ly.addWidget(self._phase_label)
         self._phase_combo = QComboBox()
-        for p in VastPhase:
-            self._phase_combo.addItem(p.value.replace("_", " ").title(), p)
+        for label, value in self._task_spec.phase_options:
+            self._phase_combo.addItem(label, value)
         session_ly.addWidget(self._phase_combo)
         session_ly.addWidget(QLabel("Mode:"))
         self._mode_combo = QComboBox()
-        for m in VastTrialMode:
-            self._mode_combo.addItem(m.value.replace("_", " ").title(), m)
+        for label, value in self._task_spec.mode_options:
+            self._mode_combo.addItem(label, value)
         session_ly.addWidget(self._mode_combo)
+        show_phase = bool(self._task_spec.phase_options)
+        self._phase_label.setVisible(show_phase)
+        self._phase_combo.setVisible(show_phase)
         self._session_id_edit.textChanged.connect(self._on_session_controls_changed)
         self._phase_combo.currentIndexChanged.connect(self._on_session_controls_changed)
         self._mode_combo.currentIndexChanged.connect(self._on_session_controls_changed)
@@ -677,13 +676,13 @@ class MainWindow(QMainWindow):
                             iw,
                             ih,
                         )
-                        self._config.arena.arena_center_x_px = float(ix)
-                        self._config.arena.arena_center_y_px = float(iy)
                         if self._task_mode == "ram" and hasattr(self._config, "radial_arm"):
                             self._config.radial_arm.calibration.template_center_x_px = float(ix)
                             self._config.radial_arm.calibration.template_center_y_px = float(iy)
                             message = f"RAM template center set to ({ix}, {iy})"
                         else:
+                            self._config.arena.arena_center_x_px = float(ix)
+                            self._config.arena.arena_center_y_px = float(iy)
                             message = f"Arena center set to ({ix}, {iy})"
                         self._roi_set_center_click.setChecked(False)
                         self.statusBar().showMessage(message)
@@ -991,8 +990,7 @@ class MainWindow(QMainWindow):
                     x_px, y_px = float(roi_cx), float(roi_cy)
                 exit_x, exit_y = tc.get_exit_position_px()
                 duty_pct = tc.get_duty_for_position(x_px, y_px)
-                dist_to_exit_px = distance_px(x_px, y_px, exit_x, exit_y)
-                in_exit = in_exit_zone(x_px, y_px, exit_x, exit_y, self._config.arena)
+                dist_to_exit_px, in_exit = tc.get_recording_frame_metrics(x_px, y_px)
                 trial_state_str = tc.get_trial_state_for_recording() or "iti"
                 meta = tc.get_recording_metadata()
                 if self._trial_recorder is None and meta is not None:
@@ -1354,7 +1352,7 @@ class MainWindow(QMainWindow):
         else:
             # Fall back to arena center instead of (0,0) so duty/exit logic
             # doesn't saturate when tracking is temporarily unavailable.
-            x, y = (self._config.arena.arena_center_x_px, self._config.arena.arena_center_y_px)
+            x, y = config_center_xy(self._config)
         self._trial_controller.tick(x, y, dt)
         self._apply_status_and_buttons()
 
@@ -1642,11 +1640,11 @@ class MainWindow(QMainWindow):
         """Sync phase, mode and session ID from UI; reset to first trial on any change."""
         sid = self._session_id_edit.text().strip()
         p = self._phase_combo.currentData()
-        if p is not None:
-            self._config.run_phase = p.value
+        if p is not None and self._task_spec.set_phase_value is not None:
+            self._task_spec.set_phase_value(self._config, str(p))
         m = self._mode_combo.currentData()
         if m is not None:
-            self._config.run_mode = m.value
+            self._task_spec.set_mode_value(self._config, str(m))
         self._trial_controller.apply_session_controls(sid)
         self._apply_status_and_buttons()
 
@@ -1654,13 +1652,15 @@ class MainWindow(QMainWindow):
         # Invalidate tracker cache so next frame uses updated config (e.g. fallback_tracking)
         if self._tracking_controller is not None:
             self._tracking_controller.set_config(self._config)
-        phase_enum, mode_enum = parse_vast_phase_mode_from_config(self._config)
-        idx = self._phase_combo.findData(phase_enum)
-        if idx >= 0:
-            self._phase_combo.setCurrentIndex(idx)
-        else:
-            self._phase_combo.setCurrentIndex(0)
-        idx = self._mode_combo.findData(mode_enum)
+        phase_value = self._task_spec.get_phase_value(self._config)
+        if self._task_spec.phase_options:
+            idx = self._phase_combo.findData(phase_value)
+            if idx >= 0:
+                self._phase_combo.setCurrentIndex(idx)
+            else:
+                self._phase_combo.setCurrentIndex(0)
+        mode_value = self._task_spec.get_mode_value(self._config)
+        idx = self._mode_combo.findData(mode_value)
         if idx >= 0:
             self._mode_combo.setCurrentIndex(idx)
         else:
@@ -1723,11 +1723,11 @@ class MainWindow(QMainWindow):
 
     def _apply_ui_to_config(self) -> None:
         p = self._phase_combo.currentData()
-        if p is not None:
-            self._config.run_phase = p.value
+        if p is not None and self._task_spec.set_phase_value is not None:
+            self._task_spec.set_phase_value(self._config, str(p))
         m = self._mode_combo.currentData()
         if m is not None:
-            self._config.run_mode = m.value
+            self._task_spec.set_mode_value(self._config, str(m))
         raw = self._output_dir_edit.text().strip()
         self._config.output_dir = raw if raw else None
         h5_raw = self._h5_filename_edit.text().strip()

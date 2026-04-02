@@ -7,16 +7,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional, Tuple
 
-from ..vast.config import (
-    AnimalInfo,
-    ControllerConfig,
-    FallbackTrackingConfig,
-    FT_TO_CM,
-    M_TO_CM,
-)
+from ..shared_config import AcquisitionConfig, AnimalInfo, FallbackTrackingConfig
+from ..vast.config import FT_TO_CM, M_TO_CM, VastControllerConfig
 from ..radial_arm.config import RadialArmControllerConfig
 from ..task_registry import AcquisitionMode, get_task_spec
-from ..vast import VastPhase, VastTrialMode
 
 try:
     from PySide6.QtWidgets import (
@@ -76,7 +70,7 @@ class SettingsDialog(QDialog):
 
     def __init__(
         self,
-        config: ControllerConfig,
+        config: AcquisitionConfig,
         parent: Optional[QWidget] = None,
         *,
         task_mode: AcquisitionMode = "vast",
@@ -123,7 +117,7 @@ class SettingsDialog(QDialog):
         if 0 <= index < self._tabs.count():
             self._tabs.setCurrentIndex(index)
 
-    def set_config(self, config: ControllerConfig) -> None:
+    def set_config(self, config: AcquisitionConfig) -> None:
         """Replace the backing config object and immediately refresh all fields."""
         self._config = config
         self._fill_from_config()
@@ -364,13 +358,13 @@ class SettingsDialog(QDialog):
             self._session_id_edit.setValidator(QRegularExpressionValidator(QRegularExpression(r"^[a-zA-Z0-9.\-]*$")))
         f.addRow("Session ID:", self._session_id_edit)
         self._phase_combo = QComboBox()
-        for p in VastPhase:
-            self._phase_combo.addItem(p.value.replace("_", " ").title(), p)
-        if self._task_mode == "vast":
-            f.addRow("Phase:", self._phase_combo)
+        for label, value in self._task_spec.phase_options:
+            self._phase_combo.addItem(label, value)
+        if self._task_spec.phase_options and self._task_spec.phase_label is not None:
+            f.addRow(self._task_spec.phase_label, self._phase_combo)
         self._mode_combo = QComboBox()
-        for m in VastTrialMode:
-            self._mode_combo.addItem(m.value.replace("_", " ").title(), m)
+        for label, value in self._task_spec.mode_options:
+            self._mode_combo.addItem(label, value)
         f.addRow("Mode:", self._mode_combo)
         self._session_num_animals = QSpinBox()
         self._session_num_animals.setRange(1, 50)
@@ -626,30 +620,39 @@ class SettingsDialog(QDialog):
             self._ram_speaker_device_name.setText(ram.speaker_device_name)
             self._ram_speaker_volume_pct.setValue(ram.speaker_volume_pct)
             self._ram_stimulus_frequency_hz.setValue(ram.stimulus_frequency_hz)
-        a = c.arena
-        unit = a.diameter_display_unit or "ft"
-        if unit == "m":
-            self._arena_diameter_value.setValue(a.diameter_m)
-        else:
-            self._arena_diameter_value.setValue(a.diameter_ft)
-        idx = self._arena_diameter_unit.findData(unit)
-        if idx >= 0:
-            self._arena_diameter_unit.setCurrentIndex(idx)
-        self._arena_radius_px.setValue(int(a.radius_px))
-        self._arena_tracking_radius_px.setValue(int(a.tracking_radius_px))
-        self._arena_center_pct.setValue(a.center_pct)
-        self._arena_exit_radius_cm.setValue(a.exit_radius_cm)
-        self._arena_center_x.setValue(a.arena_center_x_px)
-        self._arena_center_y.setValue(a.arena_center_y_px)
-        self._update_arena_px_per_cm_label()
-        e = c.exit_angles
-        self._exit_n_angles.setValue(e.n_angles)
-        self._exit_offset_deg.setValue(e.offset_deg)
-        self._exit_step_deg.setValue(e.step_deg)
-        s = c.stimulus
-        self._stimulus_min_at_exit.setChecked(s.min_at_exit)
-        self._stimulus_min_duty.setValue(s.min_duty_pct)
-        self._stimulus_max_duty.setValue(s.max_duty_pct)
+        if isinstance(c, VastControllerConfig):
+            arena = c.arena
+            unit = arena.diameter_display_unit or "ft"
+            if unit == "m":
+                self._arena_diameter_value.setValue(arena.diameter_m)
+            else:
+                self._arena_diameter_value.setValue(arena.diameter_ft)
+            idx = self._arena_diameter_unit.findData(unit)
+            if idx >= 0:
+                self._arena_diameter_unit.setCurrentIndex(idx)
+            self._arena_radius_px.setValue(int(arena.radius_px))
+            self._arena_tracking_radius_px.setValue(int(arena.tracking_radius_px))
+            self._arena_center_pct.setValue(arena.center_pct)
+            self._arena_exit_radius_cm.setValue(arena.exit_radius_cm)
+            self._arena_center_x.setValue(arena.arena_center_x_px)
+            self._arena_center_y.setValue(arena.arena_center_y_px)
+            self._update_arena_px_per_cm_label()
+            exit_angles = c.exit_angles
+            self._exit_n_angles.setValue(exit_angles.n_angles)
+            self._exit_offset_deg.setValue(exit_angles.offset_deg)
+            self._exit_step_deg.setValue(exit_angles.step_deg)
+            stimulus = c.stimulus
+            self._stimulus_min_at_exit.setChecked(stimulus.min_at_exit)
+            self._stimulus_min_duty.setValue(stimulus.min_duty_pct)
+            self._stimulus_max_duty.setValue(stimulus.max_duty_pct)
+            self._hab_duty.setValue(c.hab_training_duty_pct)
+            self._wait_not_center_duty.setValue(c.wait_not_center_duty_pct)
+            phase_value = self._task_spec.get_phase_value(c)
+            idx = self._phase_combo.findData(phase_value)
+            if idx >= 0:
+                self._phase_combo.setCurrentIndex(idx)
+            elif self._phase_combo.count() > 0:
+                self._phase_combo.setCurrentIndex(0)
         sess = c.session
         self._session_num_animals.setValue(sess.num_animals)
         self._session_num_trials.setValue(sess.num_trials)
@@ -666,27 +669,11 @@ class SettingsDialog(QDialog):
         parent = self.parent()
         if parent is not None and hasattr(parent, "_session_id_edit"):
             self._session_id_edit.setText((parent._session_id_edit.text() or "").strip())
-        self._hab_duty.setValue(c.hab_training_duty_pct)
-        self._wait_not_center_duty.setValue(c.wait_not_center_duty_pct)
-        run_phase = c.run_phase or "habituation"
-        try:
-            phase_enum = VastPhase(run_phase)
-        except ValueError:
-            phase_enum = VastPhase.HABITUATION
-        idx = self._phase_combo.findData(phase_enum)
-        if idx >= 0:
-            self._phase_combo.setCurrentIndex(idx)
-        else:
-            self._phase_combo.setCurrentIndex(0)
-        run_mode = c.run_mode or "continuous"
-        try:
-            mode_enum = VastTrialMode(run_mode.lower())
-        except ValueError:
-            mode_enum = VastTrialMode.CONTINUOUS
-        idx = self._mode_combo.findData(mode_enum)
+        mode_value = self._task_spec.get_mode_value(c)
+        idx = self._mode_combo.findData(mode_value)
         if idx >= 0:
             self._mode_combo.setCurrentIndex(idx)
-        else:
+        elif self._mode_combo.count() > 0:
             self._mode_combo.setCurrentIndex(0)
         # Animals table
         self._animals_table.setRowCount(max(len(sess.animals), 1))
@@ -752,25 +739,31 @@ class SettingsDialog(QDialog):
             ram.speaker_device_name = self._ram_speaker_device_name.text().strip()
             ram.speaker_volume_pct = self._ram_speaker_volume_pct.value()
             ram.stimulus_frequency_hz = self._ram_stimulus_frequency_hz.value()
-        unit = self._arena_diameter_unit.currentData() or "ft"
-        val = self._arena_diameter_value.value()
-        if unit == "m":
-            c.arena.diameter_cm = val * M_TO_CM
-        else:
-            c.arena.diameter_cm = val * FT_TO_CM
-        c.arena.diameter_display_unit = unit
-        c.arena.radius_px = float(self._arena_radius_px.value())
-        c.arena.tracking_radius_px = float(self._arena_tracking_radius_px.value())
-        c.arena.center_pct = self._arena_center_pct.value()
-        c.arena.exit_radius_cm = self._arena_exit_radius_cm.value()
-        c.arena.arena_center_x_px = self._arena_center_x.value()
-        c.arena.arena_center_y_px = self._arena_center_y.value()
-        c.exit_angles.n_angles = self._exit_n_angles.value()
-        c.exit_angles.offset_deg = self._exit_offset_deg.value()
-        c.exit_angles.step_deg = self._exit_step_deg.value()
-        c.stimulus.min_at_exit = self._stimulus_min_at_exit.isChecked()
-        c.stimulus.min_duty_pct = self._stimulus_min_duty.value()
-        c.stimulus.max_duty_pct = self._stimulus_max_duty.value()
+        if isinstance(c, VastControllerConfig):
+            unit = self._arena_diameter_unit.currentData() or "ft"
+            val = self._arena_diameter_value.value()
+            if unit == "m":
+                c.arena.diameter_cm = val * M_TO_CM
+            else:
+                c.arena.diameter_cm = val * FT_TO_CM
+            c.arena.diameter_display_unit = unit
+            c.arena.radius_px = float(self._arena_radius_px.value())
+            c.arena.tracking_radius_px = float(self._arena_tracking_radius_px.value())
+            c.arena.center_pct = self._arena_center_pct.value()
+            c.arena.exit_radius_cm = self._arena_exit_radius_cm.value()
+            c.arena.arena_center_x_px = self._arena_center_x.value()
+            c.arena.arena_center_y_px = self._arena_center_y.value()
+            c.exit_angles.n_angles = self._exit_n_angles.value()
+            c.exit_angles.offset_deg = self._exit_offset_deg.value()
+            c.exit_angles.step_deg = self._exit_step_deg.value()
+            c.stimulus.min_at_exit = self._stimulus_min_at_exit.isChecked()
+            c.stimulus.min_duty_pct = self._stimulus_min_duty.value()
+            c.stimulus.max_duty_pct = self._stimulus_max_duty.value()
+            c.hab_training_duty_pct = self._hab_duty.value()
+            c.wait_not_center_duty_pct = self._wait_not_center_duty.value()
+            p = self._phase_combo.currentData()
+            if p is not None and self._task_spec.set_phase_value is not None:
+                self._task_spec.set_phase_value(c, str(p))
         c.session.num_animals = self._session_num_animals.value()
         c.session.num_trials = self._session_num_trials.value()
         c.session.max_trial_duration_s = self._session_max_trial_s.value()
@@ -778,14 +771,9 @@ class SettingsDialog(QDialog):
         c.session.seed, c.session.legacy_seed_db_path = _parse_seed(self._session_seed.text())
         c.output_dir = self._output_dir_edit.text().strip() or None
         c.h5_filename = self._h5_filename_edit.text().strip() or "trials.h5"
-        c.hab_training_duty_pct = self._hab_duty.value()
-        c.wait_not_center_duty_pct = self._wait_not_center_duty.value()
-        p = self._phase_combo.currentData()
-        if p is not None:
-            c.run_phase = p.value
         m = self._mode_combo.currentData()
         if m is not None:
-            c.run_mode = m.value
+            self._task_spec.set_mode_value(c, str(m))
         # Animals
         rows = self._animals_table.rowCount()
         c.session.animals = []

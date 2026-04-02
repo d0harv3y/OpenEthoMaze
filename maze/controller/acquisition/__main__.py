@@ -6,6 +6,21 @@ from typing import Sequence
 from .app_shell import run_mode_gui
 
 
+def _preload_vast_runtime_dependencies() -> None:
+    """
+    Preload the VAST-only SLEAP stack before Qt initializes.
+
+    Some environments crash when `sleap_nn` imports after PySide/shiboken setup.
+    Keeping the workaround in this dedicated helper makes the startup asymmetry
+    explicit and gives future profiling work one narrow seam to revisit.
+    """
+    try:
+        import sleap_nn.inference.predictors  # noqa: F401
+    except Exception:
+        # SLEAP will be unavailable in the GUI, but the controller can still run.
+        pass
+
+
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Maze acquisition GUI (VAST default, optional RAM mode)"
@@ -46,16 +61,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the GUI. Returns exit code (0 = success)."""
     args = _parse_args(argv)
 
-    # Import-order workaround:
-    # Some environments crash when importing `sleap_nn` (via lightning/torchmetrics/
-    # matplotlib) after PySide has initialized shiboken signature machinery.
-    # Preloading here keeps the later lazy SLEAP load path from triggering that bug.
     if args.mode == "vast":
-        try:
-            import sleap_nn.inference.predictors  # noqa: F401
-        except Exception:
-            # SLEAP will be unavailable in the GUI, but the controller can still run.
-            pass
+        _preload_vast_runtime_dependencies()
 
     return run_mode_gui(args.mode, debug_log=args.debug_log, dev=args.dev)
 

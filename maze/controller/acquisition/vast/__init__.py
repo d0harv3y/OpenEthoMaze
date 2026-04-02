@@ -1,16 +1,15 @@
 """VAST task-local acquisition modules."""
 
 from .config import (
-    AnimalInfo,
     ArenaConfig,
-    ControllerConfig,
     ExitAngleConfig,
-    FallbackTrackingConfig,
     FT_TO_CM,
     M_TO_CM,
-    SessionConfig,
     StimulusConfig,
+    VastControllerConfig,
+    VastTaskConfig,
 )
+from ..shared_config import AnimalInfo, FallbackTrackingConfig, SessionConfig
 from .trial_flow import (
     OverlayInfo,
     Phase,
@@ -32,7 +31,8 @@ parse_vast_phase_mode_from_config = parse_phase_mode_from_config
 __all__ = [
     "AnimalInfo",
     "ArenaConfig",
-    "ControllerConfig",
+    "VastControllerConfig",
+    "VastTaskConfig",
     "ExitAngleConfig",
     "FallbackTrackingConfig",
     "FT_TO_CM",

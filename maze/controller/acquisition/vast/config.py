@@ -8,9 +8,9 @@ edge = annulus. Exit target in center region, angles from Latin square.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 from ....core.tasks import ARENA_TYPE_CIRCULAR
+from ..shared_config import AcquisitionConfig
 
 
 # Feet to cm (for arena diameter)
@@ -24,12 +24,12 @@ class ArenaConfig:
 
     diameter_cm: float = 121.92  # 4 ft default
     diameter_display_unit: str = "ft"  # "ft" or "m" for UI display
-    radius_px: float = 0.0  # arena circle radius in pixels (from ROI); used to derive px_per_cm and draw ROI
-    tracking_radius_px: float = 0.0  # mask radius for tracking; 0 = use radius_px (same as ROI)
-    center_pct: float = 0.5  # center circle diameter = center_pct * arena diameter
-    exit_radius_cm: float = 5.0
-    arena_center_x_px: float = 0.0
-    arena_center_y_px: float = 0.0
+    radius_px: float = 200.0  # arena circle radius in pixels (from ROI); used to derive px_per_cm and draw ROI
+    tracking_radius_px: float = 250.0  # mask radius for tracking; 0 = use radius_px (same as ROI)
+    center_pct: float = 0.7  # center circle diameter = center_pct * arena diameter
+    exit_radius_cm: float = 12.5
+    arena_center_x_px: float = 200.0
+    arena_center_y_px: float = 200.0
 
     @property
     def diameter_ft(self) -> float:
@@ -97,79 +97,69 @@ class StimulusConfig:
 
 
 @dataclass
-class AnimalInfo:
-    """Per-animal metadata."""
-
-    animal_id: str
-    tx: Optional[str] = None
-    strain: Optional[str] = None
-    sex: Optional[str] = None
-    drug: Optional[str] = None
-    notes: Optional[str] = None
-
-
-@dataclass
-class SessionConfig:
-    """Session and trial counts; animal list; timing. Session identity is by user-entered session_id (state machine / profile)."""
-
-    num_animals: int = 1
-    num_trials: int = 9
-    max_trial_duration_s: float = 120.0
-    iti_s: float = 10.0
-    seed: Optional[int] = None
-    legacy_seed_db_path: Optional[str] = None
-    animals: list[AnimalInfo] = field(default_factory=list)
-
-    def ensure_animals(self) -> None:
-        """Ensure animals list has at least num_animals entries."""
-        while len(self.animals) < self.num_animals:
-            self.animals.append(AnimalInfo(animal_id=str(1000 + len(self.animals))))
-
-
-@dataclass
-class FallbackTrackingConfig:
-    """Parameters for the backup (in-range threshold + morphology) tracker when SLEAP is unavailable or low confidence."""
-
-    min_area: int = 80
-    max_area: int = 0
-    morph_kernel_size: int = 5
-    max_jump_px: float = 0.0
-    selection_mode: str = "closest_else_largest"
-    min_circularity: float = 0.0
-    range_low: int = 0
-    range_high: int = 255
-    node_max_jump_px: float = 0.0
-    node_jump_confirm_frames: int = 2
-    min_sleap_nodes: int = 1
-    show_blob_overlay: bool = True
-    max_contours: int = 0
-
-
-@dataclass
-class ControllerConfig:
-    """Full controller profile: arena, calibration, session, stimulus, exit angles."""
+class VastTaskConfig:
+    """VAST-owned task payload layered on top of the shared acquisition config."""
 
     arena: ArenaConfig = field(default_factory=ArenaConfig)
     exit_angles: ExitAngleConfig = field(default_factory=ExitAngleConfig)
     stimulus: StimulusConfig = field(default_factory=StimulusConfig)
-    session: SessionConfig = field(default_factory=SessionConfig)
+    run_phase: str = "habituation"
     hab_training_duty_pct: float = 60.0
     wait_not_center_duty_pct: float = 0.0
-    output_dir: Optional[str] = None
+
+
+@dataclass
+class VastControllerConfig(AcquisitionConfig):
+    """Shared acquisition config plus the VAST-specific task payload."""
+
     h5_filename: str = "trials.h5"
     arena_type: str = ARENA_TYPE_CIRCULAR
-    run_phase: str = "habituation"
-    run_mode: str = "continuous"
-    fallback_tracking: FallbackTrackingConfig = field(default_factory=FallbackTrackingConfig)
-    sleap_confidence_pct: int = 50
-    sleap_every_n: int = 1
-    sleap_exit_min_keypoints: int = 2
-    fallback_exit_blob_overlap_pct: float = 15.0
-    track_exit_either_success: bool = False
-    sleap_model_path: str = ""
-    track_show: bool = True
-    track_async: bool = False
-    track_backup_only: bool = False
-    overlay_opacity_pct: int = 70
-    arduino_port: Optional[str] = None
-    run_analysis_after_trial: bool = False
+    vast: VastTaskConfig = field(default_factory=VastTaskConfig)
+
+    @property
+    def arena(self) -> ArenaConfig:
+        return self.vast.arena
+
+    @arena.setter
+    def arena(self, value: ArenaConfig) -> None:
+        self.vast.arena = value
+
+    @property
+    def exit_angles(self) -> ExitAngleConfig:
+        return self.vast.exit_angles
+
+    @exit_angles.setter
+    def exit_angles(self, value: ExitAngleConfig) -> None:
+        self.vast.exit_angles = value
+
+    @property
+    def stimulus(self) -> StimulusConfig:
+        return self.vast.stimulus
+
+    @stimulus.setter
+    def stimulus(self, value: StimulusConfig) -> None:
+        self.vast.stimulus = value
+
+    @property
+    def run_phase(self) -> str:
+        return self.vast.run_phase
+
+    @run_phase.setter
+    def run_phase(self, value: str) -> None:
+        self.vast.run_phase = value
+
+    @property
+    def hab_training_duty_pct(self) -> float:
+        return self.vast.hab_training_duty_pct
+
+    @hab_training_duty_pct.setter
+    def hab_training_duty_pct(self, value: float) -> None:
+        self.vast.hab_training_duty_pct = value
+
+    @property
+    def wait_not_center_duty_pct(self) -> float:
+        return self.vast.wait_not_center_duty_pct
+
+    @wait_not_center_duty_pct.setter
+    def wait_not_center_duty_pct(self, value: float) -> None:
+        self.vast.wait_not_center_duty_pct = value

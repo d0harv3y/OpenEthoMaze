@@ -1,11 +1,9 @@
 """
-SLEAP tracking data loader for VAST pipeline.
+Shared trace loading and conversion for offline maze processing.
 
-Handles loading SLEAP prediction files (.h5.slp, .slp, .analysis.h5)
-and extracting keypoint traces.
-
-Note: This module is ready for use once SLEAP model training is complete
-and predictions are available.
+Handles loading SLEAP prediction files (.h5.slp, .slp, .analysis.h5),
+plus controller-authored XY sources that are normalized into the same
+trace container used by the pipeline.
 """
 
 from __future__ import annotations
@@ -16,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from ..storage.h5_db import TrialKey
+    from ..db import TrialKey
 
 import h5py
 import numpy as np
@@ -372,7 +370,7 @@ def trace_data_from_realtime_xy(
     Returns:
         TraceData with a single node (point_name), or None if xy table missing
     """
-    from ..storage.h5_db import read_xy_table
+    from ..db import read_xy_table
 
     xy_table = read_xy_table(db_path, key, point_name)
     if xy_table is None or len(xy_table) == 0:

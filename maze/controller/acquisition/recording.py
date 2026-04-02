@@ -13,9 +13,9 @@ from typing import Callable, List, Literal, Optional, Tuple, Union
 import numpy as np
 
 from maze.core.schema import FEEDBACK_ROW_DTYPE, XY_ROW_DTYPE
-from maze.core.storage import open_db, write_feedback_table, write_xy_table
+from maze.core.h5_layout import open_db, write_feedback_table, write_xy_table
 
-from .vast.config import ControllerConfig
+from .shared_config import AcquisitionConfig
 from .radial_arm.config import RadialArmControllerConfig
 from .h5_writer import (
     init_database,
@@ -70,7 +70,7 @@ class TrialRecorder:
         animal_id: str,
         session_id: str,
         trial: str,
-        config: ControllerConfig,
+        config: AcquisitionConfig,
         run_mode: str = "habituation",
         video_fourcc: str = "mp4v",
     ):

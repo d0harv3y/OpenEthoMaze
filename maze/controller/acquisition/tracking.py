@@ -26,7 +26,7 @@ from typing import Any, List, Literal, Optional, Tuple, TYPE_CHECKING
 import numpy as np
 
 from . import app_logging
-from .vast.config import ControllerConfig
+from .shared_config import AcquisitionConfig
 
 _LOG = logging.getLogger("maze_acquisition")
 
@@ -594,7 +594,7 @@ _TRACKING_STALE_S = 0.132  # ~2× 33 ms; matches GUI constant
 
 
 def _build_or_refresh_tracker(
-    config: ControllerConfig,
+    config: AcquisitionConfig,
     cached_key: Optional[tuple],
     cached_tracker: Optional[object],
     *,
@@ -742,14 +742,14 @@ class TrackingController:
     Orchestrates real-time tracking for the GUI.
 
     Responsibilities (implemented across refactor steps):
-    - Own a cached tracker (HybridTracker + AdaptiveThresholdTracker) based on `ControllerConfig`
+    - Own a cached tracker (HybridTracker + AdaptiveThresholdTracker) based on `AcquisitionConfig`
       and the current SLEAP model path / backup-only settings.
     - Optionally run tracking in an async worker thread and queue when async is enabled.
     - Implement run-every-N SLEAP logic using `config.sleap_every_n`.
     - Expose a small API that `MainWindow` can use from camera callbacks.
     """
 
-    def __init__(self, config: ControllerConfig) -> None:
+    def __init__(self, config: AcquisitionConfig) -> None:
         """
         Initialize a new `TrackingController`.
 
@@ -778,7 +778,7 @@ class TrackingController:
         self._queue_full_log_last_s: float = 0.0
         self._no_result_log_last_s: float = 0.0
 
-        # GUI-owned parameters that are not in ControllerConfig yet; these will be
+        # GUI-owned parameters that are not in AcquisitionConfig yet; these will be
         # set by the GUI when wiring happens in later refactor steps.
         self._sleap_path: str = ""
         self._backup_only: bool = False
@@ -888,9 +888,9 @@ class TrackingController:
         self._last_tracking_result = None
         self._track_frame_counter = 0
 
-    def set_config(self, config: ControllerConfig) -> None:
+    def set_config(self, config: AcquisitionConfig) -> None:
         """
-        Replace the current `ControllerConfig` and invalidate cached trackers.
+        Replace the current `AcquisitionConfig` and invalidate cached trackers.
 
         This should be called after settings or profile changes so that the
         next frame submission rebuilds the tracker with updated parameters.

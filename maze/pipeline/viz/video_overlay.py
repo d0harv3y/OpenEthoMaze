@@ -27,7 +27,7 @@ from ..io.sleap_loader import (
     get_skeleton_edges,
     load_sleap_file,
 )
-from ..storage.h5_db import TrialKey, open_db
+from ..db import TrialKey, open_db
 from ..tracking.trace_processing import TraceProcessingParams, process_trace_data
 
 

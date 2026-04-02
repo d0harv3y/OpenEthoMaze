@@ -1,5 +1,5 @@
 """
-File discovery module for VAST pipeline.
+Legacy VAST manifest discovery and file matching.
 
 Handles discovery and matching of:
 - Input H5 files containing trial settings and legacy tracking

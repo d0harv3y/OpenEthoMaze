@@ -1,4 +1,4 @@
-"""IO module for loading input data."""
+"""Pipeline IO helpers for legacy trial discovery and trace loading."""
 
 from .input_h5_loader import (
     load_trial_settings,

@@ -11,6 +11,7 @@ from ....core.session_slots import (
     slot_for_trial_index,
     slot_to_animal_trial,
 )
+from ..shared_controller import build_run_button_states, normalize_run_mode_value
 from .config import RadialArmControllerConfig
 
 
@@ -29,7 +30,7 @@ class RamTrialState(Enum):
 
 
 def parse_ram_trial_mode(config: RadialArmControllerConfig) -> RamTrialMode:
-    run_mode = str(config.run_mode or "continuous").strip().lower()
+    run_mode = normalize_run_mode_value(config.run_mode)
     try:
         return RamTrialMode(run_mode)
     except ValueError:
@@ -255,6 +256,12 @@ class RadialArmTrialController:
         }
         return state_to_name.get(self._sm.state)
 
+    def get_recording_frame_metrics(self, x_px: float, y_px: float) -> tuple[float, bool]:
+        del x_px, y_px
+        if self._sm is None:
+            return (0.0, False)
+        return (0.0, bool(self._sm.success_override))
+
     def ensure_created(
         self,
         session_id: str,
@@ -344,21 +351,12 @@ class RadialArmTrialController:
         return "RAM trial ended."
 
     def get_button_states(self) -> dict[str, bool]:
-        out = {
-            "start": True,
-            "previous": True,
-            "next": True,
-            "end_trial": False,
-            "stop": self._run_active,
-        }
-        if self._sm is None:
-            return out
-        state = self._sm.state
-        out["start"] = state in _CAN_START_PREV_NEXT
-        out["previous"] = state in _CAN_START_PREV_NEXT
-        out["next"] = state in _CAN_START_PREV_NEXT
-        out["end_trial"] = state in _RUNNING_STATES
-        return out
+        return build_run_button_states(
+            state=(None if self._sm is None else self._sm.state),
+            run_active=self._run_active,
+            can_start_prev_next_states=_CAN_START_PREV_NEXT,
+            running_states=_RUNNING_STATES,
+        )
 
     def get_status_dict(self, x_px: float, y_px: float) -> dict[str, Any]:
         del x_px, y_px

@@ -42,7 +42,7 @@ def run_analysis_for_trial(
     """
     try:
         from maze.pipeline.io.file_discovery import TrialManifest
-        from maze.pipeline.pipeline.process_trial import process_trial
+        from maze.pipeline.process_trial import process_trial
     except ImportError:
         return (False, "maze.pipeline not available")
 

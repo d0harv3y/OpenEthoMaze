@@ -1,8 +1,12 @@
-"""
-VAST Pipeline - Vibration Actuating Search Task data processing pipeline.
+"""Shared offline processing package for maze acquisition outputs."""
 
-This package processes behavioral data from the VAST circular arena task,
-combining SLEAP pose estimation with distance-to-exit metrics.
-"""
+from .process_trial import process_trial
+from .run_pipeline import run_pipeline, run_single_trial
 
 __version__ = "0.1.0"
+
+__all__ = [
+    "process_trial",
+    "run_pipeline",
+    "run_single_trial",
+]

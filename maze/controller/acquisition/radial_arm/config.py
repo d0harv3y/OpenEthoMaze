@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
-from ..vast.config import ControllerConfig
+from ..shared_config import AcquisitionConfig
 from ....core.tasks import ARENA_TYPE_RADIAL_ARM
 
 
@@ -46,10 +45,18 @@ class RadialArmTaskConfig:
 
 
 @dataclass
-class RadialArmControllerConfig(ControllerConfig):
+class RadialArmControllerConfig(AcquisitionConfig):
     """RAM controller config with shared acquisition fields plus task-local settings."""
 
-    output_dir: Optional[str] = None
     h5_filename: str = "ram_trials.h5"
     arena_type: str = ARENA_TYPE_RADIAL_ARM
     radial_arm: RadialArmTaskConfig = field(default_factory=RadialArmTaskConfig)
+
+    @property
+    def run_phase(self) -> str:
+        """Compatibility shim while shared UI still expects a phase-like label."""
+        return "radial_arm"
+
+    @run_phase.setter
+    def run_phase(self, value: str) -> None:
+        del value

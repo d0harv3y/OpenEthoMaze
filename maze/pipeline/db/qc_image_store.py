@@ -37,10 +37,15 @@ def write_qc_image(
                 try:
                     import cv2
 
-                    arr = cv2.resize(arr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                    arr = cv2.resize(
+                        arr, (new_w, new_h), interpolation=cv2.INTER_AREA
+                    )
                 except Exception:
                     step = max(1, int(np.ceil(cur_max / max_dim)))
-                    arr = arr[::step, ::step, :] if arr.ndim == 3 else arr[::step, ::step]
+                    if arr.ndim == 3:
+                        arr = arr[::step, ::step, :]
+                    else:
+                        arr = arr[::step, ::step]
 
         store_format = (QC_IMAGE_STORE_FORMAT or "png_bytes").strip().lower()
         ds: h5py.Dataset
@@ -68,11 +73,11 @@ def write_qc_image(
             ds.attrs["ENCODING"] = "raw"
 
         if attrs:
-            for k, v in attrs.items():
+            for key_name, value in attrs.items():
                 try:
-                    ds.attrs[k] = v
+                    ds.attrs[key_name] = value
                 except Exception:
-                    ds.attrs[k] = safe_str(v)
+                    ds.attrs[key_name] = safe_str(value)
 
 
 def read_qc_image(
@@ -90,7 +95,9 @@ def read_qc_image(
                 try:
                     import cv2
 
-                    decoded = cv2.imdecode(np.asarray(data, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+                    decoded = cv2.imdecode(
+                        np.asarray(data, dtype=np.uint8), cv2.IMREAD_UNCHANGED
+                    )
                     if decoded is not None:
                         return decoded
                 except Exception:

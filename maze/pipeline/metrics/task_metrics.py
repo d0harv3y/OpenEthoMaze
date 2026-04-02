@@ -16,7 +16,7 @@ from .exit_metrics import (
 
 @dataclass(frozen=True)
 class TaskMetricsResult:
-    """Task-specific metrics plus any extra trial attrs to persist."""
+    """Task-specific metric payload returned by the shared dispatcher."""
 
     exit_metrics: ExitMetrics
     center_metrics: CenterMetrics

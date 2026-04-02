@@ -6,7 +6,7 @@ from typing import Optional
 import numpy as np
 
 from maze.core.schema import XY_ROW_DTYPE
-from maze.core.storage import write_xy_table as core_write_xy_table
+from maze.core.h5_layout import write_xy_table as core_write_xy_table
 
 from ._shared import open_db
 from .trial_key import TrialKey

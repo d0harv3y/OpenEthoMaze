@@ -1,14 +1,12 @@
 """
-Trial processing module for VAST pipeline.
+Per-trial runtime for the shared maze pipeline.
 
-Orchestrates the complete processing of a single trial:
-1. Read trial settings from the output database (written by init_db)
-2. Load SLEAP tracking data (when available)
-3. Apply trace processing (filtering, interpolation, smoothing)
-4. Calculate ambulation metrics
-5. Calculate exit-specific metrics
-6. Generate QC visualizations
-7. Save results to output database
+This module executes one trial against the shared result-database contract:
+1. Read persisted trial settings from the results DB.
+2. Load SLEAP or controller-written tracking sources.
+3. Apply shared trace processing.
+4. Compute shared ambulation metrics plus task-specific overlays.
+5. Write summaries, QC products, and mistrial metadata back to the results DB.
 """
 
 from __future__ import annotations
@@ -19,9 +17,10 @@ from typing import Any, Optional
 
 import numpy as np
 
-from ...core.anatomy import SPOT_NODE_NAMES
-from ...core.trial_settings import TrialSettings
-from ..defaults import (
+from ..core.anatomy import SPOT_NODE_NAMES
+from ..core.tasks import ARENA_TYPE_RADIAL_ARM
+from ..core.trial_settings import TrialSettings
+from .defaults import (
     DEFAULT_FPS,
     EXIT_ZONE_RADIUS_CM,
     CENTER_ZONE_RADIUS_FRACTION,
@@ -32,27 +31,31 @@ from ..defaults import (
     TRACE_MAX_GAP_FRAMES,
     FILTER_FRAMES_NO_ANIMAL,
 )
-from ..paths import OUTPUT_H5
-from ..io.file_discovery import TrialManifest, load_treatment_labels
-from ..io.sleap_loader import (
+from .paths import OUTPUT_H5
+from .io.file_discovery import TrialManifest, load_treatment_labels
+from .io.sleap_loader import (
     load_sleap_file,
     apply_jump_filter,
     trace_data_from_realtime_xy,
     trace_data_from_legacy_xy,
     TraceData,
 )
-from ..tracking.trace_processing import (
+from .tracking.trace_processing import (
     process_trace_data,
     filter_frames_no_animal,
     TraceProcessingParams,
 )
-from ..metrics.ambulation import calculate_ambulation_metrics
-from ..metrics.exit_metrics import (
+from .metrics.ambulation import calculate_ambulation_metrics
+from .metrics.exit_metrics import (
     build_xy_table_with_exit,
 )
-from ..metrics.task_metrics import calculate_task_metrics, summary_fields_for_task
-from ..mistrial_detection import REASON_NO_EXIT_XY, REASON_NO_TRACKING, REASON_PROCESSING_ERROR
-from ..storage.h5_db import (
+from .metrics.task_metrics import calculate_task_metrics, summary_fields_for_task
+from .trial_quality import (
+    REASON_NO_EXIT_XY,
+    REASON_NO_TRACKING,
+    REASON_PROCESSING_ERROR,
+)
+from .db import (
     TrialKey,
     read_arena_type,
     read_trial_settings,
@@ -340,12 +343,16 @@ def _process_with_sleap(
         params,
     )
 
-    # No exit in H5 → use arena center as "exit" and 70% arena radius as zone (habituation norm; experimental = mistrial)
+    arena_type = read_arena_type(db_path)
+
+    # No exit in H5 -> use arena center as a fallback target. VAST still records
+    # an explicit mistrial for experimental trials, while RAM can legitimately
+    # rely on mirrored shared attrs or this center fallback until richer metrics land.
     exit_pos = settings.exit_pos
     if exit_pos is None:
         if settings.arena_radius_px <= 0:
             return False
-        if key.phase == "experimental":
+        if key.phase == "experimental" and arena_type != ARENA_TYPE_RADIAL_ARM:
             write_mistrial_reason(db_path, key, REASON_NO_EXIT_XY)
         exit_pos = (settings.arena_center_x_px, settings.arena_center_y_px)
         exit_zone_radius_cm = CENTER_ZONE_RADIUS_FRACTION * settings.arena_radius_cm
@@ -357,8 +364,6 @@ def _process_with_sleap(
         center_zone_radius_cm = CENTER_ZONE_RADIUS_FRACTION * settings.arena_radius_cm
     else:
         center_zone_radius_cm = CENTER_ZONE_RADIUS_CM
-    arena_type = read_arena_type(db_path)
-
     spot_xy_full = _calculate_spot_xy(processed_traces, n_frames)
     centroid_xy_full = _calculate_centroid_xy(processed_traces, n_frames)
     inrange_xy_full = _get_inrange_xy(processed_traces, n_frames)
@@ -571,7 +576,7 @@ def _process_with_sleap(
 
     if generate_qc:
         try:
-            from ..viz.qc_images import generate_trial_qc_images
+            from .viz.qc_images import generate_trial_qc_images
             # Heatmap from all nodes (split into iti_wait vs run bands); trajectory from hybrid point.
             xy_all_nodes_iti: list[tuple[np.ndarray, np.ndarray]] = []
             xy_all_nodes_run: list[tuple[np.ndarray, np.ndarray]] = []

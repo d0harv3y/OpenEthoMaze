@@ -8,7 +8,8 @@ All outputs go to VAST/outputs/legacy/:
   - exports/                 (CSV exports from run-exports)
 
 Uses VAST/inputs/treatment_labels.csv for labels. Discovery uses the same
-DATA_DIRS as the main pipeline (maze.pipeline.config).
+DATA_DIRS as the main pipeline path settings (`maze.pipeline.paths`) through
+the legacy VAST source adapter.
 
 Usage:
   uv run python scripts/legacy_db.py init
@@ -30,10 +31,10 @@ from pathlib import Path
 from typing import Optional
 
 # -----------------------------------------------------------------------------
-# Imports (unified vast package)
+# Imports (legacy VAST source adapter + shared pipeline surfaces)
 # -----------------------------------------------------------------------------
-from maze.pipeline.config import DATA_DIRS
-from maze.pipeline.io.file_discovery import (
+from maze.pipeline.paths import DATA_DIRS
+from maze.pipeline.sources.legacy_vast import (
     TrialManifest,
     apply_treatment_labels,
     check_duplicates,
@@ -44,7 +45,7 @@ from maze.pipeline.io.file_discovery import (
     update_treatment_labels_from_discovery,
 )
 from maze.pipeline.io.input_h5_loader import load_trial_data, load_trial_settings
-from maze.pipeline.storage.h5_db import (
+from maze.pipeline.db import (
     TrialKey,
     delete_animal_group,
     delete_trial_group,
@@ -61,7 +62,7 @@ from maze.pipeline.storage.h5_db import (
     write_sleap_path,
     write_trial_manifest_rows,
 )
-from maze.pipeline.pipeline.orchestrator import (
+from maze.pipeline.run_pipeline import (
     load_manifests_from_db,
     run_pipeline,
     run_single_trial,

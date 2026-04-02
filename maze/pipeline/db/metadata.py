@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from maze.core.storage import init_task_database
+from maze.core.h5_layout import init_task_database
 from maze.core.tasks import ARENA_TYPE_CIRCULAR, normalize_arena_type
 
 from ..defaults import get_config_snapshot

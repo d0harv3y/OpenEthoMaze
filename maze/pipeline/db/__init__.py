@@ -1,8 +1,8 @@
 """
-Compatibility barrel for the pipeline HDF5 API.
+Public result-database API for the maze pipeline.
 
-The implementation now lives in focused modules under ``maze.pipeline.storage`` so task-
-specific additions can land in a narrower surface area than the old monolithic facade.
+The focused implementation remains split across narrower modules so task-specific
+extensions can land without rebuilding another monolithic facade.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from .feedback import (
     write_feedback_series,
 )
 from .metadata import init_database, read_arena_type
-from .qc_images import read_qc_image, write_qc_image
+from .qc_image_store import read_qc_image, write_qc_image
 from .trial_attributes import (
     read_task_group_attrs,
     write_analysis_duration,

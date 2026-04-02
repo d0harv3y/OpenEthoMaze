@@ -20,7 +20,7 @@ from ..defaults import (
     MAX_DWELL_TIME_S,
     QC_EXIT_ZONE_RADIUS_CM,
 )
-from ..storage.h5_db import TrialKey, write_qc_image
+from ..db import TrialKey, write_qc_image
 
 # For heatmap from all nodes: list of (xy (n_frames, 2), valid (n_frames,))
 XYValidList = list[tuple[np.ndarray, np.ndarray]]

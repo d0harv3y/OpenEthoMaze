@@ -1,7 +1,7 @@
 """
-Input H5 file loader for VAST pipeline.
+Legacy source-H5 loader for VAST-shaped controller exports.
 
-Parses the source HDF5 files containing trial settings and legacy tracking data.
+Parses the input HDF5 files containing trial settings and legacy tracking data.
 
 H5 Structure:
     <animal_id>/<session>/<trial>/

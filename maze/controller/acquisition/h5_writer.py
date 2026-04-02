@@ -1,12 +1,13 @@
 """
 Shared acquisition HDF5 writer for controller-recorded trials.
 
-The layout matches ``maze.pipeline.storage.h5_db`` so the offline pipeline can read
+The layout matches ``maze.pipeline.db`` so the offline pipeline can read
 either VAST or RAM trials from the same shared container structure.
 """
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Optional
 
@@ -17,7 +18,7 @@ from maze.core.schema import (
     XY_ROW_DTYPE,
     FEEDBACK_ROW_DTYPE,
 )
-from maze.core.storage import (
+from maze.core.h5_layout import (
     ensure_group,
     ensure_task_group,
     ensure_trial_group as core_ensure_trial_group,
@@ -44,6 +45,60 @@ __all__ = [
     "write_animal_label",
     "write_radial_arm_trial_settings",
 ]
+
+
+def _max_region_radius_cm(regions_cm: dict[str, np.ndarray]) -> float:
+    """Return the farthest template vertex distance from the template origin."""
+    max_radius_cm = 0.0
+    for poly in regions_cm.values():
+        arr = np.asarray(poly, dtype=float)
+        if arr.size == 0:
+            continue
+        radii = np.linalg.norm(arr, axis=1)
+        if radii.size:
+            max_radius_cm = max(max_radius_cm, float(np.max(radii)))
+    return max_radius_cm
+
+
+def _transform_template_point_to_px(
+    point_cm: tuple[float, float],
+    *,
+    center_x_px: float,
+    center_y_px: float,
+    rotation_deg: float,
+    px_per_cm: float,
+) -> tuple[float, float]:
+    """Project one template-space point into image space."""
+    px, py = point_cm
+    theta = math.radians(float(rotation_deg))
+    cos_t = math.cos(theta)
+    sin_t = math.sin(theta)
+    x_rot = (float(px) * cos_t) - (float(py) * sin_t)
+    y_rot = (float(px) * sin_t) + (float(py) * cos_t)
+    return (
+        float(center_x_px) + (x_rot * float(px_per_cm)),
+        float(center_y_px) + (y_rot * float(px_per_cm)),
+    )
+
+
+def _radial_arm_exit_point_cm(
+    regions_cm: dict[str, np.ndarray],
+    exit_arm_index: int,
+) -> tuple[float, float]:
+    """Approximate the exit target as the midpoint of the arm's outer edge."""
+    for region_name in (
+        f"arm{int(exit_arm_index)}_back",
+        f"arm{int(exit_arm_index)}_front",
+    ):
+        if region_name not in regions_cm:
+            continue
+        arr = np.asarray(regions_cm[region_name], dtype=float)
+        if arr.shape[0] < 2:
+            continue
+        radii = np.linalg.norm(arr, axis=1)
+        farthest = arr[np.argsort(radii)[-2:]]
+        return (float(np.mean(farthest[:, 0])), float(np.mean(farthest[:, 1])))
+    return (0.0, 0.0)
 
 
 def init_database(db_path: Path, arena_type: str = ARENA_TYPE_CIRCULAR) -> None:
@@ -133,29 +188,6 @@ def write_radial_arm_trial_settings(
     ram = config.radial_arm
     calibration = ram.calibration
     template_cfg = ram.template
-    write_group_attrs(
-        g_trial,
-        {
-            "phase": safe_str(phase),
-            "stage": safe_str(phase),
-            "run_mode": safe_str(run_mode),
-            "timestamp": safe_str(timestamp) if timestamp else None,
-            "arena_type": ARENA_TYPE_RADIAL_ARM,
-            "trial_start_frame": int(trial_start_frame),
-            "template_center_x_px": float(calibration.template_center_x_px),
-            "template_center_y_px": float(calibration.template_center_y_px),
-            "template_rotation_deg": float(calibration.template_rotation_deg),
-            "px_per_cm": float(calibration.px_per_cm),
-            "exit_arm_index": int(ram.exit_arm_index),
-            "rewarded_arm_index": int(ram.rewarded_arm_index),
-            "speaker_device_name": safe_str(ram.speaker_device_name),
-            "speaker_volume_pct": float(ram.speaker_volume_pct),
-            "stimulus_frequency_hz": float(ram.stimulus_frequency_hz),
-            "stimulus_enabled": int(bool(ram.stimulus_enabled)),
-            "active_edit_region": safe_str(calibration.edit_region_name),
-        },
-    )
-    g_task = ensure_task_group(g_trial, ARENA_TYPE_RADIAL_ARM)
     template = build_template_from_params(
         center_midedge_to_midedge_cm=template_cfg.center_midedge_to_midedge_cm,
         arm_length_cm=template_cfg.arm_length_cm,
@@ -165,11 +197,54 @@ def write_radial_arm_trial_settings(
         hole_radius_cm=template_cfg.hole_radius_cm,
         hole_inset_from_arm_end_cm=template_cfg.hole_inset_from_arm_end_cm,
     )
+    template_regions_cm = {
+        name: np.asarray(poly, dtype=float).tolist()
+        for name, poly in template.regions_cm.items()
+    }
+    max_radius_cm = _max_region_radius_cm(template.regions_cm)
+    exit_arm_index = int(ram.exit_arm_index)
+    exit_point_cm = _radial_arm_exit_point_cm(template.regions_cm, exit_arm_index)
+    exit_x_px, exit_y_px = _transform_template_point_to_px(
+        exit_point_cm,
+        center_x_px=calibration.template_center_x_px,
+        center_y_px=calibration.template_center_y_px,
+        rotation_deg=calibration.template_rotation_deg,
+        px_per_cm=calibration.px_per_cm,
+    )
+    write_group_attrs(
+        g_trial,
+        {
+            "phase": safe_str(phase),
+            "stage": safe_str(phase),
+            "run_mode": safe_str(run_mode),
+            "timestamp": safe_str(timestamp) if timestamp else None,
+            "arena_type": ARENA_TYPE_RADIAL_ARM,
+            "trial_start_frame": int(trial_start_frame),
+            "arena_center_x_px": float(calibration.template_center_x_px),
+            "arena_center_y_px": float(calibration.template_center_y_px),
+            "arena_radius_px": float(max_radius_cm * float(calibration.px_per_cm)),
+            "template_center_x_px": float(calibration.template_center_x_px),
+            "template_center_y_px": float(calibration.template_center_y_px),
+            "template_rotation_deg": float(calibration.template_rotation_deg),
+            "px_per_cm": float(calibration.px_per_cm),
+            "exit_number": exit_arm_index + 1,
+            "exit_x": float(exit_x_px),
+            "exit_y": float(exit_y_px),
+            "exit_arm_index": exit_arm_index,
+            "rewarded_arm_index": int(ram.rewarded_arm_index),
+            "speaker_device_name": safe_str(ram.speaker_device_name),
+            "speaker_volume_pct": float(ram.speaker_volume_pct),
+            "stimulus_frequency_hz": float(ram.stimulus_frequency_hz),
+            "stimulus_enabled": int(bool(ram.stimulus_enabled)),
+            "active_edit_region": safe_str(calibration.edit_region_name),
+        },
+    )
+    g_task = ensure_task_group(g_trial, ARENA_TYPE_RADIAL_ARM)
     write_group_attrs(
         g_task,
         {
             "task_name": ARENA_TYPE_RADIAL_ARM,
-            "exit_arm_index": int(ram.exit_arm_index),
+            "exit_arm_index": exit_arm_index,
             "rewarded_arm_index": int(ram.rewarded_arm_index),
             "speaker_device_name": safe_str(ram.speaker_device_name),
             "speaker_volume_pct": float(ram.speaker_volume_pct),
@@ -205,9 +280,29 @@ def write_radial_arm_trial_settings(
     write_json_attr(
         g_task,
         "template_regions_cm",
+        template_regions_cm,
+    )
+    write_json_attr(
+        g_task,
+        "geometry_payload",
         {
-            name: np.asarray(poly, dtype=float).tolist()
-            for name, poly in template.regions_cm.items()
+            "template_params": {
+                "center_midedge_to_midedge_cm": template_cfg.center_midedge_to_midedge_cm,
+                "arm_length_cm": template_cfg.arm_length_cm,
+                "arm_width_cm": template_cfg.arm_width_cm,
+                "arm_split_cm": template_cfg.arm_split_cm,
+                "hole_arm_index": template_cfg.hole_arm_index,
+                "hole_radius_cm": template_cfg.hole_radius_cm,
+                "hole_inset_from_arm_end_cm": template_cfg.hole_inset_from_arm_end_cm,
+            },
+            "calibration": {
+                "template_center_x_px": calibration.template_center_x_px,
+                "template_center_y_px": calibration.template_center_y_px,
+                "template_rotation_deg": calibration.template_rotation_deg,
+                "px_per_cm": calibration.px_per_cm,
+                "edit_region_name": calibration.edit_region_name,
+            },
+            "template_regions_cm": template_regions_cm,
         },
     )
 

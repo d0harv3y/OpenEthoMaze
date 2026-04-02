@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import h5py
 import numpy as np
-from maze.core.storage import write_group_attrs
+from maze.core.h5_layout import write_group_attrs
 
 from ._shared import ensure_group, open_db, safe_str
 

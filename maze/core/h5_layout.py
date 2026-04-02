@@ -8,13 +8,13 @@ import h5py
 import numpy as np
 
 from .schema import (
-    XY_ROW_DTYPE,
-    FEEDBACK_ROW_DTYPE,
-    FEEDBACK_GROUP,
-    FEEDBACK_TABLE_DATASET,
     AMBULATION_GROUP,
+    FEEDBACK_GROUP,
+    FEEDBACK_ROW_DTYPE,
+    FEEDBACK_TABLE_DATASET,
     TASK_DATA_GROUP,
     XY_DATASET_NAME,
+    XY_ROW_DTYPE,
 )
 from .tasks import normalize_arena_type
 
@@ -153,4 +153,3 @@ def read_feedback_table(
     if g_fb is None or FEEDBACK_TABLE_DATASET not in g_fb:
         return None
     return g_fb[FEEDBACK_TABLE_DATASET][:].astype(FEEDBACK_ROW_DTYPE, copy=False)
-

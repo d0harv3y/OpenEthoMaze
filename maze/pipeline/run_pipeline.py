@@ -1,7 +1,8 @@
 """
-Pipeline orchestrator for VAST.
+Batch orchestration for the maze pipeline.
 
-Coordinates batch processing of trials across the dataset.
+Coordinates filtering, mistrial handling, and sequential or parallel execution across
+the set of trials discovered in the results database.
 """
 
 from __future__ import annotations
@@ -12,9 +13,9 @@ from typing import Optional
 
 from tqdm import tqdm
 
-from ..paths import MAX_WORKERS, OUTPUT_H5, PARALLEL_ENABLED
-from ..io.file_discovery import TrialManifest
-from ..storage.h5_db import (
+from .paths import MAX_WORKERS, OUTPUT_H5, PARALLEL_ENABLED
+from .io.file_discovery import TrialManifest
+from .db import (
     TrialKey,
     init_database,
     list_trials,
@@ -22,7 +23,11 @@ from ..storage.h5_db import (
     read_arena_type,
     write_mistrial_reason,
 )
-from ..task_policy import detect_task_mistrial, expected_frame_diff, trial_matches_frame_policy
+from .trial_filters import (
+    detect_task_mistrial,
+    expected_frame_diff,
+    trial_matches_frame_policy,
+)
 from .process_trial import process_trial
 
 
@@ -45,7 +50,7 @@ def _attr_int(attrs, key: str) -> Optional[int]:
         return None
 
 
-def load_manifests_from_db(db_path: Path) -> list[TrialManifest]:
+def load_trial_manifests_from_db(db_path: Path) -> list[TrialManifest]:
     """
     Load trial manifests from the output database (no input H5 or file scan).
     Requires init_db to have been run so trial groups and attrs exist.
@@ -91,7 +96,7 @@ def run_pipeline(
 ) -> dict[str, int]:
     """
     Run the pipeline on all discovered trials.
-    
+
     Args:
         db_path: Output database path (uses config default if None)
         animal_ids: Optional list of animal IDs to process (None = all)
@@ -107,22 +112,20 @@ def run_pipeline(
         Dictionary with processing statistics
     """
     db_path = db_path or OUTPUT_H5
-    
-    # Initialize database
+
     print("Initializing database...")
     init_database(db_path)
     arena_type = read_arena_type(db_path)
 
-    # Load trial list from output DB (no input H5 or file scan)
     print("Loading trial list from database...")
-    trials = load_manifests_from_db(db_path)
+    trials = load_trial_manifests_from_db(db_path)
     if not trials:
         print("No trials in database. Run init_db first to populate from input H5 and videos.")
         return {"total": 0, "success": 0, "failed": 0, "skipped": 0}
 
     if animal_ids is not None:
         trials = [t for t in trials if t.animal_id in animal_ids]
-    
+
     if phase is not None:
         trials = [t for t in trials if t.phase == phase]
 
@@ -132,7 +135,6 @@ def run_pipeline(
     if trial_names is not None and len(trial_names) > 0:
         trials = [t for t in trials if t.trial in trial_names]
 
-    # Task-specific frame-count policy.
     n_before_frame_filter = len(trials)
     trials = [t for t in trials if trial_matches_frame_policy(t, arena_type)]
     n_excluded_frame_diff = n_before_frame_filter - len(trials)
@@ -150,26 +152,25 @@ def run_pipeline(
         print("No trials match the given filters after task-specific frame filtering.")
         return {"total": 0, "success": 0, "failed": 0, "skipped": 0}
 
-    # Mistrial detection: missing video, missing frame counts, frame mismatch, missing SLEAP
     mistrial_trials: list[tuple[TrialManifest, str]] = []
     processable: list[TrialManifest] = []
-    for t in trials:
-        reason = detect_task_mistrial(t, arena_type)
+    for trial in trials:
+        reason = detect_task_mistrial(trial, arena_type)
         if reason is not None:
-            mistrial_trials.append((t, reason))
+            mistrial_trials.append((trial, reason))
         else:
-            processable.append(t)
+            processable.append(trial)
 
     if skip_mistrials and mistrial_trials:
-        for t, reason in mistrial_trials:
-            key = TrialKey.from_manifest(t)
+        for trial, reason in mistrial_trials:
+            key = TrialKey.from_manifest(trial)
             write_mistrial_reason(db_path, key, reason)
         reason_counts: dict[str, int] = {}
-        for _, r in mistrial_trials:
-            reason_counts[r] = reason_counts.get(r, 0) + 1
+        for _, reason in mistrial_trials:
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
         print(
             f"Skipping {len(mistrial_trials)} trial(s) with missing data (mistrial): "
-            + ", ".join(f"{r}: {n}" for r, n in sorted(reason_counts.items()))
+            + ", ".join(f"{reason}: {count}" for reason, count in sorted(reason_counts.items()))
         )
         trials = processable
 
@@ -180,30 +181,25 @@ def run_pipeline(
         return {"total": 0, "success": 0, "failed": 0, "skipped": n_skipped_mistrial}
 
     print(f"Processing {len(trials)} trials...")
-    
-    # Process trials
+
     stats = {
         "total": len(trials),
         "success": 0,
         "failed": 0,
         "skipped": n_skipped_mistrial,
     }
-    
+
     if parallel and max_workers > 1:
-        stats = _run_parallel(
-            trials, db_path, max_workers, generate_qc, stats
-        )
+        stats = _run_parallel(trials, db_path, max_workers, generate_qc, stats)
     else:
-        stats = _run_sequential(
-            trials, db_path, generate_qc, stats
-        )
-    
+        stats = _run_sequential(trials, db_path, generate_qc, stats)
+
     print("\nPipeline complete:")
     print(f"  Total: {stats['total']}")
     print(f"  Success: {stats['success']}")
     print(f"  Failed: {stats['failed']}")
     print(f"  Skipped: {stats['skipped']}")
-    
+
     return stats
 
 
@@ -225,8 +221,7 @@ def _run_sequential(
     stats: dict[str, int],
 ) -> dict[str, int]:
     """Run trials sequentially with clean progress display."""
-    # Route pipeline logs through tqdm.write so the progress bar doesn't reprint on every message
-    pipeline_logger = logging.getLogger("vast_pipeline")
+    pipeline_logger = logging.getLogger("maze_pipeline")
     tqdm_handler = _TqdmHandler()
     tqdm_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
     pipeline_logger.addHandler(tqdm_handler)
@@ -246,7 +241,6 @@ def _run_sequential_impl(
     pbar = tqdm(trials, desc="Processing", unit="trial")
 
     for trial in pbar:
-        # Update progress bar to show current trial
         trial_key = f"{trial.animal_id}/{trial.phase[:3]}/{trial.session}/{trial.trial}"
         pbar.set_postfix_str(trial_key, refresh=True)
 
@@ -255,14 +249,14 @@ def _run_sequential_impl(
                 trial,
                 db_path=db_path,
                 generate_qc=generate_qc,
-                quiet=True,  # Suppress per-trial messages
+                quiet=True,
             )
             if success:
                 stats["success"] += 1
             else:
                 stats["failed"] += 1
-        except Exception as e:
-            tqdm.write(f"Error processing {trial.trial_key}: {e}")
+        except Exception as exc:
+            tqdm.write(f"Error processing {trial.trial_key}: {exc}")
             stats["failed"] += 1
 
     return stats
@@ -276,12 +270,8 @@ def _run_parallel(
     stats: dict[str, int],
 ) -> dict[str, int]:
     """Run trials in parallel."""
-    # Note: HDF5 doesn't support parallel writes, so we use sequential writes
-    # but parallel processing for CPU-bound operations
+    del max_workers
     print("Warning: Parallel mode uses sequential HDF5 writes")
-    
-    # For now, fall back to sequential
-    # TODO: Implement proper parallel processing with write queue
     return _run_sequential(trials, db_path, generate_qc, stats)
 
 
@@ -310,26 +300,30 @@ def run_single_trial(
     db_path = db_path or OUTPUT_H5
 
     init_database(db_path)
-    trials = load_manifests_from_db(db_path)
+    trials = load_trial_manifests_from_db(db_path)
     if not trials:
         print("No trials in database. Run init_db first.")
         return False
 
     matching = [
-        t for t in trials
-        if t.animal_id == animal_id
-        and t.session == session
-        and t.trial == trial
+        trial_manifest
+        for trial_manifest in trials
+        if trial_manifest.animal_id == animal_id
+        and trial_manifest.session == session
+        and trial_manifest.trial == trial
     ]
     if phase is not None:
-        matching = [t for t in matching if t.phase == phase]
+        matching = [trial_manifest for trial_manifest in matching if trial_manifest.phase == phase]
 
     if not matching:
-        msg = f"Trial not found: {animal_id}/{session}/{trial}"
+        message = f"Trial not found: {animal_id}/{session}/{trial}"
         if phase is not None:
-            msg += f" (phase={phase})"
-        print(msg)
+            message += f" (phase={phase})"
+        print(message)
         return False
 
     manifest = matching[0]
     return process_trial(manifest, db_path=db_path, generate_qc=generate_qc)
+
+
+load_manifests_from_db = load_trial_manifests_from_db

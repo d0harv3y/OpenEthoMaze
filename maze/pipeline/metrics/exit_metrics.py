@@ -385,9 +385,9 @@ def build_xy_table_with_exit(
         trial_start_frame: If set, frames before this (in row index) are "iti_wait", rest "run".
 
     Returns:
-        Structured array matching xy_table_dtype from storage.h5_db
+        Structured array matching ``xy_table_dtype`` from ``maze.pipeline.db``
     """
-    from ..storage.h5_db import xy_table_dtype
+    from ..db import xy_table_dtype
 
     n_frames = len(xy)
     exit_x, exit_y = exit_pos
