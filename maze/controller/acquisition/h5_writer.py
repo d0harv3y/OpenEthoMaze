@@ -8,7 +8,7 @@ either VAST or RAM trials from the same shared container structure.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional, Tuple
 
 import h5py
 import numpy as np
@@ -46,6 +46,7 @@ __all__ = [
     "write_xy_table",
     "write_video_meta",
     "write_animal_label",
+    "compute_radial_arm_settings_payloads",
     "write_radial_arm_trial_settings",
 ]
 
@@ -126,16 +127,15 @@ def write_trial_settings(
     )
 
 
-def write_radial_arm_trial_settings(
-    g_trial: h5py.Group,
+def compute_radial_arm_settings_payloads(
     config: RadialArmControllerConfig,
     *,
     timestamp: Optional[str] = None,
     phase: str = "radial_arm",
     run_mode: str = "continuous",
     trial_start_frame: int = 0,
-) -> None:
-    """Persist RAM trial attrs plus a task-local geometry payload."""
+) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    """Build trial/task attrs and geometry JSON for RAM trials (acquisition or pipeline import)."""
     ram = config.radial_arm
     calibration = ram.calibration
     template_cfg = ram.template
@@ -162,49 +162,85 @@ def write_radial_arm_trial_settings(
         rotation_deg=calibration.template_rotation_deg,
         px_per_cm=calibration.px_per_cm,
     )
-    write_group_attrs(
-        g_trial,
-        {
-            "phase": safe_str(phase),
-            "stage": safe_str(phase),
-            "run_mode": safe_str(run_mode),
-            "timestamp": safe_str(timestamp) if timestamp else None,
-            "arena_type": ARENA_TYPE_RADIAL_ARM,
-            "trial_start_frame": int(trial_start_frame),
-            "arena_center_x_px": float(calibration.template_center_x_px),
-            "arena_center_y_px": float(calibration.template_center_y_px),
-            "arena_radius_px": float(max_radius_cm * float(calibration.px_per_cm)),
-            "template_center_x_px": float(calibration.template_center_x_px),
-            "template_center_y_px": float(calibration.template_center_y_px),
-            "template_rotation_deg": float(calibration.template_rotation_deg),
-            "px_per_cm": float(calibration.px_per_cm),
-            "exit_number": exit_arm_index + 1,
-            "exit_x": float(exit_x_px),
-            "exit_y": float(exit_y_px),
-            "exit_radius_px": float(exit_radius_px),
-            "exit_arm_index": exit_arm_index,
-            "rewarded_arm_index": int(ram.rewarded_arm_index),
-            "speaker_device_name": safe_str(ram.speaker_device_name),
-            "speaker_volume_pct": float(ram.speaker_volume_pct),
-            "stimulus_frequency_hz": float(ram.stimulus_frequency_hz),
-            "stimulus_enabled": int(bool(ram.stimulus_enabled)),
-            "active_edit_region": safe_str(calibration.edit_region_name),
+    trial_attrs: Dict[str, Any] = {
+        "phase": safe_str(phase),
+        "stage": safe_str(phase),
+        "run_mode": safe_str(run_mode),
+        "timestamp": safe_str(timestamp) if timestamp else None,
+        "arena_type": ARENA_TYPE_RADIAL_ARM,
+        "trial_start_frame": int(trial_start_frame),
+        "arena_center_x_px": float(calibration.template_center_x_px),
+        "arena_center_y_px": float(calibration.template_center_y_px),
+        "arena_radius_px": float(max_radius_cm * float(calibration.px_per_cm)),
+        "template_center_x_px": float(calibration.template_center_x_px),
+        "template_center_y_px": float(calibration.template_center_y_px),
+        "template_rotation_deg": float(calibration.template_rotation_deg),
+        "px_per_cm": float(calibration.px_per_cm),
+        "exit_number": exit_arm_index + 1,
+        "exit_x": float(exit_x_px),
+        "exit_y": float(exit_y_px),
+        "exit_radius_px": float(exit_radius_px),
+        "exit_arm_index": exit_arm_index,
+        "rewarded_arm_index": int(ram.rewarded_arm_index),
+        "speaker_device_name": safe_str(ram.speaker_device_name),
+        "speaker_volume_pct": float(ram.speaker_volume_pct),
+        "stimulus_frequency_hz": float(ram.stimulus_frequency_hz),
+        "stimulus_enabled": int(bool(ram.stimulus_enabled)),
+        "active_edit_region": safe_str(calibration.edit_region_name),
+    }
+    task_attrs: Dict[str, Any] = {
+        "task_name": ARENA_TYPE_RADIAL_ARM,
+        "exit_arm_index": exit_arm_index,
+        "rewarded_arm_index": int(ram.rewarded_arm_index),
+        "speaker_device_name": safe_str(ram.speaker_device_name),
+        "speaker_volume_pct": float(ram.speaker_volume_pct),
+        "stimulus_frequency_hz": float(ram.stimulus_frequency_hz),
+        "stimulus_enabled": int(bool(ram.stimulus_enabled)),
+        "edit_region_name": safe_str(calibration.edit_region_name),
+    }
+    geometry_payload: Dict[str, Any] = {
+        "template_params": {
+            "center_midedge_to_midedge_cm": template_cfg.center_midedge_to_midedge_cm,
+            "arm_length_cm": template_cfg.arm_length_cm,
+            "arm_width_cm": template_cfg.arm_width_cm,
+            "arm_split_cm": template_cfg.arm_split_cm,
+            "hole_arm_index": template_cfg.hole_arm_index,
+            "hole_radius_cm": template_cfg.hole_radius_cm,
+            "hole_inset_from_arm_end_cm": template_cfg.hole_inset_from_arm_end_cm,
         },
+        "calibration": {
+            "template_center_x_px": calibration.template_center_x_px,
+            "template_center_y_px": calibration.template_center_y_px,
+            "template_rotation_deg": calibration.template_rotation_deg,
+            "px_per_cm": calibration.px_per_cm,
+            "edit_region_name": calibration.edit_region_name,
+        },
+        "template_regions_cm": template_regions_cm,
+    }
+    return trial_attrs, task_attrs, geometry_payload
+
+
+def write_radial_arm_trial_settings(
+    g_trial: h5py.Group,
+    config: RadialArmControllerConfig,
+    *,
+    timestamp: Optional[str] = None,
+    phase: str = "radial_arm",
+    run_mode: str = "continuous",
+    trial_start_frame: int = 0,
+) -> None:
+    """Persist RAM trial attrs plus a task-local geometry payload."""
+    trial_attrs, task_attrs, geometry_payload = compute_radial_arm_settings_payloads(
+        config,
+        timestamp=timestamp,
+        phase=phase,
+        run_mode=run_mode,
+        trial_start_frame=trial_start_frame,
     )
+    write_group_attrs(g_trial, trial_attrs)
     g_task = ensure_task_group(g_trial, ARENA_TYPE_RADIAL_ARM)
-    write_group_attrs(
-        g_task,
-        {
-            "task_name": ARENA_TYPE_RADIAL_ARM,
-            "exit_arm_index": exit_arm_index,
-            "rewarded_arm_index": int(ram.rewarded_arm_index),
-            "speaker_device_name": safe_str(ram.speaker_device_name),
-            "speaker_volume_pct": float(ram.speaker_volume_pct),
-            "stimulus_frequency_hz": float(ram.stimulus_frequency_hz),
-            "stimulus_enabled": int(bool(ram.stimulus_enabled)),
-            "edit_region_name": safe_str(calibration.edit_region_name),
-        },
-    )
+    write_group_attrs(g_task, task_attrs)
+    template_cfg = config.radial_arm.template
     write_json_attr(
         g_task,
         "template_params",
@@ -222,40 +258,22 @@ def write_radial_arm_trial_settings(
         g_task,
         "calibration",
         {
-            "template_center_x_px": calibration.template_center_x_px,
-            "template_center_y_px": calibration.template_center_y_px,
-            "template_rotation_deg": calibration.template_rotation_deg,
-            "px_per_cm": calibration.px_per_cm,
-            "edit_region_name": calibration.edit_region_name,
+            "template_center_x_px": config.radial_arm.calibration.template_center_x_px,
+            "template_center_y_px": config.radial_arm.calibration.template_center_y_px,
+            "template_rotation_deg": config.radial_arm.calibration.template_rotation_deg,
+            "px_per_cm": config.radial_arm.calibration.px_per_cm,
+            "edit_region_name": config.radial_arm.calibration.edit_region_name,
         },
     )
     write_json_attr(
         g_task,
         "template_regions_cm",
-        template_regions_cm,
+        geometry_payload["template_regions_cm"],
     )
     write_json_attr(
         g_task,
         "geometry_payload",
-        {
-            "template_params": {
-                "center_midedge_to_midedge_cm": template_cfg.center_midedge_to_midedge_cm,
-                "arm_length_cm": template_cfg.arm_length_cm,
-                "arm_width_cm": template_cfg.arm_width_cm,
-                "arm_split_cm": template_cfg.arm_split_cm,
-                "hole_arm_index": template_cfg.hole_arm_index,
-                "hole_radius_cm": template_cfg.hole_radius_cm,
-                "hole_inset_from_arm_end_cm": template_cfg.hole_inset_from_arm_end_cm,
-            },
-            "calibration": {
-                "template_center_x_px": calibration.template_center_x_px,
-                "template_center_y_px": calibration.template_center_y_px,
-                "template_rotation_deg": calibration.template_rotation_deg,
-                "px_per_cm": calibration.px_per_cm,
-                "edit_region_name": calibration.edit_region_name,
-            },
-            "template_regions_cm": template_regions_cm,
-        },
+        geometry_payload,
     )
 
 

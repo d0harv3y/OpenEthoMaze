@@ -12,7 +12,12 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from ..profile import load_profile, save_profile, gui_to_dict
+from ..profile import (
+    ProfileTaskMismatchError,
+    load_profile,
+    save_profile,
+    gui_to_dict,
+)
 from ..h5_writer import open_db
 from ..playback_loader import PlaybackHydration, load_playback_hydration
 from ..recording import TrialRecorder
@@ -557,7 +562,9 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("No profile loaded.")
             return
         try:
-            self._config, session_id, ti, gui, slot = load_profile(self._profile_path)
+            self._config, session_id, ti, gui, slot = load_profile(
+                self._profile_path, expected_task_mode=self._task_mode
+            )
             session_id_safe = sanitize_session_id(session_id) if session_id else ""
             self._apply_config_to_ui(gui=gui)
             dlg = getattr(self, "_settings_dialog", None)
@@ -572,6 +579,9 @@ class MainWindow(QMainWindow):
             self._save_last_profile_path()
             self._apply_status_and_buttons()
             self.statusBar().showMessage(f"Reloaded {self._profile_path}")
+        except ProfileTaskMismatchError as e:
+            QMessageBox.warning(self, "Wrong task profile", str(e))
+            self.statusBar().showMessage("Reload skipped: profile is for a different task.")
         except Exception as e:
             self.statusBar().showMessage(f"Reload failed: {e}")
 
@@ -1779,7 +1789,7 @@ class MainWindow(QMainWindow):
         return read_reload_last_profile()
 
     def _save_last_profile_path(self) -> None:
-        save_last_profile_path(self._profile_path)
+        save_last_profile_path(self._profile_path, task_mode=self._task_mode)
 
     def _on_toggle_reload_last_profile(self) -> None:
         if not HAS_QT_SETTINGS:
@@ -1866,10 +1876,12 @@ class MainWindow(QMainWindow):
             )
             self._apply_status_and_buttons()
             return
-        path = read_last_profile_path()
+        path = read_last_profile_path(task_mode=self._task_mode)
         if path and path.exists():
             try:
-                self._config, session_id, ti, gui, slot = load_profile(path)
+                self._config, session_id, ti, gui, slot = load_profile(
+                    path, expected_task_mode=self._task_mode
+                )
                 session_id_safe = sanitize_session_id(session_id) if session_id else ""
                 self._profile_path = path
                 self._apply_config_to_ui(gui=gui)
@@ -1881,6 +1893,14 @@ class MainWindow(QMainWindow):
                 self._update_window_title()
                 self._apply_status_and_buttons()
                 self.statusBar().showMessage(f"Loaded last profile: {path}")
+            except ProfileTaskMismatchError:
+                self._trial_controller.ensure_created(
+                    self._session_id_edit.text().strip(), 0
+                )
+                self._apply_status_and_buttons()
+                self.statusBar().showMessage(
+                    "Last profile is for a different task; skipped auto-load."
+                )
             except Exception:
                 self._trial_controller.ensure_created(
                     self._session_id_edit.text().strip(), 0
@@ -1898,7 +1918,9 @@ class MainWindow(QMainWindow):
         )
         if path:
             try:
-                self._config, session_id, ti, gui, slot = load_profile(Path(path))
+                self._config, session_id, ti, gui, slot = load_profile(
+                    Path(path), expected_task_mode=self._task_mode
+                )
                 session_id_safe = sanitize_session_id(session_id) if session_id else ""
                 self._profile_path = Path(path)
                 self._apply_config_to_ui(gui=gui)
@@ -1914,6 +1936,9 @@ class MainWindow(QMainWindow):
                 self._save_last_profile_path()
                 self._apply_status_and_buttons()
                 self.statusBar().showMessage(f"Loaded {path}")
+            except ProfileTaskMismatchError as e:
+                QMessageBox.warning(self, "Wrong task profile", str(e))
+                self.statusBar().showMessage("Load cancelled: profile is for a different task.")
             except Exception as e:
                 self.statusBar().showMessage(f"Load failed: {e}")
 

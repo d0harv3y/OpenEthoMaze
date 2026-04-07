@@ -45,6 +45,7 @@ MANIFEST_CSV_FIELDNAMES: tuple[str, ...] = (
     "input_h5_path",
     "video_path",
     "sleap_path",
+    "kpms_recording_key",
 )
 
 
@@ -78,6 +79,7 @@ def trial_manifest_csv_row_values(t: "TrialManifest") -> list[str]:
         str(t.input_h5_path),
         str(t.video_path) if t.video_path else "",
         str(t.sleap_path) if t.sleap_path else "",
+        t.kpms_recording_key or "",
     ]
 
 
@@ -148,6 +150,9 @@ class TrialManifest:
     # If None, session was not renumbered.
     original_session: Optional[str] = None
 
+    #: When set, used as kpMS HDF5 / coordinates dict key (native path-style names).
+    kpms_recording_key: Optional[str] = None
+
     @property
     def h5_session(self) -> str:
         """Session key to use when loading from H5 (original if renumbered)."""
@@ -157,6 +162,13 @@ class TrialManifest:
     def trial_key(self) -> str:
         """Unique identifier for this trial."""
         return f"{self.animal_id}/{self.session}/{self.trial}"
+
+    @property
+    def kpms_results_dict_key(self) -> str:
+        """Key in kpMS ``coordinates`` / ``results`` dicts (matches :func:`maze.kpms.frame_alignment.kpms_recording_key`)."""
+        if self.kpms_recording_key:
+            return self.kpms_recording_key
+        return f"{self.animal_id}-{self.session}-{self.trial}"
     
     @property
     def phase(self) -> str:
@@ -1095,6 +1107,7 @@ def load_manifest_csv(
                     tx=_cell(row, "tx"),
                     drug=_cell(row, "drug"),
                     inferred_id=_cell(row, "inferred_id"),
+                    kpms_recording_key=_cell(row, "kpms_recording_key"),
                 )
             )
     return manifests

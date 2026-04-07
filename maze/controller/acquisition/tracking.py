@@ -308,6 +308,8 @@ class HybridTracker:
         self._sleap_last_fail_s: Optional[float] = None
         # Prevent tight retry loops (and import races) when SLEAP load fails.
         self._sleap_fail_cooldown_s: float = 2.0
+        # Log the first load failure once (UI polls status every frame).
+        self._sleap_load_failure_logged: bool = False
 
     def get_sleap_status(self) -> Tuple[SleapStatus, Optional[str]]:
         """Return (status, error_message). status: ok | no_path | not_single_instance | load_failed.
@@ -402,6 +404,7 @@ class HybridTracker:
                 _LOG.info("SLEAP: model loaded on %s", actual)
                 self._sleap_status = "ok"
                 self._sleap_status_error = None
+                self._sleap_load_failure_logged = False
                 return True
             except Exception as e:
                 self._sleap_status = "load_failed"
@@ -412,6 +415,12 @@ class HybridTracker:
                 self._sleap_status_error = (
                     f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
                 )
+                if not self._sleap_load_failure_logged:
+                    self._sleap_load_failure_logged = True
+                    app_logging.log_error(
+                        "SLEAP: model load failed (subsequent failures are not re-logged):\n"
+                        + (self._sleap_status_error or str(e))
+                    )
                 return False
 
     def _get_skeleton_node_names(self) -> List[str]:
@@ -1087,5 +1096,4 @@ class TrackingController:
         if status == "not_single_instance":
             return "Not single-instance", "SLEAP model load status"
         err_str = (str(err).strip() if err is not None else "") or "Unknown error"
-        app_logging.log_error("SLEAP: " + err_str)
         return "failed", "SLEAP model load status. Error: " + err_str

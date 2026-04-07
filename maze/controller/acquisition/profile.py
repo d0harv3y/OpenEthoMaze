@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Literal, Optional, Tuple
 
 from ...core.tasks import ARENA_TYPE_RADIAL_ARM, normalize_arena_type
 from .radial_arm.config import (
@@ -22,6 +22,31 @@ from .vast.config import (
     VastControllerConfig,
     VastTaskConfig,
 )
+
+ProfileTaskMode = Literal["vast", "ram"]
+
+
+class ProfileTaskMismatchError(ValueError):
+    """Raised when a profile JSON belongs to a different acquisition task than the shell."""
+
+
+def profile_task_mode_from_dict(data: Dict[str, Any]) -> ProfileTaskMode:
+    """Infer ``vast`` vs ``ram`` from raw profile JSON (before building config objects)."""
+    common = data.get("common", data)
+    arena_type = normalize_arena_type(
+        str(common.get("arena_type", data.get("arena_type", "circular")) or "circular")
+    )
+    if arena_type == ARENA_TYPE_RADIAL_ARM:
+        return "ram"
+    return "vast"
+
+
+def read_profile_task_mode(path: Path) -> ProfileTaskMode:
+    """Read a profile file and return which acquisition task it was saved for."""
+    path = Path(path)
+    with open(path, "r", encoding="utf-8") as file:
+        data = json.load(file)
+    return profile_task_mode_from_dict(data)
 
 
 def _arena_to_dict(config: ArenaConfig) -> Dict[str, Any]:
@@ -462,11 +487,21 @@ def _merge_gui_into_config(
 
 def load_profile(
     path: Path,
+    *,
+    expected_task_mode: Optional[ProfileTaskMode] = None,
 ) -> Tuple[AcquisitionConfig, str, int, Optional[Dict[str, Any]], Optional[int]]:
     """Load profile JSON and return config plus last session/trial/slot GUI state."""
     path = Path(path)
     with open(path, "r", encoding="utf-8") as file:
         data = json.load(file)
+    profile_mode = profile_task_mode_from_dict(data)
+    if expected_task_mode is not None and profile_mode != expected_task_mode:
+        want = "RAM" if profile_mode == "ram" else "VAST"
+        cli = "uv run maze-daq --ram" if profile_mode == "ram" else "uv run maze-daq --vast"
+        raise ProfileTaskMismatchError(
+            f"This profile was saved for {want} mode. Start acquisition with `{cli}` "
+            f"to load it, or choose a profile saved from the current task."
+        )
     config = config_from_dict(data)
     gui = gui_from_dict(data.get("gui"))
     _merge_gui_into_config(config, gui)

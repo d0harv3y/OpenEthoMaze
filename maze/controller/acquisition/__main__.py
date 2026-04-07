@@ -1,6 +1,7 @@
 """Entry point: python -m maze.controller.acquisition (after install)."""
 
 import argparse
+import os
 from typing import Sequence
 
 from .app_shell import run_mode_gui
@@ -13,7 +14,15 @@ def _preload_vast_runtime_dependencies() -> None:
     Some environments crash when `sleap_nn` imports after PySide/shiboken setup.
     Keeping the workaround in this dedicated helper makes the startup asymmetry
     explicit and gives future profiling work one narrow seam to revisit.
+
+    Set ``MAZE_ACQ_SKIP_SLEAP_PRELOAD=1`` to skip (e.g. broken torch/lightning import).
     """
+    if os.environ.get("MAZE_ACQ_SKIP_SLEAP_PRELOAD", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return
     try:
         import sleap_nn.inference.predictors  # noqa: F401
     except Exception:

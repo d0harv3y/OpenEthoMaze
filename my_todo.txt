@@ -1,1 +1,21 @@
 uv run python -m vast.kpms.fit --project-dir "D:\work sack\vibration maze\kpms" --model-name "orm_kpms_v1" --max-trials 300 --manifest-csv "C:\Users\admin\code\IMPRESS\ORM\outputs\legacy\trial_manifest_legacy.csv"
+
+uv run python -m maze.kpms.apply --project-dir "D:\work sack\impress data\NOR video\moseq_project\moseq_251017" --model-name paramscan_s1-1e6_s2-1e4_ss-50 --animal-id 1 --session S01
+
+
+uv run python scripts/generate_selected_trials_from_nor_kpms_results.py `
+  --results-h5 "D:\work sack\impress data\NOR video\moseq_project\moseq_251017\paramscan_s1-1e6_s2-1e4_ss-50\results.h5" `
+  --require-sleap
+
+uv run python scripts/build_kpms_training_exemplar_table.py `
+  --model-dir "D:\work sack\impress data\NOR video\moseq_project\moseq_251017\paramscan_s1-1e6_s2-1e4_ss-50" `
+  --retain-all-sleap-frames 
+  
+  `
+  --exemplar-egocentric
+
+uv run python scripts/render_trial_overlay.py `
+  --animal-id 1 --session S01 --trial T01 `
+  --out outputs\overlays `
+  --kpms-h5 "D:\work sack\impress data\NOR video\moseq_project\moseq_251017\paramscan_s1-1e6_s2-1e4_ss-50\results_apply.h5" `
+  --kpms-training-exemplars "D:\work sack\impress data\NOR video\moseq_project\moseq_251017\paramscan_s1-1e6_s2-1e4_ss-50\training_exemplar_table.h5"

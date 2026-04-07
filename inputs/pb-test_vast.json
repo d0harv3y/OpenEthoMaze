@@ -30,7 +30,7 @@
       "morph_kernel_size": 5,
       "max_jump_px": 0.0,
       "selection_mode": "closest_else_largest",
-      "min_circularity": 0.39999999999999997,
+      "min_circularity": 0.4,
       "range_low": 26,
       "range_high": 70,
       "node_max_jump_px": 0.0,
@@ -44,22 +44,22 @@
     "sleap_exit_min_keypoints": 2,
     "fallback_exit_blob_overlap_pct": 10.0,
     "track_exit_either_success": false,
-    "sleap_model_path": "",
+    "sleap_model_path": "D:/work sack/combo_mazes_0",
     "track_show": true,
     "track_async": false,
     "track_backup_only": false,
     "overlay_opacity_pct": 70,
-    "arduino_port": null
+    "arduino_port": "— Select port —"
   },
   "vast": {
     "arena": {
       "diameter_cm": 121.92,
       "diameter_display_unit": "ft",
-      "radius_px": 155.0,
+      "radius_px": 150.0,
       "tracking_radius_px": 250.0,
       "center_pct": 0.7,
       "exit_radius_cm": 12.5,
-      "arena_center_x_px": 215.0,
+      "arena_center_x_px": 210.0,
       "arena_center_y_px": 150.0
     },
     "exit_angles": {
@@ -83,7 +83,7 @@
     "track_show": true,
     "track_async": false,
     "track_backup_only": false,
-    "track_sleap_path": "",
+    "track_sleap_path": "D:/work sack/combo_mazes_0",
     "track_confidence": 50,
     "track_sleap_every_n": 1,
     "track_opacity": 70,

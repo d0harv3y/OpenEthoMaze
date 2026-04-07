@@ -3,6 +3,7 @@ name = "maze"
 version = "0.1.0"
 description = "ORM — controller, pipeline, and core for rodent behavior maze tasks"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = "==3.12.*"
 dependencies = [
     "numpy>=1.21.0",
@@ -40,8 +41,12 @@ sleap = [
     "torch==2.10.0; sys_platform != 'win32' and sys_platform != 'linux'",
     "torchvision==0.25.0; sys_platform != 'win32' and sys_platform != 'linux'",
 ]
+# jax<0.7: tensorflow_probability (via jax-moseq) still uses APIs removed in JAX 0.7
+# (see keypoint-moseq setup.cfg install_requires). Without these pins, uv can pull jax>=0.7.
 kpms = [
-    "keypoint-moseq==0.6.3", # jax has no cuda support on x86_64
+    "keypoint-moseq==0.6.3",
+    "jax<0.7.0",
+    "jaxlib<0.7.0",
 ]
 
 [project.scripts]
@@ -71,6 +76,13 @@ packages = ["maze"]
 
 [tool.ruff]
 line-length = 100
+extend-exclude = ["scripts/archive"]
+
+[tool.ruff.lint.per-file-ignores]
+# Run as ``python scripts/…`` with sys.path bootstrap before ``maze`` imports.
+"scripts/render_trial_overlay.py" = ["E402"]
+"scripts/build_kpms_training_exemplar_table.py" = ["E402"]
+"scripts/generate_selected_trials_from_nor_kpms_results.py" = ["E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

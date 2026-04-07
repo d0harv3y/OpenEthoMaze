@@ -230,7 +230,7 @@ def load_slp_file(slp_path: Path) -> Optional[TraceData]:
             
             return TraceData(
                 traces=traces,
-                node_names=STANDARD_NODE_NAMES.copy(),
+                node_names=list(STANDARD_NODE_NAMES),
                 n_frames=n_frames,
                 source_path=slp_path,
             )
@@ -306,7 +306,7 @@ def load_analysis_h5(h5_path: Path) -> Optional[TraceData]:
             
             return TraceData(
                 traces=traces,
-                node_names=STANDARD_NODE_NAMES.copy(),
+                node_names=list(STANDARD_NODE_NAMES),
                 n_frames=n_frames,
                 source_path=h5_path,
             )

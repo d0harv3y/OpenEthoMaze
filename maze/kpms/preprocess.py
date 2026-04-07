@@ -23,6 +23,9 @@ class KpmsPreprocessConfig:
     jump_filter_cm: float = 15.0
     jump_filter_lookahead_frames: int = 3
     px_per_cm: float = 2.42
+    #: If True, keep every video frame in coordinates (NaN where invalid) so time axes
+    #: match full-length kpMS ``results.h5`` / native fits. Default False matches ORM fit/apply.
+    retain_all_frames: bool = False
 
 
 def build_kpms_inputs(
@@ -40,7 +43,7 @@ def build_kpms_inputs(
     skipped: list[str] = []
 
     for m in manifests:
-        trial_key = f"{m.animal_id}-{m.session}-{m.trial}"
+        trial_key = m.kpms_results_dict_key
         if m.sleap_path is None:
             skipped.append(f"{trial_key}:missing_sleap")
             continue
@@ -67,14 +70,22 @@ def build_kpms_inputs(
         arr_xy, arr_conf = _stack_nodes(processed, trace.n_frames)
         keep = valid_frames & np.isfinite(arr_xy).all(axis=(1, 2))
 
-        if int(keep.sum()) < cfg.min_fragment_frames:
-            skipped.append(f"{trial_key}:too_short_after_filter")
-            continue
+        if cfg.retain_all_frames:
+            n_good = int(keep.sum())
+            if n_good < cfg.min_fragment_frames:
+                skipped.append(f"{trial_key}:too_short_after_filter")
+                continue
+            coordinates[trial_key] = arr_xy
+            confidences[trial_key] = arr_conf
+        else:
+            if int(keep.sum()) < cfg.min_fragment_frames:
+                skipped.append(f"{trial_key}:too_short_after_filter")
+                continue
 
-        coordinates[trial_key] = arr_xy[keep]
-        confidences[trial_key] = arr_conf[keep]
+            coordinates[trial_key] = arr_xy[keep]
+            confidences[trial_key] = arr_conf[keep]
 
-    return coordinates, confidences, STANDARD_NODE_NAMES.copy(), skipped
+    return coordinates, confidences, list(STANDARD_NODE_NAMES), skipped
 
 
 def _stack_nodes(
