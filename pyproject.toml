@@ -47,6 +47,7 @@ kpms = [
     "keypoint-moseq==0.6.3",
     "jax<0.7.0",
     "jaxlib<0.7.0",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
@@ -83,7 +84,9 @@ extend-exclude = ["scripts/archive"]
 "scripts/render_trial_overlay.py" = ["E402"]
 "scripts/build_kpms_training_exemplar_table.py" = ["E402"]
 "scripts/generate_selected_trials_from_nor_kpms_results.py" = ["E402"]
-
+"scripts/kpms_review_artifacts.py" = ["E402"]
+"scripts/kpms_apply_syllable_merge.py" = ["E402"]
+"scripts/kpms_clean_syllable_bouts.py" = ["E402"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

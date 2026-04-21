@@ -71,7 +71,8 @@ from maze.pipeline.exports import export_all
 
 # VAST project root (parent of scripts/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-LEGACY_DIR = PROJECT_ROOT / "outputs" / "legacy"
+# LEGACY_DIR = PROJECT_ROOT / "outputs" / "legacy"
+LEGACY_DIR = Path(r"E:\vast_analysis")
 LEGACY_DB = LEGACY_DIR / "vast_results_legacy.h5"
 LEGACY_MANIFEST = LEGACY_DIR / "trial_manifest_legacy.csv"
 LABELS_PATH = PROJECT_ROOT / "inputs" / "treatment_labels.csv"

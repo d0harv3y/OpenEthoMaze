@@ -84,6 +84,8 @@ FEEDBACK_GROUP = "feedback"
 FEEDBACK_TABLE_DATASET = "table"
 
 AMBULATION_GROUP = "ambulation_metrics"
+# Some legacy exports (e.g. older VAST / EHRAM writers) use a space instead of an underscore.
+AMBULATION_GROUP_LEGACY = "ambulation metrics"
 XY_DATASET_NAME = "xy"
 TASK_DATA_GROUP = "task_data"
 

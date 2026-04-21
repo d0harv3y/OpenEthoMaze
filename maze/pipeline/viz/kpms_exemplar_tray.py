@@ -1,6 +1,10 @@
 """
 kpMS exemplar trajectory loops as RGBA rasters for the side tray overlay (right of video).
 
+Skeleton edges use :data:`maze.core.anatomy.SKELETON_EDGES` (hind to tail, fore to neck), aligned
+with the main video overlay. Keypoint columns are permuted to ``KPMS_TRAJECTORY_PLOT_BODYPARTS``
+for stable ``get_edges`` indexing.
+
 Requires optional dependency ``keypoint-moseq`` (``uv sync --extra kpms``).
 """
 
@@ -17,6 +21,20 @@ from ...kpms.exemplar_typical import typical_trajectories_for_exemplar_tray
 from ...kpms.frame_alignment import kpms_aligned_coordinates_and_indices
 from ...kpms.preprocess import KpmsPreprocessConfig
 from ..io.file_discovery import TrialManifest
+
+# Column order for ``get_edges`` / typical arrays in ``generate_trajectory_plots`` when
+# ``use_bodyparts`` matches ``my_moseq_test/generate_trajectory_gifs.DEFAULT_USE_BODYPARTS``.
+# ORM fits use :data:`STANDARD_NODE_NAMES`; we permute at raster time for GIF parity.
+KPMS_TRAJECTORY_PLOT_BODYPARTS: tuple[str, ...] = (
+    "nose",
+    "neck",
+    "spine",
+    "tail",
+    "hindL",
+    "hindR",
+    "foreL",
+    "foreR",
+)
 
 _KPMS_IMPORT_ERROR: Exception | None = None
 try:
@@ -36,6 +54,16 @@ except Exception as e:  # pragma: no cover - optional dependency
 
 def kpms_tray_import_error() -> Exception | None:
     return _KPMS_IMPORT_ERROR
+
+
+def _reindex_keypoints_trajectory_plot_order(X: np.ndarray) -> np.ndarray:
+    """Map keypoints from ``STANDARD_NODE_NAMES`` order → ``KPMS_TRAJECTORY_PLOT_BODYPARTS`` (GIF) order."""
+    X = np.asarray(X, dtype=np.float64)
+    if X.shape[-2] != len(STANDARD_NODE_NAMES):
+        return X
+    ori = list(STANDARD_NODE_NAMES)
+    idx = [ori.index(str(n)) for n in KPMS_TRAJECTORY_PLOT_BODYPARTS]
+    return np.take(X, np.array(idx, dtype=np.intp), axis=-2)
 
 
 def _orient_xy_vertical_heading(X: np.ndarray) -> np.ndarray:
@@ -86,9 +114,9 @@ def _draw_trajectory_rgba_frames(
     lims: np.ndarray,
     edges: list[list[int]],
     *,
-    num_timesteps: int = 14,
-    node_size: float = 42.0,
-    line_width: float = 2.8,
+    num_timesteps: int = 10,
+    node_size: float = 50.0,
+    line_width: float = 3.0,
     keypoint_colormap: str = "autumn",
     dpi: float = 120.0,
     fig_width_inches: float = 3.2,
@@ -170,11 +198,15 @@ def exemplar_rgba_loops_from_typical_arrays(
     syllable_ids: list[int],
     *,
     projection_plane: str = "xy",
-    num_timesteps: int = 14,
-    vertical_heading: bool = True,
+    num_timesteps: int = 10,
+    vertical_heading: bool = False,
 ) -> dict[int, list[np.ndarray]]:
     """
     Turn precomputed ``typical[syllable_id] -> (T, K, D)`` arrays into RGBA frame loops.
+
+    Reorders keypoints to match ``generate_trajectory_plots`` / ``generate_trajectory_gifs.py``
+    (``use_bodyparts`` column order) and uses the same ``get_limits`` padding as trajectory GIFs
+    (``pctl=0``, 10/20% pads) unless ``vertical_heading`` adds an extra rotation step.
 
     Used with :func:`maze.kpms.training_exemplar_table.load_training_exemplar_typical`.
     """
@@ -183,7 +215,8 @@ def exemplar_rgba_loops_from_typical_arrays(
             "keypoint-moseq is required for the exemplar tray. Install with: uv sync --extra kpms"
         ) from _KPMS_IMPORT_ERROR
 
-    edges = get_edges(list(STANDARD_NODE_NAMES), list(SKELETON_EDGES))
+    # Same topology as the main video SLEAP overlay: tail→hind, neck→fore (see ``SKELETON_EDGES``).
+    edges = get_edges(list(KPMS_TRAJECTORY_PLOT_BODYPARTS), list(SKELETON_EDGES))
     want = {int(s) for s in syllable_ids if int(s) >= 0}
     out: dict[int, list[np.ndarray]] = {}
 
@@ -207,13 +240,15 @@ def exemplar_rgba_loops_from_typical_arrays(
         if vertical_heading:
             X_vis = _orient_xy_vertical_heading(X_vis)
 
+        X_vis = _reindex_keypoints_trajectory_plot_order(X_vis)
+
         lims = get_limits(
             X_vis,
-            pctl=1,
-            left=0.12,
-            right=0.12,
-            top=0.18,
-            bottom=0.18,
+            pctl=0,
+            left=0.1,
+            right=0.1,
+            top=0.2,
+            bottom=0.2,
         )
         frames = _draw_trajectory_rgba_frames(
             X_vis,
@@ -239,14 +274,14 @@ def build_exemplar_rgba_loops_for_syllables(
     fps: float,
     pre_seconds: float = 0.167,
     post_seconds: float = 0.5,
-    min_frequency: float = 0.003,
+    min_frequency: float = 0.0,
     min_duration: int = 3,
-    density_sample: bool = True,
+    density_sample: bool = False,
     n_neighbors: int = 50,
     projection_plane: str = "xy",
-    num_timesteps: int = 14,
-    vertical_heading: bool = True,
-    egocentric: bool = False,
+    num_timesteps: int = 10,
+    vertical_heading: bool = False,
+    egocentric: bool = True,
 ) -> dict[int, list[np.ndarray]]:
     """
     For each syllable id, build a list of RGBA uint8 frames (H, W, 4) using

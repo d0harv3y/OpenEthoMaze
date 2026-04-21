@@ -54,7 +54,12 @@ from .trial_groups import (
     read_trial_meta_for_manifest,
     trial_has_settings,
 )
-from .trial_key import TrialKey
+from .trial_key import (
+    TrialKey,
+    ram_sessions_equivalent,
+    ram_trials_equivalent,
+    resolve_trial_key_for_hdf5,
+)
 from .trial_settings_io import (
     read_radial_arm_trial_settings,
     read_trial_settings,
@@ -64,6 +69,9 @@ from .trial_settings_io import (
 
 __all__ = [
     "TrialKey",
+    "ram_sessions_equivalent",
+    "ram_trials_equivalent",
+    "resolve_trial_key_for_hdf5",
     "open_db",
     "init_database",
     "read_arena_type",

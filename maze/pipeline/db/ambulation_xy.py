@@ -6,7 +6,7 @@ from typing import Optional
 import numpy as np
 
 from maze.core.schema import XY_ROW_DTYPE
-from maze.core.h5_layout import write_xy_table as core_write_xy_table
+from maze.core.h5_layout import resolve_ambulation_metrics_group, write_xy_table as core_write_xy_table
 
 from ._shared import open_db
 from .trial_key import TrialKey
@@ -37,6 +37,10 @@ def read_xy_table(
     """Read XY table for a tracking point."""
     try:
         with open_db(db_path, "r") as h5:
-            return h5[key.path()]["ambulation_metrics"][point_name]["xy"][:]
+            g_trial = h5[key.path()]
+            g_amb = resolve_ambulation_metrics_group(g_trial)
+            if g_amb is None:
+                return None
+            return g_amb[point_name]["xy"][:]
     except (KeyError, ValueError):
         return None

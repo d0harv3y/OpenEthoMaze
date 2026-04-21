@@ -9,14 +9,22 @@ current syllable bout.
 Set :attr:`UnifiedOverlayConfig.kpms_training_exemplar_h5` to use a fixed training-derived
 table (see ``scripts/build_kpms_training_exemplar_table.py``) instead of per-trial exemplars.
 
-See ``scripts/render_trial_overlay.py`` for CLI. Layer opacities are configurable via
+See ``scripts/render_trial_overlay.py`` (or ``scripts/render_ram_trial_overlay.py`` for RAM
+manifest defaults). Radial-arm geometry comes from ``task_data/radial_arm`` or from
+``ehram_results``-style ``/metadata/global_template`` (:mod:`maze.pipeline.viz.ram_template_draw`,
+:mod:`maze.pipeline.viz.ehram_global_template_draw`). That is independent of
+``metadata/arena_info`` (see :func:`_read_arena_type`, which defaults to circular when
+``arena_info`` is missing). The RAM HUD uses ``ram_polys`` or radial-arm ``arena_type``;
+the motor line uses circular ``arena_type`` with no ``ram_polys`` (see HUD loop below).
+Layer opacities are configurable via
 :class:`UnifiedOverlayConfig`.
 """
 
 from __future__ import annotations
 
 import subprocess
-from dataclasses import dataclass, field
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Optional
 
@@ -33,18 +41,26 @@ import h5py
 
 from maze.core.anatomy import STANDARD_NODE_NAMES
 from maze.core.tasks import ARENA_TYPE_CIRCULAR, ARENA_TYPE_RADIAL_ARM, normalize_arena_type
+from maze.core.h5_layout import resolve_ambulation_metrics_group
+from maze.core.trial_settings import TrialSettings
 
 from ..defaults import HYBRID_POINT_NAME, QC_EXIT_ZONE_RADIUS_CM
 from ..db import (
     TrialKey,
     open_db,
+    ram_sessions_equivalent,
+    ram_trials_equivalent,
     read_feedback_series,
     read_task_group_attrs,
     read_trial_settings,
+    resolve_trial_key_for_hdf5,
 )
 from ..io.file_discovery import TrialManifest
 from ..io.sleap_loader import apply_jump_filter, get_skeleton_edges, load_sleap_file
 from ..tracking.trace_processing import TraceProcessingParams, process_trace_data
+from .ehram_global_template_draw import load_ehram_global_template_polygons_px
+from .ehram_memory_hud import merge_ehram_memory_metrics_into_ram_attrs
+from .ram_template_draw import load_ram_region_polygons_px
 from .video_overlay import _decode_attr
 
 from maze.kpms.apply import KpmsApplyConfig
@@ -76,47 +92,80 @@ def _state_str(cell: Any) -> str:
     return str(cell).strip()
 
 
-def _feedback_wm_for_overlay(
-    w_series: np.ndarray,
-    m_series: np.ndarray,
-    *,
+def _trial_states_for_xy_overlay(xy_run: np.ndarray) -> list[str]:
+    """
+    Per-frame ``trial_state`` for the HUD.
+
+    Full ORM :class:`~maze.core.schema.XY_ROW_DTYPE` tables always include ``trial_state``.
+    Older or minimal exports may omit it; we then assume ``run`` for every frame so the
+    overlay can render.
+    """
+    names = getattr(xy_run.dtype, "names", None) or ()
+    n = len(xy_run)
+    if "trial_state" in names:
+        return [_state_str(xy_run["trial_state"][i]) for i in range(n)]
+    return ["run"] * n
+
+
+def _hud_memory_label(v: Any) -> str:
+    if v is None or v == "":
+        return "--"
+    return str(v)
+
+
+def _slice_series_to_overlay(
+    series: Optional[np.ndarray],
     render_start_frame: int,
     max_frames: int,
-    trial_start_frame: int,
-    n_effective: int,
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Map stored W/M series onto overlay frame indices.
-
-    Legacy DB stores feedback as ``w[trial_start_frame:]`` (same length as analysis window).
-    Some tables span all ``n_effective`` frames (index = absolute video frame).
-    """
-    w_arr = np.full(max_frames, np.nan)
-    m_arr = np.full(max_frames, np.nan)
-    lw, lm = len(w_series), len(m_series)
-    if lw <= 0 or lm <= 0:
-        return w_arr, m_arr
-    L = min(lw, lm)
-    w_s = np.asarray(w_series[:L], dtype=np.float64)
-    m_s = np.asarray(m_series[:L], dtype=np.float64)
-
-    if L >= n_effective:
-        rs = min(render_start_frame, L)
-        re = min(rs + max_frames, L)
-        n = re - rs
-        if n > 0:
-            w_arr[:n] = w_s[rs:re]
-            m_arr[:n] = m_s[rs:re]
-        return w_arr, m_arr
-
-    ts = int(trial_start_frame)
+) -> np.ndarray:
+    """Align a per-frame series to overlay indices ``0 .. max_frames-1`` (video frame ``render_start_frame + i``)."""
+    out = np.full(max_frames, np.nan, dtype=np.float64)
+    if series is None or len(series) == 0:
+        return out
+    s = np.asarray(series, dtype=np.float64).ravel()
     for i in range(max_frames):
-        abs_f = render_start_frame + i
-        j = abs_f - ts
-        if 0 <= j < L:
-            w_arr[i] = w_s[j]
-            m_arr[i] = m_s[j]
-    return w_arr, m_arr
+        j = render_start_frame + i
+        if j < len(s):
+            out[i] = s[j]
+    return out
+
+
+def _hud_scalar_or_dash(v: float) -> str:
+    if np.isnan(v):
+        return "--"
+    return f"{float(v):.3f}"
+
+
+def _put_text_outlined(
+    img: np.ndarray,
+    text: str,
+    org: tuple[int, int],
+    font: int,
+    font_scale: float,
+    color: tuple[int, int, int],
+    thickness: int,
+    line_type: int,
+    *,
+    outline_color: tuple[int, int, int] = (0, 0, 0),
+) -> None:
+    """Draw text with a 1 px outline (OpenCV has no built-in halo)."""
+    x, y = int(org[0]), int(org[1])
+    ot = max(1, thickness + 1)
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            if dx == 0 and dy == 0:
+                continue
+            cv2.putText(
+                img,
+                text,
+                (x + dx, y + dy),
+                font,
+                font_scale,
+                outline_color,
+                ot,
+                line_type,
+            )
+    cv2.putText(img, text, (x, y), font, font_scale, color, thickness, line_type)
 
 
 def _syllable_bgr(sid: int) -> tuple[int, int, int]:
@@ -149,28 +198,42 @@ class UnifiedOverlayConfig:
     #: If True (default), render from video frame 0 so ``iti_wait`` rows in ``xy`` appear in
     #: the HUD; if False, start at ``trial_start_frame`` (analysis / run window only).
     include_pre_trial_frames: bool = True
-    trajectory_history_frames: int = 45
-    hypnogram_height_px: int = 96
+    #: How many past frames to include in the trajectory tail (spot history polyline).
+    trajectory_history_frames: int = 42
+    #: If True, older segments of the tail are drawn dimmer (see fade floor / gamma).
+    trajectory_history_fade: bool = True
+    #: Minimum brightness scale (0..1) at the oldest end of the tail when fading.
+    trajectory_history_fade_floor: float = 0.07
+    #: Fade curve: weight uses ``u**gamma`` where ``u`` goes 0 (old) → 1 (recent); ``gamma>1`` keeps the bright part tighter near the head.
+    trajectory_history_fade_gamma: float = 1.0
+    hypnogram_height_px: int = 64
     #: Pixel width of the exemplar tray column to the right of the video.
-    syllable_tray_width_px: int = 140
+    syllable_tray_width_px: int = 220
     syllable_tray_margin_px: int = 6
     #: Max width and max height (pixels) when fitting an exemplar patch in the tray column.
     syllable_tray_max_patch_width_px: int = 420
-    #: If True, rotate each exemplar in-plane so mean nose→tail points up (+y in the patch).
-    exemplar_vertical_heading: bool = True
+    #: If True, rotate each exemplar in-plane so mean nose→tail points up (+y). Off by default
+    #: to match kpMS ``generate_trajectory_plots`` / ``generate_trajectory_gifs.py``.
+    exemplar_vertical_heading: bool = False
     #: If True, move the exemplar patch vertically with the syllable bout center; if False,
     #: keep it fixed at mid-height of the video column.
     exemplar_tray_bout_centered: bool = False
     exemplar_pre_seconds: float = 0.167
     exemplar_post_seconds: float = 0.5
-    exemplar_min_frequency: float = 0.003
+    #: Minimum global syllable frequency in the recording (see kpMS ``get_syllable_instances``).
+    #: Use ``0`` to include rare syllables in the tray; higher values match publication-style filters.
+    exemplar_min_frequency: float = 0.0
     exemplar_min_duration: int = 3
     exemplar_n_neighbors: int = 50
-    exemplar_density_sample: bool = True
-    #: If True, median trajectory matches kpMS body-centered ``get_typical_trajectories``.
-    #: If False (default), use arena coordinates so the loop shows translation.
-    exemplar_egocentric: bool = False
-    exemplar_num_timesteps: int = 14
+    #: When True, kpMS density sampling requires ~``exemplar_n_neighbors`` instances per syllable,
+    #: so most syllables have no median loop and the tray is blank. False matches GIF-style use on
+    #: single trials (median over all instances that pass duration/frequency).
+    exemplar_density_sample: bool = False
+    #: If True (default), median matches kpMS ``get_typical_trajectories`` (body-centered; same as
+    #: trajectory GIFs). If False, arena coordinates (can look like a smeared starburst).
+    exemplar_egocentric: bool = True
+    #: Matches ``plot_trajectories`` default in keypoint_moseq (trajectory GIF frame count).
+    exemplar_num_timesteps: int = 10
     tray_projection_plane: str = "xy"
     layers: LayerWeights = field(default_factory=LayerWeights)
     show_skeleton: bool = True
@@ -178,6 +241,13 @@ class UnifiedOverlayConfig:
     show_trajectory_history: bool = True
     show_arena_geometry: bool = True
     show_hud: bool = True
+    #: If True, cumulative HUD distance only counts displacement during movement bouts (matches
+    #: exported ``total_distance_m``). If False, sum all valid frame-to-frame steps (useful when
+    #: ``is_moving`` is sparse, e.g. minimal NOR bootstraps).
+    hud_distance_only_when_moving: bool = True
+    #: Motor feedback (``feedback`` / ``motor_fb``) when ``arena_type`` is circular and
+    #: ``ram_polys`` is unset; see HUD loop in :func:`render_unified_overlay_video`.
+    show_circular_motor_hud: bool = True
     show_hypnogram: bool = True
     show_syllable_tray: bool = True
     kpms_pre: KpmsPreprocessConfig = field(default_factory=KpmsPreprocessConfig)
@@ -185,6 +255,35 @@ class UnifiedOverlayConfig:
     #: If set, syllable tray loops come from this HDF5 (training exemplar table)
     #: instead of recomputing from the current trial and ``kpms_results_h5``.
     kpms_training_exemplar_h5: Optional[Path] = None
+    #: Extra HUD lines per video frame. Argument is **absolute** frame index (same timeline as
+    #: source video / SLEAP), not the overlay loop index after ``render_start_frame``.
+    hud_extra_lines_for_frame: Optional[Callable[[int], Sequence[str]]] = None
+    #: If set, draw the yellow arena outline as this axis-aligned box ``(x1, y1, x2, y2)`` px
+    #: instead of a circle (NOR ``objects/arena/bbox``).
+    arena_bbox_px_override: Optional[tuple[float, float, float, float]] = None
+    #: If set (and :attr:`arena_bbox_px_override` is unset), override pipeline attrs for the
+    #: yellow arena **circle**.
+    arena_center_x_px_override: Optional[float] = None
+    arena_center_y_px_override: Optional[float] = None
+    arena_radius_px_override: Optional[float] = None
+
+
+def _apply_arena_geometry_overrides(
+    settings: TrialSettings,
+    cfg: UnifiedOverlayConfig,
+) -> TrialSettings:
+    if cfg.arena_bbox_px_override is not None:
+        return settings
+    kw: dict[str, float] = {}
+    if cfg.arena_center_x_px_override is not None:
+        kw["arena_center_x_px"] = float(cfg.arena_center_x_px_override)
+    if cfg.arena_center_y_px_override is not None:
+        kw["arena_center_y_px"] = float(cfg.arena_center_y_px_override)
+    if cfg.arena_radius_px_override is not None:
+        kw["arena_radius_px"] = float(cfg.arena_radius_px_override)
+    if not kw:
+        return settings
+    return replace(settings, **kw)
 
 
 def resolve_unique_manifest(
@@ -193,10 +292,13 @@ def resolve_unique_manifest(
     session: str,
     trial: str,
 ) -> TrialManifest:
+    aid = str(animal_id)
     matches = [
         m
         for m in manifests
-        if m.animal_id == str(animal_id) and m.session == str(session) and m.trial == str(trial)
+        if m.animal_id == aid
+        and ram_sessions_equivalent(m.session, str(session))
+        and ram_trials_equivalent(m.trial, str(trial))
     ]
     if not matches:
         sessions = sorted({m.session for m in manifests if m.animal_id == str(animal_id)})
@@ -210,6 +312,45 @@ def resolve_unique_manifest(
             f"Multiple manifest rows for animal_id={animal_id!r} session={session!r} trial={trial!r}"
         )
     return matches[0]
+
+
+def _draw_trajectory_history_tail(
+    hist_layer: np.ndarray,
+    *,
+    hist: int,
+    i: int,
+    x: np.ndarray,
+    y: np.ndarray,
+    valid: np.ndarray,
+    fade: bool,
+    fade_floor: float,
+    fade_gamma: float,
+    line_type: int,
+) -> None:
+    """Draw spot history from frame ``hist`` through ``i`` (inclusive) onto ``hist_layer``."""
+    pts: list[tuple[int, int]] = []
+    idxs: list[int] = []
+    for j in range(hist, i + 1):
+        if bool(valid[j]) and np.isfinite(x[j]) and np.isfinite(y[j]):
+            pts.append((int(round(float(x[j]))), int(round(float(y[j])))))
+            idxs.append(j)
+    if len(pts) < 2:
+        return
+    b0, g0, r0 = 80, 200, 255
+    span = max(i - hist, 1)
+    floor = float(np.clip(fade_floor, 0.0, 1.0))
+    gamma = max(float(fade_gamma), 1e-6)
+    for k in range(len(pts) - 1):
+        p0, p1 = pts[k], pts[k + 1]
+        j1 = idxs[k + 1]
+        if fade:
+            u = float(j1 - hist) / float(span)
+            u = min(max(u, 0.0), 1.0)
+            w = floor + (1.0 - floor) * (u**gamma)
+        else:
+            w = 1.0
+        col = (int(b0 * w), int(g0 * w), int(r0 * w))
+        cv2.line(hist_layer, p0, p1, col, 2, line_type)
 
 
 def _blend_layer(base: np.ndarray, layer: np.ndarray, alpha: float) -> None:
@@ -327,6 +468,39 @@ def _fit_rgba_to_box(rgba: np.ndarray, max_w: int, max_h: int) -> np.ndarray:
     return cv2.resize(rgba, (nw, nh), interpolation=cv2.INTER_AREA)
 
 
+def _open_pipeline_trial_group(
+    h5: h5py.File, key: TrialKey, manifest: TrialManifest
+) -> h5py.Group:
+    """Require ORM trial layout ``/animal_id/session/trial`` (ambulation metrics / spot / xy)."""
+    path = key.path()
+    p = path.lstrip("/")
+    try:
+        return h5[p]
+    except KeyError:
+        pass
+    aid = str(key.animal_id)
+    subs: list[str] = []
+    if aid in h5:
+        subs = sorted(h5[aid].keys())
+    sub_preview = ""
+    if subs:
+        sub_preview = f" Under /{aid}/: {subs[:50]!r}" + (" ..." if len(subs) > 50 else "")
+    nor_hint = ""
+    orig = (manifest.original_session or "").strip()
+    if orig and orig != key.session:
+        nor_hint = (
+            f" NOR manifests use phase/condition for session/trial ({key.session!r} / {key.trial!r}); "
+            f"the native NOR pipeline HDF5 is usually /{aid}/{orig}/... without that three-level path. "
+            "Use --pipeline-h5 pointing to a per-trial ORM bootstrap file "
+            "(my_nor_wip/scripts/bootstrap_minimal_pipeline_h5.py) whose groups match "
+            f"{path!r}, not the monolithic my_NOR_results.h5. "
+            f"kpMS results_apply.h5 groups stay keyed like {manifest.kpms_results_dict_key!r}."
+        )
+    raise ValueError(
+        f"Pipeline HDF5 has no trial group {path!r}.{sub_preview}{nor_hint}"
+    )
+
+
 def render_unified_overlay_video(
     *,
     manifest: TrialManifest,
@@ -356,8 +530,9 @@ def render_unified_overlay_video(
     out_path = Path(out_path)
 
     with open_db(pipeline_db, "r") as h5:
+        key = resolve_trial_key_for_hdf5(h5, key)
         arena_type = _read_arena_type(h5)
-        g_trial = h5[key.path()]
+        g_trial = _open_pipeline_trial_group(h5, key, manifest)
         attrs = {k: g_trial.attrs[k] for k in g_trial.attrs.keys()}
         video_path_attr = _decode_attr(attrs.get("video_path", ""))
         if not video_path_attr:
@@ -373,9 +548,11 @@ def render_unified_overlay_video(
         primary = (
             _decode_attr(attrs.get("primary_trajectory", HYBRID_POINT_NAME)) or HYBRID_POINT_NAME
         )
-        g_amb = g_trial.get("ambulation_metrics")
+        g_amb = resolve_ambulation_metrics_group(g_trial)
         if g_amb is None:
-            raise ValueError(f"No ambulation_metrics group (trial {key.path()})")
+            raise ValueError(
+                f"No ambulation_metrics (or legacy 'ambulation metrics') group (trial {key.path()})"
+            )
         if primary not in g_amb:
             if "spot" in g_amb:
                 primary = "spot"
@@ -389,8 +566,16 @@ def render_unified_overlay_video(
         n_xy = len(xy_full)
 
     settings, _h5_fps, tsf_settings = read_trial_settings(pipeline_db, key)
+    settings = _apply_arena_geometry_overrides(settings, cfg)
     if tsf_settings != trial_start_frame and tsf_settings > 0:
         trial_start_frame = tsf_settings
+
+    # ORM RAM: task_data/radial_arm. ehram_results.h5: /metadata/global_template + trial escape_arm.
+    ram_polys: Optional[dict[str, np.ndarray]] = load_ram_region_polygons_px(
+        pipeline_db, key, settings
+    )
+    if ram_polys is None:
+        ram_polys = load_ehram_global_template_polygons_px(pipeline_db, key)
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -414,7 +599,7 @@ def render_unified_overlay_video(
     max_frames = run_len
 
     xy_run = xy_full[render_start_frame : render_start_frame + max_frames]
-    trial_states = [_state_str(xy_run["trial_state"][i]) for i in range(len(xy_run))]
+    trial_states = _trial_states_for_xy_overlay(xy_run)
     state_elapsed = _precompute_state_elapsed_s(trial_states, fps)
 
     x = np.asarray(xy_run["x"], dtype=np.float64)
@@ -429,26 +614,14 @@ def render_unified_overlay_video(
         dy = np.diff(y)
         step_px = np.sqrt(dx**2 + dy**2)
         step_valid = valid[:-1] & valid[1:]
-        step_m = np.where(step_valid & is_moving[:-1], step_px / (px_per_cm * 100.0), 0.0)
+        if cfg.hud_distance_only_when_moving:
+            step_m = np.where(step_valid & is_moving[:-1], step_px / (px_per_cm * 100.0), 0.0)
+        else:
+            step_m = np.where(step_valid, step_px / (px_per_cm * 100.0), 0.0)
         cum_distance_m[1:] = np.cumsum(step_m)
     frame_dur = 1.0 / fps if fps > 0 else 0.0
     still_s = np.where(~is_moving, frame_dur, 0.0)
     cum_time_still_s = np.cumsum(still_s)
-
-    fb = read_feedback_series(pipeline_db, key)
-    if fb is not None:
-        w_ser, m_ser = fb
-        w_arr, m_arr = _feedback_wm_for_overlay(
-            w_ser,
-            m_ser,
-            render_start_frame=render_start_frame,
-            max_frames=max_frames,
-            trial_start_frame=trial_start_frame,
-            n_effective=n_effective,
-        )
-    else:
-        w_arr = np.full(max_frames, np.nan)
-        m_arr = np.full(max_frames, np.nan)
 
     syllable_run = np.full(max_frames, -1, dtype=np.int32)
     kpms_aligned: tuple[str, np.ndarray, np.ndarray] | None = None
@@ -473,16 +646,31 @@ def render_unified_overlay_video(
                         syllable_run[ir] = int(z[j])
 
     ram_attrs: dict[str, Any] = {}
-    if arena_type == ARENA_TYPE_RADIAL_ARM:
+    if ram_polys is not None or arena_type == ARENA_TYPE_RADIAL_ARM:
         ram_attrs = read_task_group_attrs(pipeline_db, key, ARENA_TYPE_RADIAL_ARM)
         for k in (
             "working_memory_errors",
             "reference_memory_errors",
             "reference_memory_successes",
             "exit_arm",
+            "exit_arm_index",
         ):
             if k in attrs:
                 ram_attrs[k] = attrs[k]
+        merge_ehram_memory_metrics_into_ram_attrs(pipeline_db, key, ram_attrs)
+
+    # Motor HUD only when no RAM template polys: if ``ram_polys`` is set, the RAM HUD path runs
+    # even when ``_read_arena_type`` is circular (default or unchanged ``arena_info``).
+    m_hud_frames: Optional[np.ndarray] = None
+    if (
+        arena_type == ARENA_TYPE_CIRCULAR
+        and cfg.show_circular_motor_hud
+        and ram_polys is None
+    ):
+        fb = read_feedback_series(pipeline_db, key)
+        if fb is not None:
+            _w_fb, m_fb = fb
+            m_hud_frames = _slice_series_to_overlay(m_fb, render_start_frame, max_frames)
 
     sleap_path_str = _decode_attr(attrs.get("sleap_path", ""))
     if not sleap_path_str and manifest.sleap_path:
@@ -620,20 +808,19 @@ def render_unified_overlay_video(
 
             hist_layer = np.zeros_like(frame)
             if cfg.show_trajectory_history and cfg.layers.trajectory_history > 0:
-                hist = max(0, i - cfg.trajectory_history_frames)
-                pts = []
-                for j in range(hist, i + 1):
-                    if valid[j] and np.isfinite(x[j]) and np.isfinite(y[j]):
-                        pts.append((int(round(x[j])), int(round(y[j]))))
-                if len(pts) >= 2:
-                    cv2.polylines(
-                        hist_layer,
-                        [np.array(pts, dtype=np.int32)],
-                        False,
-                        (80, 200, 255),
-                        2,
-                        line_type,
-                    )
+                hist = max(0, i - int(cfg.trajectory_history_frames))
+                _draw_trajectory_history_tail(
+                    hist_layer,
+                    hist=hist,
+                    i=i,
+                    x=x,
+                    y=y,
+                    valid=valid,
+                    fade=bool(cfg.trajectory_history_fade),
+                    fade_floor=float(cfg.trajectory_history_fade_floor),
+                    fade_gamma=float(cfg.trajectory_history_fade_gamma),
+                    line_type=line_type,
+                )
             _blend_layer(frame, hist_layer, cfg.layers.trajectory_history)
 
             traj_layer = np.zeros_like(frame)
@@ -673,14 +860,55 @@ def render_unified_overlay_video(
 
             geom_layer = np.zeros_like(frame)
             if cfg.show_arena_geometry and cfg.layers.arena_geometry > 0:
-                if arena_type == ARENA_TYPE_CIRCULAR and settings.arena_radius_px > 0:
+                draw_exit_circle = True
+                if cfg.arena_bbox_px_override is not None:
+                    bx = cfg.arena_bbox_px_override
+                    if len(bx) >= 4:
+                        x1, y1, x2, y2 = (
+                            float(bx[0]),
+                            float(bx[1]),
+                            float(bx[2]),
+                            float(bx[3]),
+                        )
+                        cv2.rectangle(
+                            geom_layer,
+                            (int(round(x1)), int(round(y1))),
+                            (int(round(x2)), int(round(y2))),
+                            (200, 200, 0),
+                            1,
+                            line_type,
+                        )
+                elif ram_polys:
+                    for name, poly in sorted(ram_polys.items()):
+                        pts = np.asarray(poly, dtype=np.float64)
+                        if pts.shape[0] < 2:
+                            continue
+                        pi = np.round(pts).astype(np.int32).reshape(-1, 1, 2)
+                        col = (0, 255, 0) if name == "hole" else (200, 200, 0)
+                        th = 2 if name == "hole" else 1
+                        cv2.polylines(
+                            geom_layer,
+                            [pi],
+                            isClosed=True,
+                            color=col,
+                            thickness=th,
+                            lineType=line_type,
+                        )
+                    if "hole" in ram_polys:
+                        draw_exit_circle = False
+                elif arena_type == ARENA_TYPE_CIRCULAR and settings.arena_radius_px > 0 and not ram_polys:
                     cx, cy = (
                         int(round(settings.arena_center_x_px)),
                         int(round(settings.arena_center_y_px)),
                     )
                     r = int(round(settings.arena_radius_px))
                     cv2.circle(geom_layer, (cx, cy), r, (200, 200, 0), 1, line_type)
-                if exit_x is not None and exit_y is not None and exit_radius_px > 0:
+                if (
+                    draw_exit_circle
+                    and exit_x is not None
+                    and exit_y is not None
+                    and exit_radius_px > 0
+                ):
                     cv2.circle(
                         geom_layer,
                         (int(round(exit_x)), int(round(exit_y))),
@@ -700,7 +928,7 @@ def render_unified_overlay_video(
 
                 def put(line: str) -> None:
                     nonlocal yl
-                    cv2.putText(
+                    _put_text_outlined(
                         canvas,
                         line,
                         (10, yl),
@@ -713,40 +941,76 @@ def render_unified_overlay_video(
                     yl += lh
 
                 st = trial_states[i] if i < len(trial_states) else ""
-                put(f"state: {st or '--'}  t_state: {state_elapsed[i]:.1f}s")
-                # put(f"W: {w_arr[i]:.2f}" if np.isfinite(w_arr[i]) else "W: --")
-                put(f"Motor: {m_arr[i]:.2f}" if np.isfinite(m_arr[i]) else "Motor: --")
+                put(f"state: {st or '--'}  t: {state_elapsed[i]:.1f}s")
                 put(f"dist: {cum_distance_m[i]:.3f}m  still: {cum_time_still_s[i]:.1f}s")
-                if arena_type == ARENA_TYPE_CIRCULAR:
+                if cfg.hud_extra_lines_for_frame is not None:
+                    abs_frame = int(render_start_frame) + int(i)
+                    for extra in cfg.hud_extra_lines_for_frame(abs_frame):
+                        put(str(extra))
+                # RAM HUD before circular motor: ``ram_polys`` can be present while
+                # ``arena_type`` is still ``circular`` (see module docstring).
+                if ram_polys is not None or arena_type == ARENA_TYPE_RADIAL_ARM:
+                    put(
+                        "Working memory errors: "
+                        f"{_hud_memory_label(ram_attrs.get('working_memory_errors'))}"
+                    )
+                    put(
+                        "Reference memory errors: "
+                        f"{_hud_memory_label(ram_attrs.get('reference_memory_errors'))}"
+                    )
+                    put(
+                        "Reference memory successes: "
+                        f"{_hud_memory_label(ram_attrs.get('reference_memory_successes'))}"
+                    )
+                    ex_raw = attrs.get("exit_arm_index", ram_attrs.get("exit_arm"))
+                    ex_arm = _decode_attr(ex_raw) if ex_raw is not None else "--"
+                    #put(f"exit_arm: {ex_arm}")
+                elif arena_type == ARENA_TYPE_CIRCULAR:
                     # r_cm = settings.arena_radius_cm if settings.px_per_cm > 0 else float("nan")
                     # put(f"arena_r: {r_cm:.1f}cm" if np.isfinite(r_cm) else "arena_r: --")
                     # exn = attrs.get("exit_number", settings.exit_number)
                     # put(f"exit: {int(exn) if exn is not None else '--'}")
-                    pass
-                elif arena_type == ARENA_TYPE_RADIAL_ARM:
-                    wme = ram_attrs.get("working_memory_errors", "--")
-                    rme = ram_attrs.get("reference_memory_errors", "--")
-                    rms = ram_attrs.get("reference_memory_successes", "--")
-                    # put(f"RAM WME: {wme}  RME: {rme}  RMS: {rms}")
-                    # ex_arm = ram_attrs.get("exit_arm", attrs.get("exit_arm_index", "--"))
-                    # put(f"exit_arm: {ex_arm}")
+                    if m_hud_frames is not None:
+                        mv = (
+                            float(m_hud_frames[i])
+                            if i < len(m_hud_frames)
+                            else float("nan")
+                        )
+                        put(f"Motor: {_hud_scalar_or_dash(mv)}")
 
             if tray_w > 0 and exemplar_loops and cfg.layers.syllable_tray > 0:
                 tray_roi = canvas[0:h_vid, w_vid : w_vid + tray_w]
                 tray_roi[:] = (24, 24, 30)
                 sid = int(syllable_run[i]) if i < len(syllable_run) else -1
+                mrg = int(cfg.syllable_tray_margin_px)
+                label = f"S {sid}" if sid >= 0 else "S --"
+                fs_tray = 0.52
+                (tw, th), _ = cv2.getTextSize(label, font, fs_tray, thickness)
+                tx = w_vid + max(mrg, (tray_w - tw) // 2)
+                ty_label = 4 + th
+                cv2.putText(
+                    canvas,
+                    label,
+                    (tx, ty_label),
+                    font,
+                    fs_tray,
+                    (238, 238, 248),
+                    thickness,
+                    line_type,
+                )
+                label_reserve = ty_label + 8
                 loop = exemplar_loops.get(sid) if sid >= 0 else None
                 if loop:
                     if cfg.exemplar_tray_bout_centered:
                         _, _, bc = _bout_bounds_center(syllable_run, i)
-                        y_c = _timeline_y_center(bc, max_frames, h_vid)
+                        y_c = _timeline_y_center(bc, max_frames, h_vid) + label_reserve // 2
                     else:
-                        y_c = h_vid // 2
+                        y_c = (h_vid + label_reserve) // 2
                     x_c = w_vid + tray_w // 2
                     fr = loop[i % len(loop)]
-                    mrg = int(cfg.syllable_tray_margin_px)
                     mw = max(2, min(int(cfg.syllable_tray_max_patch_width_px), tray_w - 2 * mrg))
-                    mh = max(2, min(int(cfg.syllable_tray_max_patch_width_px), h_vid - 2 * mrg))
+                    v_avail = max(32, h_vid - 2 * mrg - label_reserve)
+                    mh = max(2, min(int(cfg.syllable_tray_max_patch_width_px), v_avail))
                     fitted = _fit_rgba_to_box(fr, mw, mh)
                     x0 = x_c - fitted.shape[1] // 2
                     y0 = y_c - fitted.shape[0] // 2

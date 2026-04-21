@@ -1,6 +1,50 @@
 uv run python -m vast.kpms.fit --project-dir "D:\work sack\vibration maze\kpms" --model-name "orm_kpms_v1" --max-trials 300 --manifest-csv "C:\Users\admin\code\IMPRESS\ORM\outputs\legacy\trial_manifest_legacy.csv"
 
-uv run python -m maze.kpms.apply --project-dir "D:\work sack\impress data\NOR video\moseq_project\moseq_251017" --model-name paramscan_s1-1e6_s2-1e4_ss-50 --animal-id 1 --session S01
+
+  vast //--------------------------------------------------\\
+
+uv run python -m maze.kpms.apply `
+   --project-dir "E:\kpms" `
+   --model-name orm_kpms_v1 `
+   --animal-id 1 --session S01 --trial T01 
+
+uv run python scripts/build_kpms_training_exemplar_table.py `
+  --model-dir E:\kpms\orm_kpms_v1 `
+  --retain-all-sleap-frames
+
+uv run python scripts/render_trial_overlay.py `
+  --kpms-h5 "E:\kpms\orm_kpms_v1\results_apply.h5" `
+  --kpms-training-exemplars "E:\kpms\orm_kpms_v1\training_exemplar_table.h5" `
+  --animal-id 1 --session S01 --trial T01 `
+  --out E:\overlays `
+  --vertical-exemplar-heading
+
+  ram //--------------------------------------------------\\
+
+
+uv run python scripts/export_ram_trial_manifest_csv.py `
+  --video-base "E:\videos\ehram\standard format" `
+  --trial-ns "C:\Users\admin\code\IMPRESS\ORM\inputs\trial_ns.csv" `
+  --pipeline-h5 "C:\Users\admin\code\IMPRESS\ehram\ehram_results.h5" `
+  --out-csv "E:\ram_trial_manifest.csv"
+
+uv run python -m maze.kpms.apply `
+  --manifest-csv "E:\ram_trial_manifest.csv" `
+  --project-dir "E:\kpms" `
+  --model-name orm_kpms_v1 `
+  --animal-id 3233 --session train-1
+
+uv run python scripts/render_ram_trial_overlay.py `
+  --manifest-csv "E:\ram_trial_manifest.csv" `
+  --pipeline-h5 "C:\Users\admin\code\IMPRESS\ehram\ehram_results.h5" `
+  --kpms-h5 "E:\kpms\orm_kpms_v1\RAMresults_apply.h5" `
+  --kpms-training-exemplars "E:\kpms\orm_kpms_v1\training_exemplar_table.h5" `
+  --vertical-exemplar-heading `
+  --out "E:\overlays" `
+  --animal-id 3233 --session train-1 --trial T01
+
+
+  NOR //--------------------------------------------------\\
 
 
 uv run python scripts/generate_selected_trials_from_nor_kpms_results.py `
@@ -8,14 +52,32 @@ uv run python scripts/generate_selected_trials_from_nor_kpms_results.py `
   --require-sleap
 
 uv run python scripts/build_kpms_training_exemplar_table.py `
-  --model-dir "D:\work sack\impress data\NOR video\moseq_project\moseq_251017\paramscan_s1-1e6_s2-1e4_ss-50" `
-  --retain-all-sleap-frames 
-  
-  `
-  --exemplar-egocentric
+  --model-dir D:\work sack\impress data\NOR video\moseq_project\moseq_251017\paramscan_s1-1e6_s2-1e4_ss-50 `
+  --retain-all-sleap-frames
 
-uv run python scripts/render_trial_overlay.py `
-  --animal-id 1 --session S01 --trial T01 `
-  --out outputs\overlays `
-  --kpms-h5 "D:\work sack\impress data\NOR video\moseq_project\moseq_251017\paramscan_s1-1e6_s2-1e4_ss-50\results_apply.h5" `
-  --kpms-training-exemplars "D:\work sack\impress data\NOR video\moseq_project\moseq_251017\paramscan_s1-1e6_s2-1e4_ss-50\training_exemplar_table.h5"
+uv run python ..\my_nor_wip\scripts\export_nor_trial_manifest_csv.py `
+  --out-csv ..\my_nor_wip\exports\nor_trial_manifest.csv `
+  --pipeline-dir C:\Users\admin\code\IMPRESS\my_nor_wip\my_NOR_results.h5 `
+  --kpms-key-mode raw_t01
+
+
+uv run python -m maze.kpms.apply `
+   --project-dir "D:\work sack\impress data\NOR video\moseq_project\moseq_251017" `
+   --manifest-csv "C:\Users\admin\code\IMPRESS\my_nor_wip\exports\nor_trial_manifest.csv" `
+   --model-name paramscan_s1-1e6_s2-1e4_ss-50 `
+   --animal-id 3101
+
+uv run python ..\my_nor_wip\scripts\bootstrap_orm_from_nor_manifest.py `
+  --manifest-csv ..\my_nor_wip\exports\nor_trial_manifest.csv `
+  --nor-results-h5 ..\my_nor_wip\my_NOR_results.h5 `
+  --out-h5 ..\my_nor_wip\exports\nor_orm_pipeline_overlay.h5 `
+  --continue-on-error
+
+uv run python ..\my_nor_wip\scripts\render_nor_trial_overlay.py `
+  --manifest-csv "C:\Users\admin\code\IMPRESS\my_nor_wip\exports\nor_trial_manifest.csv" `
+  --pipeline-h5 "C:\Users\admin\code\IMPRESS\my_nor_wip\exports\nor_orm_pipeline_overlay.h5" `
+  --nor-results-h5 "C:\Users\admin\code\IMPRESS\my_nor_wip\my_NOR_results.h5" `
+  --out "C:\Users\admin\code\IMPRESS\my_nor_wip" `
+  --kpms-h5 "D:\work sack\impress data\NOR video\moseq_project\moseq_251017\paramscan_s1-1e6_s2-1e4_ss-50\NORresults_apply.h5" `
+  --vertical-exemplar-heading `
+  --animal-id 3101 --session NOR_BL --trial id_obj

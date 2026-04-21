@@ -38,8 +38,8 @@ class TrainingExemplarBuildParams:
     n_neighbors: int = 50
     fps: float = 30.0
     projection_plane: str = "xy"
-    #: If True, match kpMS ``get_typical_trajectories`` (body-centered windows). If False, arena coords.
-    egocentric: bool = False
+    #: If True (default), match kpMS ``get_typical_trajectories`` / trajectory GIFs. If False, arena.
+    egocentric: bool = True
 
 
 def load_selected_trials_manifests(model_dir: Path) -> list[TrialManifest]:

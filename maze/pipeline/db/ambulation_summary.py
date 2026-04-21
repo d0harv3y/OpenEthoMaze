@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 import numpy as np
 
+from maze.core.h5_layout import resolve_ambulation_metrics_group
 from maze.core.schema import NODE_SUMMARY_BY_STATE_DTYPE, NODE_SUMMARY_DTYPE
 
 from ._shared import ensure_group, open_db, safe_str
@@ -74,7 +75,11 @@ def read_exit_metrics(
     """Read exit metrics for a trial from ``ambulation_metrics/<point>/summary``."""
     try:
         with open_db(db_path, "r") as h5:
-            summary = _summary_run_row(h5[key.path()]["ambulation_metrics"][point_name])
+            g_trial = h5[key.path()]
+            g_amb = resolve_ambulation_metrics_group(g_trial)
+            if g_amb is None:
+                return None
+            summary = _summary_run_row(g_amb[point_name])
             if summary is None:
                 return None
             out = np.zeros((1,), dtype=exit_metrics_dtype())

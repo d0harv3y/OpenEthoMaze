@@ -55,6 +55,15 @@ def filter_manifests_by_trial_selectors(
     return out
 
 
+@dataclass(frozen=True)
+class ApplyManifestLoadStats:
+    """Counts at each filtering stage (for diagnostics when no trials match)."""
+
+    n_csv_rows: int
+    n_after_sleap_and_phase: int
+    n_after_animal_session_trial: int
+
+
 def load_manifests_for_apply(
     manifest_csv: Path,
     *,
@@ -64,7 +73,7 @@ def load_manifests_for_apply(
     animal_ids: Optional[list[str]] = None,
     sessions: Optional[list[str]] = None,
     trials: Optional[list[str]] = None,
-) -> list[TrialManifest]:
+) -> tuple[list[TrialManifest], ApplyManifestLoadStats]:
     """
     Load CSV, enrich labels, apply phase/sleap filters, then optional id/session/trial filters.
     """
@@ -76,9 +85,20 @@ def load_manifests_for_apply(
         enrich_from_treatment_labels=enrich_from_treatment_labels,
     )
     manifests = load_manifests(cfg)
+    n_csv = len(manifests)
     manifests = filter_manifests(manifests, cfg)
+    n_after_base = len(manifests)
     manifests = filter_manifests_by_trial_selectors(manifests, animal_ids, sessions, trials)
-    return sorted(manifests, key=lambda m: (m.animal_id, m.session, m.trial))
+    n_after_sel = len(manifests)
+    stats = ApplyManifestLoadStats(
+        n_csv_rows=n_csv,
+        n_after_sleap_and_phase=n_after_base,
+        n_after_animal_session_trial=n_after_sel,
+    )
+    return (
+        sorted(manifests, key=lambda m: (m.animal_id, m.session, m.trial)),
+        stats,
+    )
 
 
 def interpolate_nans(arr: np.ndarray) -> np.ndarray:
@@ -185,16 +205,16 @@ def apply_kpms_checkpoint_from_manifests(
     if not coordinates:
         raise RuntimeError("No usable trajectories after preprocessing; nothing to apply.")
 
-    interpolate_nans_in_coordinates(coordinates)
-    filter_low_confidence_fragments(
-        coordinates,
-        confidences,
-        conf_thresh=cfg.conf_threshold,
-        min_points=cfg.min_points_per_frame,
-        min_fragment=cfg.min_fragment_frames,
-    )
-    if not coordinates:
-        raise RuntimeError("No recordings left after confidence / fragment filtering.")
+    # interpolate_nans_in_coordinates(coordinates)
+    # filter_low_confidence_fragments(
+    #     coordinates,
+    #     confidences,
+    #     conf_thresh=cfg.conf_threshold,
+    #     min_points=cfg.min_points_per_frame,
+    #     min_fragment=cfg.min_fragment_frames,
+    # )
+    # if not coordinates:
+    #     raise RuntimeError("No recordings left after confidence / fragment filtering.")
 
     data, metadata = kpms.format_data(
         coordinates,
@@ -299,7 +319,7 @@ def main() -> None:
     if not manifest_csv.is_file():
         raise FileNotFoundError(f"Manifest CSV not found: {manifest_csv}")
 
-    manifests = load_manifests_for_apply(
+    manifests, stats = load_manifests_for_apply(
         manifest_csv,
         include_habituation=args.include_habituation,
         include_experimental=not args.exclude_experimental,
@@ -309,8 +329,18 @@ def main() -> None:
         trials=expand_filter_arg(args.trial),
     )
     if not manifests:
+        aid = expand_filter_arg(args.animal_id)
+        sess = expand_filter_arg(args.session)
+        tr = expand_filter_arg(args.trial)
         raise RuntimeError(
-            "No trials match filters (check --animal-id / --session / --trial and phase options)."
+            "No trials match filters. "
+            f"manifest={manifest_csv} "
+            f"(rows={stats.n_csv_rows}, after sleap+phase={stats.n_after_sleap_and_phase}, "
+            f"after id/session/trial={stats.n_after_animal_session_trial}). "
+            "Apply requires non-empty sleap_path and (by default) experimental phase. "
+            f"Filters: animal_id={aid!r} session={sess!r} trial={tr!r}. "
+            "Use --manifest-csv pointing at a CSV that lists your trials; "
+            "animal_id/session/trial must match those columns exactly (including spacing/case)."
         )
 
     cfg = KpmsApplyConfig(

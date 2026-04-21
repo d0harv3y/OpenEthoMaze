@@ -9,6 +9,7 @@ import csv
 import math
 import numpy as np
 
+from ...core.h5_layout import resolve_ambulation_metrics_group
 from ...core.schema import NODE_SUMMARY_DTYPE
 from ..defaults import HYBRID_POINT_NAME
 from ..paths import OUTPUT_H5
@@ -82,7 +83,7 @@ def _append_hybrid_summary_metric_rows(
     base_row: dict[str, Any],
     g_trial: Any,
 ) -> None:
-    g_amb = g_trial.get("ambulation_metrics")
+    g_amb = resolve_ambulation_metrics_group(g_trial)
     if g_amb is None or HYBRID_POINT_NAME not in g_amb:
         return
     g_pt = g_amb[HYBRID_POINT_NAME]
@@ -176,25 +177,24 @@ def _extract_trial_metrics(db_path: Path, key: TrialKey) -> dict[str, Any]:
                 _pt = _pt.decode("utf-8", errors="replace")
             result["trajectory_source"] = str(_pt).strip() or HYBRID_POINT_NAME
 
-            if "ambulation_metrics" in g_trial:
-                g_amb = g_trial["ambulation_metrics"]
-                if HYBRID_POINT_NAME in g_amb:
-                    summary_primary = _run_band_summary_row(g_amb[HYBRID_POINT_NAME])
-                    if summary_primary is not None:
-                        result["total_distance_m"] = float(summary_primary["total_distance_m"])
-                        result["mean_speed_mps"] = float(summary_primary["mean_speed_mps"])
-                        result["time_immobile_s"] = float(summary_primary["time_immobile_s"])
-                        result["n_movement_bouts"] = int(summary_primary["n_movement_bouts"])
-                        result["latency_to_exit_s"] = float(summary_primary["latency_to_exit_s"])
-                        result["time_in_exit_zone_s"] = float(summary_primary["time_in_exit_zone_s"])
-                        result["mean_distance_to_exit_cm"] = float(
-                            summary_primary["mean_distance_to_exit_cm"]
-                        )
-                        result["path_efficiency"] = float(summary_primary["path_efficiency"])
-                        if "time_in_center_s" in summary_primary.dtype.names:
-                            result["time_in_center_s"] = float(summary_primary["time_in_center_s"])
-                        if "n_center_entries" in summary_primary.dtype.names:
-                            result["n_center_entries"] = int(summary_primary["n_center_entries"])
+            g_amb = resolve_ambulation_metrics_group(g_trial)
+            if g_amb is not None and HYBRID_POINT_NAME in g_amb:
+                summary_primary = _run_band_summary_row(g_amb[HYBRID_POINT_NAME])
+                if summary_primary is not None:
+                    result["total_distance_m"] = float(summary_primary["total_distance_m"])
+                    result["mean_speed_mps"] = float(summary_primary["mean_speed_mps"])
+                    result["time_immobile_s"] = float(summary_primary["time_immobile_s"])
+                    result["n_movement_bouts"] = int(summary_primary["n_movement_bouts"])
+                    result["latency_to_exit_s"] = float(summary_primary["latency_to_exit_s"])
+                    result["time_in_exit_zone_s"] = float(summary_primary["time_in_exit_zone_s"])
+                    result["mean_distance_to_exit_cm"] = float(
+                        summary_primary["mean_distance_to_exit_cm"]
+                    )
+                    result["path_efficiency"] = float(summary_primary["path_efficiency"])
+                    if "time_in_center_s" in summary_primary.dtype.names:
+                        result["time_in_center_s"] = float(summary_primary["time_in_center_s"])
+                    if "n_center_entries" in summary_primary.dtype.names:
+                        result["n_center_entries"] = int(summary_primary["n_center_entries"])
 
             # Feedback error (incongruent feedback)
             if "feedback" in g_trial:

@@ -94,18 +94,26 @@ def main() -> int:
     ap.add_argument("--fps", type=float, default=30.0, help="FPS for pre/post frame counts")
     ap.add_argument("--exemplar-pre-seconds", type=float, default=0.167)
     ap.add_argument("--exemplar-post-seconds", type=float, default=0.5)
-    ap.add_argument("--exemplar-min-frequency", type=float, default=0.003)
-    ap.add_argument("--exemplar-min-duration", type=int, default=3)
-    ap.add_argument("--exemplar-neighbors", type=int, default=50)
+    ap.add_argument("--exemplar-min-frequency", type=float, default=0.0001)
+    ap.add_argument("--exemplar-min-duration", type=int, default=1)
+    ap.add_argument(
+        "--exemplar-neighbors",
+        type=int,
+        default=42,
+        help=(
+            "Number of neighboring syllable instances to consider around each candidate exemplar "
+            "when selecting diverse exemplars; higher values increase diversity but may slow processing."
+        ),
+    )
     ap.add_argument(
         "--no-density-sample",
         action="store_true",
         help="Disable density sampling when choosing syllable instances",
     )
     ap.add_argument(
-        "--exemplar-egocentric",
+        "--exemplar-arena-coords",
         action="store_true",
-        help="Body-centered median trajectories (legacy kpMS style); default is arena coordinates",
+        help="Median in arena coordinates (not recommended for GIF-like motifs); default is ego-centered",
     )
     ap.add_argument(
         "--ignore-fit-summary-preprocess",
@@ -155,7 +163,7 @@ def main() -> int:
         n_neighbors=int(args.exemplar_neighbors),
         fps=float(args.fps),
         projection_plane="xy",
-        egocentric=bool(args.exemplar_egocentric),
+        egocentric=not bool(args.exemplar_arena_coords),
     )
 
     typical = compute_training_typical_trajectories(

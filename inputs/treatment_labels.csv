@@ -102,7 +102,7 @@ animal_id,6,?,VASTcont,Hayden,?,RBSF,n/a,
 animal_id,3243,tg,VASTalt,Emma|Hayden,F,RBSF,n/a,
 animal_id,3244,wt,VASTalt,Emma|Hayden,F,RBSF,n/a,
 animal_id,3245,tg,VASTalt,Emma|Hayden,F,n/a,n/a,
-animal_id,32494,wt,VASTalt,Emma|Hayden,M,n/a,n/a,omit
+animal_id,32494,wt,VASTalt,Emma|Hayden,M,n/a,n/a,omit?
 animal_id,32571,tg,VASTalt,Emma|Hayden,M,RBSF,n/a,
 animal_id,32581,wt,VASTalt,Emma|Hayden,M,RBSF,n/a,
 animal_id,3250,tg,VASTalt,Emma|Hayden,M,n/a,n/a,omit
@@ -111,3 +111,9 @@ animal_id,3261,tg,VASTalt,Emma|Hayden,M,n/a,n/a,
 animal_id,3246,wt,VASTalt,Emma|Hayden,F,n/a,n/a,
 animal_id,3252,tg,VASTalt,Emma|Hayden,F,n/a,n/a,
 animal_id,3253,wt,VASTalt,Emma|Hayden,F,n/a,n/a,
+animal_id,3278,tg,VASTalt,Emma|Hayden,M,n/a,n/a,
+animal_id,3279,wt,VASTalt,Emma|Hayden,M,n/a,n/a,
+animal_id,3280,tg,VASTalt,Emma|Hayden,F,n/a,n/a,
+animal_id,3281,wt,VASTalt,Emma|Hayden,F,n/a,n/a,
+animal_id,3284,tg,VASTalt,Emma|Hayden,F,RBSF,n/a,
+animal_id,3285,wt,VASTalt,Emma|Hayden,F,RBSF,n/a,

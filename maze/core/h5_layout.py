@@ -9,6 +9,7 @@ import numpy as np
 
 from .schema import (
     AMBULATION_GROUP,
+    AMBULATION_GROUP_LEGACY,
     FEEDBACK_GROUP,
     FEEDBACK_ROW_DTYPE,
     FEEDBACK_TABLE_DATASET,
@@ -31,6 +32,18 @@ def open_db(db_path: Path | str, mode: str = "a") -> h5py.File:
 def ensure_group(parent: h5py.Group, name: str) -> h5py.Group:
     """Return an existing child group or create it."""
     return parent[name] if name in parent else parent.create_group(name)
+
+
+def resolve_ambulation_metrics_group(g_trial: h5py.Group) -> h5py.Group | None:
+    """
+    Return the ``ambulation_metrics`` child group, or legacy ``ambulation metrics`` if present.
+
+    ORM writers use :data:`AMBULATION_GROUP`; some older HDF5 files use a spaced name.
+    """
+    for name in (AMBULATION_GROUP, AMBULATION_GROUP_LEGACY):
+        if name in g_trial:
+            return g_trial[name]
+    return None
 
 
 def safe_str(value: Any) -> str:

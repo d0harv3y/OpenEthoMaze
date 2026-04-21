@@ -21,6 +21,7 @@ except ImportError:
     HAS_CV2 = False
 
 from ...core.anatomy import STANDARD_NODE_NAMES
+from ...core.h5_layout import resolve_ambulation_metrics_group
 from ..defaults import QC_EXIT_ZONE_RADIUS_CM
 from ..io.sleap_loader import (
     apply_jump_filter,
@@ -109,9 +110,10 @@ def render_overlay_video(
                 m_series = np.asarray(g_fb["m"][:], dtype=np.float64)
 
         xy_table = None
-        if "ambulation_metrics" in g_trial and "spot" in g_trial["ambulation_metrics"]:
+        g_amb = resolve_ambulation_metrics_group(g_trial)
+        if g_amb is not None and "spot" in g_amb:
             try:
-                xy_table = g_trial["ambulation_metrics"]["spot"]["xy"][:]
+                xy_table = g_amb["spot"]["xy"][:]
             except (KeyError, ValueError):
                 pass
 
