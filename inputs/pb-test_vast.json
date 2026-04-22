@@ -47,7 +47,9 @@
     "sleap_model_path": "D:/work sack/combo_mazes_0",
     "track_show": true,
     "track_async": false,
-    "track_backup_only": false,
+    "track_enable_backup": true,
+    "track_enable_sleap": true,
+    "track_infer_scale": 1.0,
     "overlay_opacity_pct": 70,
     "arduino_port": "— Select port —"
   },
@@ -82,7 +84,9 @@
   "gui": {
     "track_show": true,
     "track_async": false,
-    "track_backup_only": false,
+    "track_enable_backup": true,
+    "track_enable_sleap": true,
+    "track_infer_scale": 1.0,
     "track_sleap_path": "D:/work sack/combo_mazes_0",
     "track_confidence": 50,
     "track_sleap_every_n": 1,

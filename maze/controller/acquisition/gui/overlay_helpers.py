@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import numpy as np
 
@@ -177,6 +177,42 @@ def blend_blob_mask_into_overlay(
         cv2.copyTo(blended, blob_mask, overlay)
 
 
+def draw_ram_template_polylines(
+    overlay: np.ndarray,
+    polys: dict[str, Any],
+    exit_xyr: Optional[Tuple[float, float, float]],
+) -> None:
+    """Draw RAM projected regions on ``overlay`` (BGR) and optional exit hole circle."""
+    if not HAS_CV2:
+        return
+    center_color = (0, 220, 255)
+    hole_color = (180, 180, 255)
+    arm_color = (0, 200, 200)
+    for name, poly in polys.items():
+        arr = np.asarray(poly, dtype=np.float64)
+        if arr.ndim != 2 or arr.shape[0] < 3 or arr.shape[1] < 2:
+            continue
+        pts = np.round(arr).astype(np.int32)
+        if str(name) == "center":
+            c = center_color
+        elif str(name) == "hole":
+            c = hole_color
+        else:
+            c = arm_color
+        cv2.polylines(overlay, [pts], True, c, 1, cv2.LINE_AA)
+    if exit_xyr is not None:
+        ex, ey, er = exit_xyr
+        if er > 0 and np.isfinite(ex) and np.isfinite(ey):
+            cv2.circle(
+                overlay,
+                (int(round(ex)), int(round(ey))),
+                int(round(er)),
+                (255, 0, 255),
+                2,
+                cv2.LINE_AA,
+            )
+
+
 def draw_roi_and_tracking_overlay(
     img: np.ndarray,
     roi_center_xy: Optional[Tuple[float, float]],
@@ -193,6 +229,8 @@ def draw_roi_and_tracking_overlay(
     pose_node_valid: Optional[np.ndarray] = None,
     blob_mask: Optional[np.ndarray] = None,
     blob_crop_rect: Optional[Tuple[int, int, int, int]] = None,
+    ram_polys: Optional[dict[str, Any]] = None,
+    ram_exit_xyr: Optional[Tuple[float, float, float]] = None,
 ) -> np.ndarray:
     """Draw ROI, state overlays, SLEAP skeleton, and fallback position marker."""
     if not HAS_CV2:
@@ -205,7 +243,9 @@ def draw_roi_and_tracking_overlay(
     overlay = out.copy()
     cx_i = int(roi_center_xy[0]) if roi_center_xy else None
     cy_i = int(roi_center_xy[1]) if roi_center_xy else None
-    if roi_center_xy is not None and roi_radius_px > 0:
+    if ram_polys is not None:
+        draw_ram_template_polylines(overlay, ram_polys, ram_exit_xyr)
+    elif roi_center_xy is not None and roi_radius_px > 0:
         cv2.circle(overlay, (cx_i, cy_i), int(roi_radius_px), (0, 255, 255), 1)
     if overlay_info is not None and cx_i is not None and cy_i is not None:
         arena = overlay_info.arena

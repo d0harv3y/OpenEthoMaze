@@ -7,13 +7,15 @@ from typing import Sequence
 from .app_shell import run_mode_gui
 
 
-def _preload_vast_runtime_dependencies() -> None:
+def _preload_sleap_stack_before_qt() -> None:
     """
-    Preload the VAST-only SLEAP stack before Qt initializes.
+    Import ``sleap_nn`` (Lightning/torchmetrics/matplotlib/…) before ``QApplication``.
 
-    Some environments crash when `sleap_nn` imports after PySide/shiboken setup.
-    Keeping the workaround in this dedicated helper makes the startup asymmetry
-    explicit and gives future profiling work one narrow seam to revisit.
+    If ``sleap_nn`` is first imported after PySide/shiboken is active, some stacks
+    hit ``dateutil`` → ``six.moves`` while shiboken hooks ``inspect``; combined
+    with torch's ``inspect.getfile`` patch this can raise
+    ``AttributeError: '_SixMetaPathImporter' object has no attribute '_path'``.
+    Preloading avoids that ordering bug for both VAST and RAM.
 
     Set ``MAZE_ACQ_SKIP_SLEAP_PRELOAD=1`` to skip (e.g. broken torch/lightning import).
     """
@@ -70,8 +72,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the GUI. Returns exit code (0 = success)."""
     args = _parse_args(argv)
 
-    if args.mode == "vast":
-        _preload_vast_runtime_dependencies()
+    _preload_sleap_stack_before_qt()
 
     return run_mode_gui(args.mode, debug_log=args.debug_log, dev=args.dev)
 

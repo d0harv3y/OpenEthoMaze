@@ -12,6 +12,8 @@ from .radial_arm.config import (
     RadialArmControllerConfig,
     RadialArmTaskConfig,
     RadialArmTemplateConfig,
+    ram_apothem_cm_from_template,
+    sync_ram_px_per_cm,
 )
 from .shared_config import AcquisitionConfig, AnimalInfo, FallbackTrackingConfig, SessionConfig
 from .vast.config import (
@@ -220,10 +222,38 @@ def _shared_to_dict(config: AcquisitionConfig) -> Dict[str, Any]:
         "sleap_model_path": config.sleap_model_path or "",
         "track_show": config.track_show,
         "track_async": config.track_async,
-        "track_backup_only": config.track_backup_only,
+        "track_enable_backup": config.track_enable_backup,
+        "track_enable_sleap": config.track_enable_sleap,
+        "track_infer_scale": float(config.track_infer_scale),
         "overlay_opacity_pct": config.overlay_opacity_pct,
         "arduino_port": config.arduino_port,
     }
+
+
+def _infer_scale_from_dict(data: Dict[str, Any]) -> float:
+    """Clamp inference scale to 1.0 (full) or 0.5 (half) for v1."""
+    try:
+        v = float(data.get("track_infer_scale", 1.0))
+    except (TypeError, ValueError):
+        return 1.0
+    if 0.4 <= v <= 0.6:
+        return 0.5
+    return 1.0
+
+
+def _enable_backup_sleap_from_dict(data: Dict[str, Any]) -> tuple[bool, bool]:
+    """Parse backup/SLEAP toggles; migrate legacy ``track_backup_only``."""
+    eb = data.get("track_enable_backup")
+    es = data.get("track_enable_sleap")
+    if eb is not None or es is not None:
+        return (
+            bool(eb if eb is not None else True),
+            bool(es if es is not None else True),
+        )
+    legacy = data.get("track_backup_only")
+    if legacy is not None:
+        return True, not bool(legacy)
+    return True, True
 
 
 def _run_mode_from_dict(data: Dict[str, Any]) -> str:
@@ -238,6 +268,7 @@ def _shared_kwargs_from_dict(
     default_h5_filename: str,
 ) -> Dict[str, Any]:
     output_dir = data.get("output_dir")
+    _eb, _es = _enable_backup_sleap_from_dict(data)
     return {
         "session": _session_from_dict(data.get("session", {})),
         "output_dir": output_dir if output_dir else None,
@@ -263,7 +294,9 @@ def _shared_kwargs_from_dict(
         "sleap_model_path": str(data.get("sleap_model_path", "") or "").strip(),
         "track_show": bool(data.get("track_show", True)),
         "track_async": bool(data.get("track_async", False)),
-        "track_backup_only": bool(data.get("track_backup_only", False)),
+        "track_enable_backup": _eb,
+        "track_enable_sleap": _es,
+        "track_infer_scale": _infer_scale_from_dict(data),
         "overlay_opacity_pct": max(
             0, min(100, int(data.get("overlay_opacity_pct", 70)))
         ),
@@ -310,7 +343,9 @@ def _radial_arm_task_to_dict(config: RadialArmTaskConfig) -> Dict[str, Any]:
             "template_center_x_px": config.calibration.template_center_x_px,
             "template_center_y_px": config.calibration.template_center_y_px,
             "template_rotation_deg": config.calibration.template_rotation_deg,
+            "apothem_px": config.calibration.apothem_px,
             "px_per_cm": config.calibration.px_per_cm,
+            "tracking_mask_margin_px": config.calibration.tracking_mask_margin_px,
             "edit_region_name": config.calibration.edit_region_name,
         },
         "exit_arm_index": config.exit_arm_index,
@@ -322,35 +357,48 @@ def _radial_arm_task_to_dict(config: RadialArmTaskConfig) -> Dict[str, Any]:
     }
 
 
+def _radial_arm_calibration_from_dict(
+    calibration_data: Dict[str, Any],
+    *,
+    template: RadialArmTemplateConfig,
+) -> RadialArmCalibrationConfig:
+    ap_cm = ram_apothem_cm_from_template(template)
+    ap_px = float(calibration_data.get("apothem_px", 0.0))
+    px_legacy = float(calibration_data.get("px_per_cm", 0.0))
+    if ap_px <= 0.0 and px_legacy > 0.0 and ap_cm > 0.0:
+        ap_px = px_legacy * ap_cm
+    return RadialArmCalibrationConfig(
+        template_center_x_px=float(calibration_data.get("template_center_x_px", 0.0)),
+        template_center_y_px=float(calibration_data.get("template_center_y_px", 0.0)),
+        template_rotation_deg=float(calibration_data.get("template_rotation_deg", 0.0)),
+        apothem_px=ap_px,
+        px_per_cm=0.0,
+        tracking_mask_margin_px=float(calibration_data.get("tracking_mask_margin_px", 0.0)),
+        edit_region_name=str(calibration_data.get("edit_region_name", "") or ""),
+    )
+
+
 def _radial_arm_task_from_dict(data: Dict[str, Any]) -> RadialArmTaskConfig:
     template_data = data.get("template", {}) if isinstance(data, dict) else {}
     calibration_data = data.get("calibration", {}) if isinstance(data, dict) else {}
-    return RadialArmTaskConfig(
-        template=RadialArmTemplateConfig(
-            center_midedge_to_midedge_cm=float(
-                template_data.get("center_midedge_to_midedge_cm", 80.0)
-            ),
-            arm_length_cm=float(template_data.get("arm_length_cm", 55.0)),
-            arm_width_cm=float(template_data.get("arm_width_cm", 15.0)),
-            arm_split_cm=float(template_data.get("arm_split_cm", 27.5)),
-            hole_arm_index=int(template_data.get("hole_arm_index", 0)),
-            hole_radius_cm=float(template_data.get("hole_radius_cm", 5.0)),
-            hole_inset_from_arm_end_cm=float(
-                template_data.get("hole_inset_from_arm_end_cm", 10.0)
-            ),
+    template = RadialArmTemplateConfig(
+        center_midedge_to_midedge_cm=float(
+            template_data.get("center_midedge_to_midedge_cm", 80.0)
         ),
-        calibration=RadialArmCalibrationConfig(
-            template_center_x_px=float(
-                calibration_data.get("template_center_x_px", 0.0)
-            ),
-            template_center_y_px=float(
-                calibration_data.get("template_center_y_px", 0.0)
-            ),
-            template_rotation_deg=float(
-                calibration_data.get("template_rotation_deg", 0.0)
-            ),
-            px_per_cm=float(calibration_data.get("px_per_cm", 0.0)),
-            edit_region_name=str(calibration_data.get("edit_region_name", "") or ""),
+        arm_length_cm=float(template_data.get("arm_length_cm", 55.0)),
+        arm_width_cm=float(template_data.get("arm_width_cm", 15.0)),
+        arm_split_cm=float(template_data.get("arm_split_cm", 27.5)),
+        hole_arm_index=int(template_data.get("hole_arm_index", 0)),
+        hole_radius_cm=float(template_data.get("hole_radius_cm", 5.0)),
+        hole_inset_from_arm_end_cm=float(
+            template_data.get("hole_inset_from_arm_end_cm", 10.0)
+        ),
+    )
+    ram = RadialArmTaskConfig(
+        template=template,
+        calibration=_radial_arm_calibration_from_dict(
+            calibration_data,
+            template=template,
         ),
         exit_arm_index=int(data.get("exit_arm_index", 0)),
         rewarded_arm_index=int(data.get("rewarded_arm_index", 0)),
@@ -359,6 +407,8 @@ def _radial_arm_task_from_dict(data: Dict[str, Any]) -> RadialArmTaskConfig:
         stimulus_frequency_hz=float(data.get("stimulus_frequency_hz", 5000.0)),
         stimulus_enabled=bool(data.get("stimulus_enabled", False)),
     )
+    sync_ram_px_per_cm(ram)
+    return ram
 
 
 def config_to_dict(config: AcquisitionConfig) -> Dict[str, Any]:
@@ -377,7 +427,9 @@ def gui_to_dict(
     *,
     track_show: bool = False,
     track_async: bool = False,
-    track_backup_only: bool = False,
+    track_enable_backup: bool = True,
+    track_enable_sleap: bool = True,
+    track_infer_scale: float = 1.0,
     track_sleap_path: str = "",
     track_confidence: int = 50,
     track_sleap_every_n: int = 1,
@@ -393,7 +445,9 @@ def gui_to_dict(
     return {
         "track_show": track_show,
         "track_async": track_async,
-        "track_backup_only": track_backup_only,
+        "track_enable_backup": track_enable_backup,
+        "track_enable_sleap": track_enable_sleap,
+        "track_infer_scale": float(track_infer_scale),
         "track_sleap_path": track_sleap_path,
         "track_confidence": track_confidence,
         "track_sleap_every_n": track_sleap_every_n,
@@ -477,8 +531,15 @@ def _merge_gui_into_config(
         config.track_show = bool(gui["track_show"])
     if gui.get("track_async") is not None:
         config.track_async = bool(gui["track_async"])
-    if gui.get("track_backup_only") is not None:
-        config.track_backup_only = bool(gui["track_backup_only"])
+    if gui.get("track_enable_backup") is not None:
+        config.track_enable_backup = bool(gui["track_enable_backup"])
+    if gui.get("track_enable_sleap") is not None:
+        config.track_enable_sleap = bool(gui["track_enable_sleap"])
+    elif gui.get("track_backup_only") is not None:
+        config.track_enable_backup = True
+        config.track_enable_sleap = not bool(gui["track_backup_only"])
+    if gui.get("track_infer_scale") is not None:
+        config.track_infer_scale = _infer_scale_from_dict(gui)
     if gui.get("track_opacity") is not None:
         config.overlay_opacity_pct = max(0, min(100, int(gui["track_opacity"])))
     if gui.get("arduino_port") is not None:

@@ -6,6 +6,25 @@ from ..shared_config import AcquisitionConfig
 from ....core.tasks import ARENA_TYPE_RADIAL_ARM
 
 
+def ram_apothem_cm_from_template(template: RadialArmTemplateConfig) -> float:
+    """Half of center mid-edge span; apothem of the hub 16-gon in cm."""
+    return float(template.center_midedge_to_midedge_cm) / 2.0
+
+
+def ram_derived_px_per_cm(template: RadialArmTemplateConfig, calibration: RadialArmCalibrationConfig) -> float:
+    """pixels per cm from hub apothem knob and physical print size (VAST-style ratio)."""
+    ap_cm = ram_apothem_cm_from_template(template)
+    ap_px = float(calibration.apothem_px)
+    if ap_cm > 0.0 and ap_px > 0.0:
+        return ap_px / ap_cm
+    return 0.0
+
+
+def sync_ram_px_per_cm(ram: RadialArmTaskConfig) -> None:
+    """Write derived scale into ``calibration.px_per_cm`` for H5 / pipeline consumers."""
+    ram.calibration.px_per_cm = ram_derived_px_per_cm(ram.template, ram.calibration)
+
+
 @dataclass
 class RadialArmTemplateConfig:
     """Canonical template parameters for the radial-arm maze."""
@@ -26,7 +45,13 @@ class RadialArmCalibrationConfig:
     template_center_x_px: float = 0.0
     template_center_y_px: float = 0.0
     template_rotation_deg: float = 0.0
+    #: Hub apothem in **image pixels** (distance center → flat side). Paired with
+    #: ``center_midedge_to_midedge_cm`` to derive ``px_per_cm`` (read-only ratio).
+    apothem_px: float = 0.0
+    #: Denormalized scale for HDF5 / legacy readers; kept in sync by :func:`sync_ram_px_per_cm`.
     px_per_cm: float = 0.0
+    #: Extra margin (px) around template bbox for tracking crop; ``0`` = use 20% of half-extent.
+    tracking_mask_margin_px: float = 0.0
     edit_region_name: str = ""
 
 

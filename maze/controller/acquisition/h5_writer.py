@@ -212,7 +212,9 @@ def compute_radial_arm_settings_payloads(
             "template_center_x_px": calibration.template_center_x_px,
             "template_center_y_px": calibration.template_center_y_px,
             "template_rotation_deg": calibration.template_rotation_deg,
+            "apothem_px": float(calibration.apothem_px),
             "px_per_cm": calibration.px_per_cm,
+            "tracking_mask_margin_px": float(calibration.tracking_mask_margin_px),
             "edit_region_name": calibration.edit_region_name,
         },
         "template_regions_cm": template_regions_cm,
@@ -261,7 +263,11 @@ def write_radial_arm_trial_settings(
             "template_center_x_px": config.radial_arm.calibration.template_center_x_px,
             "template_center_y_px": config.radial_arm.calibration.template_center_y_px,
             "template_rotation_deg": config.radial_arm.calibration.template_rotation_deg,
+            "apothem_px": float(config.radial_arm.calibration.apothem_px),
             "px_per_cm": config.radial_arm.calibration.px_per_cm,
+            "tracking_mask_margin_px": float(
+                config.radial_arm.calibration.tracking_mask_margin_px
+            ),
             "edit_region_name": config.radial_arm.calibration.edit_region_name,
         },
     )

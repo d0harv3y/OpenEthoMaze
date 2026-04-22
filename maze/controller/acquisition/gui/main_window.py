@@ -8,7 +8,7 @@ from __future__ import annotations
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 
@@ -22,6 +22,7 @@ from ..h5_writer import open_db
 from ..playback_loader import PlaybackHydration, load_playback_hydration
 from ..recording import TrialRecorder
 from .. import app_logging
+from ..radial_arm.config import RadialArmControllerConfig
 from ..shared_controller import config_center_xy, config_tracking_roi
 from ..task_registry import AcquisitionMode, get_task_spec
 from .analysis_worker import AnalysisWorker
@@ -145,6 +146,8 @@ class MainWindow(QMainWindow):
         self._update_window_title()
         self._camera_timer: Optional[QTimer] = None
         self._last_preview_img_size: Optional[Tuple[int, int]] = None  # (width, height) for click mapping
+        # Last flipped raw frame (BGR or gray) for eyedropper hover; updated each camera tick.
+        self._last_eyedropper_frame_bgr: Optional[np.ndarray] = None
         self._last_track_xy: Optional[Tuple[float, float]] = None  # latest valid tracking position for run loop
         self._pose_jump_state = PoseJumpState()
         self._tracking_controller = TrackingController(self._config) if HAS_TRACKING and TrackingController is not None else None
@@ -152,7 +155,8 @@ class MainWindow(QMainWindow):
         self._display_fps_times: list = []  # ring of frame timestamps for display FPS (max 30)
         self._display_fps_max_samples = 30
         self._last_display_fps: float = 0.0  # latest preview FPS estimate for dev HUD
-        self._last_frame_timings: Optional[Tuple[float, float]] = None  # (read_ms, process_ms) for tooltip
+        # Per-phase process times (ms) for last camera frame; see Display FPS tooltip.
+        self._last_frame_phase_ms: Dict[str, float] = {}
         # Virtual acquisition: during idle (before Start trial), pause video frame advancement
         # so playback starts exactly when Start trial is pressed.
         self._virtual_video_path: Optional[Path] = None
@@ -267,12 +271,40 @@ class MainWindow(QMainWindow):
         self._frame_counter_label = QLabel("—")
         self._frame_counter_label.setToolTip("Virtual/preview frame index (and total if known)")
         arena_track_row.addWidget(self._frame_counter_label)
-        arena_track_row.addWidget(QLabel("Video:"))
+        arena_track_row.addWidget(QLabel("Gray (hover):"))
+        self._intensity_hover_label = QLabel("—")
+        self._intensity_hover_label.setMinimumWidth(36)
+        self._intensity_hover_label.setToolTip(
+            "Grayscale 0–255 under cursor (same as backup tracking). Move over live preview."
+        )
+        arena_track_row.addWidget(self._intensity_hover_label)
+        # Backup range and video controls are split into a second row beneath arena_track_row
+        arena_track_subrow = QHBoxLayout()
+        self._range_from_click_cb = QCheckBox("Set backup range from next click")
+        self._range_from_click_cb.setToolTip(
+            "Next click on preview samples a small neighborhood and sets Tracking → Range low/high."
+        )
+        arena_track_subrow.addWidget(self._range_from_click_cb)
+        arena_track_subrow.addWidget(QLabel("±δ"))
+        self._range_pick_delta_spin = QSpinBox()
+        self._range_pick_delta_spin.setRange(0, 80)
+        self._range_pick_delta_spin.setValue(12)
+        self._range_pick_delta_spin.setToolTip("Half-width added to neighborhood min/max for backup range.")
+        arena_track_subrow.addWidget(self._range_pick_delta_spin)
+        arena_track_subrow.addWidget(QLabel("nbhd"))
+        self._range_pick_half_spin = QSpinBox()
+        self._range_pick_half_spin.setRange(0, 15)
+        self._range_pick_half_spin.setValue(2)
+        self._range_pick_half_spin.setToolTip("Neighborhood half-size in pixels (patch side = 2×nbhd+1).")
+        arena_track_subrow.addWidget(self._range_pick_half_spin)
+        arena_track_subrow.addWidget(QLabel("Video:"))
         self._video_filename_label = QLabel("—")
         self._video_filename_label.setToolTip("Current virtual video filename")
-        arena_track_row.addWidget(self._video_filename_label)
-        arena_track_row.addStretch()
+        arena_track_subrow.addWidget(self._video_filename_label)
+        arena_track_subrow.addStretch()
+ 
         camera_ly.addLayout(arena_track_row)
+        camera_ly.addLayout(arena_track_subrow)
         layout.addWidget(camera_section)
         if SectionWithSettings:
             camera_section.settings_clicked.connect(
@@ -474,8 +506,11 @@ class MainWindow(QMainWindow):
         self._reset_sleap_node_jump_state()
         if self._tracking_controller is not None:
             path = self._config.sleap_model_path or ""
-            backup_only = self._config.track_backup_only
-            self._tracking_controller.set_sleap_params(path.strip(), backup_only)
+            self._tracking_controller.set_tracker_sources(
+                path.strip(),
+                bool(getattr(self._config, "track_enable_backup", True)),
+                bool(getattr(self._config, "track_enable_sleap", True)),
+            )
 
     def _update_pose_last_and_valid(
         self,
@@ -527,7 +562,9 @@ class MainWindow(QMainWindow):
                 gui = gui_to_dict(
                     track_show=self._config.track_show,
                     track_async=self._config.track_async,
-                    track_backup_only=self._config.track_backup_only,
+                    track_enable_backup=self._config.track_enable_backup,
+                    track_enable_sleap=self._config.track_enable_sleap,
+                    track_infer_scale=float(getattr(self._config, "track_infer_scale", 1.0)),
                     track_sleap_path=self._config.sleap_model_path or "",
                     track_confidence=self._config.sleap_confidence_pct,
                     track_sleap_every_n=self._config.sleap_every_n,
@@ -672,32 +709,103 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(msg)
 
     def eventFilter(self, obj, event) -> bool:
-        if obj is self._camera_label and event.type() == QEvent.Type.MouseButtonPress:
-            if self._roi_set_center_click.isChecked() and self._camera_controller is not None:
-                size = self._camera_controller.get_last_preview_size()
-                if size is not None:
-                    iw, ih = size
-                    if iw > 0 and ih > 0:
-                        lw, lh = self._camera_label.width(), self._camera_label.height()
-                        lx, ly = event.position().x(), event.position().y()
-                        ix, iy = map_click_to_image_coords(
-                            lx,
-                            ly,
-                            lw,
-                            lh,
-                            iw,
-                            ih,
-                        )
-                        if self._task_mode == "ram" and hasattr(self._config, "radial_arm"):
-                            self._config.radial_arm.calibration.template_center_x_px = float(ix)
-                            self._config.radial_arm.calibration.template_center_y_px = float(iy)
-                            message = f"RAM template center set to ({ix}, {iy})"
-                        else:
-                            self._config.arena.arena_center_x_px = float(ix)
-                            self._config.arena.arena_center_y_px = float(iy)
-                            message = f"Arena center set to ({ix}, {iy})"
-                        self._roi_set_center_click.setChecked(False)
-                        self.statusBar().showMessage(message)
+        if obj is self._camera_label:
+            if event.type() == QEvent.Type.MouseMove:
+                if (
+                    self._camera_timer is not None
+                    and self._camera_timer.isActive()
+                    and self._camera_controller is not None
+                    and self._last_eyedropper_frame_bgr is not None
+                ):
+                    size = self._camera_controller.get_last_preview_size()
+                    if size is not None:
+                        iw, ih = size
+                        if iw > 0 and ih > 0:
+                            lw, lh = self._camera_label.width(), self._camera_label.height()
+                            lx, ly = event.position().x(), event.position().y()
+                            ix, iy = map_click_to_image_coords(
+                                lx,
+                                ly,
+                                lw,
+                                lh,
+                                iw,
+                                ih,
+                            )
+                            from .intensity_sample import gray_value_at_pixel_bgr
+
+                            gv = gray_value_at_pixel_bgr(
+                                self._last_eyedropper_frame_bgr, int(ix), int(iy)
+                            )
+                            if gv is not None:
+                                self._intensity_hover_label.setText(str(gv))
+                return False
+            if event.type() == QEvent.Type.MouseButtonPress:
+                if self._roi_set_center_click.isChecked() and self._camera_controller is not None:
+                    size = self._camera_controller.get_last_preview_size()
+                    if size is not None:
+                        iw, ih = size
+                        if iw > 0 and ih > 0:
+                            lw, lh = self._camera_label.width(), self._camera_label.height()
+                            lx, ly = event.position().x(), event.position().y()
+                            ix, iy = map_click_to_image_coords(
+                                lx,
+                                ly,
+                                lw,
+                                lh,
+                                iw,
+                                ih,
+                            )
+                            if self._task_mode == "ram" and hasattr(self._config, "radial_arm"):
+                                self._config.radial_arm.calibration.template_center_x_px = float(ix)
+                                self._config.radial_arm.calibration.template_center_y_px = float(iy)
+                                message = f"RAM template center set to ({ix}, {iy})"
+                            else:
+                                self._config.arena.arena_center_x_px = float(ix)
+                                self._config.arena.arena_center_y_px = float(iy)
+                                message = f"Arena center set to ({ix}, {iy})"
+                            self._roi_set_center_click.setChecked(False)
+                            self.statusBar().showMessage(message)
+                elif self._range_from_click_cb.isChecked() and self._camera_controller is not None:
+                    size = self._camera_controller.get_last_preview_size()
+                    frm = self._last_eyedropper_frame_bgr
+                    if size is not None and frm is not None:
+                        iw, ih = size
+                        if iw > 0 and ih > 0:
+                            lw, lh = self._camera_label.width(), self._camera_label.height()
+                            lx, ly = event.position().x(), event.position().y()
+                            ix, iy = map_click_to_image_coords(
+                                lx,
+                                ly,
+                                lw,
+                                lh,
+                                iw,
+                                ih,
+                            )
+                            from .intensity_sample import (
+                                fallback_range_from_gray_patch,
+                                gray_neighborhood_patch_bgr,
+                            )
+
+                            half = max(0, int(self._range_pick_half_spin.value()))
+                            delta = max(0, int(self._range_pick_delta_spin.value()))
+                            patch = gray_neighborhood_patch_bgr(frm, int(ix), int(iy), half)
+                            if patch is not None:
+                                lo, hi = fallback_range_from_gray_patch(patch, delta)
+                                self._config.fallback_tracking.range_low = lo
+                                self._config.fallback_tracking.range_high = hi
+                                self.statusBar().showMessage(
+                                    f"Backup intensity range set to [{lo}, {hi}] (neighborhood ±{delta})."
+                                )
+                            else:
+                                self.statusBar().showMessage("Could not sample neighborhood for range.")
+                            self._range_from_click_cb.setChecked(False)
+                            dlg = getattr(self, "_settings_dialog", None)
+                            if (
+                                dlg is not None
+                                and dlg.isVisible()
+                                and hasattr(dlg, "sync_fallback_intensity_range_widgets")
+                            ):
+                                dlg.sync_fallback_intensity_range_widgets()
         return super().eventFilter(obj, event)
 
     def _on_camera_tick(self) -> None:
@@ -775,6 +883,7 @@ class MainWindow(QMainWindow):
                             self._frame_counter_label.setText(f"{cur_1b}/—")
                 else:
                     self._frame_counter_label.setText("—")
+            _tp = time.perf_counter()
             # Raw frame for inference (no brightness/contrast); display uses a copy with adjustments
             flip_now = self._camera_flip.isChecked()
             if self._last_preview_flip_checked is not None and flip_now != self._last_preview_flip_checked:
@@ -784,6 +893,7 @@ class MainWindow(QMainWindow):
                 img_raw = _cv2.flip(img_raw, 1)  # 1 = horizontal (flip x-axis)
             h, w = img_raw.shape[0], img_raw.shape[1]
             self._last_preview_img_size = (w, h)
+            self._last_eyedropper_frame_bgr = img_raw
             # Virtual file playback: frame index went backward → video looped or seek; reset GUI pose-jump state.
             if virtual_mode and not paused_virtual and self._camera_controller is not None:
                 playback_cur_idx, _ = self._camera_controller.get_last_frame_info()
@@ -792,6 +902,8 @@ class MainWindow(QMainWindow):
                         self._reset_sleap_node_jump_state()
                 if playback_cur_idx is not None:
                     self._last_virtual_playback_frame_idx = playback_cur_idx
+            preprocess_ms = (time.perf_counter() - _tp) * 1000.0
+            _tp = time.perf_counter()
             # Display copy: brightness/contrast and BGR for overlay
             img_display = apply_display_adjustments(
                 img_raw.copy(),
@@ -800,6 +912,8 @@ class MainWindow(QMainWindow):
             )
             if _cv2 is not None and img_display.ndim == 2:
                 img_display = _cv2.cvtColor(img_display, _cv2.COLOR_GRAY2BGR)
+            display_prep_ms = (time.perf_counter() - _tp) * 1000.0
+            _tp = time.perf_counter()
             show_track = self._config.track_show and HAS_TRACKING and AdaptiveThresholdTracker is not None
             roi_cx, roi_cy, roi_r = config_tracking_roi(self._config)
             roi_center = (roi_cx, roi_cy) if roi_r > 0 else None
@@ -809,6 +923,16 @@ class MainWindow(QMainWindow):
             pose_node_valid_from_res = None  # per-node confidence validity from tracker (SLEAP only)
             blob_mask = None
             blob_crop_rect = None
+            in_range_xy_res = None
+            ram_polys_preview = None
+            ram_exit_preview = None
+            if self._task_mode == "ram" and isinstance(self._config, RadialArmControllerConfig):
+                from ..ram_preview_mask import ram_exit_hole_xyr_px, ram_template_polylines_image
+
+                ram_polys_preview = ram_template_polylines_image(self._config)
+                ram_exit_preview = ram_exit_hole_xyr_px(self._config)
+            ram_template_ms = (time.perf_counter() - _tp) * 1000.0
+            _tp = time.perf_counter()
             if show_track and self._tracking_controller is not None:
                 to_track = img_raw  # inference sees raw image (no brightness/contrast)
                 track_r = (
@@ -818,7 +942,21 @@ class MainWindow(QMainWindow):
                 )
                 did_crop = False
                 crop_x0, crop_y0 = 0, 0  # offset to add to tracker coords when we crop
-                if _cv2 is not None and track_r > 0:
+                ram_mask_result = None
+                if (
+                    _cv2 is not None
+                    and self._task_mode == "ram"
+                    and isinstance(self._config, RadialArmControllerConfig)
+                ):
+                    from ..ram_preview_mask import ram_walkable_mask_crop
+
+                    ram_mask_result = ram_walkable_mask_crop(self._config, h, w)
+                if ram_mask_result is not None:
+                    mask_crop, crop_x0, crop_y0, crop_x1, crop_y1 = ram_mask_result
+                    did_crop = True
+                    to_track = img_raw[crop_y0:crop_y1, crop_x0:crop_x1].copy()
+                    to_track = _cv2.bitwise_and(to_track, to_track, mask=mask_crop)
+                elif _cv2 is not None and track_r > 0:
                     # Crop to rectangle around circle so tracker runs on fewer pixels (better FPS).
                     # Display still shows full image; we add crop offset to track_xy/pose_xy and embed blob_mask.
                     crop_x0 = max(0, int(roi_cx - track_r) - 1)
@@ -842,7 +980,11 @@ class MainWindow(QMainWindow):
                         to_track = _cv2.bitwise_and(to_track, to_track, mask=mask_crop)
                 # Update SLEAP parameters on the controller and submit frame
                 path = self._config.sleap_model_path or ""
-                self._tracking_controller.set_sleap_params(path.strip(), self._config.track_backup_only)
+                self._tracking_controller.set_tracker_sources(
+                    path.strip(),
+                    bool(getattr(self._config, "track_enable_backup", True)),
+                    bool(getattr(self._config, "track_enable_sleap", True)),
+                )
                 now = time.monotonic()
                 self._tracking_controller.submit_frame(to_track, now)
                 overlay_state = self._tracking_controller.get_overlay_state(now_s=now)
@@ -898,12 +1040,16 @@ class MainWindow(QMainWindow):
                     except Exception:
                         # Best-effort debug; never break preview.
                         pass
+                track_ms = (time.perf_counter() - _tp) * 1000.0
+                _tp = time.perf_counter()
             else:
+                track_ms = (time.perf_counter() - _tp) * 1000.0
+                _tp = time.perf_counter()
                 # show_track is False: no tracking overlay
                 self._track_source_label.setText("—")
                 self._last_overlay_track_source = None
             opacity = self._track_opacity.value() / 100.0
-            if show_track or (roi_center is not None and roi_r > 0):
+            if show_track or (roi_center is not None and roi_r > 0) or ram_polys_preview:
                 ft = self._config.fallback_tracking
                 node_max_jump_px = ft.node_max_jump_px
                 node_jump_confirm = max(1, int(getattr(ft, "node_jump_confirm_frames", 2)))
@@ -930,9 +1076,13 @@ class MainWindow(QMainWindow):
                     pose_node_valid=pose_node_valid,
                     blob_mask=blob_mask,
                     blob_crop_rect=blob_crop_rect,
+                    ram_polys=ram_polys_preview,
+                    ram_exit_xyr=ram_exit_preview,
                 )
             else:
                 pose_node_valid = None
+            overlay_ms = (time.perf_counter() - _tp) * 1000.0
+            _tp = time.perf_counter()
             tc = self._trial_controller
             exit_x_px, exit_y_px = tc.get_exit_position_px()
             exit_success_override = None
@@ -1107,14 +1257,21 @@ class MainWindow(QMainWindow):
                         self._record_frame_index += 1
                     except Exception:
                         pass
+            trial_ms = (time.perf_counter() - _tp) * 1000.0
+            _tp = time.perf_counter()
+            dev_ms = 0.0
             # Dev-only debug HUD overlay: draw simple text on the preview with per-frame diagnostics.
             if self._dev_mode and _cv2 is not None:
+                _td0 = time.perf_counter()
                 try:
                     debug_lines = []
                     debug_lines.append(
                         f"FPS {self._last_display_fps:.1f}  read {((t1 - t0) * 1000):.1f} ms"
                     )
-                    # process_ms is computed below; estimate it here as well for per-frame HUD
+                    debug_lines.append(
+                        f"ph ms pre {preprocess_ms:.1f} disp {display_prep_ms:.1f} ram {ram_template_ms:.1f} "
+                        f"trk {track_ms:.1f} ovl {overlay_ms:.1f} trial {trial_ms:.1f}"
+                    )
                     debug_lines.append(f"track src {track_source}")
                     y0 = 18
                     for line in debug_lines:
@@ -1143,7 +1300,10 @@ class MainWindow(QMainWindow):
                 except Exception:
                     # HUD is best-effort; never break preview if debug drawing fails
                     pass
+                dev_ms = (time.perf_counter() - _td0) * 1000.0
+                _tp = time.perf_counter()
 
+            _tqt0 = time.perf_counter()
             pix = frame_to_pixmap(img_display)
             if pix is not None:
                 self._camera_label.setPixmap(pix.scaled(
@@ -1151,14 +1311,32 @@ class MainWindow(QMainWindow):
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation,
                 ))
-            # Frame timing for FPS investigation: hover Display FPS to see read vs process breakdown
+            qt_ms = (time.perf_counter() - _tqt0) * 1000.0
             read_ms = (t1 - t0) * 1000
             process_ms = (time.perf_counter() - t1) * 1000
-            self._last_frame_timings = (read_ms, process_ms)
-            tt = "Preview frame rate."
-            if self._last_frame_timings is not None:
-                r, p = self._last_frame_timings
-                tt += f" Last frame: read {r:.1f} ms, process {p:.1f} ms (track+overlay+display)."
+            infer_s = float(getattr(self._config, "track_infer_scale", 1.0))
+            self._last_frame_phase_ms = {
+                "read": read_ms,
+                "preprocess": preprocess_ms,
+                "display_prep": display_prep_ms,
+                "ram_template": ram_template_ms,
+                "track": track_ms,
+                "overlay": overlay_ms,
+                "trial": trial_ms,
+                "dev_hud": dev_ms,
+                "qt_pixmap": qt_ms,
+                "process_total": process_ms,
+                "infer_scale": infer_s,
+            }
+            tt = "Preview frame rate.\n"
+            tt += f"read {read_ms:.1f} ms | process total {process_ms:.1f} ms\n"
+            tt += (
+                f"preprocess {preprocess_ms:.1f} | display {display_prep_ms:.1f} | "
+                f"ram_template {ram_template_ms:.1f} | track {track_ms:.1f}\n"
+                f"overlay {overlay_ms:.1f} | trial {trial_ms:.1f} | dev {dev_ms:.1f} | qt {qt_ms:.1f}\n"
+                f"infer_scale={infer_s}  backup={getattr(self._config, 'track_enable_backup', True)} "
+                f"sleap={getattr(self._config, 'track_enable_sleap', True)}"
+            )
             if hasattr(self, "_track_display_fps_label"):
                 self._track_display_fps_label.setToolTip(tt)
 
@@ -1241,6 +1419,9 @@ class MainWindow(QMainWindow):
         self._camera_stop_btn.setEnabled(False)
         self._camera_label.clear()
         self._camera_label.setText("Click Start camera")
+        self._last_eyedropper_frame_bgr = None
+        if hasattr(self, "_intensity_hover_label") and self._intensity_hover_label is not None:
+            self._intensity_hover_label.setText("—")
         self.statusBar().showMessage("Camera stopped.")
         self._virtual_video_path = None
         self._playback_hydration = None
@@ -1733,8 +1914,19 @@ class MainWindow(QMainWindow):
             self._config.track_show = bool(gui["track_show"])
         if gui.get("track_async") is not None:
             self._config.track_async = bool(gui["track_async"])
-        if gui.get("track_backup_only") is not None:
-            self._config.track_backup_only = bool(gui["track_backup_only"])
+        if gui.get("track_enable_backup") is not None:
+            self._config.track_enable_backup = bool(gui["track_enable_backup"])
+        if gui.get("track_enable_sleap") is not None:
+            self._config.track_enable_sleap = bool(gui["track_enable_sleap"])
+        elif gui.get("track_backup_only") is not None:
+            self._config.track_enable_backup = True
+            self._config.track_enable_sleap = not bool(gui["track_backup_only"])
+        if gui.get("track_infer_scale") is not None:
+            try:
+                s = float(gui["track_infer_scale"])
+            except (TypeError, ValueError):
+                s = 1.0
+            self._config.track_infer_scale = 0.5 if 0.4 <= s <= 0.6 else 1.0
         if "track_sleap_path" in gui:
             self._config.sleap_model_path = str(gui.get("track_sleap_path") or "").strip()
         if gui.get("track_confidence") is not None:
@@ -1957,7 +2149,9 @@ class MainWindow(QMainWindow):
                 gui = gui_to_dict(
                     track_show=self._config.track_show,
                     track_async=self._config.track_async,
-                    track_backup_only=self._config.track_backup_only,
+                    track_enable_backup=self._config.track_enable_backup,
+                    track_enable_sleap=self._config.track_enable_sleap,
+                    track_infer_scale=float(getattr(self._config, "track_infer_scale", 1.0)),
                     track_sleap_path=self._config.sleap_model_path or "",
                     track_confidence=self._config.sleap_confidence_pct,
                     track_sleap_every_n=self._config.sleap_every_n,

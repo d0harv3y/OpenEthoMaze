@@ -8,6 +8,8 @@ import numpy as np
 if TYPE_CHECKING:
     from .config import RadialArmControllerConfig
 
+from .config import ram_apothem_cm_from_template, sync_ram_px_per_cm
+
 
 @dataclass(frozen=True)
 class LegacyRadialArmTemplate:
@@ -129,4 +131,6 @@ def apply_legacy_template_config(config: "RadialArmControllerConfig") -> None:
     calibration.template_center_x_px = float(LEGACY_RAM_TEMPLATE.center_px[0])
     calibration.template_center_y_px = float(LEGACY_RAM_TEMPLATE.center_px[1])
     calibration.template_rotation_deg = -90.0
-    calibration.px_per_cm = float(LEGACY_RAM_TEMPLATE.px_per_cm)
+    ap_cm = ram_apothem_cm_from_template(template)
+    calibration.apothem_px = float(LEGACY_RAM_TEMPLATE.px_per_cm) * ap_cm
+    sync_ram_px_per_cm(config.radial_arm)

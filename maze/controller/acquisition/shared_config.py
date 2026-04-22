@@ -73,7 +73,10 @@ class AcquisitionConfig:
     sleap_model_path: str = ""
     track_show: bool = True
     track_async: bool = False
-    track_backup_only: bool = False
+    track_enable_backup: bool = True
+    track_enable_sleap: bool = True
+    # Linear scale applied to width/height before SLEAP/backup inference (1.0 = full res, 0.5 = half).
+    track_infer_scale: float = 1.0
     overlay_opacity_pct: int = 70
     arduino_port: Optional[str] = None
     run_analysis_after_trial: bool = False

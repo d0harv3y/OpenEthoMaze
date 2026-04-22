@@ -9,7 +9,7 @@ from typing import Optional, Tuple
 
 from ..shared_config import AcquisitionConfig, AnimalInfo, FallbackTrackingConfig
 from ..vast.config import FT_TO_CM, M_TO_CM, VastControllerConfig
-from ..radial_arm.config import RadialArmControllerConfig
+from ..radial_arm.config import RadialArmControllerConfig, sync_ram_px_per_cm
 from ..task_registry import AcquisitionMode, get_task_spec
 
 try:
@@ -97,6 +97,15 @@ class SettingsDialog(QDialog):
             if 0 <= last < self._tabs.count():
                 self._tabs.setCurrentIndex(last)
         self._tabs.currentChanged.connect(self._on_tab_changed)
+        if self._task_mode == "ram":
+            for _w in (
+                self._ram_center_midedge_cm,
+                self._ram_apothem_px,
+                self._ram_template_rotation_deg,
+                self._ram_template_center_x,
+                self._ram_template_center_y,
+            ):
+                _w.valueChanged.connect(self._update_ram_px_per_cm_label)
         bbox = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Apply
             | QDialogButtonBox.StandardButton.Ok
@@ -133,6 +142,18 @@ class SettingsDialog(QDialog):
             self._apply_btn.setToolTip("Apply changes without closing this window.")
         else:
             self._apply_btn.setToolTip("Apply is disabled while a trial is running.")
+
+    def _update_ram_px_per_cm_label(self, *_args) -> None:
+        """Refresh read-only px/cm from hub apothem (px) and center mid-edge span (cm)."""
+        if self._task_mode != "ram":
+            return
+        mid_cm = self._ram_center_midedge_cm.value()
+        ap_cm = mid_cm / 2.0
+        ap_px = self._ram_apothem_px.value()
+        if ap_cm > 0.0 and ap_px > 0.0:
+            self._ram_px_per_cm_label.setText(f"{ap_px / ap_cm:.4f}")
+        else:
+            self._ram_px_per_cm_label.setText("—")
 
     def _on_tab_changed(self, index: int) -> None:
         s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
@@ -209,10 +230,24 @@ class SettingsDialog(QDialog):
         self._ram_template_rotation_deg.setRange(-360.0, 360.0)
         self._ram_template_rotation_deg.setSuffix(" deg")
         calibration_f.addRow("Template rotation:", self._ram_template_rotation_deg)
-        self._ram_px_per_cm = QDoubleSpinBox()
-        self._ram_px_per_cm.setRange(0.0, 100.0)
-        self._ram_px_per_cm.setDecimals(4)
-        calibration_f.addRow("px/cm:", self._ram_px_per_cm)
+        self._ram_apothem_px = QDoubleSpinBox()
+        self._ram_apothem_px.setRange(0.0, 8000.0)
+        self._ram_apothem_px.setDecimals(2)
+        self._ram_apothem_px.setToolTip(
+            "Hub apothem in pixels (center to flat side). With center mid-edge span (cm), "
+            "defines read-only px/cm like VAST arena ROI radius + diameter."
+        )
+        calibration_f.addRow("Hub apothem (px):", self._ram_apothem_px)
+        self._ram_px_per_cm_label = QLabel("—")
+        self._ram_px_per_cm_label.setToolTip("Derived: apothem_px / (center mid-edge span / 2)")
+        calibration_f.addRow("px/cm (read-only):", self._ram_px_per_cm_label)
+        self._ram_tracking_mask_margin_px = QSpinBox()
+        self._ram_tracking_mask_margin_px.setRange(0, 9999)
+        self._ram_tracking_mask_margin_px.setToolTip(
+            "Extra pixels around template bbox for tracking crop. 0 = auto (~20% of bbox half-extent), "
+            "similar to VAST when tracking mask radius uses the 1.2× default."
+        )
+        calibration_f.addRow("Tracking mask margin (px, 0=auto):", self._ram_tracking_mask_margin_px)
         self._ram_edit_region_name = QLineEdit()
         self._ram_edit_region_name.setPlaceholderText("e.g. arm0_front")
         calibration_f.addRow("Active edit region:", self._ram_edit_region_name)
@@ -413,6 +448,10 @@ class SettingsDialog(QDialog):
         if path:
             self._output_dir_edit.setText(path)
 
+    def _sync_track_enable_sleap_widget(self, *_args) -> None:
+        has_path = bool((self._sleap_model_path_edit.text() or "").strip())
+        self._track_enable_sleap_cb.setEnabled(has_path)
+
     def _on_browse_sleap_model(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "SLEAP model directory")
         if path:
@@ -441,9 +480,23 @@ class SettingsDialog(QDialog):
         self._track_async_cb = QCheckBox("Async tracking (smoother display)")
         self._track_async_cb.setToolTip("Run tracking in background thread; display uses last result.")
         options_ly.addWidget(self._track_async_cb)
-        self._track_backup_only_cb = QCheckBox("Backup tracking only (ignore SLEAP model)")
-        self._track_backup_only_cb.setToolTip("Use only the adaptive-threshold backup tracker.")
-        options_ly.addWidget(self._track_backup_only_cb)
+        self._track_enable_backup_cb = QCheckBox("Enable backup tracking")
+        self._track_enable_backup_cb.setToolTip("Adaptive-threshold blob tracker (in-range intensity).")
+        options_ly.addWidget(self._track_enable_backup_cb)
+        self._track_enable_sleap_cb = QCheckBox("Enable SLEAP tracking")
+        self._track_enable_sleap_cb.setToolTip("Requires a SLEAP model directory below. When off, only backup runs if enabled.")
+        options_ly.addWidget(self._track_enable_sleap_cb)
+        infer_row = QHBoxLayout()
+        infer_row.addWidget(QLabel("Inference resolution:"))
+        self._track_infer_scale_combo = QComboBox()
+        self._track_infer_scale_combo.addItem("Full", 1.0)
+        self._track_infer_scale_combo.addItem("Half (50%)", 0.5)
+        self._track_infer_scale_combo.setToolTip(
+            "Resize the tracking crop before SLEAP/backup inference (faster on HD video). Coordinates map back to full-res."
+        )
+        infer_row.addWidget(self._track_infer_scale_combo)
+        infer_row.addStretch()
+        options_ly.addLayout(infer_row)
         self._track_exit_either_success_cb = QCheckBox("Use either success condition")
         self._track_exit_either_success_cb.setToolTip(
             "When enabled, a trial succeeds if either the SLEAP exit rule (min keypoints in exit zone) "
@@ -530,6 +583,7 @@ class SettingsDialog(QDialog):
         self._sleap_browse_btn = QPushButton("Browse…")
         self._sleap_browse_btn.clicked.connect(self._on_browse_sleap_model)
         sleap_path_row.addWidget(self._sleap_browse_btn)
+        self._sleap_model_path_edit.textChanged.connect(self._sync_track_enable_sleap_widget)
         sleap_f.addRow("SLEAP model (dir):", sleap_path_row)
         self._fallback_min_sleap_nodes = QSpinBox()
         self._fallback_min_sleap_nodes.setRange(1, 64)
@@ -612,7 +666,11 @@ class SettingsDialog(QDialog):
             self._ram_template_center_x.setValue(calibration.template_center_x_px)
             self._ram_template_center_y.setValue(calibration.template_center_y_px)
             self._ram_template_rotation_deg.setValue(calibration.template_rotation_deg)
-            self._ram_px_per_cm.setValue(calibration.px_per_cm)
+            self._ram_apothem_px.setValue(calibration.apothem_px)
+            self._ram_tracking_mask_margin_px.setValue(
+                int(round(calibration.tracking_mask_margin_px))
+            )
+            self._update_ram_px_per_cm_label()
             self._ram_edit_region_name.setText(calibration.edit_region_name)
             self._ram_exit_arm_index.setValue(ram.exit_arm_index)
             self._ram_rewarded_arm_index.setValue(ram.rewarded_arm_index)
@@ -708,7 +766,12 @@ class SettingsDialog(QDialog):
         # Tracking options and SLEAP path
         self._track_show_cb.setChecked(getattr(c, "track_show", True))
         self._track_async_cb.setChecked(getattr(c, "track_async", False))
-        self._track_backup_only_cb.setChecked(getattr(c, "track_backup_only", False))
+        self._track_enable_backup_cb.setChecked(getattr(c, "track_enable_backup", True))
+        self._track_enable_sleap_cb.setChecked(getattr(c, "track_enable_sleap", True))
+        self._sync_track_enable_sleap_widget()
+        infer_s = float(getattr(c, "track_infer_scale", 1.0))
+        idx_inf = self._track_infer_scale_combo.findData(0.5 if 0.4 <= infer_s <= 0.6 else 1.0)
+        self._track_infer_scale_combo.setCurrentIndex(idx_inf if idx_inf >= 0 else 0)
         self._track_exit_either_success_cb.setChecked(getattr(c, "track_exit_either_success", False))
         self._sleap_model_path_edit.setText(getattr(c, "sleap_model_path", "") or "")
         # SLEAP
@@ -731,7 +794,11 @@ class SettingsDialog(QDialog):
             ram.calibration.template_center_x_px = self._ram_template_center_x.value()
             ram.calibration.template_center_y_px = self._ram_template_center_y.value()
             ram.calibration.template_rotation_deg = self._ram_template_rotation_deg.value()
-            ram.calibration.px_per_cm = self._ram_px_per_cm.value()
+            ram.calibration.apothem_px = self._ram_apothem_px.value()
+            ram.calibration.tracking_mask_margin_px = float(
+                self._ram_tracking_mask_margin_px.value()
+            )
+            sync_ram_px_per_cm(ram)
             ram.calibration.edit_region_name = self._ram_edit_region_name.text().strip()
             ram.exit_arm_index = self._ram_exit_arm_index.value()
             ram.rewarded_arm_index = self._ram_rewarded_arm_index.value()
@@ -819,14 +886,56 @@ class SettingsDialog(QDialog):
         # Tracking options and SLEAP path
         c.track_show = self._track_show_cb.isChecked()
         c.track_async = self._track_async_cb.isChecked()
-        c.track_backup_only = self._track_backup_only_cb.isChecked()
+        path = (self._sleap_model_path_edit.text() or "").strip()
+        c.track_enable_backup = self._track_enable_backup_cb.isChecked()
+        c.track_enable_sleap = self._track_enable_sleap_cb.isChecked() if path else False
+        raw_infer = self._track_infer_scale_combo.currentData()
+        try:
+            c.track_infer_scale = float(raw_infer) if raw_infer is not None else 1.0
+        except (TypeError, ValueError):
+            c.track_infer_scale = 1.0
+        if c.track_infer_scale not in (1.0, 0.5):
+            c.track_infer_scale = 1.0
+        adjusted = False
+        if not c.track_enable_backup and not c.track_enable_sleap:
+            c.track_enable_backup = True
+            adjusted = True
+        if c.track_enable_sleap and not path:
+            c.track_enable_sleap = False
+            adjusted = True
+        if not c.track_enable_backup and not path:
+            c.track_enable_backup = True
+            adjusted = True
         c.track_exit_either_success = self._track_exit_either_success_cb.isChecked()
-        c.sleap_model_path = (self._sleap_model_path_edit.text() or "").strip()
+        c.sleap_model_path = path
+        if adjusted:
+            self._track_enable_backup_cb.setChecked(c.track_enable_backup)
+            self._track_enable_sleap_cb.setChecked(c.track_enable_sleap)
+            pw = self.parent()
+            if pw is not None and hasattr(pw, "statusBar"):
+                pw.statusBar().showMessage(
+                    "Tracking: invalid backup/SLEAP combination — enabled backup tracking.",
+                    5000,
+                )
         # SLEAP
         c.sleap_confidence_pct = max(0, min(100, self._sleap_confidence_pct.value()))
         c.sleap_every_n = max(1, min(5, self._sleap_every_n.value()))
         c.sleap_exit_min_keypoints = max(1, self._sleap_exit_min_keypoints.value())
         c.fallback_exit_blob_overlap_pct = max(0.0, min(100.0, self._fallback_exit_blob_overlap_pct.value()))
+
+    def sync_fallback_intensity_range_widgets(self) -> None:
+        """Update Range low/high spinboxes from ``self._config`` (e.g. after eyedropper click on main window)."""
+        ft = getattr(self._config, "fallback_tracking", None) or FallbackTrackingConfig()
+        lo = int(getattr(ft, "range_low", 0))
+        hi = int(getattr(ft, "range_high", 255))
+        self._fallback_range_low.blockSignals(True)
+        self._fallback_range_high.blockSignals(True)
+        try:
+            self._fallback_range_low.setValue(lo)
+            self._fallback_range_high.setValue(hi)
+        finally:
+            self._fallback_range_low.blockSignals(False)
+            self._fallback_range_high.blockSignals(False)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self._save_last_tab()

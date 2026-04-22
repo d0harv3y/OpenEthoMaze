@@ -6,7 +6,11 @@ from typing import Optional
 
 from .gui.identity import parse_virtual_video_identity, sanitize_session_id
 from .shared_config import AcquisitionConfig
-from .radial_arm.config import RadialArmControllerConfig
+from .radial_arm.config import (
+    RadialArmControllerConfig,
+    ram_apothem_cm_from_template,
+    sync_ram_px_per_cm,
+)
 from .radial_arm.legacy_template import apply_legacy_template_config
 from ...pipeline.db import TrialKey, read_radial_arm_trial_settings, read_trial_settings
 from ...pipeline.sources.legacy_ehram import find_trial_ns_row, normalize_legacy_ram_session
@@ -149,8 +153,19 @@ def _hydrate_from_modern_db(
                             ram.calibration.template_rotation_deg,
                         )
                     )
-                    ram.calibration.px_per_cm = float(
-                        calibration.get("px_per_cm", ram.calibration.px_per_cm)
+                    if calibration.get("apothem_px") is not None:
+                        ram.calibration.apothem_px = float(calibration["apothem_px"])
+                    else:
+                        ap_cm = ram_apothem_cm_from_template(ram.template)
+                        ppc = float(calibration.get("px_per_cm", ram.calibration.px_per_cm))
+                        ram.calibration.apothem_px = (
+                            ppc * ap_cm if ap_cm > 0 and ppc > 0 else 0.0
+                        )
+                    ram.calibration.tracking_mask_margin_px = float(
+                        calibration.get(
+                            "tracking_mask_margin_px",
+                            ram.calibration.tracking_mask_margin_px,
+                        )
                     )
                     ram.calibration.edit_region_name = str(
                         calibration.get(
@@ -158,6 +173,7 @@ def _hydrate_from_modern_db(
                             ram.calibration.edit_region_name,
                         )
                     )
+                sync_ram_px_per_cm(ram)
                 ram.exit_arm_index = int(
                     task_attrs.get("exit_arm_index", payload["trial_attrs"].get("exit_arm_index", ram.exit_arm_index))
                 )
