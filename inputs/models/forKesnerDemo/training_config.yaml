@@ -1,0 +1,225 @@
+data_config:
+  train_labels_path:
+  - E:/sleap/kasner-labels.v001.slp
+  val_labels_path: null
+  validation_fraction: 0.1
+  use_same_data_for_val: false
+  test_file_path: null
+  provider: LabelsReader
+  user_instances_only: true
+  data_pipeline_fw: torch_dataset_cache_img_memory
+  cache_img_path: null
+  use_existing_imgs: false
+  delete_cache_imgs_after_training: true
+  parallel_caching: true
+  cache_workers: 0
+  preprocessing:
+    ensure_rgb: false
+    ensure_grayscale: true
+    max_height: 308
+    max_width: 406
+    scale: 1.0
+    crop_size: null
+    min_crop_size: 100
+    crop_padding: null
+  use_augmentations_train: true
+  augmentation_config:
+    intensity:
+      uniform_noise_min: 0.0
+      uniform_noise_max: 1.0
+      uniform_noise_p: 0.0
+      gaussian_noise_mean: 5.0
+      gaussian_noise_std: 1.0
+      gaussian_noise_p: 0.0
+      contrast_min: 0.8
+      contrast_max: 1.2
+      contrast_p: 0.0
+      brightness_min: 0.8
+      brightness_max: 1.2
+      brightness_p: 0.0
+    geometric:
+      rotation_min: -15.0
+      rotation_max: 15.0
+      rotation_p: 1.0
+      scale_min: 0.9
+      scale_max: 1.1
+      scale_p: 1.0
+      translate_width: 0.0
+      translate_height: 0.0
+      translate_p: null
+      affine_p: 0.0
+      erase_scale_min: 0.0001
+      erase_scale_max: 0.01
+      erase_ratio_min: 1.0
+      erase_ratio_max: 1.0
+      erase_p: 0.0
+      mixup_lambda_min: 0.01
+      mixup_lambda_max: 0.05
+      mixup_p: 0.0
+  use_negative_frames: false
+  negative_loss_weight: 1.0
+  skeletons:
+  - nodes:
+    - name: nose
+    - name: tail
+    - name: neck
+    - name: hindL
+    - name: foreL
+    - name: foreR
+    - name: hindR
+    - name: spine
+    edges:
+    - source:
+        name: tail
+      destination:
+        name: hindL
+    - source:
+        name: tail
+      destination:
+        name: hindR
+    - source:
+        name: neck
+      destination:
+        name: nose
+    - source:
+        name: neck
+      destination:
+        name: foreL
+    - source:
+        name: neck
+      destination:
+        name: foreR
+    - source:
+        name: spine
+      destination:
+        name: neck
+    - source:
+        name: spine
+      destination:
+        name: tail
+    symmetries: []
+    name: Skeleton-1
+model_config:
+  init_weights: default
+  pretrained_backbone_weights: E:/sleap/models/combo_mazes_1/best.ckpt
+  pretrained_head_weights: E:/sleap/models/combo_mazes_1/best.ckpt
+  backbone_config:
+    unet:
+      in_channels: 1
+      kernel_size: 3
+      filters: 16
+      filters_rate: 2.0
+      max_stride: 16
+      stem_stride: null
+      middle_block: true
+      up_interpolate: true
+      stacks: 1
+      convs_per_block: 2
+      output_stride: 2
+    convnext: null
+    swint: null
+  head_configs:
+    single_instance:
+      confmaps:
+        part_names:
+        - nose
+        - tail
+        - neck
+        - hindL
+        - foreL
+        - foreR
+        - hindR
+        - spine
+        sigma: 2.5
+        output_stride: 2
+    centroid: null
+    centered_instance: null
+    bottomup: null
+    multi_class_bottomup: null
+    multi_class_topdown: null
+  total_params: 1953336
+trainer_config:
+  train_data_loader:
+    batch_size: 64
+    num_workers: 0
+    shuffle: true
+  val_data_loader:
+    batch_size: 64
+    num_workers: 0
+    shuffle: false
+  model_ckpt:
+    save_top_k: 1
+    save_last: false
+  trainer_devices: 1
+  trainer_device_indices: null
+  trainer_accelerator: auto
+  profiler: null
+  trainer_strategy: auto
+  enable_progress_bar: true
+  min_train_steps_per_epoch: 200
+  train_steps_per_epoch: 200
+  visualize_preds_during_training: true
+  keep_viz: false
+  max_epochs: 300
+  seed: null
+  use_wandb: false
+  save_ckpt: true
+  ckpt_dir: E:/sleap/models
+  run_name: 260421_204020.single_instance.n=52
+  resume_ckpt_path: null
+  wandb:
+    entity: null
+    project: null
+    name: 260421_204020.single_instance.n=52
+    save_viz_imgs_wandb: false
+    api_key: null
+    wandb_mode: null
+    prv_runid: null
+    group: null
+    current_run_id: null
+    viz_enabled: true
+    viz_boxes: false
+    viz_masks: false
+    viz_box_size: 5.0
+    viz_confmap_threshold: 0.1
+    log_viz_table: false
+    delete_local_logs: null
+  optimizer_name: Adam
+  optimizer:
+    lr: 0.0001
+    amsgrad: false
+  lr_scheduler:
+    step_lr: null
+    reduce_lr_on_plateau:
+      threshold: 1.0e-06
+      threshold_mode: abs
+      cooldown: 3
+      patience: 5
+      factor: 0.5
+      min_lr: 1.0e-08
+    cosine_annealing_warmup: null
+    linear_warmup_linear_decay: null
+  early_stopping:
+    min_delta: 1.414e-06
+    patience: 10
+    stop_training_on_plateau: true
+  online_hard_keypoint_mining:
+    online_mining: false
+    hard_to_easy_ratio: 2.0
+    min_hard_keypoints: 2
+    max_hard_keypoints: null
+    loss_scale: 5.0
+  zmq:
+    controller_port: 9000
+    controller_polling_timeout: 10
+    publish_port: 9001
+  eval:
+    enabled: true
+    frequency: 1
+    oks_stddev: 0.025
+    oks_scale: null
+    match_threshold: 50.0
+name: ''
+description: ''
+sleap_nn_version: 0.1.3
+filename: ''
