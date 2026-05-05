@@ -13,7 +13,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from . import app_logging
 from .shared_config import AcquisitionConfig
@@ -42,6 +42,33 @@ class Frame:
     image: np.ndarray  # (H, W) or (H, W, C), dtype uint8
     timestamp: float   # monotonic time from start
     frame_index: int
+
+
+def effective_frame_count_for_virtual_timing(
+    file_total_frames: Optional[int],
+    anchor_frame_index: Optional[int],
+) -> Optional[int]:
+    """
+    Frame count paired with ``virtual_duration_override_s`` to compute **constant** effective FPS.
+
+    ``anchor_frame_index`` is the 0-based start of the pacing segment (inclusive), fixed until
+    the next seek: ``max(1, file_total_frames - clamp(anchor, 0, total))``. The override
+    duration is spread evenly over that many frames, so playback and per-frame virtual time
+    stay linear. Passing ``None`` or negative anchor uses ``0`` (whole file).
+
+    :meth:`CameraController` sets the anchor on virtual open (0) and on each successful
+    :meth:`seek_video_frame`.
+    """
+    if file_total_frames is None:
+        return None
+    t = int(file_total_frames)
+    if t <= 0:
+        return None
+    if anchor_frame_index is None or int(anchor_frame_index) < 0:
+        a = 0
+    else:
+        a = min(max(0, int(anchor_frame_index)), t)
+    return max(1, t - a)
 
 
 class BaseCamera(ABC):
@@ -197,14 +224,24 @@ class VideoFileCamera(BaseCamera):
 
     def seek_to_start(self) -> None:
         """Rewind to the beginning of the video file."""
+        self.seek_to_frame(0)
+
+    def seek_to_frame(self, index: int) -> bool:
+        """Seek to a 0-based frame index (best-effort; accuracy depends on codec/container)."""
         if self._cap is None or not self._cap.isOpened():
-            return
+            return False
+        idx = max(0, int(index))
         try:
-            self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            self._cap.set(cv2.CAP_PROP_POS_FRAMES, float(idx))
         except Exception:
-            pass
+            return False
         self._start_time = time.monotonic()
-        self._frame_index = 0
+        try:
+            pos = self._cap.get(cv2.CAP_PROP_POS_FRAMES)
+            self._frame_index = int(pos) if pos is not None and pos >= 0 else idx
+        except Exception:
+            self._frame_index = idx
+        return True
 
     def stop(self) -> None:
         if self._cap is not None:
@@ -274,7 +311,7 @@ class VimbaCamera(BaseCamera):
         self._latest_img: Optional[np.ndarray] = None
         self._latest_frame_index = 0
 
-    def _frame_handler(self, cam: Any, stream: Any, frame: Any) -> None:
+    def _frame_handler(self, cam: Any, _stream: Any, frame: Any) -> None:
         try:
             try:
                 img = frame.as_opencv_image()
@@ -412,16 +449,6 @@ class VimbaCamera(BaseCamera):
         self.stop()
 
 
-def frame_iterator(camera: BaseCamera, stop_event: Optional[object] = None) -> Iterator[Frame]:
-    """Yield frames until stop_event is set (if provided)."""
-    while True:
-        if stop_event is not None and getattr(stop_event, "is_set", lambda: False)():
-            break
-        frame = camera.read()
-        if frame is not None:
-            yield frame
-
-
 def apply_display_adjustments(
     img: np.ndarray,
     brightness: int,
@@ -430,16 +457,20 @@ def apply_display_adjustments(
     """
     Apply display-only brightness (offset) and contrast (scale).
 
-    This mirrors `_apply_brightness_contrast` in `main_window`:
-    - `brightness`: -100..100 (added after contrast).
-    - `contrast_pct`: 50..200 (100 = no change; scale around 128).
+    - ``brightness``: -100..100 (added after contrast).
+    - ``contrast_pct``: 50..200 (100 = no change; scale around 128).
     """
     if not HAS_CV2 or (brightness == 0 and contrast_pct == 100):
         return img
-    out = img.astype(np.float64)
+    # Calculate scale factor and offset, applying always in uint8
     scale = contrast_pct / 100.0
-    out = (out - 128.0) * scale + 128.0 + float(brightness)
-    out = np.clip(out, 0, 255).astype(np.uint8)
+    offset = float(brightness)
+    # Apply contrast and brightness while staying in uint8 domain
+    # Using cv2.addWeighted for uint8 image math
+    # (out - 128) * scale + 128 + brightness == out * scale + 128*(1-scale) + brightness
+    if img.dtype != np.uint8:
+        img = np.clip(img, 0, 255).astype(np.uint8)
+    out = cv2.addWeighted(img, scale, img, 0, 128 * (1.0 - scale) + offset)
     return out
 
 
@@ -489,6 +520,8 @@ class CameraController:
         self._last_preview_img_size: Optional[Tuple[int, int]] = None
         self._last_frame_index: Optional[int] = None
         self._last_total_frames: Optional[int] = None
+        #: 0-based start frame for ``virtual_duration_override`` pacing (virtual file only).
+        self._virtual_override_anchor_frame: Optional[int] = None
 
     def open(self, source: str, device_index: int, video_path: Optional[Path] = None) -> None:
         """
@@ -518,6 +551,7 @@ class CameraController:
                     raise ValueError("video_path is required for Virtual (video file) source")
                 self._camera = VideoFileCamera(video_path=video_path, fps_target=30.0, loop=True)
                 self._camera.start()
+                self._virtual_override_anchor_frame = 0
             elif use_gige:
                 self._camera = VimbaCamera(
                     device_index=device_index,
@@ -554,6 +588,7 @@ class CameraController:
             except Exception:  # pragma: no cover - defensive logging
                 app_logging.log_error("CameraController: error while stopping camera.")
         self._last_preview_img_size = None
+        self._virtual_override_anchor_frame = None
 
     def grab_frame(self) -> Optional[np.ndarray]:
         """
@@ -591,14 +626,121 @@ class CameraController:
 
     def rewind(self) -> None:
         """Rewind the underlying camera if it supports seeking (virtual mode)."""
+        self.seek_video_frame(0)
+
+    def seek_video_frame(self, index: int) -> bool:
+        """Seek file-backed video to ``index``; no-op for live cameras. Returns whether seek was attempted."""
         cam = self._camera
         if cam is None:
-            return
-        seek = getattr(cam, "seek_to_start", None)
-        if callable(seek):
-            seek()
-            self._last_frame_index = 0
+            return False
+        fn = getattr(cam, "seek_to_frame", None)
+        if not callable(fn):
+            return False
+        ok = bool(fn(int(index)))
+        if ok:
+            idx = int(index)
+            self._last_frame_index = idx
+            self._virtual_override_anchor_frame = idx
+        return ok
 
     def get_last_preview_size(self) -> Optional[Tuple[int, int]]:
         """Return the last preview image size as (width, height), if known."""
         return self._last_preview_img_size
+
+    def virtual_file_nominal_fps(self) -> Optional[float]:
+        """
+        Nominal frames-per-second from virtual file metadata (``CAP_PROP_FPS``),
+        if the active backend is file-based. Used for preview timer pacing and
+        trial recording metadata. Returns ``None`` for live cameras.
+        """
+        cam = self._camera
+        if cam is None or not isinstance(cam, VideoFileCamera):
+            return None
+        fps = float(cam.fps)
+        if fps <= 0:
+            return None
+        # Guard absurd container values so the Qt timer stays reasonable.
+        return float(max(1.0, min(fps, 360.0)))
+
+    def virtual_file_effective_fps(self, config: Optional[AcquisitionConfig] = None) -> Optional[float]:
+        """
+        Effective virtual FPS for GUI pacing/recording.
+
+        If ``config.virtual_duration_override_s`` is set (>0) and total frame count
+        is known, compute FPS as ``timing_frames / duration_override_s``, where
+        ``timing_frames`` is fixed for the segment from the **anchor** frame (0 on open,
+        updated on each :meth:`seek_video_frame`) to EOF — constant effective FPS until
+        the next seek. Otherwise fall back to container nominal FPS.
+        """
+        nominal = self.virtual_file_nominal_fps()
+        cam = self._camera
+        if cam is None or not isinstance(cam, VideoFileCamera):
+            return None
+        if config is None:
+            return nominal
+        try:
+            dur = getattr(config, "virtual_duration_override_s", None)
+            if dur is None:
+                return nominal
+            dur_s = float(dur)
+            if dur_s <= 0:
+                return nominal
+            total = cam.total_frames()
+            anchor = self._virtual_override_anchor_frame
+            if anchor is None:
+                anchor = 0
+            timing_frames = effective_frame_count_for_virtual_timing(total, anchor)
+            if timing_frames is None:
+                return nominal
+            fps_eff = float(timing_frames) / dur_s
+            if fps_eff <= 0:
+                return nominal
+            return float(max(1.0, min(fps_eff, 360.0)))
+        except Exception:
+            return nominal
+
+    def virtual_file_timing_info(
+        self, config: Optional[AcquisitionConfig] = None
+    ) -> Optional[dict[str, Optional[float]]]:
+        """
+        Return timing diagnostics for virtual sources, or ``None`` for live cameras.
+        """
+        cam = self._camera
+        if cam is None or not isinstance(cam, VideoFileCamera):
+            return None
+        nominal = self.virtual_file_nominal_fps()
+        effective = self.virtual_file_effective_fps(config)
+        total = cam.total_frames()
+        anchor = self._virtual_override_anchor_frame
+        if anchor is None:
+            anchor = 0
+        timing_frames = effective_frame_count_for_virtual_timing(total, anchor)
+        override_s = None
+        if config is not None:
+            try:
+                v = getattr(config, "virtual_duration_override_s", None)
+                override_s = float(v) if v is not None else None
+            except Exception:
+                override_s = None
+        return {
+            "nominal_fps": nominal,
+            "effective_fps": effective,
+            "total_frames": float(total) if total is not None else None,
+            "total_frames_for_effective_fps": (
+                float(timing_frames) if timing_frames is not None else None
+            ),
+            "virtual_override_anchor_frame": float(anchor),
+            "duration_override_s": override_s,
+        }
+
+    def preview_timer_interval_ms(self, config: Optional[AcquisitionConfig] = None) -> int:
+        """
+        Milliseconds between GUI preview ticks.
+
+        Virtual (video file) uses the file's nominal FPS so playback matches
+        the container's reported sampling rate. Live sources keep ~30 Hz.
+        """
+        fps = self.virtual_file_effective_fps(config)
+        if fps is not None:
+            return max(1, int(round(1000.0 / fps)))
+        return 33

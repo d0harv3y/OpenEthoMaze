@@ -5,6 +5,11 @@ from typing import Any, Optional
 
 import numpy as np
 
+
+def _encode_trial_state(state: Any) -> bytes:
+    raw = str(state or "run").strip().lower().encode("utf-8")[:16]
+    return raw.ljust(16, b"\0")
+
 from ._shared import ensure_group, open_db
 from .trial_key import TrialKey
 
@@ -20,6 +25,7 @@ def movement_bout_dtype() -> np.dtype:
             ("total_distance_m", np.float32),
             ("mean_speed_mps", np.float32),
             ("max_speed_mps", np.float32),
+            ("trial_state", "S16"),
         ]
     )
 
@@ -62,6 +68,9 @@ def write_movement_bouts(
             )
             bout_array[i]["mean_speed_mps"] = float(bout.get("mean_speed_mps", 0.0))
             bout_array[i]["max_speed_mps"] = float(bout.get("max_speed_mps", 0.0))
+            bout_array[i]["trial_state"] = _encode_trial_state(
+                bout.get("trial_state", "run")
+            )
 
         if "movement_bouts" in g_pt:
             del g_pt["movement_bouts"]

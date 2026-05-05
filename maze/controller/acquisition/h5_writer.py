@@ -26,11 +26,12 @@ from maze.core.h5_layout import (
     safe_str,
     write_feedback_table as core_write_feedback_table,
     write_group_attrs,
-    write_json_attr,
     write_xy_table as core_write_xy_table,
 )
 from maze.core.tasks import ARENA_TYPE_CIRCULAR, ARENA_TYPE_RADIAL_ARM, normalize_arena_type
+from maze.pipeline.db.radial_arm_geometry_io import write_radial_arm_geometry_tree
 from .radial_arm.config import RadialArmControllerConfig
+from .shared_config import AnalysisTrajectoryConfig
 from .radial_arm.geometry import (
     build_template_from_params,
     exit_hole_xyr_px,
@@ -107,7 +108,10 @@ def write_trial_settings(
     exit_y: Optional[float] = None,
     exit_radius_px: Optional[float] = None,
     trial_start_frame: int = 0,
+    seek_to_frame: int = 0,
+    analysis_trajectory: Optional[AnalysisTrajectoryConfig] = None,
 ) -> None:
+    analysis = analysis_trajectory or AnalysisTrajectoryConfig()
     write_group_attrs(
         g_trial,
         {
@@ -123,6 +127,32 @@ def write_trial_settings(
             "exit_y": float(exit_y) if exit_y is not None else None,
             "exit_radius_px": float(exit_radius_px) if exit_radius_px is not None else None,
             "trial_start_frame": int(trial_start_frame),
+            "seek_to_frame": int(seek_to_frame),
+            "movement_start_threshold_m_per_frame": float(
+                analysis.movement_start_threshold_m_per_frame
+            ),
+            "movement_stop_threshold_m_per_frame": float(
+                analysis.movement_stop_threshold_m_per_frame
+            ),
+            "movement_speed_median_window_frames": int(
+                analysis.movement_speed_median_window_frames
+            ),
+            "movement_entry_debounce_frames": int(
+                analysis.movement_entry_debounce_frames
+            ),
+            "movement_exit_debounce_frames": int(
+                analysis.movement_exit_debounce_frames
+            ),
+            "min_movement_bout_duration_frames": int(
+                analysis.min_movement_bout_duration_frames
+            ),
+            "movement_inter_bout_interval_frames": int(
+                analysis.movement_inter_bout_interval_frames
+            ),
+            "max_movement_per_frame_cm": float(analysis.max_movement_per_frame_cm),
+            "jump_filter_lookahead_frames": int(
+                analysis.jump_filter_lookahead_frames
+            ),
         },
     )
 
@@ -134,8 +164,15 @@ def compute_radial_arm_settings_payloads(
     phase: str = "radial_arm",
     run_mode: str = "continuous",
     trial_start_frame: int = 0,
+    seek_to_frame: int = 0,
+    ram_exit_arm_index: Optional[int] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
-    """Build trial/task attrs and geometry JSON for RAM trials (acquisition or pipeline import)."""
+    """Build trial/task attrs and geometry JSON for RAM trials (acquisition or pipeline import).
+
+    When ``ram_exit_arm_index`` is set (0..7), use it for this trial's escape hole in attrs and
+    ``exit_x``/``exit_y``; otherwise use ``config.radial_arm.exit_arm_index`` (profile default).
+    Template geometry still follows the profile (printed maze hole arm).
+    """
     ram = config.radial_arm
     calibration = ram.calibration
     template_cfg = ram.template
@@ -144,7 +181,7 @@ def compute_radial_arm_settings_payloads(
         arm_length_cm=template_cfg.arm_length_cm,
         arm_width_cm=template_cfg.arm_width_cm,
         arm_split_cm=template_cfg.arm_split_cm,
-        hole_arm_index=template_cfg.hole_arm_index,
+        exit_arm_index=int(ram.exit_arm_index),
         hole_radius_cm=template_cfg.hole_radius_cm,
         hole_inset_from_arm_end_cm=template_cfg.hole_inset_from_arm_end_cm,
     )
@@ -153,10 +190,13 @@ def compute_radial_arm_settings_payloads(
         for name, poly in template.regions_cm.items()
     }
     max_radius_cm = max_template_radius_cm(template)
-    exit_arm_index = int(ram.exit_arm_index)
+    trial_exit_arm_index = int(ram.exit_arm_index)
+    if ram_exit_arm_index is not None:
+        trial_exit_arm_index = int(ram_exit_arm_index)
+    trial_exit_arm_index = max(0, min(7, trial_exit_arm_index))
     exit_x_px, exit_y_px, exit_radius_px = exit_hole_xyr_px(
         template,
-        exit_arm_index=exit_arm_index,
+        exit_arm_index=trial_exit_arm_index,
         center_x_px=calibration.template_center_x_px,
         center_y_px=calibration.template_center_y_px,
         rotation_deg=calibration.template_rotation_deg,
@@ -169,6 +209,7 @@ def compute_radial_arm_settings_payloads(
         "timestamp": safe_str(timestamp) if timestamp else None,
         "arena_type": ARENA_TYPE_RADIAL_ARM,
         "trial_start_frame": int(trial_start_frame),
+        "seek_to_frame": int(seek_to_frame),
         "arena_center_x_px": float(calibration.template_center_x_px),
         "arena_center_y_px": float(calibration.template_center_y_px),
         "arena_radius_px": float(max_radius_cm * float(calibration.px_per_cm)),
@@ -176,22 +217,47 @@ def compute_radial_arm_settings_payloads(
         "template_center_y_px": float(calibration.template_center_y_px),
         "template_rotation_deg": float(calibration.template_rotation_deg),
         "px_per_cm": float(calibration.px_per_cm),
-        "exit_number": exit_arm_index + 1,
+        "exit_number": trial_exit_arm_index + 1,
         "exit_x": float(exit_x_px),
         "exit_y": float(exit_y_px),
         "exit_radius_px": float(exit_radius_px),
-        "exit_arm_index": exit_arm_index,
-        "rewarded_arm_index": int(ram.rewarded_arm_index),
+        "exit_arm_index": trial_exit_arm_index,
         "speaker_device_name": safe_str(ram.speaker_device_name),
         "speaker_volume_pct": float(ram.speaker_volume_pct),
         "stimulus_frequency_hz": float(ram.stimulus_frequency_hz),
         "stimulus_enabled": int(bool(ram.stimulus_enabled)),
         "active_edit_region": safe_str(calibration.edit_region_name),
+        "movement_start_threshold_m_per_frame": float(
+            config.analysis_trajectory.movement_start_threshold_m_per_frame
+        ),
+        "movement_stop_threshold_m_per_frame": float(
+            config.analysis_trajectory.movement_stop_threshold_m_per_frame
+        ),
+        "movement_speed_median_window_frames": int(
+            config.analysis_trajectory.movement_speed_median_window_frames
+        ),
+        "movement_entry_debounce_frames": int(
+            config.analysis_trajectory.movement_entry_debounce_frames
+        ),
+        "movement_exit_debounce_frames": int(
+            config.analysis_trajectory.movement_exit_debounce_frames
+        ),
+        "min_movement_bout_duration_frames": int(
+            config.analysis_trajectory.min_movement_bout_duration_frames
+        ),
+        "movement_inter_bout_interval_frames": int(
+            config.analysis_trajectory.movement_inter_bout_interval_frames
+        ),
+        "max_movement_per_frame_cm": float(
+            config.analysis_trajectory.max_movement_per_frame_cm
+        ),
+        "jump_filter_lookahead_frames": int(
+            config.analysis_trajectory.jump_filter_lookahead_frames
+        ),
     }
     task_attrs: Dict[str, Any] = {
         "task_name": ARENA_TYPE_RADIAL_ARM,
-        "exit_arm_index": exit_arm_index,
-        "rewarded_arm_index": int(ram.rewarded_arm_index),
+        "exit_arm_index": trial_exit_arm_index,
         "speaker_device_name": safe_str(ram.speaker_device_name),
         "speaker_volume_pct": float(ram.speaker_volume_pct),
         "stimulus_frequency_hz": float(ram.stimulus_frequency_hz),
@@ -204,7 +270,6 @@ def compute_radial_arm_settings_payloads(
             "arm_length_cm": template_cfg.arm_length_cm,
             "arm_width_cm": template_cfg.arm_width_cm,
             "arm_split_cm": template_cfg.arm_split_cm,
-            "hole_arm_index": template_cfg.hole_arm_index,
             "hole_radius_cm": template_cfg.hole_radius_cm,
             "hole_inset_from_arm_end_cm": template_cfg.hole_inset_from_arm_end_cm,
         },
@@ -230,6 +295,8 @@ def write_radial_arm_trial_settings(
     phase: str = "radial_arm",
     run_mode: str = "continuous",
     trial_start_frame: int = 0,
+    seek_to_frame: int = 0,
+    ram_exit_arm_index: Optional[int] = None,
 ) -> None:
     """Persist RAM trial attrs plus a task-local geometry payload."""
     trial_attrs, task_attrs, geometry_payload = compute_radial_arm_settings_payloads(
@@ -238,49 +305,13 @@ def write_radial_arm_trial_settings(
         phase=phase,
         run_mode=run_mode,
         trial_start_frame=trial_start_frame,
+        seek_to_frame=seek_to_frame,
+        ram_exit_arm_index=ram_exit_arm_index,
     )
     write_group_attrs(g_trial, trial_attrs)
     g_task = ensure_task_group(g_trial, ARENA_TYPE_RADIAL_ARM)
     write_group_attrs(g_task, task_attrs)
-    template_cfg = config.radial_arm.template
-    write_json_attr(
-        g_task,
-        "template_params",
-        {
-            "center_midedge_to_midedge_cm": template_cfg.center_midedge_to_midedge_cm,
-            "arm_length_cm": template_cfg.arm_length_cm,
-            "arm_width_cm": template_cfg.arm_width_cm,
-            "arm_split_cm": template_cfg.arm_split_cm,
-            "hole_arm_index": template_cfg.hole_arm_index,
-            "hole_radius_cm": template_cfg.hole_radius_cm,
-            "hole_inset_from_arm_end_cm": template_cfg.hole_inset_from_arm_end_cm,
-        },
-    )
-    write_json_attr(
-        g_task,
-        "calibration",
-        {
-            "template_center_x_px": config.radial_arm.calibration.template_center_x_px,
-            "template_center_y_px": config.radial_arm.calibration.template_center_y_px,
-            "template_rotation_deg": config.radial_arm.calibration.template_rotation_deg,
-            "apothem_px": float(config.radial_arm.calibration.apothem_px),
-            "px_per_cm": config.radial_arm.calibration.px_per_cm,
-            "tracking_mask_margin_px": float(
-                config.radial_arm.calibration.tracking_mask_margin_px
-            ),
-            "edit_region_name": config.radial_arm.calibration.edit_region_name,
-        },
-    )
-    write_json_attr(
-        g_task,
-        "template_regions_cm",
-        geometry_payload["template_regions_cm"],
-    )
-    write_json_attr(
-        g_task,
-        "geometry_payload",
-        geometry_payload,
-    )
+    write_radial_arm_geometry_tree(g_task, geometry_payload)
 
 
 def write_feedback_table(g_trial: h5py.Group, fb_table: np.ndarray) -> None:

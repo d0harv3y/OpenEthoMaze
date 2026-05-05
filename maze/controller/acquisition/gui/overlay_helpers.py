@@ -138,20 +138,6 @@ def resolve_exit_success_override(
     return None
 
 
-def apply_brightness_contrast(
-    img: np.ndarray,
-    brightness: int,
-    contrast_pct: int,
-) -> np.ndarray:
-    """Apply display-only brightness and contrast adjustments."""
-    if not HAS_CV2 or (brightness == 0 and contrast_pct == 100):
-        return img
-    out = img.astype(np.float64)
-    scale = contrast_pct / 100.0
-    out = (out - 128.0) * scale + 128.0 + float(brightness)
-    return np.clip(out, 0, 255).astype(np.uint8)
-
-
 def blend_blob_mask_into_overlay(
     overlay: np.ndarray,
     blob_mask: Optional[np.ndarray],
@@ -181,8 +167,11 @@ def draw_ram_template_polylines(
     overlay: np.ndarray,
     polys: dict[str, Any],
     exit_xyr: Optional[Tuple[float, float, float]],
+    *,
+    all_holes_xyr: Optional[list[Tuple[float, float, float]]] = None,
+    escape_arm_index: int = 0,
 ) -> None:
-    """Draw RAM projected regions on ``overlay`` (BGR) and optional exit hole circle."""
+    """Draw RAM projected regions on ``overlay`` (BGR) and optional hole circle(s)."""
     if not HAS_CV2:
         return
     center_color = (0, 220, 255)
@@ -196,11 +185,53 @@ def draw_ram_template_polylines(
         if str(name) == "center":
             c = center_color
         elif str(name) == "hole":
+            if all_holes_xyr:
+                continue
             c = hole_color
         else:
             c = arm_color
         cv2.polylines(overlay, [pts], True, c, 1, cv2.LINE_AA)
-    if exit_xyr is not None:
+    if all_holes_xyr is not None and len(all_holes_xyr) > 0:
+        esc = int(max(0, min(7, escape_arm_index)))
+        for i, t in enumerate(all_holes_xyr):
+            ex, ey, er = t
+            if er <= 0 or not np.isfinite(ex) or not np.isfinite(ey):
+                continue
+            col = (255, 0, 255) if i == esc else (200, 200, 255)
+            th = 3 if i == esc else 1
+            cv2.circle(
+                overlay,
+                (int(round(ex)), int(round(ey))),
+                int(round(er)),
+                col,
+                th,
+                cv2.LINE_AA,
+            )
+            # Show stable arm labels in preview using 1-based display numbering.
+            label = f"arm{i + 1}"
+            tx = int(round(ex + max(8.0, er + 4.0)))
+            ty = int(round(ey - max(8.0, er + 4.0)))
+            cv2.putText(
+                overlay,
+                label,
+                (tx + 1, ty + 1),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                (0, 0, 0),
+                2,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                overlay,
+                label,
+                (tx, ty),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                col,
+                1,
+                cv2.LINE_AA,
+            )
+    elif exit_xyr is not None:
         ex, ey, er = exit_xyr
         if er > 0 and np.isfinite(ex) and np.isfinite(ey):
             cv2.circle(
@@ -231,6 +262,8 @@ def draw_roi_and_tracking_overlay(
     blob_crop_rect: Optional[Tuple[int, int, int, int]] = None,
     ram_polys: Optional[dict[str, Any]] = None,
     ram_exit_xyr: Optional[Tuple[float, float, float]] = None,
+    ram_all_holes_xyr: Optional[list] = None,
+    ram_escape_arm_index: int = 0,
 ) -> np.ndarray:
     """Draw ROI, state overlays, SLEAP skeleton, and fallback position marker."""
     if not HAS_CV2:
@@ -244,7 +277,13 @@ def draw_roi_and_tracking_overlay(
     cx_i = int(roi_center_xy[0]) if roi_center_xy else None
     cy_i = int(roi_center_xy[1]) if roi_center_xy else None
     if ram_polys is not None:
-        draw_ram_template_polylines(overlay, ram_polys, ram_exit_xyr)
+        draw_ram_template_polylines(
+            overlay,
+            ram_polys,
+            ram_exit_xyr,
+            all_holes_xyr=ram_all_holes_xyr,
+            escape_arm_index=int(ram_escape_arm_index),
+        )
     elif roi_center_xy is not None and roi_radius_px > 0:
         cv2.circle(overlay, (cx_i, cy_i), int(roi_radius_px), (0, 255, 255), 1)
     if overlay_info is not None and cx_i is not None and cy_i is not None:

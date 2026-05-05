@@ -27,7 +27,6 @@ class PlaybackHydration:
     source: str
     animal_id: str
     session_id: str
-    display_session_id: str
     trial_label: str
     trial_idx: int
     slot_idx: int
@@ -57,6 +56,17 @@ def _parse_trial_index(trial_label: str) -> int:
     return 0
 
 
+def _one_based_or_zero_based_exit_to_zero_based(raw: object) -> int:
+    """Normalize external exit-arm values to 0-based internal indices."""
+    try:
+        v = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return 0
+    if 1 <= v <= 8:
+        return v - 1
+    return max(0, min(7, v))
+
+
 def _candidate_h5_paths(video_path: Path, config: AcquisitionConfig) -> list[Path]:
     h5_name = (config.h5_filename or "trials.h5").strip() or "trials.h5"
     parents = [video_path.parent.parent, video_path.parent]
@@ -69,7 +79,7 @@ def _candidate_h5_paths(video_path: Path, config: AcquisitionConfig) -> list[Pat
             if candidate.exists() and candidate not in seen:
                 seen.add(candidate)
                 candidates.append(candidate)
-    explicit_legacy_db = (config.session.legacy_seed_db_path or "").strip()
+    explicit_legacy_db = (config.session.seed_legacy_source or "").strip()
     if explicit_legacy_db:
         legacy_path = Path(explicit_legacy_db)
         if legacy_path.exists() and legacy_path not in seen:
@@ -94,7 +104,7 @@ def _hydrate_from_modern_db(
     for db_path in _candidate_h5_paths(video_path, config):
         try:
             legacy_exit_xy: tuple[float, float] | None = None
-            settings, _, _ = read_trial_settings(db_path, key)
+            settings, _, _timing = read_trial_settings(db_path, key)
             if settings.exit_pos is not None:
                 legacy_exit_xy = (
                     float(settings.exit_pos[0]),
@@ -121,9 +131,6 @@ def _hydrate_from_modern_db(
                     )
                     ram.template.arm_split_cm = float(
                         template_params.get("arm_split_cm", ram.template.arm_split_cm)
-                    )
-                    ram.template.hole_arm_index = int(
-                        template_params.get("hole_arm_index", ram.template.hole_arm_index)
                     )
                     ram.template.hole_radius_cm = float(
                         template_params.get("hole_radius_cm", ram.template.hole_radius_cm)
@@ -177,20 +184,11 @@ def _hydrate_from_modern_db(
                 ram.exit_arm_index = int(
                     task_attrs.get("exit_arm_index", payload["trial_attrs"].get("exit_arm_index", ram.exit_arm_index))
                 )
-                ram.rewarded_arm_index = int(
-                    task_attrs.get(
-                        "rewarded_arm_index",
-                        payload["trial_attrs"].get(
-                            "rewarded_arm_index", ram.rewarded_arm_index
-                        ),
-                    )
-                )
             _apply_loaded_identity(config, animal_id=animal_id, num_trials=trial_idx + 1)
             return PlaybackHydration(
                 source="modern_db",
                 animal_id=animal_id,
                 session_id=session_id,
-                display_session_id=session_id,
                 trial_label=trial_label,
                 trial_idx=trial_idx,
                 slot_idx=trial_idx,
@@ -213,8 +211,8 @@ def _hydrate_ram_from_sidecar(
         return None
 
     apply_legacy_template_config(config)
-    config.radial_arm.exit_arm_index = int(row.escape_arm)
-    config.radial_arm.rewarded_arm_index = int(row.escape_arm)
+    escape_idx = _one_based_or_zero_based_exit_to_zero_based(row.escape_arm)
+    config.radial_arm.exit_arm_index = escape_idx
     _apply_loaded_identity(config, animal_id=row.animal_id, num_trials=max(1, _parse_trial_index(row.trial_key) + 1))
     if row.tx:
         config.session.animals[0].tx = row.tx
@@ -226,13 +224,12 @@ def _hydrate_ram_from_sidecar(
         source="legacy_trial_ns",
         animal_id=row.animal_id,
         session_id=session_id,
-        display_session_id=row.phase,
         trial_label=row.trial_key,
         trial_idx=_parse_trial_index(row.trial_key),
         slot_idx=_parse_trial_index(row.trial_key),
         status=(
             f"Playback hydrated from trial_ns.csv: {row.animal_id} {row.phase} "
-            f"{row.trial_key} exit arm {row.escape_arm + 1}."
+            f"{row.trial_key} exit index {escape_idx + 1}."
         ),
     )
 

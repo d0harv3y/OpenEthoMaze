@@ -1,7 +1,16 @@
 from __future__ import annotations
 
+"""
+Shared helpers for VAST and RAM acquisition GUIs.
+
+Per-frame spatial labels (:class:`VastRegionCodeTracker`, :func:`ram_region_code`, etc.)
+live in :mod:`maze.controller.acquisition.region_code` so the pipeline can import the same
+rules without duplicating geometry logic.
+"""
+
 from typing import Any
 
+from .region_code import REGION_ANNULUS, REGION_CENTER, REGION_OOB
 from .shared_config import AcquisitionConfig
 from .radial_arm.geometry import build_template_from_params, max_template_radius_cm
 
@@ -70,7 +79,7 @@ def config_tracking_roi(config: AcquisitionConfig) -> tuple[float, float, float]
             arm_length_cm=config.radial_arm.template.arm_length_cm,
             arm_width_cm=config.radial_arm.template.arm_width_cm,
             arm_split_cm=config.radial_arm.template.arm_split_cm,
-            hole_arm_index=config.radial_arm.template.hole_arm_index,
+            exit_arm_index=int(config.radial_arm.exit_arm_index),
             hole_radius_cm=config.radial_arm.template.hole_radius_cm,
             hole_inset_from_arm_end_cm=config.radial_arm.template.hole_inset_from_arm_end_cm,
         )

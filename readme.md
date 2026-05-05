@@ -29,3 +29,5 @@ uv run maze-daq --ram
 legacy RAM alias:  
 uv run maze-ram-daq  
 
+
+uv sync --extra gui --extra sleap --extra kpms --extra dev --reinstall-package torch --reinstall-package torchvision  

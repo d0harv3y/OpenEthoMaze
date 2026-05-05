@@ -15,7 +15,7 @@ XY_ROW_DTYPE = np.dtype(
         ("y", np.float32),
         ("dist_to_exit_px", np.float32),
         ("trial_state", "S16"),
-        ("in_exit_zone", np.uint8),
+        ("region_code", "S16"),
         ("valid", np.uint8),
         ("is_moving", np.uint8),
     ]

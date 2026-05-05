@@ -26,7 +26,6 @@ class RadialArmRegionBounds:
     arms_poly_xy: dict[tuple[int, int], np.ndarray]
     exit_hole_xyr: np.ndarray
     exit_arm_index: int
-    rewarded_arm_index: int
     px_per_cm: float
 
 
@@ -121,7 +120,6 @@ def bounds_from_geometry_payload(
     geometry_payload: dict[str, object],
     *,
     exit_arm_index: int,
-    rewarded_arm_index: int,
 ) -> Optional[RadialArmRegionBounds]:
     """Build RAM bounds from controller-written geometry payload."""
     template_params = geometry_payload.get("template_params", {})
@@ -136,7 +134,12 @@ def bounds_from_geometry_payload(
         arm_length_cm=float(template_params.get("arm_length_cm", 55.0)),
         arm_width_cm=float(template_params.get("arm_width_cm", 15.0)),
         arm_split_cm=float(template_params.get("arm_split_cm", 27.5)),
-        hole_arm_index=int(template_params.get("hole_arm_index", 0)),
+        exit_arm_index=int(
+            template_params.get(
+                "exit_arm_index",
+                template_params.get("hole_arm_index", exit_arm_index),
+            )
+        ),
         hole_radius_cm=float(template_params.get("hole_radius_cm", 5.0)),
         hole_inset_from_arm_end_cm=float(
             template_params.get("hole_inset_from_arm_end_cm", 10.0)
@@ -170,7 +173,6 @@ def bounds_from_geometry_payload(
         arms_poly_xy=arms,
         exit_hole_xyr=hole_xyr,
         exit_arm_index=int(exit_arm_index),
-        rewarded_arm_index=int(rewarded_arm_index),
         px_per_cm=px_per_cm,
     )
 
@@ -178,7 +180,6 @@ def bounds_from_geometry_payload(
 def legacy_bounds(
     *,
     exit_arm_index: int,
-    rewarded_arm_index: int = 0,
 ) -> RadialArmRegionBounds:
     """Return the migrated legacy RAM template bounds."""
     arms: dict[tuple[int, int], np.ndarray] = {}
@@ -202,7 +203,6 @@ def legacy_bounds(
             dtype=np.float32,
         ),
         exit_arm_index=int(exit_arm_index),
-        rewarded_arm_index=int(rewarded_arm_index),
         px_per_cm=float(LEGACY_RAM_TEMPLATE.px_per_cm),
     )
 

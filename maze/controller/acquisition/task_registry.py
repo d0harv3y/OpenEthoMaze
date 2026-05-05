@@ -31,6 +31,17 @@ def _set_vast_phase(config: VastControllerConfig, value: str) -> None:
     config.run_phase = str(value or "habituation").strip() or "habituation"
 
 
+def _get_ram_phase(config: RadialArmControllerConfig) -> str:
+    return str(config.run_phase or "radial_arm").strip() or "radial_arm"
+
+
+def _set_ram_phase(config: RadialArmControllerConfig, value: str) -> None:
+    v = str(value or "radial_arm").strip() or "radial_arm"
+    if v not in {"habituation", "radial_arm"}:
+        v = "radial_arm"
+    config.run_phase = v
+
+
 def _build_vast_controller(config: Any) -> Any:
     from .vast import VastTrialController
 
@@ -63,6 +74,8 @@ class AcquisitionTaskSpec:
     set_phase_value: Optional[Callable[[Any, str], None]]
     get_mode_value: Callable[[Any], str]
     set_mode_value: Callable[[Any, str], None]
+    get_num_exits: Callable[[Any], int]
+    get_default_exit_index: Callable[[Any], int]
 
 
 TASK_SPECS: dict[AcquisitionMode, AcquisitionTaskSpec] = {
@@ -72,7 +85,7 @@ TASK_SPECS: dict[AcquisitionMode, AcquisitionTaskSpec] = {
         arena_type=ARENA_TYPE_CIRCULAR,
         window_title="Maze Acquisition",
         task_tab_label="VAST Task",
-        exit_status_label="Exit #:",
+        exit_status_label="Exit index (1-based):",
         requires_mc_connection=True,
         config_factory=VastControllerConfig,
         controller_factory=_build_vast_controller,
@@ -90,6 +103,10 @@ TASK_SPECS: dict[AcquisitionMode, AcquisitionTaskSpec] = {
         set_phase_value=_set_vast_phase,
         get_mode_value=_get_run_mode,
         set_mode_value=_set_run_mode,
+        get_num_exits=lambda config: max(1, int(config.exit_angles.n_angles)),
+        get_default_exit_index=lambda config: max(
+            0, min(max(1, int(config.exit_angles.n_angles)) - 1, int(config.exit_angles.default_manual_exit_index))
+        ),
     ),
     "ram": AcquisitionTaskSpec(
         mode="ram",
@@ -97,20 +114,25 @@ TASK_SPECS: dict[AcquisitionMode, AcquisitionTaskSpec] = {
         arena_type=ARENA_TYPE_RADIAL_ARM,
         window_title="Maze Acquisition",
         task_tab_label="RAM Task",
-        exit_status_label="Exit arm:",
+        exit_status_label="Exit index (1-based):",
         requires_mc_connection=False,
         config_factory=RadialArmControllerConfig,
         controller_factory=_build_ram_controller,
-        phase_label=None,
-        phase_options=(),
+        phase_label="Phase:",
+        phase_options=(
+            ("Habituation", "habituation"),
+            ("RAM", "radial_arm"),
+        ),
         mode_options=(
             ("Continuous", "continuous"),
             ("Alternating", "alternating"),
         ),
-        get_phase_value=lambda config: None,
-        set_phase_value=None,
+        get_phase_value=_get_ram_phase,
+        set_phase_value=_set_ram_phase,
         get_mode_value=_get_run_mode,
         set_mode_value=_set_run_mode,
+        get_num_exits=lambda config: 8,
+        get_default_exit_index=lambda config: max(0, min(7, int(config.radial_arm.exit_arm_index))),
     ),
 }
 

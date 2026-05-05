@@ -24,7 +24,11 @@ from ...core.anatomy import (
     STANDARD_NODE_NAMES,
     skeleton_edge_indices,
 )
-from ..defaults import IN_RANGE_POINT_NAME
+from ..defaults import (
+    IN_RANGE_POINT_NAME,
+    JUMP_FILTER_LOOKAHEAD_FRAMES,
+    MAX_MOVEMENT_PER_FRAME_CM,
+)
 
 
 def get_skeleton_edges() -> list[tuple[int, int]]:
@@ -473,9 +477,9 @@ def trace_data_from_legacy_xy(
 
 def apply_jump_filter(
     trace: TraceData,
-    max_jump_cm: float = 15.0,
+    max_jump_cm: float = MAX_MOVEMENT_PER_FRAME_CM,
     px_per_cm: float = 2.42,
-    lookahead_frames: int = 3,
+    lookahead_frames: int = JUMP_FILTER_LOOKAHEAD_FRAMES,
 ) -> TraceData:
     """
     Filter out tracking jumps that exceed physical plausibility.

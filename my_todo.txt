@@ -1,0 +1,12 @@
+uv run python "scripts\legacy_db.py" sync --prune-unlabeled
+uv run python "scripts\legacy_db.py" run-inference --model "E:\sleap\models\combo_mazes_1" --skip-existing --dry-run
+uv run python "scripts\legacy_db.py" run-pipeline --animal-id 3266 3272 3273 3274 3275
+uv run python "scripts\legacy_db.py" run-exports
+
+
+
+cd C:\Users\admin\code\IMPRESS\orm
+uv run pydeps maze --show-deps --noshow --nodot --deps-output maze_import_deps.json --rmprefix maze
+uv run python tmp\build_maze_import_graph.py
+dot -Tsvg maze_import_graph.dot -o maze_import_graph.svg
+dot -Gfontsize=16 -Nfontsize=14 -Efontsize=12 -Tsvg maze_import_graph.dot -o maze_import_graph.svg

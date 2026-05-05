@@ -17,6 +17,12 @@ from typing import Any, Optional
 
 import numpy as np
 
+from maze.controller.acquisition.region_code import (
+    arena_config_from_trial_settings,
+    compute_trace_region_codes,
+)
+from maze.controller.acquisition.vast.config import ExitAngleConfig
+
 from ..core.anatomy import SPOT_NODE_NAMES
 from ..core.tasks import ARENA_TYPE_RADIAL_ARM
 from ..core.trial_settings import TrialSettings
@@ -57,11 +63,13 @@ from .trial_quality import (
 )
 from .db import (
     TrialKey,
+    complete_trial_timing,
+    compute_seek_run_rows,
     read_arena_type,
     read_radial_arm_trial_settings,
+    read_spot_frame_index_column,
     read_trial_settings,
     read_feedback_series,
-    read_xy_table,
     write_mistrial_reason,
     write_video_meta,
     write_analysis_duration,
@@ -74,9 +82,46 @@ from .db import (
     write_animal_notes_attr,
     write_trial_attrs,
     read_animal_label,
+    TrialTiming,
 )
+from .db.trial_settings_io import radial_arm_exit_hole_from_geometry_payload
 
 log = logging.getLogger(__name__)
+
+
+def _ram_exit_arm_index_for_pipeline(
+    radial_arm_payload: dict[str, Any],
+    settings: TrialSettings,
+) -> int:
+    """0-based RAM exit arm for metrics/QC: prefer per-trial attrs, then task attrs, then exit_number."""
+    trial_attrs = radial_arm_payload.get("trial_attrs") or {}
+    task_attrs = radial_arm_payload.get("task_attrs") or {}
+
+    def _parse_exit_arm(raw: Any) -> Optional[int]:
+        if raw is None:
+            return None
+        try:
+            v = int(raw)
+            if v < 0:
+                return None
+            return v
+        except (TypeError, ValueError):
+            return None
+
+    v = _parse_exit_arm(trial_attrs.get("exit_arm_index"))
+    if v is not None:
+        return max(0, min(7, v))
+    v = _parse_exit_arm(task_attrs.get("exit_arm_index"))
+    if v is not None:
+        return max(0, min(7, v))
+    if settings.exit_number is not None:
+        try:
+            en = int(settings.exit_number)
+            if en > 0:
+                return max(0, min(7, en - 1))
+        except (TypeError, ValueError):
+            pass
+    return 0
 
 
 def _animal_notes_from_treatment_csv(manifest: TrialManifest) -> str:
@@ -143,27 +188,6 @@ def _merge_trace_data(
     )
 
 
-def _infer_trial_start_from_xy_state(db_path: Path, key: TrialKey) -> int:
-    """
-    Infer trial_start_frame from existing controller xy trial_state labels.
-    Returns first frame index whose trial_state == "run", or 0 if unavailable.
-    """
-    for point_name in (IN_RANGE_POINT_NAME, "spot"):
-        xy = read_xy_table(db_path, key, point_name=point_name)
-        if xy is None or xy.shape[0] == 0:
-            continue
-        names = xy.dtype.names or ()
-        if "trial_state" not in names:
-            continue
-        for i in range(xy.shape[0]):
-            ts = xy["trial_state"][i]
-            if isinstance(ts, bytes):
-                ts = ts.decode("utf-8", errors="replace")
-            if str(ts).strip().lower() == "run":
-                return int(i)
-    return 0
-
-
 def process_trial(
     manifest: TrialManifest,
     db_path: Optional[Path] = None,
@@ -198,11 +222,10 @@ def process_trial(
 
     try:
         # Step 1: Read trial settings from output database (written by init_db)
-        settings, h5_fps, trial_start_frame = read_trial_settings(db_path, key)
+        settings, h5_fps, timing = read_trial_settings(db_path, key)
         if h5_fps is None:
             h5_fps = DEFAULT_FPS
-        if trial_start_frame <= 0:
-            trial_start_frame = _infer_trial_start_from_xy_state(db_path, key)
+        timing = complete_trial_timing(db_path, key, timing)
 
         # Step 2: Load tracking data (SLEAP + in-range when available; merge into one TraceData)
         trace_data_sleap = None
@@ -212,6 +235,8 @@ def process_trial(
                 trace_data_sleap = apply_jump_filter(
                     trace_data_sleap,
                     px_per_cm=settings.px_per_cm,
+                    max_jump_cm=settings.max_movement_per_frame_cm,
+                    lookahead_frames=settings.jump_filter_lookahead_frames,
                 )
             else:
                 log("  Warning: Failed to load SLEAP data")
@@ -268,7 +293,7 @@ def process_trial(
             db_path=db_path,
             generate_qc=generate_qc,
             fps_override=h5_fps,
-            trial_start_frame=trial_start_frame,
+            timing=timing,
         )
         if not ok:
             log("  Incomplete processing (no analysis window or invalid arena); marking as failed.")
@@ -299,15 +324,19 @@ def _process_with_sleap(
     db_path: Path,
     generate_qc: bool = True,
     fps_override: Optional[float] = None,
-    trial_start_frame: int = 0,
+    timing: Optional[TrialTiming] = None,
 ) -> bool:
     """
     Process trial with SLEAP tracking data.
 
-    Analysis uses only frames from trial_start_frame onward (post-ITI).
+    Analysis uses only frames from the run row onward (post-ITI within the seek window).
     Returns True if full pipeline ran and data was written; False on early exit
     (e.g. no analysis frames or invalid arena), so the caller can mark the trial as failed.
     """
+    if timing is None:
+        timing = TrialTiming(
+            seek_to_frame=0, run_start_frame=0, use_absolute_frame_index=False
+        )
     # FPS: h5_fps (from DB, from input H5 timer0) when available, else SLEAP trace, else config default. Not changed by pipeline.
     if fps_override and fps_override > 0:
         fps = fps_override
@@ -317,7 +346,9 @@ def _process_with_sleap(
         fps = DEFAULT_FPS
     n_frames = trace_data.n_frames
 
-    start_frame = min(trial_start_frame, n_frames)
+    fi_spot = read_spot_frame_index_column(db_path, key)
+    seek_row, run_row = compute_seek_run_rows(n_frames, fi_spot, timing)
+    start_frame = run_row
     if start_frame >= n_frames:
         return False
     n_analysis = n_frames - start_frame
@@ -413,22 +444,31 @@ def _process_with_sleap(
         hybrid_valid_full = hybrid_valid_full & valid_frames_full
     hybrid_xy_run = hybrid_xy_full[start_frame:]
     hybrid_valid_run = hybrid_valid_full[start_frame:]
-    hybrid_xy_iti = hybrid_xy_full[:start_frame]
-    hybrid_valid_iti = hybrid_valid_full[:start_frame]
+    hybrid_xy_iti = hybrid_xy_full[seek_row:run_row]
+    hybrid_valid_iti = hybrid_valid_full[seek_row:run_row]
+    radial_arm_payload: dict[str, Any] = {}
     task_context: dict[str, Any] | None = None
     if arena_type == ARENA_TYPE_RADIAL_ARM:
         radial_arm_payload = read_radial_arm_trial_settings(db_path, key)
+        exit_arm_resolved = _ram_exit_arm_index_for_pipeline(radial_arm_payload, settings)
         task_context = {
             "geometry_payload": radial_arm_payload.get("geometry_payload", {}),
-            "exit_arm_index": radial_arm_payload.get("task_attrs", {}).get(
-                "exit_arm_index",
-                radial_arm_payload.get("trial_attrs", {}).get("exit_arm_index", -1),
-            ),
+            "exit_arm_index": exit_arm_resolved,
             "rewarded_arm_index": radial_arm_payload.get("task_attrs", {}).get(
                 "rewarded_arm_index",
                 radial_arm_payload.get("trial_attrs", {}).get("rewarded_arm_index", 0),
             ),
         }
+
+    arena_cfg_region = arena_config_from_trial_settings(settings)
+    exit_angles_region = ExitAngleConfig()
+    assigned_vast_region = max(0, int(settings.exit_number or 1) - 1)
+    gp_ram_region: dict = {}
+    exit_arm_region = 0
+    if arena_type == ARENA_TYPE_RADIAL_ARM and task_context:
+        gp_ram_region = dict(task_context.get("geometry_payload") or {})
+        exit_arm_region = int(task_context.get("exit_arm_index", 0) or 0)
+        exit_arm_region = max(0, min(7, exit_arm_region))
 
     for point_name in AMBIULATION_POINT_NAMES:
         if point_name == "spot":
@@ -447,11 +487,27 @@ def _process_with_sleap(
         if FILTER_FRAMES_NO_ANIMAL:
             valid_full = valid_full & valid_frames_full
 
-        # Split into iti_wait (pre-analysis) and run (analysis) bands.
-        xy_iti = xy_full[:start_frame]
+        # ITI band: between seek_row and run_row; run band: from run_row onward.
+        xy_iti = xy_full[seek_row:run_row]
         xy_run = xy_full[start_frame:]
-        valid_iti = valid_full[:start_frame]
+        valid_iti = valid_full[seek_row:run_row]
         valid_run = valid_full[start_frame:]
+
+        amb_iti = None
+        if run_row > seek_row and xy_iti.shape[0] > 0:
+            amb_iti = calculate_ambulation_metrics(
+                xy=xy_iti,
+                valid=valid_iti,
+                px_per_cm=settings.px_per_cm,
+                fps=fps,
+                start_threshold_m=settings.movement_start_threshold_m_per_frame,
+                stop_threshold_m=settings.movement_stop_threshold_m_per_frame,
+                speed_median_window_frames=settings.movement_speed_median_window_frames,
+                entry_debounce_frames=settings.movement_entry_debounce_frames,
+                exit_debounce_frames=settings.movement_exit_debounce_frames,
+                min_bout_duration_frames=settings.min_movement_bout_duration_frames,
+                inter_bout_interval_frames=settings.movement_inter_bout_interval_frames,
+            )
 
         # Run-band metrics (matches existing analysis semantics).
         amb_run = calculate_ambulation_metrics(
@@ -459,6 +515,13 @@ def _process_with_sleap(
             valid=valid_run,
             px_per_cm=settings.px_per_cm,
             fps=fps,
+            start_threshold_m=settings.movement_start_threshold_m_per_frame,
+            stop_threshold_m=settings.movement_stop_threshold_m_per_frame,
+            speed_median_window_frames=settings.movement_speed_median_window_frames,
+            entry_debounce_frames=settings.movement_entry_debounce_frames,
+            exit_debounce_frames=settings.movement_exit_debounce_frames,
+            min_bout_duration_frames=settings.min_movement_bout_duration_frames,
+            inter_bout_interval_frames=settings.movement_inter_bout_interval_frames,
         )
         arena_center = (settings.arena_center_x_px, settings.arena_center_y_px)
         task_xy_run = hybrid_xy_run if arena_type == ARENA_TYPE_RADIAL_ARM else xy_run
@@ -488,6 +551,18 @@ def _process_with_sleap(
         is_moving_full[start_frame : start_frame + n_analysis] = is_moving_run
 
         # Build xy table over full video (frame_index 0 .. n_frames-1).
+        _fi_write = None
+        if fi_spot is not None and len(fi_spot) == n_frames:
+            _fi_write = fi_spot
+        rc_list = compute_trace_region_codes(
+            xy_full,
+            arena_type=arena_type,
+            geometry_payload=gp_ram_region if arena_type == ARENA_TYPE_RADIAL_ARM else None,
+            exit_arm_index=exit_arm_region,
+            arena_config=arena_cfg_region,
+            exit_angles=exit_angles_region,
+            assigned_exit_index=assigned_vast_region,
+        )
         xy_table = build_xy_table_with_exit(
             xy=xy_full,
             valid=valid_full,
@@ -496,12 +571,31 @@ def _process_with_sleap(
             fps=fps,
             exit_zone_radius_cm=exit_zone_radius_cm,
             is_moving=is_moving_full,
-            start_frame=0,
-            trial_start_frame=start_frame,
+            seek_row=seek_row,
+            run_row=run_row,
+            frame_indices=_fi_write,
+            region_codes=rc_list,
         )
 
         write_xy_table(db_path, key, point_name, xy_table, fps)
-        write_movement_bouts(db_path, key, point_name, amb_run.movement_bouts, analysis_start_frame=start_frame)
+        combined_bouts: list[dict[str, Any]] = []
+        if amb_iti is not None:
+            for b in amb_iti.movement_bouts:
+                nb = dict(b)
+                nb["trial_state"] = "iti_wait"
+                nb["start_frame"] = seek_row + int(b["start_frame"])
+                nb["end_frame"] = seek_row + int(b["end_frame"])
+                combined_bouts.append(nb)
+        for b in amb_run.movement_bouts:
+            nb = dict(b)
+            nb["trial_state"] = "run"
+            nb["start_frame"] = start_frame + int(b["start_frame"])
+            nb["end_frame"] = start_frame + int(b["end_frame"])
+            combined_bouts.append(nb)
+        combined_bouts.sort(key=lambda x: int(x["start_frame"]))
+        write_movement_bouts(
+            db_path, key, point_name, combined_bouts, analysis_start_frame=0
+        )
 
         run_summary = {
             "total_distance_m": amb_run.total_distance_m,
@@ -517,15 +611,9 @@ def _process_with_sleap(
             ),
         }
 
-        # Optional iti_wait-band metrics (frames before analysis window).
+        # Optional iti_wait-band metrics (seek..run slice only; skip when empty).
         band_summaries: list[dict[str, Any]] = []
-        if start_frame > 0 and xy_iti.shape[0] > 0:
-            amb_iti = calculate_ambulation_metrics(
-                xy=xy_iti,
-                valid=valid_iti,
-                px_per_cm=settings.px_per_cm,
-                fps=fps,
-            )
+        if amb_iti is not None:
             task_xy_iti = hybrid_xy_iti if arena_type == ARENA_TYPE_RADIAL_ARM else xy_iti
             task_valid_iti = hybrid_valid_iti if arena_type == ARENA_TYPE_RADIAL_ARM else valid_iti
             task_iti = calculate_task_metrics(
@@ -618,18 +706,22 @@ def _process_with_sleap(
                 y_full = node["y"]
                 xy_full = np.column_stack([x_full, y_full])
                 valid_full_node = ~np.any(np.isnan(xy_full), axis=1)
-                xy_all_nodes_iti.append((xy_full[:start_frame], valid_full_node[:start_frame]))
-                xy_all_nodes_run.append((xy_full[start_frame:], valid_full_node[start_frame:]))
+                xy_all_nodes_iti.append(
+                    (xy_full[seek_row:run_row], valid_full_node[seek_row:run_row])
+                )
+                xy_all_nodes_run.append(
+                    (xy_full[run_row:], valid_full_node[run_row:])
+                )
 
             # Use hybrid trajectory for QC overlay
             xy_traj_full = hybrid_xy_full
             traj_valid_full = ~np.any(np.isnan(xy_traj_full), axis=1)
             if FILTER_FRAMES_NO_ANIMAL:
                 traj_valid_full = traj_valid_full & valid_frames_full
-            xy_traj_iti = xy_traj_full[:start_frame]
-            valid_traj_iti = traj_valid_full[:start_frame]
-            xy_traj_run = xy_traj_full[start_frame:]
-            valid_traj_run = traj_valid_full[start_frame:]
+            xy_traj_iti = xy_traj_full[seek_row:run_row]
+            valid_traj_iti = traj_valid_full[seek_row:run_row]
+            xy_traj_run = xy_traj_full[run_row:]
+            valid_traj_run = traj_valid_full[run_row:]
 
             # QC image attributes (provenance: what went into heatmap/trajectory and why)
             primary_reason = "in_range_fallback" if use_inrange_primary else "spot"
@@ -639,19 +731,36 @@ def _process_with_sleap(
                 "trajectory_source": primary_trajectory,
                 "primary_reason": primary_reason,
             }
+            ram_geometry_payload = None
+            if arena_type == ARENA_TYPE_RADIAL_ARM and isinstance(radial_arm_payload, dict):
+                ram_geometry_payload = radial_arm_payload.get("geometry_payload")
 
-            # ITI/WAIT QC image (if any pre-analysis frames exist)
-            if start_frame > 0 and xy_traj_iti.shape[0] > 0:
+            qc_exit_pos = exit_pos
+            qc_exit_radius_px = settings.exit_radius_px
+            if arena_type == ARENA_TYPE_RADIAL_ARM and ram_geometry_payload:
+                qc_exit_arm = _ram_exit_arm_index_for_pipeline(radial_arm_payload, settings)
+                hole = radial_arm_exit_hole_from_geometry_payload(
+                    ram_geometry_payload,
+                    exit_arm_index=qc_exit_arm,
+                )
+                if hole is not None:
+                    qc_exit_pos = (hole[0], hole[1])
+                    qc_exit_radius_px = float(hole[2])
+
+            # ITI/WAIT QC image (seek..run band only)
+            if run_row > seek_row and xy_traj_iti.shape[0] > 0:
                 generate_trial_qc_images(
                     db_path=db_path,
                     key=key,
                     trajectory_xy=xy_traj_iti,
                     trajectory_valid=valid_traj_iti,
-                    exit_pos=exit_pos,
+                    exit_pos=qc_exit_pos,
                     arena_center_x_px=settings.arena_center_x_px,
                     arena_center_y_px=settings.arena_center_y_px,
                     arena_radius_px=settings.arena_radius_px,
                     px_per_cm=settings.px_per_cm,
+                    exit_radius_px=qc_exit_radius_px,
+                    ram_geometry_payload=ram_geometry_payload,
                     fps=fps,
                     xy_list_heatmap=xy_all_nodes_iti if xy_all_nodes_iti else None,
                     image_name="composite_iti_wait",
@@ -664,11 +773,13 @@ def _process_with_sleap(
                 key=key,
                 trajectory_xy=xy_traj_run,
                 trajectory_valid=valid_traj_run,
-                exit_pos=exit_pos,
+                exit_pos=qc_exit_pos,
                 arena_center_x_px=settings.arena_center_x_px,
                 arena_center_y_px=settings.arena_center_y_px,
                 arena_radius_px=settings.arena_radius_px,
                 px_per_cm=settings.px_per_cm,
+                exit_radius_px=qc_exit_radius_px,
+                ram_geometry_payload=ram_geometry_payload,
                 fps=fps,
                 xy_list_heatmap=xy_all_nodes_run if xy_all_nodes_run else None,
                 image_name="composite_run",

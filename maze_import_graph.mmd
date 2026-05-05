@@ -1,0 +1,614 @@
+graph LR
+  n0[maze]
+  n1[maze.controller]
+  n2[maze.controller.acquisition]
+  n3[maze.controller.acquisition.__main__]
+  n4[maze.controller.acquisition.app_logging]
+  n5[maze.controller.acquisition.app_shell]
+  n6[maze.controller.acquisition.arduino]
+  n7[maze.controller.acquisition.camera]
+  n8[maze.controller.acquisition.gui]
+  n9[maze.controller.acquisition.gui.analysis_worker]
+  n10[maze.controller.acquisition.gui.file_actions]
+  n11[maze.controller.acquisition.gui.identity]
+  n12[maze.controller.acquisition.gui.intensity_sample]
+  n13[maze.controller.acquisition.gui.launcher]
+  n14[maze.controller.acquisition.gui.main_window]
+  n15[maze.controller.acquisition.gui.mc_actions]
+  n16[maze.controller.acquisition.gui.menus]
+  n17[maze.controller.acquisition.gui.overlay_helpers]
+  n18[maze.controller.acquisition.gui.pose_jump_state]
+  n19[maze.controller.acquisition.gui.profile_settings]
+  n20[maze.controller.acquisition.gui.qt_preview]
+  n21[maze.controller.acquisition.gui.section_with_settings]
+  n22[maze.controller.acquisition.gui.settings_dialog]
+  n23[maze.controller.acquisition.gui.trial_schedule_window]
+  n24[maze.controller.acquisition.h5_writer]
+  n25[maze.controller.acquisition.h5web_server]
+  n26[maze.controller.acquisition.playback_loader]
+  n27[maze.controller.acquisition.post_trial_analysis]
+  n28[maze.controller.acquisition.profile]
+  n29[maze.controller.acquisition.radial_arm]
+  n30[maze.controller.acquisition.radial_arm.__main__]
+  n31[maze.controller.acquisition.radial_arm.config]
+  n32[maze.controller.acquisition.radial_arm.geometry]
+  n33[maze.controller.acquisition.radial_arm.legacy_template]
+  n34[maze.controller.acquisition.radial_arm.trial_flow]
+  n35[maze.controller.acquisition.ram_preview_mask]
+  n36[maze.controller.acquisition.recording]
+  n37[maze.controller.acquisition.region_code]
+  n38[maze.controller.acquisition.shared_config]
+  n39[maze.controller.acquisition.shared_controller]
+  n40[maze.controller.acquisition.task_registry]
+  n41[maze.controller.acquisition.tracking]
+  n42[maze.controller.acquisition.vast]
+  n43[maze.controller.acquisition.vast.arena]
+  n44[maze.controller.acquisition.vast.config]
+  n45[maze.controller.acquisition.vast.trial_flow]
+  n46[maze.core]
+  n47[maze.core.anatomy]
+  n48[maze.core.h5_layout]
+  n49[maze.core.schema]
+  n50[maze.core.session_slots]
+  n51[maze.core.tasks]
+  n52[maze.core.trial_settings]
+  n53[maze.core.trial_state]
+  n54[maze.kpms]
+  n55[maze.kpms.apply]
+  n56[maze.kpms.exemplar_typical]
+  n57[maze.kpms.fit]
+  n58[maze.kpms.frame_alignment]
+  n59[maze.kpms.io]
+  n60[maze.kpms.manifest_subset]
+  n61[maze.kpms.native_nor_results_paths]
+  n62[maze.kpms.preprocess]
+  n63[maze.kpms.review_artifacts]
+  n64[maze.kpms.syllable_bout_clean]
+  n65[maze.kpms.syllable_merge]
+  n66[maze.kpms.training_exemplar_table]
+  n67[maze.pipeline]
+  n68[maze.pipeline.calibration]
+  n69[maze.pipeline.calibration.arena_calibration]
+  n70[maze.pipeline.db]
+  n71[maze.pipeline.db._shared]
+  n72[maze.pipeline.db.ambulation_bouts]
+  n73[maze.pipeline.db.ambulation_summary]
+  n74[maze.pipeline.db.ambulation_xy]
+  n75[maze.pipeline.db.cohort_manifest]
+  n76[maze.pipeline.db.feedback]
+  n77[maze.pipeline.db.metadata]
+  n78[maze.pipeline.db.qc_image_store]
+  n79[maze.pipeline.db.radial_arm_geometry_io]
+  n80[maze.pipeline.db.trial_attributes]
+  n81[maze.pipeline.db.trial_groups]
+  n82[maze.pipeline.db.trial_key]
+  n83[maze.pipeline.db.trial_settings_io]
+  n84[maze.pipeline.defaults]
+  n85[maze.pipeline.discovery_profiles]
+  n86[maze.pipeline.exports]
+  n87[maze.pipeline.exports.csv_trials]
+  n88[maze.pipeline.io]
+  n89[maze.pipeline.io.file_discovery]
+  n90[maze.pipeline.io.input_h5_loader]
+  n91[maze.pipeline.io.sleap_loader]
+  n92[maze.pipeline.metrics]
+  n93[maze.pipeline.metrics.ambulation]
+  n94[maze.pipeline.metrics.exit_metrics]
+  n95[maze.pipeline.metrics.radial_arm_regions]
+  n96[maze.pipeline.metrics.task_metrics]
+  n97[maze.pipeline.paths]
+  n98[maze.pipeline.process_trial]
+  n99[maze.pipeline.run_pipeline]
+  n100[maze.pipeline.sources]
+  n101[maze.pipeline.sources.legacy_ehram]
+  n102[maze.pipeline.sources.legacy_ehram_import]
+  n103[maze.pipeline.sources.legacy_vast]
+  n104[maze.pipeline.tracking]
+  n105[maze.pipeline.tracking.trace_processing]
+  n106[maze.pipeline.trial_filters]
+  n107[maze.pipeline.trial_quality]
+  n108[maze.pipeline.viz]
+  n109[maze.pipeline.viz.ehram_global_template_draw]
+  n110[maze.pipeline.viz.ehram_memory_hud]
+  n111[maze.pipeline.viz.kpms_exemplar_tray]
+  n112[maze.pipeline.viz.overlay_cli]
+  n113[maze.pipeline.viz.qc_images]
+  n114[maze.pipeline.viz.ram_template_draw]
+  n115[maze.pipeline.viz.unified_overlay]
+  n116[maze.pipeline.viz.video_overlay]
+  n117[maze.pipeline.work_items]
+  n3 --> n5
+  n5 --> n8
+  n5 --> n13
+  n7 --> n0
+  n7 --> n1
+  n7 --> n2
+  n7 --> n4
+  n7 --> n38
+  n9 --> n27
+  n10 --> n24
+  n10 --> n25
+  n13 --> n0
+  n13 --> n1
+  n13 --> n2
+  n13 --> n4
+  n13 --> n14
+  n14 --> n0
+  n14 --> n1
+  n14 --> n2
+  n14 --> n4
+  n14 --> n6
+  n14 --> n7
+  n14 --> n9
+  n14 --> n10
+  n14 --> n11
+  n14 --> n12
+  n14 --> n13
+  n14 --> n15
+  n14 --> n16
+  n14 --> n17
+  n14 --> n18
+  n14 --> n19
+  n14 --> n20
+  n14 --> n21
+  n14 --> n22
+  n14 --> n24
+  n14 --> n26
+  n14 --> n28
+  n14 --> n29
+  n14 --> n31
+  n14 --> n35
+  n14 --> n36
+  n14 --> n39
+  n14 --> n40
+  n14 --> n41
+  n14 --> n67
+  n14 --> n86
+  n14 --> n87
+  n17 --> n0
+  n17 --> n42
+  n17 --> n46
+  n17 --> n47
+  n19 --> n0
+  n19 --> n1
+  n19 --> n2
+  n19 --> n28
+  n22 --> n29
+  n22 --> n31
+  n22 --> n38
+  n22 --> n40
+  n22 --> n42
+  n22 --> n43
+  n22 --> n44
+  n22 --> n46
+  n22 --> n50
+  n23 --> n38
+  n23 --> n40
+  n23 --> n42
+  n23 --> n43
+  n23 --> n46
+  n23 --> n50
+  n24 --> n0
+  n24 --> n29
+  n24 --> n31
+  n24 --> n32
+  n24 --> n46
+  n24 --> n48
+  n24 --> n49
+  n24 --> n51
+  n24 --> n67
+  n24 --> n70
+  n24 --> n79
+  n26 --> n8
+  n26 --> n11
+  n26 --> n29
+  n26 --> n31
+  n26 --> n33
+  n26 --> n38
+  n26 --> n67
+  n26 --> n70
+  n26 --> n100
+  n26 --> n101
+  n27 --> n0
+  n27 --> n67
+  n27 --> n70
+  n27 --> n88
+  n27 --> n89
+  n27 --> n98
+  n28 --> n29
+  n28 --> n31
+  n28 --> n38
+  n28 --> n42
+  n28 --> n44
+  n28 --> n46
+  n28 --> n51
+  n30 --> n3
+  n31 --> n38
+  n31 --> n46
+  n31 --> n51
+  n33 --> n31
+  n34 --> n31
+  n34 --> n32
+  n34 --> n37
+  n34 --> n38
+  n34 --> n39
+  n34 --> n42
+  n34 --> n43
+  n34 --> n46
+  n34 --> n50
+  n35 --> n29
+  n35 --> n31
+  n35 --> n32
+  n36 --> n0
+  n36 --> n24
+  n36 --> n29
+  n36 --> n31
+  n36 --> n37
+  n36 --> n38
+  n36 --> n46
+  n36 --> n48
+  n36 --> n49
+  n37 --> n0
+  n37 --> n29
+  n37 --> n32
+  n37 --> n42
+  n37 --> n43
+  n37 --> n44
+  n37 --> n46
+  n37 --> n51
+  n39 --> n29
+  n39 --> n32
+  n39 --> n37
+  n39 --> n38
+  n40 --> n29
+  n40 --> n31
+  n40 --> n34
+  n40 --> n38
+  n40 --> n39
+  n40 --> n42
+  n40 --> n44
+  n40 --> n46
+  n40 --> n51
+  n41 --> n0
+  n41 --> n1
+  n41 --> n2
+  n41 --> n4
+  n41 --> n38
+  n42 --> n38
+  n42 --> n44
+  n43 --> n44
+  n44 --> n38
+  n44 --> n46
+  n44 --> n51
+  n45 --> n37
+  n45 --> n39
+  n45 --> n43
+  n45 --> n44
+  n45 --> n46
+  n45 --> n50
+  n46 --> n0
+  n46 --> n46
+  n46 --> n48
+  n46 --> n49
+  n46 --> n53
+  n48 --> n49
+  n48 --> n51
+  n55 --> n59
+  n55 --> n60
+  n55 --> n62
+  n55 --> n67
+  n55 --> n88
+  n55 --> n89
+  n57 --> n59
+  n57 --> n60
+  n57 --> n62
+  n58 --> n55
+  n58 --> n62
+  n58 --> n67
+  n58 --> n88
+  n58 --> n89
+  n58 --> n91
+  n58 --> n104
+  n58 --> n105
+  n59 --> n67
+  n59 --> n88
+  n59 --> n89
+  n60 --> n67
+  n60 --> n88
+  n60 --> n89
+  n62 --> n46
+  n62 --> n47
+  n62 --> n67
+  n62 --> n88
+  n62 --> n89
+  n62 --> n91
+  n62 --> n104
+  n62 --> n105
+  n63 --> n46
+  n63 --> n47
+  n63 --> n62
+  n63 --> n67
+  n63 --> n88
+  n63 --> n89
+  n64 --> n67
+  n64 --> n84
+  n66 --> n46
+  n66 --> n47
+  n66 --> n56
+  n66 --> n62
+  n66 --> n67
+  n66 --> n88
+  n66 --> n89
+  n68 --> n69
+  n69 --> n84
+  n70 --> n71
+  n70 --> n72
+  n70 --> n73
+  n70 --> n74
+  n70 --> n75
+  n70 --> n76
+  n70 --> n77
+  n70 --> n78
+  n70 --> n80
+  n70 --> n81
+  n70 --> n82
+  n70 --> n83
+  n71 --> n0
+  n71 --> n46
+  n71 --> n48
+  n71 --> n97
+  n72 --> n71
+  n72 --> n82
+  n73 --> n0
+  n73 --> n46
+  n73 --> n48
+  n73 --> n49
+  n73 --> n71
+  n73 --> n82
+  n74 --> n0
+  n74 --> n46
+  n74 --> n48
+  n74 --> n49
+  n74 --> n71
+  n74 --> n82
+  n75 --> n0
+  n75 --> n46
+  n75 --> n48
+  n75 --> n71
+  n75 --> n88
+  n75 --> n89
+  n76 --> n0
+  n76 --> n46
+  n76 --> n48
+  n76 --> n49
+  n76 --> n71
+  n76 --> n82
+  n77 --> n0
+  n77 --> n46
+  n77 --> n48
+  n77 --> n51
+  n77 --> n71
+  n77 --> n84
+  n77 --> n97
+  n78 --> n71
+  n78 --> n82
+  n78 --> n84
+  n80 --> n0
+  n80 --> n46
+  n80 --> n48
+  n80 --> n49
+  n80 --> n51
+  n80 --> n67
+  n80 --> n71
+  n80 --> n82
+  n80 --> n84
+  n81 --> n0
+  n81 --> n46
+  n81 --> n48
+  n81 --> n52
+  n81 --> n71
+  n81 --> n82
+  n82 --> n88
+  n82 --> n89
+  n83 --> n0
+  n83 --> n1
+  n83 --> n2
+  n83 --> n29
+  n83 --> n32
+  n83 --> n46
+  n83 --> n48
+  n83 --> n52
+  n83 --> n71
+  n83 --> n74
+  n83 --> n79
+  n83 --> n82
+  n83 --> n84
+  n86 --> n87
+  n87 --> n46
+  n87 --> n48
+  n87 --> n49
+  n87 --> n70
+  n87 --> n84
+  n87 --> n97
+  n88 --> n89
+  n88 --> n90
+  n88 --> n91
+  n89 --> n97
+  n90 --> n46
+  n90 --> n52
+  n90 --> n84
+  n90 --> n97
+  n91 --> n46
+  n91 --> n47
+  n91 --> n70
+  n91 --> n84
+  n91 --> n88
+  n91 --> n90
+  n92 --> n93
+  n92 --> n94
+  n93 --> n84
+  n94 --> n0
+  n94 --> n1
+  n94 --> n2
+  n94 --> n37
+  n94 --> n70
+  n94 --> n84
+  n95 --> n1
+  n95 --> n2
+  n95 --> n29
+  n95 --> n32
+  n95 --> n33
+  n96 --> n46
+  n96 --> n51
+  n96 --> n94
+  n96 --> n95
+  n97 --> n85
+  n98 --> n0
+  n98 --> n1
+  n98 --> n2
+  n98 --> n37
+  n98 --> n42
+  n98 --> n44
+  n98 --> n46
+  n98 --> n47
+  n98 --> n51
+  n98 --> n52
+  n98 --> n70
+  n98 --> n84
+  n98 --> n88
+  n98 --> n89
+  n98 --> n91
+  n98 --> n92
+  n98 --> n93
+  n98 --> n94
+  n98 --> n96
+  n98 --> n97
+  n98 --> n104
+  n98 --> n105
+  n98 --> n107
+  n98 --> n108
+  n98 --> n113
+  n99 --> n70
+  n99 --> n88
+  n99 --> n89
+  n99 --> n97
+  n99 --> n98
+  n99 --> n106
+  n100 --> n101
+  n100 --> n102
+  n100 --> n103
+  n100 --> n117
+  n101 --> n46
+  n101 --> n51
+  n101 --> n117
+  n102 --> n0
+  n102 --> n1
+  n102 --> n2
+  n102 --> n24
+  n102 --> n29
+  n102 --> n31
+  n102 --> n33
+  n102 --> n46
+  n102 --> n48
+  n102 --> n51
+  n102 --> n70
+  n102 --> n82
+  n102 --> n101
+  n102 --> n117
+  n103 --> n46
+  n103 --> n51
+  n103 --> n88
+  n103 --> n89
+  n103 --> n117
+  n104 --> n105
+  n105 --> n46
+  n105 --> n47
+  n105 --> n84
+  n106 --> n46
+  n106 --> n51
+  n106 --> n88
+  n106 --> n89
+  n106 --> n107
+  n107 --> n88
+  n107 --> n89
+  n108 --> n113
+  n108 --> n116
+  n109 --> n0
+  n109 --> n67
+  n109 --> n70
+  n109 --> n82
+  n110 --> n0
+  n110 --> n46
+  n110 --> n48
+  n110 --> n67
+  n110 --> n70
+  n110 --> n71
+  n110 --> n82
+  n111 --> n0
+  n111 --> n46
+  n111 --> n47
+  n111 --> n54
+  n111 --> n56
+  n111 --> n58
+  n111 --> n62
+  n111 --> n88
+  n111 --> n89
+  n112 --> n0
+  n112 --> n54
+  n112 --> n55
+  n112 --> n62
+  n112 --> n67
+  n112 --> n70
+  n112 --> n82
+  n112 --> n88
+  n112 --> n89
+  n112 --> n115
+  n113 --> n1
+  n113 --> n2
+  n113 --> n29
+  n113 --> n32
+  n113 --> n70
+  n113 --> n84
+  n114 --> n0
+  n114 --> n1
+  n114 --> n2
+  n114 --> n29
+  n114 --> n32
+  n114 --> n46
+  n114 --> n52
+  n114 --> n67
+  n114 --> n70
+  n114 --> n82
+  n114 --> n83
+  n115 --> n0
+  n115 --> n46
+  n115 --> n47
+  n115 --> n48
+  n115 --> n51
+  n115 --> n52
+  n115 --> n54
+  n115 --> n55
+  n115 --> n58
+  n115 --> n62
+  n115 --> n66
+  n115 --> n70
+  n115 --> n84
+  n115 --> n88
+  n115 --> n89
+  n115 --> n91
+  n115 --> n104
+  n115 --> n105
+  n115 --> n109
+  n115 --> n110
+  n115 --> n111
+  n115 --> n114
+  n115 --> n116
+  n116 --> n46
+  n116 --> n47
+  n116 --> n48
+  n116 --> n70
+  n116 --> n84
+  n116 --> n88
+  n116 --> n91
+  n116 --> n104
+  n116 --> n105

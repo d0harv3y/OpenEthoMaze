@@ -1,16 +1,20 @@
-"""
-Settings dialog: one task-specific tab plus shared Session, Animals, and Tracking tabs.
-"""
+"""Settings dialog with task, session, tracking, animals, and trial schedule tabs."""
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
-from ..shared_config import AcquisitionConfig, AnimalInfo, FallbackTrackingConfig
+from ....core.session_slots import slot_to_animal_trial
+from ..shared_config import (
+    AcquisitionConfig,
+    AnimalInfo,
+    FallbackTrackingConfig,
+    ensure_exit_schedule_indices_length,
+)
 from ..vast.config import FT_TO_CM, M_TO_CM, VastControllerConfig
 from ..radial_arm.config import RadialArmControllerConfig, sync_ram_px_per_cm
 from ..task_registry import AcquisitionMode, get_task_spec
+from ..vast.arena import latin_square_exit_index
 
 try:
     from PySide6.QtWidgets import (
@@ -49,20 +53,14 @@ _SETTINGS_APP = "Acquisition"
 _KEY_LAST_SETTINGS_TAB = "last_settings_tab"
 
 
-def _parse_seed(text: str) -> Tuple[Optional[int], Optional[str]]:
+def _parse_seed_auto_value(text: str) -> Optional[int]:
     s = (text or "").strip()
     if not s:
-        return (None, None)
-    # Legacy sentinel:
-    # - `seed == -1` means "use exit_x/exit_y from the original legacy trial"
-    #   (primarily for Virtual acquisition + replay matching).
-    if s.lower() == "legacy":
-        return (-1, None)
+        return None
     try:
-        return (int(s), None)
+        return int(s)
     except ValueError:
-        # Treat any non-integer value as explicit legacy DB path and enable legacy mode.
-        return (-1, str(Path(s)))
+        return None
 
 
 class SettingsDialog(QDialog):
@@ -84,10 +82,11 @@ class SettingsDialog(QDialog):
         self.setWindowModality(Qt.WindowModality.NonModal)
         layout = QVBoxLayout(self)
         self._tabs = QTabWidget()
+        self._tabs.addTab(self._tracking_tab(), "Tracking")
         self._tabs.addTab(self._task_tab(), self._task_spec.task_tab_label)
         self._tabs.addTab(self._session_tab(), "Session")
         self._tabs.addTab(self._animals_tab(), "Animals")
-        self._tabs.addTab(self._tracking_tab(), "Tracking")
+        self._tabs.addTab(self._trial_schedule_tab(), "Trial schedule")
         layout.addWidget(self._tabs)
         if initial_tab_index is not None and 0 <= initial_tab_index < self._tabs.count():
             self._tabs.setCurrentIndex(initial_tab_index)
@@ -205,9 +204,6 @@ class SettingsDialog(QDialog):
         self._ram_arm_split_cm.setRange(0.0, 500.0)
         self._ram_arm_split_cm.setSuffix(" cm")
         template_f.addRow("Arm split:", self._ram_arm_split_cm)
-        self._ram_hole_arm_index = QSpinBox()
-        self._ram_hole_arm_index.setRange(0, 7)
-        template_f.addRow("Hole arm index:", self._ram_hole_arm_index)
         self._ram_hole_radius_cm = QDoubleSpinBox()
         self._ram_hole_radius_cm.setRange(0.1, 50.0)
         self._ram_hole_radius_cm.setSuffix(" cm")
@@ -248,19 +244,24 @@ class SettingsDialog(QDialog):
             "similar to VAST when tracking mask radius uses the 1.2× default."
         )
         calibration_f.addRow("Tracking mask margin (px, 0=auto):", self._ram_tracking_mask_margin_px)
+        # TODO(RAM edit tools): wire this into per-region editing/highlighting; currently metadata-only.
         self._ram_edit_region_name = QLineEdit()
         self._ram_edit_region_name.setPlaceholderText("e.g. arm0_front")
         calibration_f.addRow("Active edit region:", self._ram_edit_region_name)
+        self._ram_preview_set_center_from_click_cb = QCheckBox(
+            "Place RAM template from next click on preview"
+        )
+        self._ram_preview_set_center_from_click_cb.setToolTip(
+            "When checked, the next left-click on the live preview sets template center X/Y."
+        )
+        self._ram_preview_set_center_from_click_cb.stateChanged.connect(
+            self._on_ram_preview_set_center_clicked_changed
+        )
+        calibration_f.addRow(self._ram_preview_set_center_from_click_cb)
         layout.addWidget(calibration_g)
 
         trial_g = QGroupBox("Task and stimulus")
         trial_f = QFormLayout(trial_g)
-        self._ram_exit_arm_index = QSpinBox()
-        self._ram_exit_arm_index.setRange(0, 7)
-        trial_f.addRow("Exit arm index:", self._ram_exit_arm_index)
-        self._ram_rewarded_arm_index = QSpinBox()
-        self._ram_rewarded_arm_index.setRange(0, 7)
-        trial_f.addRow("Rewarded arm index:", self._ram_rewarded_arm_index)
         self._ram_stimulus_enabled = QCheckBox("Enable speaker stimulus")
         trial_f.addRow(self._ram_stimulus_enabled)
         self._ram_speaker_device_name = QLineEdit()
@@ -320,6 +321,16 @@ class SettingsDialog(QDialog):
         self._arena_center_y = QDoubleSpinBox()
         self._arena_center_y.setRange(-10000, 10000)
         f.addRow("Arena center Y (px):", self._arena_center_y)
+        self._preview_set_center_from_click_cb = QCheckBox(
+            "Set arena center from next click on preview"
+        )
+        self._preview_set_center_from_click_cb.setToolTip(
+            "When checked, the next left-click on the live preview sets arena center X/Y."
+        )
+        self._preview_set_center_from_click_cb.stateChanged.connect(
+            self._on_vast_preview_set_center_clicked_changed
+        )
+        f.addRow(self._preview_set_center_from_click_cb)
         return w
 
     def _update_arena_px_per_cm_label(self) -> None:
@@ -351,7 +362,12 @@ class SettingsDialog(QDialog):
         self._exit_step_deg.setRange(0.5, 360)
         self._exit_step_deg.setSuffix(" °")
         f.addRow("Step (deg):", self._exit_step_deg)
+        self._exit_n_angles.valueChanged.connect(self._on_exit_n_angles_changed)
         return w
+
+    def _on_exit_n_angles_changed(self, value: int) -> None:
+        if hasattr(self, "_schedule_default_exit_idx"):
+            self._schedule_default_exit_idx.setMaximum(max(1, int(value)))
 
     def _stimulus_tab(self) -> QWidget:
         w = QWidget()
@@ -391,6 +407,7 @@ class SettingsDialog(QDialog):
         self._session_id_edit.setToolTip("Letters, digits, hyphen, period only (no underscore; used as delimiter in filenames).")
         if HAS_QT:
             self._session_id_edit.setValidator(QRegularExpressionValidator(QRegularExpression(r"^[a-zA-Z0-9.\-]*$")))
+        self._session_id_edit.textChanged.connect(self._refresh_trial_schedule_tab)
         f.addRow("Session ID:", self._session_id_edit)
         self._phase_combo = QComboBox()
         for label, value in self._task_spec.phase_options:
@@ -400,13 +417,16 @@ class SettingsDialog(QDialog):
         self._mode_combo = QComboBox()
         for label, value in self._task_spec.mode_options:
             self._mode_combo.addItem(label, value)
+        self._mode_combo.currentIndexChanged.connect(self._refresh_trial_schedule_tab)
         f.addRow("Mode:", self._mode_combo)
         self._session_num_animals = QSpinBox()
         self._session_num_animals.setRange(1, 50)
         self._session_num_animals.valueChanged.connect(self._on_num_animals_changed)
+        self._session_num_animals.valueChanged.connect(self._on_session_slots_changed)
         f.addRow("Number of animals:", self._session_num_animals)
         self._session_num_trials = QSpinBox()
         self._session_num_trials.setRange(1, 99)
+        self._session_num_trials.valueChanged.connect(self._on_session_slots_changed)
         f.addRow("Trials per session:", self._session_num_trials)
         self._session_max_trial_s = QDoubleSpinBox()
         self._session_max_trial_s.setRange(1, 3600)
@@ -416,9 +436,26 @@ class SettingsDialog(QDialog):
         self._session_iti_s.setRange(0, 600)
         self._session_iti_s.setSuffix(" s")
         f.addRow("ITI (s):", self._session_iti_s)
-        self._session_seed = QLineEdit()
-        self._session_seed.setPlaceholderText("None, integer, legacy, or path to legacy .h5")
-        f.addRow("Seed:", self._session_seed)
+        self._virtual_duration_override_s = QDoubleSpinBox()
+        self._virtual_duration_override_s.setRange(0.0, 24 * 3600.0)
+        self._virtual_duration_override_s.setDecimals(3)
+        self._virtual_duration_override_s.setSuffix(" s")
+        self._virtual_duration_override_s.setToolTip(
+            "Per-profile override for virtual source duration. 0 = use container FPS. "
+            "When >0, effective playback FPS = frame_count / override duration."
+        )
+        f.addRow("Virtual duration override (s):", self._virtual_duration_override_s)
+        self._session_seed_mode = QComboBox()
+        self._session_seed_mode.addItem("Auto", "auto")
+        self._session_seed_mode.addItem("Legacy", "legacy")
+        self._session_seed_mode.addItem("Manual", "manual")
+        self._session_seed_mode.currentIndexChanged.connect(
+            self._sync_seed_value_widget_state
+        )
+        f.addRow("Seed mode:", self._session_seed_mode)
+        self._session_seed_value = QLineEdit()
+        self._session_seed_value.setPlaceholderText("Auto: integer seed | Legacy: path to legacy .h5")
+        f.addRow("Seed value:", self._session_seed_value)
         out_row = QHBoxLayout()
         self._output_dir_edit = QLineEdit()
         self._output_dir_edit.setPlaceholderText("Output folder for H5 file; videos in <h5_stem>_vids subfolder")
@@ -432,6 +469,120 @@ class SettingsDialog(QDialog):
         f.addRow("H5 filename:", self._h5_filename_edit)
         return w
 
+    def _trial_schedule_tab(self) -> QWidget:
+        w = QWidget()
+        layout = QVBoxLayout(w)
+
+        form = QFormLayout()
+        self._schedule_default_exit_idx = QSpinBox()
+        self._schedule_default_exit_idx.setRange(1, 16)
+        self._schedule_default_exit_idx.setToolTip(
+            "Default exit index (1-based) used when creating or resizing manual schedules."
+        )
+        form.addRow("Default exit index (1-based):", self._schedule_default_exit_idx)
+        self._schedule_seed_mode_hint = QLabel("")
+        self._schedule_seed_mode_hint.setWordWrap(True)
+        form.addRow("", self._schedule_seed_mode_hint)
+        layout.addLayout(form)
+
+        actions = QHBoxLayout()
+        self._schedule_apply_default_btn = QPushButton("Apply default to all slots")
+        self._schedule_apply_default_btn.clicked.connect(self._on_schedule_apply_default_to_all)
+        actions.addWidget(self._schedule_apply_default_btn)
+        actions.addStretch()
+        layout.addLayout(actions)
+
+        self._schedule_table = QTableWidget(0, 5)
+        self._schedule_table.setHorizontalHeaderLabels(
+            ["Index", "Animal ID", "Trial", "Exit", "Source"]
+        )
+        self._schedule_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self._schedule_table)
+        return w
+
+    def _refresh_trial_schedule_tab(self) -> None:
+        c = self._config
+        n_a = max(0, int(c.session.num_animals))
+        n_t = max(0, int(c.session.num_trials))
+        total = max(0, n_a * n_t)
+        seed_mode = str(c.session.seed_mode or "auto")
+        manual = seed_mode == "manual"
+        n_exits = max(1, int(self._task_spec.get_num_exits(c)))
+        default_idx = max(0, min(n_exits - 1, int(self._task_spec.get_default_exit_index(c))))
+        self._schedule_default_exit_idx.setMaximum(n_exits)
+        self._schedule_default_exit_idx.setValue(default_idx + 1)
+        ensure_exit_schedule_indices_length(
+            c.session,
+            n_exits=n_exits,
+            default_exit_index=default_idx,
+        )
+
+        if manual:
+            self._schedule_seed_mode_hint.setText(
+                "Manual seed mode: table values are editable and used per slot."
+            )
+        else:
+            self._schedule_seed_mode_hint.setText(
+                "Non-manual seed mode: table is read-only preview."
+            )
+
+        mode = self._task_spec.get_mode_value(c)
+        sid = (self._session_id_edit.text() or "").strip() or "S"
+        c.session.ensure_animals()
+        animals = c.session.animals
+        raw = c.session.exit_schedule_indices or []
+
+        self._schedule_apply_default_btn.setEnabled(bool(manual))
+        self._schedule_table.blockSignals(True)
+        self._schedule_table.setRowCount(total)
+        for slot in range(total):
+            aidx, tidx = slot_to_animal_trial(slot, n_a, n_t, mode)
+            aid = (
+                str(animals[aidx % max(1, len(animals))].animal_id)
+                if animals
+                else str(1000 + aidx)
+            )
+            self._schedule_table.setItem(slot, 0, QTableWidgetItem(str(slot)))
+            self._schedule_table.setItem(slot, 1, QTableWidgetItem(aid))
+            self._schedule_table.setItem(slot, 2, QTableWidgetItem(f"T{tidx + 1:02d}"))
+            if manual and slot < len(raw):
+                exit_idx = max(0, min(n_exits - 1, int(raw[slot])))
+            else:
+                seed_v = c.session.seed_auto_value
+                exit_idx = latin_square_exit_index(sid, tidx, n_exits, seed_v)
+            it = QTableWidgetItem(str(exit_idx + 1))
+            if manual:
+                it.setFlags(it.flags() | Qt.ItemFlag.ItemIsEditable)
+            else:
+                it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self._schedule_table.setItem(slot, 3, it)
+            if manual:
+                source = "manual schedule"
+            elif seed_mode == "legacy":
+                source = "legacy-driven (preview only)"
+            else:
+                source = "auto seed (preview only)"
+            src_it = QTableWidgetItem(source)
+            src_it.setFlags(src_it.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self._schedule_table.setItem(slot, 4, src_it)
+        self._schedule_table.blockSignals(False)
+
+    def _on_schedule_apply_default_to_all(self) -> None:
+        c = self._config
+        if str(c.session.seed_mode or "auto") != "manual":
+            return
+        n_exits = max(1, int(self._task_spec.get_num_exits(c)))
+        d = max(1, min(n_exits, int(self._schedule_default_exit_idx.value())))
+        self._schedule_table.blockSignals(True)
+        for row in range(self._schedule_table.rowCount()):
+            item = self._schedule_table.item(row, 3)
+            if item is None:
+                item = QTableWidgetItem(str(d))
+                self._schedule_table.setItem(row, 3, item)
+            else:
+                item.setText(str(d))
+        self._schedule_table.blockSignals(False)
+
     def _on_num_animals_changed(self) -> None:
         """Resize animals table when number of animals changes so dialog stays in sync."""
         n = max(self._session_num_animals.value(), 1)
@@ -442,6 +593,25 @@ class SettingsDialog(QDialog):
             for col in (1, 2, 3, 4, 5):
                 if self._animals_table.item(i, col) is None:
                     self._animals_table.setItem(i, col, QTableWidgetItem(""))
+
+    def _on_session_slots_changed(self, *_args) -> None:
+        self._refresh_trial_schedule_tab()
+
+    def _sync_seed_value_widget_state(self) -> None:
+        mode = str(self._session_seed_mode.currentData() or "auto")
+        if mode == "manual":
+            self._session_seed_value.setEnabled(False)
+            self._session_seed_value.setPlaceholderText(
+                "Manual mode uses Trial schedule tab for per-slot exits."
+            )
+        elif mode == "legacy":
+            self._session_seed_value.setEnabled(True)
+            self._session_seed_value.setPlaceholderText("Path to legacy .h5 to replay exits")
+        else:
+            self._session_seed_value.setEnabled(True)
+            self._session_seed_value.setPlaceholderText("Integer seed (blank = deterministic from Session ID)")
+        if hasattr(self, "_schedule_seed_mode_hint"):
+            self._refresh_trial_schedule_tab()
 
     def _on_browse_output(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "Output folder")
@@ -456,6 +626,22 @@ class SettingsDialog(QDialog):
         path = QFileDialog.getExistingDirectory(self, "SLEAP model directory")
         if path:
             self._sleap_model_path_edit.setText(path)
+
+    def _on_vast_preview_set_center_clicked_changed(self, state: int) -> None:
+        self._config.preview_set_center_from_next_click = state == Qt.CheckState.Checked.value
+
+    def _on_ram_preview_set_center_clicked_changed(self, state: int) -> None:
+        self._config.preview_set_center_from_next_click = state == Qt.CheckState.Checked.value
+
+    def _on_fallback_range_from_click_changed(self, state: int) -> None:
+        ft = self._config.fallback_tracking
+        ft.range_from_next_click = state == Qt.CheckState.Checked.value
+
+    def _on_fallback_range_pick_delta_changed(self, value: int) -> None:
+        self._config.fallback_tracking.range_pick_delta = max(0, int(value))
+
+    def _on_fallback_range_pick_half_changed(self, value: int) -> None:
+        self._config.fallback_tracking.range_pick_half = max(0, int(value))
 
     def _animals_tab(self) -> QWidget:
         w = QWidget()
@@ -486,17 +672,6 @@ class SettingsDialog(QDialog):
         self._track_enable_sleap_cb = QCheckBox("Enable SLEAP tracking")
         self._track_enable_sleap_cb.setToolTip("Requires a SLEAP model directory below. When off, only backup runs if enabled.")
         options_ly.addWidget(self._track_enable_sleap_cb)
-        infer_row = QHBoxLayout()
-        infer_row.addWidget(QLabel("Inference resolution:"))
-        self._track_infer_scale_combo = QComboBox()
-        self._track_infer_scale_combo.addItem("Full", 1.0)
-        self._track_infer_scale_combo.addItem("Half (50%)", 0.5)
-        self._track_infer_scale_combo.setToolTip(
-            "Resize the tracking crop before SLEAP/backup inference (faster on HD video). Coordinates map back to full-res."
-        )
-        infer_row.addWidget(self._track_infer_scale_combo)
-        infer_row.addStretch()
-        options_ly.addLayout(infer_row)
         self._track_exit_either_success_cb = QCheckBox("Use either success condition")
         self._track_exit_either_success_cb.setToolTip(
             "When enabled, a trial succeeds if either the SLEAP exit rule (min keypoints in exit zone) "
@@ -532,6 +707,37 @@ class SettingsDialog(QDialog):
         self._fallback_range_high.setValue(255)
         self._fallback_range_high.setToolTip("Intensity range: maximum (0–255). Pixel on if intensity in [low, high].")
         f.addRow("Range high (0–255):", self._fallback_range_high)
+        pick_row = QHBoxLayout()
+        self._fallback_range_from_next_click_cb = QCheckBox("Set backup range from next click")
+        self._fallback_range_from_next_click_cb.setToolTip(
+            "Next click on preview samples a small neighborhood and sets Range low/high below."
+        )
+        self._fallback_range_from_next_click_cb.stateChanged.connect(
+            self._on_fallback_range_from_click_changed
+        )
+        pick_row.addWidget(self._fallback_range_from_next_click_cb)
+        pick_row.addWidget(QLabel("±δ"))
+        self._fallback_range_pick_delta_spin = QSpinBox()
+        self._fallback_range_pick_delta_spin.setRange(0, 80)
+        self._fallback_range_pick_delta_spin.setToolTip(
+            "Half-width added to neighborhood min/max for backup range."
+        )
+        self._fallback_range_pick_delta_spin.valueChanged.connect(
+            self._on_fallback_range_pick_delta_changed
+        )
+        pick_row.addWidget(self._fallback_range_pick_delta_spin)
+        pick_row.addWidget(QLabel("nbhd"))
+        self._fallback_range_pick_half_spin = QSpinBox()
+        self._fallback_range_pick_half_spin.setRange(0, 15)
+        self._fallback_range_pick_half_spin.setToolTip(
+            "Neighborhood half-size in pixels (patch side = 2×nbhd+1)."
+        )
+        self._fallback_range_pick_half_spin.valueChanged.connect(
+            self._on_fallback_range_pick_half_changed
+        )
+        pick_row.addWidget(self._fallback_range_pick_half_spin)
+        pick_row.addStretch()
+        f.addRow("Range from click:", pick_row)
         self._fallback_max_jump = QDoubleSpinBox()
         self._fallback_max_jump.setRange(0, 2000)
         self._fallback_max_jump.setDecimals(0)
@@ -660,7 +866,6 @@ class SettingsDialog(QDialog):
             self._ram_arm_length_cm.setValue(template.arm_length_cm)
             self._ram_arm_width_cm.setValue(template.arm_width_cm)
             self._ram_arm_split_cm.setValue(template.arm_split_cm)
-            self._ram_hole_arm_index.setValue(template.hole_arm_index)
             self._ram_hole_radius_cm.setValue(template.hole_radius_cm)
             self._ram_hole_inset_cm.setValue(template.hole_inset_from_arm_end_cm)
             self._ram_template_center_x.setValue(calibration.template_center_x_px)
@@ -672,8 +877,6 @@ class SettingsDialog(QDialog):
             )
             self._update_ram_px_per_cm_label()
             self._ram_edit_region_name.setText(calibration.edit_region_name)
-            self._ram_exit_arm_index.setValue(ram.exit_arm_index)
-            self._ram_rewarded_arm_index.setValue(ram.rewarded_arm_index)
             self._ram_stimulus_enabled.setChecked(ram.stimulus_enabled)
             self._ram_speaker_device_name.setText(ram.speaker_device_name)
             self._ram_speaker_volume_pct.setValue(ram.speaker_volume_pct)
@@ -716,12 +919,21 @@ class SettingsDialog(QDialog):
         self._session_num_trials.setValue(sess.num_trials)
         self._session_max_trial_s.setValue(sess.max_trial_duration_s)
         self._session_iti_s.setValue(sess.iti_s)
-        if sess.seed == -1 and sess.legacy_seed_db_path:
-            self._session_seed.setText(sess.legacy_seed_db_path)
-        elif sess.seed == -1:
-            self._session_seed.setText("legacy")
+        self._virtual_duration_override_s.setValue(
+            float(getattr(c, "virtual_duration_override_s", 0.0) or 0.0)
+        )
+        seed_mode = str(getattr(sess, "seed_mode", "auto") or "auto")
+        idx_seed_mode = self._session_seed_mode.findData(seed_mode)
+        self._session_seed_mode.setCurrentIndex(idx_seed_mode if idx_seed_mode >= 0 else 0)
+        if seed_mode == "legacy":
+            self._session_seed_value.setText(str(sess.seed_legacy_source or ""))
+        elif seed_mode == "manual":
+            self._session_seed_value.setText("")
         else:
-            self._session_seed.setText(str(sess.seed) if sess.seed is not None else "")
+            self._session_seed_value.setText(
+                "" if sess.seed_auto_value is None else str(int(sess.seed_auto_value))
+            )
+        self._sync_seed_value_widget_state()
         self._output_dir_edit.setText(c.output_dir or "")
         self._h5_filename_edit.setText(c.h5_filename or "trials.h5")
         parent = self.parent()
@@ -758,6 +970,7 @@ class SettingsDialog(QDialog):
         self._fallback_min_circularity.setValue(getattr(ft, "min_circularity", 0.0))
         self._fallback_range_low.setValue(getattr(ft, "range_low", 0))
         self._fallback_range_high.setValue(getattr(ft, "range_high", 255))
+        self._sync_fallback_range_pick_widgets_from_config()
         self._fallback_node_max_jump.setValue(getattr(ft, "node_max_jump_px", 0.0))
         self._node_jump_confirm_frames.setValue(max(1, int(getattr(ft, "node_jump_confirm_frames", 2))))
         self._fallback_min_sleap_nodes.setValue(getattr(ft, "min_sleap_nodes", 1))
@@ -769,9 +982,6 @@ class SettingsDialog(QDialog):
         self._track_enable_backup_cb.setChecked(getattr(c, "track_enable_backup", True))
         self._track_enable_sleap_cb.setChecked(getattr(c, "track_enable_sleap", True))
         self._sync_track_enable_sleap_widget()
-        infer_s = float(getattr(c, "track_infer_scale", 1.0))
-        idx_inf = self._track_infer_scale_combo.findData(0.5 if 0.4 <= infer_s <= 0.6 else 1.0)
-        self._track_infer_scale_combo.setCurrentIndex(idx_inf if idx_inf >= 0 else 0)
         self._track_exit_either_success_cb.setChecked(getattr(c, "track_exit_either_success", False))
         self._sleap_model_path_edit.setText(getattr(c, "sleap_model_path", "") or "")
         # SLEAP
@@ -779,6 +989,8 @@ class SettingsDialog(QDialog):
         self._sleap_every_n.setValue(max(1, min(5, getattr(c, "sleap_every_n", 1))))
         self._sleap_exit_min_keypoints.setValue(max(1, int(getattr(c, "sleap_exit_min_keypoints", 2))))
         self._fallback_exit_blob_overlap_pct.setValue(max(0.0, min(100.0, float(getattr(c, "fallback_exit_blob_overlap_pct", 15.0)))))
+        self.sync_preview_center_checkbox_from_config()
+        self._refresh_trial_schedule_tab()
 
     def _write_to_config(self) -> None:
         c = self._config
@@ -788,7 +1000,6 @@ class SettingsDialog(QDialog):
             ram.template.arm_length_cm = self._ram_arm_length_cm.value()
             ram.template.arm_width_cm = self._ram_arm_width_cm.value()
             ram.template.arm_split_cm = self._ram_arm_split_cm.value()
-            ram.template.hole_arm_index = self._ram_hole_arm_index.value()
             ram.template.hole_radius_cm = self._ram_hole_radius_cm.value()
             ram.template.hole_inset_from_arm_end_cm = self._ram_hole_inset_cm.value()
             ram.calibration.template_center_x_px = self._ram_template_center_x.value()
@@ -800,8 +1011,6 @@ class SettingsDialog(QDialog):
             )
             sync_ram_px_per_cm(ram)
             ram.calibration.edit_region_name = self._ram_edit_region_name.text().strip()
-            ram.exit_arm_index = self._ram_exit_arm_index.value()
-            ram.rewarded_arm_index = self._ram_rewarded_arm_index.value()
             ram.stimulus_enabled = self._ram_stimulus_enabled.isChecked()
             ram.speaker_device_name = self._ram_speaker_device_name.text().strip()
             ram.speaker_volume_pct = self._ram_speaker_volume_pct.value()
@@ -828,14 +1037,42 @@ class SettingsDialog(QDialog):
             c.stimulus.max_duty_pct = self._stimulus_max_duty.value()
             c.hab_training_duty_pct = self._hab_duty.value()
             c.wait_not_center_duty_pct = self._wait_not_center_duty.value()
-            p = self._phase_combo.currentData()
-            if p is not None and self._task_spec.set_phase_value is not None:
-                self._task_spec.set_phase_value(c, str(p))
+        n_exits = max(1, int(self._task_spec.get_num_exits(c)))
+        default_idx = max(
+            0,
+            min(
+                n_exits - 1,
+                int(self._schedule_default_exit_idx.value()) - 1,
+            ),
+        )
+        if isinstance(c, VastControllerConfig):
+            c.exit_angles.default_manual_exit_index = default_idx
+        if self._task_mode == "ram" and isinstance(c, RadialArmControllerConfig):
+            c.radial_arm.exit_arm_index = max(0, min(7, default_idx))
+        p = self._phase_combo.currentData()
+        if p is not None and self._task_spec.set_phase_value is not None:
+            self._task_spec.set_phase_value(c, str(p))
         c.session.num_animals = self._session_num_animals.value()
         c.session.num_trials = self._session_num_trials.value()
         c.session.max_trial_duration_s = self._session_max_trial_s.value()
         c.session.iti_s = self._session_iti_s.value()
-        c.session.seed, c.session.legacy_seed_db_path = _parse_seed(self._session_seed.text())
+        c.virtual_duration_override_s = (
+            self._virtual_duration_override_s.value()
+            if self._virtual_duration_override_s.value() > 0.0
+            else None
+        )
+        seed_mode = str(self._session_seed_mode.currentData() or "auto")
+        c.session.seed_mode = seed_mode if seed_mode in ("auto", "legacy", "manual") else "auto"
+        c.session.seed_auto_value = None
+        c.session.seed_legacy_source = None
+        if c.session.seed_mode == "legacy":
+            c.session.seed_legacy_source = (
+                self._session_seed_value.text().strip() or None
+            )
+        elif c.session.seed_mode == "auto":
+            c.session.seed_auto_value = _parse_seed_auto_value(
+                self._session_seed_value.text()
+            )
         c.output_dir = self._output_dir_edit.text().strip() or None
         c.h5_filename = self._h5_filename_edit.text().strip() or "trials.h5"
         m = self._mode_combo.currentData()
@@ -863,6 +1100,24 @@ class SettingsDialog(QDialog):
                 notes=(notes_item.text() or "").strip() or None if notes_item else None,
             ))
         c.session.ensure_animals()
+        if c.session.seed_mode == "manual":
+            ensure_exit_schedule_indices_length(
+                c.session,
+                n_exits=n_exits,
+                default_exit_index=default_idx,
+            )
+            total = max(0, c.session.num_animals * c.session.num_trials)
+            out: list[int] = []
+            for row in range(total):
+                it = self._schedule_table.item(row, 3)
+                raw = (it.text() if it is not None else str(default_idx + 1)).strip()
+                try:
+                    v1 = int(raw)
+                except ValueError:
+                    v1 = default_idx + 1
+                v1 = max(1, min(n_exits, v1))
+                out.append(v1 - 1)
+            c.session.exit_schedule_indices = out
         # Fallback tracking
         ft = getattr(c, "fallback_tracking", None)
         if ft is None:
@@ -878,6 +1133,9 @@ class SettingsDialog(QDialog):
         ft.min_circularity = self._fallback_min_circularity.value()
         ft.range_low = self._fallback_range_low.value()
         ft.range_high = self._fallback_range_high.value()
+        ft.range_from_next_click = self._fallback_range_from_next_click_cb.isChecked()
+        ft.range_pick_delta = max(0, self._fallback_range_pick_delta_spin.value())
+        ft.range_pick_half = max(0, self._fallback_range_pick_half_spin.value())
         ft.node_max_jump_px = self._fallback_node_max_jump.value()
         ft.node_jump_confirm_frames = max(1, self._node_jump_confirm_frames.value())
         ft.min_sleap_nodes = self._fallback_min_sleap_nodes.value()
@@ -889,13 +1147,6 @@ class SettingsDialog(QDialog):
         path = (self._sleap_model_path_edit.text() or "").strip()
         c.track_enable_backup = self._track_enable_backup_cb.isChecked()
         c.track_enable_sleap = self._track_enable_sleap_cb.isChecked() if path else False
-        raw_infer = self._track_infer_scale_combo.currentData()
-        try:
-            c.track_infer_scale = float(raw_infer) if raw_infer is not None else 1.0
-        except (TypeError, ValueError):
-            c.track_infer_scale = 1.0
-        if c.track_infer_scale not in (1.0, 0.5):
-            c.track_infer_scale = 1.0
         adjusted = False
         if not c.track_enable_backup and not c.track_enable_sleap:
             c.track_enable_backup = True
@@ -923,6 +1174,56 @@ class SettingsDialog(QDialog):
         c.sleap_exit_min_keypoints = max(1, self._sleap_exit_min_keypoints.value())
         c.fallback_exit_blob_overlap_pct = max(0.0, min(100.0, self._fallback_exit_blob_overlap_pct.value()))
 
+    def _sync_fallback_range_pick_widgets_from_config(self) -> None:
+        ft = getattr(self._config, "fallback_tracking", None) or FallbackTrackingConfig()
+        self._fallback_range_from_next_click_cb.blockSignals(True)
+        self._fallback_range_pick_delta_spin.blockSignals(True)
+        self._fallback_range_pick_half_spin.blockSignals(True)
+        try:
+            self._fallback_range_from_next_click_cb.setChecked(
+                bool(getattr(ft, "range_from_next_click", False))
+            )
+            self._fallback_range_pick_delta_spin.setValue(int(getattr(ft, "range_pick_delta", 12)))
+            self._fallback_range_pick_half_spin.setValue(int(getattr(ft, "range_pick_half", 2)))
+        finally:
+            self._fallback_range_from_next_click_cb.blockSignals(False)
+            self._fallback_range_pick_delta_spin.blockSignals(False)
+            self._fallback_range_pick_half_spin.blockSignals(False)
+
+    def sync_preview_center_checkbox_from_config(self) -> None:
+        """Sync arena/RAM preview center-from-click checkboxes from ``self._config``."""
+        v = bool(getattr(self._config, "preview_set_center_from_next_click", False))
+        if hasattr(self, "_preview_set_center_from_click_cb"):
+            self._preview_set_center_from_click_cb.blockSignals(True)
+            try:
+                self._preview_set_center_from_click_cb.setChecked(v)
+            finally:
+                self._preview_set_center_from_click_cb.blockSignals(False)
+        if hasattr(self, "_ram_preview_set_center_from_click_cb"):
+            self._ram_preview_set_center_from_click_cb.blockSignals(True)
+            try:
+                self._ram_preview_set_center_from_click_cb.setChecked(v)
+            finally:
+                self._ram_preview_set_center_from_click_cb.blockSignals(False)
+
+    def sync_ram_template_center_widgets(self) -> None:
+        """Update RAM template center X/Y fields from ``self._config``."""
+        if not hasattr(self._config, "radial_arm"):
+            return
+        calib = self._config.radial_arm.calibration
+        if hasattr(self, "_ram_template_center_x"):
+            self._ram_template_center_x.blockSignals(True)
+            try:
+                self._ram_template_center_x.setValue(float(calib.template_center_x_px))
+            finally:
+                self._ram_template_center_x.blockSignals(False)
+        if hasattr(self, "_ram_template_center_y"):
+            self._ram_template_center_y.blockSignals(True)
+            try:
+                self._ram_template_center_y.setValue(float(calib.template_center_y_px))
+            finally:
+                self._ram_template_center_y.blockSignals(False)
+
     def sync_fallback_intensity_range_widgets(self) -> None:
         """Update Range low/high spinboxes from ``self._config`` (e.g. after eyedropper click on main window)."""
         ft = getattr(self._config, "fallback_tracking", None) or FallbackTrackingConfig()
@@ -936,6 +1237,7 @@ class SettingsDialog(QDialog):
         finally:
             self._fallback_range_low.blockSignals(False)
             self._fallback_range_high.blockSignals(False)
+        self._sync_fallback_range_pick_widgets_from_config()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self._save_last_tab()

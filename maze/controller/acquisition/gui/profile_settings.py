@@ -18,6 +18,7 @@ KEY_RELOAD_LAST_PROFILE = "reload_last_profile"
 KEY_LAST_PROFILE_PATH = "last_profile_path"
 KEY_LAST_PROFILE_PATH_VAST = "last_profile_path_vast"
 KEY_LAST_PROFILE_PATH_RAM = "last_profile_path_ram"
+KEY_LAST_ANALYSIS_PROFILE_PATH = "last_analysis_profile_path"
 
 
 def read_reload_last_profile() -> bool:
@@ -75,3 +76,20 @@ def read_last_profile_path(*, task_mode: str = "vast") -> Optional[Path]:
     except Exception:
         return None
     return None
+
+
+def save_last_analysis_profile_path(profile_path: Optional[Path]) -> None:
+    if not HAS_QT or profile_path is None:
+        return
+    settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+    settings.setValue(KEY_LAST_ANALYSIS_PROFILE_PATH, str(profile_path))
+
+
+def read_last_analysis_profile_path() -> Optional[Path]:
+    if not HAS_QT:
+        return None
+    settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+    path_str = settings.value(KEY_LAST_ANALYSIS_PROFILE_PATH, "", type=str)
+    if not path_str:
+        return None
+    return Path(path_str)

@@ -24,6 +24,8 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
     "vulture>=2.15",
+    "pydeps",
+    "graphviz",
 ]
 gui = [
     "PySide6>=6.0",
@@ -78,6 +80,13 @@ packages = ["maze"]
 [tool.ruff]
 line-length = 100
 extend-exclude = ["scripts/archive"]
+
+# Dead-code finder (optional dev dependency). From ORM/: ``uv run vulture``
+# CLI flags override these settings. Lower min_confidence for more hits (more false positives).
+[tool.vulture]
+paths = ["maze"]
+exclude = ["tests/", "scripts/archive/"]
+min_confidence = 80
 
 [tool.ruff.lint.per-file-ignores]
 # Run as ``python scripts/…`` with sys.path bootstrap before ``maze`` imports.

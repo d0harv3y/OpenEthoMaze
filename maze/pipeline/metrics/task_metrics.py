@@ -60,13 +60,11 @@ def calculate_task_metrics(
             else {}
         )
         exit_arm_index = int(task_context.get("exit_arm_index", -1)) if isinstance(task_context, dict) else -1
-        rewarded_arm_index = int(task_context.get("rewarded_arm_index", 0)) if isinstance(task_context, dict) else 0
         extra_attrs = radial_arm_metric_defaults()
         if geometry_payload and exit_arm_index >= 0:
             bounds = bounds_from_geometry_payload(
                 geometry_payload,
                 exit_arm_index=exit_arm_index,
-                rewarded_arm_index=rewarded_arm_index,
             )
             if bounds is not None:
                 region_codes = region_codes_from_trajectory(xy, valid, bounds)

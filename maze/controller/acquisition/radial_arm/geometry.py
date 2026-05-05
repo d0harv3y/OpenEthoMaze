@@ -174,7 +174,7 @@ def build_template_from_params(
     arm_length_cm: float = 55.0,
     arm_width_cm: float = 15.0,
     arm_split_cm: float | None = None,
-    hole_arm_index: int = 0,
+    exit_arm_index: int = 0,
     hole_radius_cm: float = 5.0,
     hole_inset_from_arm_end_cm: float = 10.0,
 ) -> RadialArmTemplateGeometry:
@@ -194,11 +194,13 @@ def build_template_from_params(
         rotation_rad=rotation,
     )
 
-    arm_angles = tuple(float(k * (np.pi / 4.0)) for k in range(8))
+    # Arm index convention: arm0 at 12 o'clock, then clockwise in image space.
+    # (Image y increases downward, so increasing angle appears clockwise on screen.)
+    arm_angles = tuple(float((-np.pi / 2.0) + (k * (np.pi / 4.0))) for k in range(8))
     regions: dict[str, np.ndarray] = {"center": center_poly}
 
     clamped_split = float(max(0.0, min(float(arm_length_cm), split_cm)))
-    hole_arm_index = int(max(0, min(7, hole_arm_index)))
+    hole_arm_idx = int(max(0, min(7, exit_arm_index)))
 
     for arm_index, angle in enumerate(arm_angles):
         base_mid = (
@@ -228,7 +230,7 @@ def build_template_from_params(
         regions[f"arm{arm_index}_front"] = front_poly
         regions[f"arm{arm_index}_back"] = back_poly
 
-    hole_angle = arm_angles[hole_arm_index]
+    hole_angle = arm_angles[hole_arm_idx]
     ux, uy = float(np.cos(hole_angle)), float(np.sin(hole_angle))
     hole_base_mid = (
         apothem_cm * float(np.cos(hole_angle)),
@@ -259,12 +261,7 @@ def build_template_from_params(
         arm_length_cm=float(arm_length_cm),
         arm_width_cm=float(arm_width_cm),
         arm_split_cm=clamped_split,
-        hole_arm_index=hole_arm_index,
+        hole_arm_index=hole_arm_idx,
         hole_radius_cm=float(hole_radius_cm),
         hole_inset_from_arm_end_cm=float(hole_inset_from_arm_end_cm),
     )
-
-
-def build_template() -> RadialArmTemplateGeometry:
-    """Build the default canonical RAM template."""
-    return build_template_from_params()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -23,6 +24,15 @@ class TrialSettings:
     exit_y: Optional[float] = None
     exit_radius_px: Optional[float] = None
     roi_old: Optional[str] = None
+    movement_start_threshold_m_per_frame: float = math.sqrt(2) / 150
+    movement_stop_threshold_m_per_frame: float = math.sqrt(2) / 300
+    movement_speed_median_window_frames: int = 3
+    movement_entry_debounce_frames: int = 3
+    movement_exit_debounce_frames: int = 3
+    min_movement_bout_duration_frames: int = 4
+    movement_inter_bout_interval_frames: int = 4
+    max_movement_per_frame_cm: float = 15.0
+    jump_filter_lookahead_frames: int = 3
 
     @property
     def exit_pos(self) -> Optional[tuple[float, float]]:

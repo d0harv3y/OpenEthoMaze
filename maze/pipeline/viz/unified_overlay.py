@@ -47,10 +47,13 @@ from maze.core.trial_settings import TrialSettings
 from ..defaults import HYBRID_POINT_NAME, QC_EXIT_ZONE_RADIUS_CM
 from ..db import (
     TrialKey,
+    complete_trial_timing,
+    compute_seek_run_rows,
     open_db,
     ram_sessions_equivalent,
     ram_trials_equivalent,
     read_feedback_series,
+    read_spot_frame_index_column,
     read_task_group_attrs,
     read_trial_settings,
     resolve_trial_key_for_hdf5,
@@ -513,9 +516,8 @@ def render_unified_overlay_video(
     """
     Render composed overlay MP4 for one trial.
 
-    Video frames are read from ``manifest.video_path``. By default the clip starts at frame 0
-    so ``iti_wait`` band labels in ``ambulation_metrics`` are included; set
-    ``include_pre_trial_frames=False`` to start at ``trial_start_frame`` only.
+    Video frames are read from ``manifest.video_path``. By default the clip starts at table row 0;
+    set ``include_pre_trial_frames=False`` to start at the resolved run-phase row (post-ITI).
     Metrics come from ``pipeline_db``; optional kpMS hypnogram and exemplar tray from
     ``kpms_results_h5`` (and optional training exemplar HDF5 on ``cfg``).
     """
@@ -539,7 +541,6 @@ def render_unified_overlay_video(
             video_path_attr = video_path
         original_stem = Path(video_path_attr).stem
 
-        trial_start_frame = int(attrs.get("trial_start_frame", 0))
         fps = float(attrs.get("fps") or attrs.get("h5_fps") or 30.0)
         px_per_cm = float(attrs.get("px_per_cm", 1.0))
         if px_per_cm <= 0:
@@ -565,10 +566,12 @@ def render_unified_overlay_video(
         xy_full = g_amb[primary]["xy"][:]
         n_xy = len(xy_full)
 
-    settings, _h5_fps, tsf_settings = read_trial_settings(pipeline_db, key)
+    settings, _h5_fps, timing = read_trial_settings(pipeline_db, key)
     settings = _apply_arena_geometry_overrides(settings, cfg)
-    if tsf_settings != trial_start_frame and tsf_settings > 0:
-        trial_start_frame = tsf_settings
+    timing = complete_trial_timing(pipeline_db, key, timing)
+    fi_xy = read_spot_frame_index_column(pipeline_db, key)
+    _seek_row, run_row = compute_seek_run_rows(n_xy, fi_xy, timing)
+    trial_start_frame = run_row
 
     # ORM RAM: task_data/radial_arm. ehram_results.h5: /metadata/global_template + trial escape_arm.
     ram_polys: Optional[dict[str, np.ndarray]] = load_ram_region_polygons_px(
@@ -962,9 +965,6 @@ def render_unified_overlay_video(
                         "Reference memory successes: "
                         f"{_hud_memory_label(ram_attrs.get('reference_memory_successes'))}"
                     )
-                    ex_raw = attrs.get("exit_arm_index", ram_attrs.get("exit_arm"))
-                    ex_arm = _decode_attr(ex_raw) if ex_raw is not None else "--"
-                    #put(f"exit_arm: {ex_arm}")
                 elif arena_type == ARENA_TYPE_CIRCULAR:
                     # r_cm = settings.arena_radius_cm if settings.px_per_cm > 0 else float("nan")
                     # put(f"arena_r: {r_cm:.1f}cm" if np.isfinite(r_cm) else "arena_r: --")

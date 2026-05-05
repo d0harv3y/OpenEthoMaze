@@ -75,19 +75,13 @@ def bootstrap_legacy_ram_database(db_path: Path | str) -> None:
 def _escape_arm_index(item: SourceWorkItem) -> int:
     raw = item.metadata.get("escape_arm", "0")
     try:
-        return int(str(raw).strip())
+        v = int(str(raw).strip())
     except (TypeError, ValueError):
         return 0
-
-
-def _rewarded_arm_index(item: SourceWorkItem, escape_idx: int) -> int:
-    raw = item.metadata.get("rewarded_arm_index")
-    if raw is None or str(raw).strip() == "":
-        return max(0, min(7, escape_idx))
-    try:
-        return max(0, min(7, int(str(raw).strip())))
-    except (TypeError, ValueError):
-        return max(0, min(7, escape_idx))
+    # Legacy trial_ns values are 1-based; normalize to internal 0-based.
+    if 1 <= v <= 8:
+        return v - 1
+    return v
 
 
 def import_legacy_ram_work_items(
@@ -129,12 +123,10 @@ def import_legacy_ram_work_items(
 
             escape_idx = _escape_arm_index(item)
             escape_idx = max(0, min(7, escape_idx))
-            rewarded_idx = _rewarded_arm_index(item, escape_idx)
 
             cfg = RadialArmControllerConfig()
             apply_legacy_template_config(cfg)
             cfg.radial_arm.exit_arm_index = escape_idx
-            cfg.radial_arm.rewarded_arm_index = rewarded_idx
 
             ts = (
                 item.timestamp.isoformat()

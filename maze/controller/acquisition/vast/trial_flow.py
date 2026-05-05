@@ -19,6 +19,7 @@ from ....core.session_slots import (
     slot_for_trial_index,
     slot_to_animal_trial,
 )
+from ..region_code import REGION_OOB, VastRegionCodeTracker
 from ..shared_controller import build_run_button_states, normalize_run_mode_value
 from .arena import (
     distance_px,
@@ -152,6 +153,24 @@ class TrialStateMachine:
     def trial_key(self) -> str:
         return f"T{self.trial_idx + 1:02d}"
 
+    def _manual_exit_idx_for_slot(self, slot_idx: int) -> int:
+        sess = self.config.session
+        n = self.config.exit_angles.n_angles
+        default_i = int(getattr(self.config.exit_angles, "default_manual_exit_index", 0))
+        default_i = max(0, min(n - 1, default_i))
+        raw = sess.exit_schedule_indices
+        if raw is None or slot_idx < 0 or slot_idx >= len(raw):
+            return default_i
+        return max(0, min(n - 1, int(raw[slot_idx])))
+
+    def _latin_preview_exit_idx(self, trial_t: int) -> int:
+        return latin_square_exit_index(
+            self.session_id,
+            trial_t,
+            self.config.exit_angles.n_angles,
+            self.config.session.seed_auto_value,
+        )
+
     def queued_trial_display(self) -> str:
         """
         Return a short string for the trial shown in the status panel: e.g. "sess1 T02 #3".
@@ -165,24 +184,20 @@ class TrialStateMachine:
         if self.state == TrialState.IDLE:
             if self.slot_idx >= total:
                 return "—"
-            exit_idx = latin_square_exit_index(
-                self.session_id,
-                self.trial_idx,
-                self.config.exit_angles.n_angles,
-                (None if self.config.session.seed == -1 else self.config.session.seed),
-            )
+            if self.config.session.seed_mode == "manual":
+                exit_idx = self._manual_exit_idx_for_slot(self.slot_idx)
+            else:
+                exit_idx = self._latin_preview_exit_idx(self.trial_idx)
             return f"{self.session_key()} {self.trial_key()} #{exit_idx + 1}"
         if self.state in (TrialState.TRIAL_SUCCESS, TrialState.TRIAL_TIMEOUT):
             next_slot = self.slot_idx + 1
             if next_slot >= total:
                 return "—"
             _, next_t = slot_to_animal_trial(next_slot, n_a, n_t, self.mode)
-            exit_idx = latin_square_exit_index(
-                self.session_id,
-                next_t,
-                self.config.exit_angles.n_angles,
-                (None if self.config.session.seed == -1 else self.config.session.seed),
-            )
+            if self.config.session.seed_mode == "manual":
+                exit_idx = self._manual_exit_idx_for_slot(next_slot)
+            else:
+                exit_idx = self._latin_preview_exit_idx(next_t)
             return f"{self.session_key()} T{next_t + 1:02d} #{exit_idx + 1}"
         return f"{self.session_key()} {self.trial_key()} #{self.exit_angle_index + 1}"
 
@@ -227,10 +242,11 @@ class TrialStateMachine:
         return False
 
     def _place_exit(self, rodent_x: float, rodent_y: float) -> None:
-        seed = self.config.session.seed
+        seed_mode = self.config.session.seed_mode
+        seed_auto = self.config.session.seed_auto_value
         n = self.config.exit_angles.n_angles
         if (
-            seed == -1
+            seed_mode == "legacy"
             and self.legacy_exit_x_px is not None
             and self.legacy_exit_y_px is not None
         ):
@@ -257,12 +273,25 @@ class TrialStateMachine:
                 self.on_exit_placed(ex_target, ey_target)
             return
 
-        effective_seed: Optional[int] = None if seed == -1 else seed
+        if seed_mode == "manual":
+            self.exit_angle_index = self._manual_exit_idx_for_slot(self.slot_idx)
+            ex, ey = exit_center_px(
+                rodent_x,
+                rodent_y,
+                self.exit_angle_index,
+                self.config.arena,
+                self.config.exit_angles,
+            )
+            self.exit_x_px, self.exit_y_px = ex, ey
+            if self.on_exit_placed:
+                self.on_exit_placed(ex, ey)
+            return
+
         self.exit_angle_index = latin_square_exit_index(
             self.session_id,
             self.trial_idx,
             n,
-            effective_seed,
+            seed_auto,
         )
         ex, ey = exit_center_px(
             rodent_x,
@@ -407,11 +436,14 @@ class TrialStateMachine:
             self.trial_elapsed_s += dt_s
 
     def _sync_exit_index_to_position(self) -> None:
+        if self.config.session.seed_mode == "manual":
+            self.exit_angle_index = self._manual_exit_idx_for_slot(self.slot_idx)
+            return
         self.exit_angle_index = latin_square_exit_index(
             self.session_id,
             self.trial_idx,
             self.config.exit_angles.n_angles,
-            (None if self.config.session.seed == -1 else self.config.session.seed),
+            self.config.session.seed_auto_value,
         )
 
     def manual_trial_success(self) -> None:
@@ -453,6 +485,8 @@ class TrialController:
         self._state_listeners: List[Callable[[TrialState], None]] = []
         self._pending_legacy_exit_xy: Optional[Tuple[float, float]] = None
         self._pending_exit_success_override: Optional[bool] = None
+        self._region_tracker = VastRegionCodeTracker()
+        self._region_trial_key: Optional[Tuple[str, int]] = None
 
     def set_legacy_exit_xy(self, exit_x_px: float, exit_y_px: float) -> None:
         if self._sm is not None:
@@ -544,6 +578,23 @@ class TrialController:
             in_exit_zone(x_px, y_px, exit_x_px, exit_y_px, self._config.arena),
         )
 
+    def get_region_code_for_recording(self, x_px: float, y_px: float) -> str:
+        """Per-frame VAST region label; same rules as :mod:`maze.controller.acquisition.region_code`."""
+        if self._sm is None:
+            return REGION_OOB
+        sm = self._sm
+        key = (sm.session_id, sm.slot_idx)
+        if key != self._region_trial_key:
+            self._region_trial_key = key
+            self._region_tracker.reset()
+        return self._region_tracker.update(
+            float(x_px),
+            float(y_px),
+            arena=sm.config.arena,
+            exit_angles=sm.config.exit_angles,
+            assigned_exit_index=int(sm.exit_angle_index),
+        )
+
     def add_state_listener(self, callback: Callable[[TrialState], None]) -> None:
         self._state_listeners.append(callback)
 
@@ -590,7 +641,14 @@ class TrialController:
         self._run_active = False
         self.ensure_created(session_id, trial_idx, slot_idx=slot_idx)
 
-    def tick(self, x_px: float, y_px: float, dt_s: float) -> None:
+    def tick(
+        self,
+        x_px: float,
+        y_px: float,
+        dt_s: float,
+        *,
+        trial_clock_dt_s: Optional[float] = None,
+    ) -> None:
         if not self._run_active or self._sm is None:
             return
         sm = self._sm
@@ -600,7 +658,8 @@ class TrialController:
         elif sm.state == TrialState.WAIT_NOT_CENTER:
             sm.check_not_center(x_px, y_px)
         elif sm.state == TrialState.TRIAL_RUNNING:
-            sm.update_trial(x_px, y_px, dt_s)
+            dt_trial = dt_s if trial_clock_dt_s is None else trial_clock_dt_s
+            sm.update_trial(x_px, y_px, dt_trial)
 
     def start_run(self) -> None:
         self._run_active = True
@@ -697,12 +756,15 @@ class TrialController:
             "session_id": sm.session_id,
         }
         if sm.state in (TrialState.IDLE, TrialState.ITI, TrialState.WAIT_NOT_CENTER):
-            exit_idx = latin_square_exit_index(
-                sm.session_id,
-                sm.trial_idx,
-                sm.config.exit_angles.n_angles,
-                (None if sm.config.session.seed == -1 else sm.config.session.seed),
-            )
+            if sm.config.session.seed_mode == "manual":
+                exit_idx = sm._manual_exit_idx_for_slot(sm.slot_idx)
+            else:
+                exit_idx = latin_square_exit_index(
+                    sm.session_id,
+                    sm.trial_idx,
+                    sm.config.exit_angles.n_angles,
+                    sm.config.session.seed_auto_value,
+                )
             out["exit"] = str(exit_idx + 1)
         else:
             out["exit"] = str(sm.exit_angle_index + 1)

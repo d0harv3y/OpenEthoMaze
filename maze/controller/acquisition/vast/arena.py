@@ -23,13 +23,6 @@ def in_center_region(x_px: float, y_px: float, config: ArenaConfig) -> bool:
     return d <= config.center_radius_px
 
 
-def in_edge_region(x_px: float, y_px: float, config: ArenaConfig) -> bool:
-    """True if (x_px, y_px) is in the edge annulus (outside center, inside arena)."""
-    cx, cy = config.arena_center_x_px, config.arena_center_y_px
-    d = distance_px(x_px, y_px, cx, cy)
-    return config.center_radius_px < d <= config.radius_px
-
-
 def in_exit_zone(
     x_px: float,
     y_px: float,

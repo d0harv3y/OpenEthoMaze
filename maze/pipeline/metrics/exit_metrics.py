@@ -364,29 +364,35 @@ def build_xy_table_with_exit(
     fps: float,
     exit_zone_radius_cm: float = EXIT_ZONE_RADIUS_CM,
     is_moving: Optional[np.ndarray] = None,
-    start_frame: int = 0,
-    trial_start_frame: Optional[int] = None,
+    seek_row: int = 0,
+    run_row: int = 0,
+    frame_indices: Optional[np.ndarray] = None,
+    region_codes: Optional[list[str]] = None,
 ) -> np.ndarray:
     """
     Build structured XY table with exit-related columns.
 
-    When start_frame > 0, frame_index stores original video frame indices
-    (start_frame + i for row i); t_s is 0-based for the analysis window.
-
     Args:
-        xy: Position array (n_frames, 2) in pixels (analysis window)
+        xy: Position array (n_frames, 2) in pixels (full trial trace rows).
         valid: Boolean validity array
         exit_pos: Exit position in pixels
         px_per_cm: Calibration factor
         fps: Frame rate
         exit_zone_radius_cm: Exit zone radius in cm
         is_moving: Optional boolean array for movement status
-        start_frame: Original video frame index of row 0 (for frame_index column)
-        trial_start_frame: If set, frames before this (in row index) are "iti_wait", rest "run".
+        seek_row: First row included in the analysis window (rows before are ``excluded``).
+        run_row: First row of the run phase (``iti_wait`` from seek_row to run_row-1).
+        frame_indices: Optional per-row source frame indices (else 0 .. n_frames-1).
+        region_codes: Per-frame spatial region ids (VAST/RAM); default ``oob``.
 
     Returns:
         Structured array matching ``xy_table_dtype`` from ``maze.pipeline.db``
     """
+    from maze.controller.acquisition.region_code import (
+        REGION_OOB,
+        encode_region_code_bytes,
+    )
+
     from ..db import xy_table_dtype
 
     n_frames = len(xy)
@@ -404,21 +410,33 @@ def build_xy_table_with_exit(
     # Create structured array
     table = np.zeros(n_frames, dtype=xy_table_dtype())
 
-    table["frame_index"] = (start_frame + np.arange(n_frames, dtype=np.uint32)).astype(np.uint32)
+    if frame_indices is not None and len(frame_indices) == n_frames:
+        table["frame_index"] = np.asarray(frame_indices, dtype=np.uint32)
+    else:
+        table["frame_index"] = np.arange(n_frames, dtype=np.uint32)
     table["t_s"] = np.arange(n_frames, dtype=np.float64) / fps
     table['x'] = xy[:, 0].astype(np.float32)
     table['y'] = xy[:, 1].astype(np.float32)
     table['dist_to_exit_px'] = distance_to_exit_px.astype(np.float32)
-    table['in_exit_zone'] = in_exit_zone.astype(np.uint8)
+    if region_codes is not None and len(region_codes) == n_frames:
+        for i in range(n_frames):
+            table["region_code"][i] = encode_region_code_bytes(region_codes[i])
+    else:
+        z = encode_region_code_bytes(REGION_OOB)
+        for i in range(n_frames):
+            table["region_code"][i] = z
     table['valid'] = valid.astype(np.uint8)
     if is_moving is not None:
         table['is_moving'] = is_moving.astype(np.uint8)
 
-    # Per-frame trial_state: iti_wait before trial_start_frame, run from trial_start_frame on.
-    if trial_start_frame is not None and trial_start_frame > 0 and trial_start_frame < n_frames:
-        table["trial_state"][:trial_start_frame] = b"iti_wait"
-        table["trial_state"][trial_start_frame:] = b"run"
-    else:
-        table["trial_state"] = b"run"
+    seek_row = int(np.clip(seek_row, 0, n_frames))
+    run_row = int(np.clip(run_row, seek_row, n_frames))
+    table["trial_state"] = b"run"
+    if seek_row > 0:
+        table["trial_state"][:seek_row] = b"excluded"
+    if run_row > seek_row:
+        table["trial_state"][seek_row:run_row] = b"iti_wait"
+    if run_row < n_frames:
+        table["trial_state"][run_row:] = b"run"
 
     return table

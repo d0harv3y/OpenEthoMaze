@@ -33,7 +33,6 @@ class RadialArmTemplateConfig:
     arm_length_cm: float = 55.0
     arm_width_cm: float = 15.0
     arm_split_cm: float = 27.5
-    hole_arm_index: int = 0
     hole_radius_cm: float = 5.0
     hole_inset_from_arm_end_cm: float = 10.0
 
@@ -62,7 +61,6 @@ class RadialArmTaskConfig:
     template: RadialArmTemplateConfig = field(default_factory=RadialArmTemplateConfig)
     calibration: RadialArmCalibrationConfig = field(default_factory=RadialArmCalibrationConfig)
     exit_arm_index: int = 0
-    rewarded_arm_index: int = 0
     speaker_device_name: str = ""
     speaker_volume_pct: float = 100.0
     stimulus_frequency_hz: float = 5000.0
@@ -75,13 +73,5 @@ class RadialArmControllerConfig(AcquisitionConfig):
 
     h5_filename: str = "ram_trials.h5"
     arena_type: str = ARENA_TYPE_RADIAL_ARM
+    run_phase: str = "radial_arm"
     radial_arm: RadialArmTaskConfig = field(default_factory=RadialArmTaskConfig)
-
-    @property
-    def run_phase(self) -> str:
-        """Compatibility shim while shared UI still expects a phase-like label."""
-        return "radial_arm"
-
-    @run_phase.setter
-    def run_phase(self, value: str) -> None:
-        del value

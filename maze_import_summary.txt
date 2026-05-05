@@ -1,0 +1,51 @@
+modules=118
+edges=495
+cycles=2
+
+top_outgoing:
+  maze.controller.acquisition.gui.main_window: 32
+  maze.pipeline.process_trial: 25
+  maze.pipeline.viz.unified_overlay: 23
+  maze.pipeline.sources.legacy_ehram_import: 14
+  maze.pipeline.db.trial_settings_io: 13
+  maze.pipeline.db: 12
+  maze.pipeline.viz.ram_template_draw: 11
+  maze.controller.acquisition.h5_writer: 11
+  maze.controller.acquisition.playback_loader: 10
+  maze.pipeline.viz.overlay_cli: 10
+  maze.pipeline.db.trial_attributes: 9
+  maze.controller.acquisition.gui.settings_dialog: 9
+  maze.controller.acquisition.radial_arm.trial_flow: 9
+  maze.controller.acquisition.task_registry: 9
+  maze.controller.acquisition.recording: 9
+  maze.pipeline.viz.video_overlay: 9
+  maze.pipeline.viz.kpms_exemplar_tray: 9
+  maze.controller.acquisition.region_code: 8
+  maze.kpms.frame_alignment: 8
+  maze.kpms.preprocess: 8
+
+top_incoming:
+  maze.core: 40
+  maze: 29
+  maze.pipeline.io: 20
+  maze.pipeline.io.file_discovery: 19
+  maze.pipeline: 17
+  maze.core.h5_layout: 17
+  maze.pipeline.db: 16
+  maze.pipeline.defaults: 16
+  maze.core.tasks: 16
+  maze.controller.acquisition.radial_arm: 15
+  maze.pipeline.db.trial_key: 14
+  maze.controller.acquisition.shared_config: 13
+  maze.controller.acquisition: 12
+  maze.pipeline.db._shared: 12
+  maze.controller: 12
+  maze.controller.acquisition.radial_arm.config: 11
+  maze.core.anatomy: 10
+  maze.core.schema: 9
+  maze.controller.acquisition.radial_arm.geometry: 9
+  maze.controller.acquisition.vast: 8
+
+cycle_components:
+  - maze.pipeline.db, maze.pipeline.db.ambulation_bouts, maze.pipeline.db.ambulation_summary, maze.pipeline.db.ambulation_xy, maze.pipeline.db.cohort_manifest, maze.pipeline.db.feedback, maze.pipeline.db.qc_image_store, maze.pipeline.db.trial_attributes, maze.pipeline.db.trial_groups, maze.pipeline.db.trial_key, maze.pipeline.db.trial_settings_io, maze.pipeline.io, maze.pipeline.io.sleap_loader
+  - maze.controller.acquisition.gui.launcher, maze.controller.acquisition.gui.main_window

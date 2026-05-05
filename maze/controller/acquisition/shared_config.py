@@ -1,7 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Literal, Optional
+
+from ...pipeline.defaults import (
+    JUMP_FILTER_LOOKAHEAD_FRAMES,
+    MAX_MOVEMENT_PER_FRAME_CM,
+    MOVEMENT_ENTRY_DEBOUNCE_FRAMES,
+    MOVEMENT_EXIT_DEBOUNCE_FRAMES,
+    MOVEMENT_INTER_BOUT_INTERVAL_FRAMES,
+    MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES,
+    MOVEMENT_START_THRESHOLD_M_PER_FRAME,
+    MOVEMENT_STOP_THRESHOLD_M_PER_FRAME,
+    MIN_MOVEMENT_BOUT_DURATION_FRAMES,
+)
 
 
 @dataclass
@@ -24,14 +36,42 @@ class SessionConfig:
     num_trials: int = 9
     max_trial_duration_s: float = 120.0
     iti_s: float = 10.0
-    seed: Optional[int] = None
-    legacy_seed_db_path: Optional[str] = None
+    seed_mode: Literal["auto", "legacy", "manual"] = "auto"
+    # Used only when ``seed_mode == "auto"``.
+    seed_auto_value: Optional[int] = None
+    # Used only when ``seed_mode == "legacy"``.
+    seed_legacy_source: Optional[str] = None
+    # When ``seed_mode == "manual"``: length num_animals * num_trials, 0-based exit indices.
+    exit_schedule_indices: Optional[list[int]] = None
     animals: list[AnimalInfo] = field(default_factory=list)
 
     def ensure_animals(self) -> None:
         """Ensure animals list has at least ``num_animals`` entries."""
         while len(self.animals) < self.num_animals:
             self.animals.append(AnimalInfo(animal_id=str(1000 + len(self.animals))))
+
+
+def ensure_exit_schedule_indices_length(
+    session: SessionConfig,
+    *,
+    n_exits: int,
+    default_exit_index: int,
+) -> None:
+    """Pad or truncate ``session.exit_schedule_indices`` for ``num_animals * num_trials`` slots."""
+    total = max(0, int(session.num_animals) * int(session.num_trials))
+    n_ang = max(1, int(n_exits))
+    d = max(0, min(n_ang - 1, int(default_exit_index)))
+    if total <= 0:
+        session.exit_schedule_indices = None
+        return
+    cur = session.exit_schedule_indices
+    if cur is None:
+        session.exit_schedule_indices = [d] * total
+        return
+    cur_list = [max(0, min(n_ang - 1, int(x))) for x in cur[:total]]
+    if len(cur_list) < total:
+        cur_list.extend([d] * (total - len(cur_list)))
+    session.exit_schedule_indices = cur_list
 
 
 @dataclass
@@ -51,6 +91,25 @@ class FallbackTrackingConfig:
     min_sleap_nodes: int = 1
     show_blob_overlay: bool = True
     max_contours: int = 0
+    # Next preview click sets backup intensity range (main window + Settings Tracking).
+    range_from_next_click: bool = False
+    range_pick_delta: int = 12
+    range_pick_half: int = 2
+
+
+@dataclass
+class AnalysisTrajectoryConfig:
+    """Movement-bout analysis knobs (frame-based canonical units)."""
+
+    movement_start_threshold_m_per_frame: float = MOVEMENT_START_THRESHOLD_M_PER_FRAME
+    movement_stop_threshold_m_per_frame: float = MOVEMENT_STOP_THRESHOLD_M_PER_FRAME
+    movement_speed_median_window_frames: int = MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES
+    movement_entry_debounce_frames: int = MOVEMENT_ENTRY_DEBOUNCE_FRAMES
+    movement_exit_debounce_frames: int = MOVEMENT_EXIT_DEBOUNCE_FRAMES
+    min_movement_bout_duration_frames: int = MIN_MOVEMENT_BOUT_DURATION_FRAMES
+    movement_inter_bout_interval_frames: int = MOVEMENT_INTER_BOUT_INTERVAL_FRAMES
+    max_movement_per_frame_cm: float = MAX_MOVEMENT_PER_FRAME_CM
+    jump_filter_lookahead_frames: int = JUMP_FILTER_LOOKAHEAD_FRAMES
 
 
 @dataclass
@@ -75,8 +134,15 @@ class AcquisitionConfig:
     track_async: bool = False
     track_enable_backup: bool = True
     track_enable_sleap: bool = True
-    # Linear scale applied to width/height before SLEAP/backup inference (1.0 = full res, 0.5 = half).
-    track_infer_scale: float = 1.0
     overlay_opacity_pct: int = 70
     arduino_port: Optional[str] = None
     run_analysis_after_trial: bool = False
+    # Optional per-profile override for virtual source timing.
+    # When set (>0), virtual playback uses constant effective_fps = segment_frames / duration_override_s,
+    # where segment_frames = total_frames − anchor_frame (anchor = 0 on open, or last seek index).
+    virtual_duration_override_s: Optional[float] = None
+    # Next preview click sets arena center (VAST) or RAM template center (RAM).
+    preview_set_center_from_next_click: bool = False
+    analysis_trajectory: AnalysisTrajectoryConfig = field(
+        default_factory=AnalysisTrajectoryConfig
+    )

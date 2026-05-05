@@ -15,7 +15,13 @@ from .radial_arm.config import (
     ram_apothem_cm_from_template,
     sync_ram_px_per_cm,
 )
-from .shared_config import AcquisitionConfig, AnimalInfo, FallbackTrackingConfig, SessionConfig
+from .shared_config import (
+    AcquisitionConfig,
+    AnalysisTrajectoryConfig,
+    AnimalInfo,
+    FallbackTrackingConfig,
+    SessionConfig,
+)
 from .vast.config import (
     ArenaConfig,
     ExitAngleConfig,
@@ -95,6 +101,7 @@ def _exit_angles_to_dict(config: ExitAngleConfig) -> Dict[str, Any]:
         "n_angles": config.n_angles,
         "offset_deg": config.offset_deg,
         "step_deg": config.step_deg,
+        "default_manual_exit_index": int(getattr(config, "default_manual_exit_index", 0)),
     }
 
 
@@ -103,6 +110,7 @@ def _exit_angles_from_dict(data: Dict[str, Any]) -> ExitAngleConfig:
         n_angles=int(data.get("n_angles", 4)),
         offset_deg=float(data.get("offset_deg", -30.0)),
         step_deg=float(data.get("step_deg", 20.0)),
+        default_manual_exit_index=int(data.get("default_manual_exit_index", 0)),
     )
 
 
@@ -145,26 +153,43 @@ def _animal_from_dict(data: Dict[str, Any]) -> AnimalInfo:
 
 
 def _session_to_dict(config: SessionConfig) -> Dict[str, Any]:
-    return {
+    d: Dict[str, Any] = {
         "num_animals": config.num_animals,
         "num_trials": config.num_trials,
         "max_trial_duration_s": config.max_trial_duration_s,
         "iti_s": config.iti_s,
-        "seed": config.seed,
-        "legacy_seed_db_path": config.legacy_seed_db_path,
+        "seed_mode": config.seed_mode,
+        "seed_auto_value": config.seed_auto_value,
+        "seed_legacy_source": config.seed_legacy_source,
         "animals": [_animal_to_dict(animal) for animal in config.animals],
     }
+    if config.exit_schedule_indices is not None:
+        d["exit_schedule_indices"] = list(config.exit_schedule_indices)
+    return d
 
 
 def _session_from_dict(data: Dict[str, Any]) -> SessionConfig:
     animals = [_animal_from_dict(item) for item in data.get("animals", [])]
+    mode = str(data.get("seed_mode", "auto") or "auto").strip().lower()
+    if mode not in ("auto", "legacy", "manual"):
+        mode = "auto"
+    schedule_raw = data.get("exit_schedule_indices")
+    schedule_indices: Optional[list[int]] = None
+    if isinstance(schedule_raw, list) and schedule_raw:
+        schedule_indices = [int(x) for x in schedule_raw]
     return SessionConfig(
         num_animals=int(data.get("num_animals", 1)),
         num_trials=int(data.get("num_trials", 9)),
         max_trial_duration_s=float(data.get("max_trial_duration_s", 300.0)),
         iti_s=float(data.get("iti_s", 30.0)),
-        seed=data.get("seed"),
-        legacy_seed_db_path=data.get("legacy_seed_db_path"),
+        seed_mode=mode,
+        seed_auto_value=(
+            int(data["seed_auto_value"])
+            if data.get("seed_auto_value") is not None
+            else None
+        ),
+        seed_legacy_source=data.get("seed_legacy_source"),
+        exit_schedule_indices=schedule_indices,
         animals=animals,
     )
 
@@ -179,6 +204,9 @@ def _fallback_tracking_to_dict(config: FallbackTrackingConfig) -> Dict[str, Any]
         "min_circularity": config.min_circularity,
         "range_low": config.range_low,
         "range_high": config.range_high,
+        "range_from_next_click": config.range_from_next_click,
+        "range_pick_delta": config.range_pick_delta,
+        "range_pick_half": config.range_pick_half,
         "node_max_jump_px": config.node_max_jump_px,
         "node_jump_confirm_frames": config.node_jump_confirm_frames,
         "min_sleap_nodes": config.min_sleap_nodes,
@@ -197,11 +225,114 @@ def _fallback_tracking_from_dict(data: Dict[str, Any]) -> FallbackTrackingConfig
         min_circularity=float(data.get("min_circularity", 0.0)),
         range_low=int(data.get("range_low", 0)),
         range_high=int(data.get("range_high", 255)),
+        range_from_next_click=bool(data.get("range_from_next_click", False)),
+        range_pick_delta=max(0, int(data.get("range_pick_delta", 12))),
+        range_pick_half=max(0, int(data.get("range_pick_half", 2))),
         node_max_jump_px=float(data.get("node_max_jump_px", 0.0)),
         node_jump_confirm_frames=max(1, int(data.get("node_jump_confirm_frames", 2))),
         min_sleap_nodes=int(data.get("min_sleap_nodes", 1)),
         show_blob_overlay=bool(data.get("show_blob_overlay", True)),
         max_contours=int(data.get("max_contours", 0)),
+    )
+
+
+def _analysis_trajectory_to_dict(config: AnalysisTrajectoryConfig) -> Dict[str, Any]:
+    return {
+        "movement_start_threshold_m_per_frame": config.movement_start_threshold_m_per_frame,
+        "movement_stop_threshold_m_per_frame": config.movement_stop_threshold_m_per_frame,
+        "movement_speed_median_window_frames": config.movement_speed_median_window_frames,
+        "movement_entry_debounce_frames": config.movement_entry_debounce_frames,
+        "movement_exit_debounce_frames": config.movement_exit_debounce_frames,
+        "min_movement_bout_duration_frames": config.min_movement_bout_duration_frames,
+        "movement_inter_bout_interval_frames": config.movement_inter_bout_interval_frames,
+        "max_movement_per_frame_cm": config.max_movement_per_frame_cm,
+        "jump_filter_lookahead_frames": config.jump_filter_lookahead_frames,
+    }
+
+
+def _analysis_trajectory_from_dict(data: Dict[str, Any]) -> AnalysisTrajectoryConfig:
+    from maze.pipeline.defaults import (
+        JUMP_FILTER_LOOKAHEAD_FRAMES,
+        MAX_MOVEMENT_PER_FRAME_CM,
+        MOVEMENT_ENTRY_DEBOUNCE_FRAMES,
+        MOVEMENT_EXIT_DEBOUNCE_FRAMES,
+        MOVEMENT_INTER_BOUT_INTERVAL_FRAMES,
+        MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES,
+        MOVEMENT_START_THRESHOLD_M_PER_FRAME,
+        MOVEMENT_STOP_THRESHOLD_M_PER_FRAME,
+        MIN_MOVEMENT_BOUT_DURATION_FRAMES,
+    )
+
+    return AnalysisTrajectoryConfig(
+        movement_start_threshold_m_per_frame=float(
+            data.get(
+                "movement_start_threshold_m_per_frame",
+                MOVEMENT_START_THRESHOLD_M_PER_FRAME,
+            )
+        ),
+        movement_stop_threshold_m_per_frame=float(
+            data.get(
+                "movement_stop_threshold_m_per_frame",
+                MOVEMENT_STOP_THRESHOLD_M_PER_FRAME,
+            )
+        ),
+        movement_speed_median_window_frames=max(
+            1,
+            int(
+                data.get(
+                    "movement_speed_median_window_frames",
+                    MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES,
+                )
+            ),
+        ),
+        movement_entry_debounce_frames=max(
+            1,
+            int(
+                data.get(
+                    "movement_entry_debounce_frames",
+                    MOVEMENT_ENTRY_DEBOUNCE_FRAMES,
+                )
+            ),
+        ),
+        movement_exit_debounce_frames=max(
+            1,
+            int(
+                data.get(
+                    "movement_exit_debounce_frames",
+                    MOVEMENT_EXIT_DEBOUNCE_FRAMES,
+                )
+            ),
+        ),
+        min_movement_bout_duration_frames=max(
+            1,
+            int(
+                data.get(
+                    "min_movement_bout_duration_frames",
+                    MIN_MOVEMENT_BOUT_DURATION_FRAMES,
+                )
+            ),
+        ),
+        movement_inter_bout_interval_frames=max(
+            0,
+            int(
+                data.get(
+                    "movement_inter_bout_interval_frames",
+                    MOVEMENT_INTER_BOUT_INTERVAL_FRAMES,
+                )
+            ),
+        ),
+        max_movement_per_frame_cm=float(
+            data.get("max_movement_per_frame_cm", MAX_MOVEMENT_PER_FRAME_CM)
+        ),
+        jump_filter_lookahead_frames=max(
+            0,
+            int(
+                data.get(
+                    "jump_filter_lookahead_frames",
+                    JUMP_FILTER_LOOKAHEAD_FRAMES,
+                )
+            ),
+        ),
     )
 
 
@@ -213,6 +344,11 @@ def _shared_to_dict(config: AcquisitionConfig) -> Dict[str, Any]:
         "arena_type": config.arena_type,
         "run_mode": config.run_mode,
         "run_analysis_after_trial": config.run_analysis_after_trial,
+        "virtual_duration_override_s": (
+            float(config.virtual_duration_override_s)
+            if config.virtual_duration_override_s is not None
+            else None
+        ),
         "fallback_tracking": _fallback_tracking_to_dict(config.fallback_tracking),
         "sleap_confidence_pct": config.sleap_confidence_pct,
         "sleap_every_n": config.sleap_every_n,
@@ -224,21 +360,13 @@ def _shared_to_dict(config: AcquisitionConfig) -> Dict[str, Any]:
         "track_async": config.track_async,
         "track_enable_backup": config.track_enable_backup,
         "track_enable_sleap": config.track_enable_sleap,
-        "track_infer_scale": float(config.track_infer_scale),
         "overlay_opacity_pct": config.overlay_opacity_pct,
         "arduino_port": config.arduino_port,
+        "preview_set_center_from_next_click": bool(
+            getattr(config, "preview_set_center_from_next_click", False)
+        ),
+        "analysis_trajectory": _analysis_trajectory_to_dict(config.analysis_trajectory),
     }
-
-
-def _infer_scale_from_dict(data: Dict[str, Any]) -> float:
-    """Clamp inference scale to 1.0 (full) or 0.5 (half) for v1."""
-    try:
-        v = float(data.get("track_infer_scale", 1.0))
-    except (TypeError, ValueError):
-        return 1.0
-    if 0.4 <= v <= 0.6:
-        return 0.5
-    return 1.0
 
 
 def _enable_backup_sleap_from_dict(data: Dict[str, Any]) -> tuple[bool, bool]:
@@ -279,6 +407,11 @@ def _shared_kwargs_from_dict(
         "arena_type": arena_type,
         "run_mode": _run_mode_from_dict(data),
         "run_analysis_after_trial": bool(data.get("run_analysis_after_trial", False)),
+        "virtual_duration_override_s": (
+            float(data.get("virtual_duration_override_s"))
+            if data.get("virtual_duration_override_s") is not None
+            else None
+        ),
         "fallback_tracking": _fallback_tracking_from_dict(
             data.get("fallback_tracking", {})
         ),
@@ -296,11 +429,16 @@ def _shared_kwargs_from_dict(
         "track_async": bool(data.get("track_async", False)),
         "track_enable_backup": _eb,
         "track_enable_sleap": _es,
-        "track_infer_scale": _infer_scale_from_dict(data),
         "overlay_opacity_pct": max(
             0, min(100, int(data.get("overlay_opacity_pct", 70)))
         ),
         "arduino_port": data.get("arduino_port") or None,
+        "preview_set_center_from_next_click": bool(
+            data.get("preview_set_center_from_next_click", False)
+        ),
+        "analysis_trajectory": _analysis_trajectory_from_dict(
+            data.get("analysis_trajectory", {})
+        ),
     }
 
 
@@ -335,7 +473,6 @@ def _radial_arm_task_to_dict(config: RadialArmTaskConfig) -> Dict[str, Any]:
             "arm_length_cm": config.template.arm_length_cm,
             "arm_width_cm": config.template.arm_width_cm,
             "arm_split_cm": config.template.arm_split_cm,
-            "hole_arm_index": config.template.hole_arm_index,
             "hole_radius_cm": config.template.hole_radius_cm,
             "hole_inset_from_arm_end_cm": config.template.hole_inset_from_arm_end_cm,
         },
@@ -349,7 +486,6 @@ def _radial_arm_task_to_dict(config: RadialArmTaskConfig) -> Dict[str, Any]:
             "edit_region_name": config.calibration.edit_region_name,
         },
         "exit_arm_index": config.exit_arm_index,
-        "rewarded_arm_index": config.rewarded_arm_index,
         "speaker_device_name": config.speaker_device_name,
         "speaker_volume_pct": config.speaker_volume_pct,
         "stimulus_frequency_hz": config.stimulus_frequency_hz,
@@ -388,7 +524,6 @@ def _radial_arm_task_from_dict(data: Dict[str, Any]) -> RadialArmTaskConfig:
         arm_length_cm=float(template_data.get("arm_length_cm", 55.0)),
         arm_width_cm=float(template_data.get("arm_width_cm", 15.0)),
         arm_split_cm=float(template_data.get("arm_split_cm", 27.5)),
-        hole_arm_index=int(template_data.get("hole_arm_index", 0)),
         hole_radius_cm=float(template_data.get("hole_radius_cm", 5.0)),
         hole_inset_from_arm_end_cm=float(
             template_data.get("hole_inset_from_arm_end_cm", 10.0)
@@ -401,7 +536,6 @@ def _radial_arm_task_from_dict(data: Dict[str, Any]) -> RadialArmTaskConfig:
             template=template,
         ),
         exit_arm_index=int(data.get("exit_arm_index", 0)),
-        rewarded_arm_index=int(data.get("rewarded_arm_index", 0)),
         speaker_device_name=str(data.get("speaker_device_name", "") or ""),
         speaker_volume_pct=float(data.get("speaker_volume_pct", 100.0)),
         stimulus_frequency_hz=float(data.get("stimulus_frequency_hz", 5000.0)),
@@ -429,7 +563,6 @@ def gui_to_dict(
     track_async: bool = False,
     track_enable_backup: bool = True,
     track_enable_sleap: bool = True,
-    track_infer_scale: float = 1.0,
     track_sleap_path: str = "",
     track_confidence: int = 50,
     track_sleap_every_n: int = 1,
@@ -447,7 +580,6 @@ def gui_to_dict(
         "track_async": track_async,
         "track_enable_backup": track_enable_backup,
         "track_enable_sleap": track_enable_sleap,
-        "track_infer_scale": float(track_infer_scale),
         "track_sleap_path": track_sleap_path,
         "track_confidence": track_confidence,
         "track_sleap_every_n": track_sleap_every_n,
@@ -538,8 +670,6 @@ def _merge_gui_into_config(
     elif gui.get("track_backup_only") is not None:
         config.track_enable_backup = True
         config.track_enable_sleap = not bool(gui["track_backup_only"])
-    if gui.get("track_infer_scale") is not None:
-        config.track_infer_scale = _infer_scale_from_dict(gui)
     if gui.get("track_opacity") is not None:
         config.overlay_opacity_pct = max(0, min(100, int(gui["track_opacity"])))
     if gui.get("arduino_port") is not None:
@@ -582,3 +712,32 @@ def load_profile(
     if slot_idx is not None:
         slot_idx = max(0, min(int(slot_idx), total_slots)) if total_slots else 0
     return config, session_id, trial_idx, gui, slot_idx
+
+
+def save_analysis_profile(
+    *,
+    analysis_trajectory: AnalysisTrajectoryConfig,
+    path: Path,
+) -> None:
+    """Save only analysis settings (separate from acquisition profiles)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data: Dict[str, Any] = {
+        "schema_version": 1,
+        "kind": "analysis_profile",
+        "analysis_trajectory": _analysis_trajectory_to_dict(analysis_trajectory),
+    }
+    with open(path, "w", encoding="utf-8") as file:
+        json.dump(data, file, indent=2, ensure_ascii=False)
+
+
+def load_analysis_profile(path: Path) -> AnalysisTrajectoryConfig:
+    """Load analysis settings profile saved by :func:`save_analysis_profile`."""
+    path = Path(path)
+    with open(path, "r", encoding="utf-8") as file:
+        data = json.load(file)
+    if not isinstance(data, dict):
+        raise ValueError("Invalid analysis profile format.")
+    if str(data.get("kind", "")).strip().lower() not in ("", "analysis_profile"):
+        raise ValueError("This file is not an analysis settings profile.")
+    return _analysis_trajectory_from_dict(data.get("analysis_trajectory", {}))

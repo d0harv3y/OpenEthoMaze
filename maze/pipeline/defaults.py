@@ -21,8 +21,12 @@ MOVEMENT_STOP_THRESHOLD_M_PER_FRAME = math.sqrt(2) / 300
 MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES = 3
 MOVEMENT_ENTRY_DEBOUNCE_FRAMES = 3
 MOVEMENT_EXIT_DEBOUNCE_FRAMES = 3
-MIN_MOVEMENT_BOUT_DURATION_S = 0.166
-MOVEMENT_INTER_BOUT_INTERVAL_S = 0.166
+# Canonical movement-bout duration/gap settings are frame-based for GUI + profile control.
+MIN_MOVEMENT_BOUT_DURATION_FRAMES = 4
+MOVEMENT_INTER_BOUT_INTERVAL_FRAMES = 4
+# Compatibility values still used in legacy call-sites.
+MIN_MOVEMENT_BOUT_DURATION_S = MIN_MOVEMENT_BOUT_DURATION_FRAMES / DEFAULT_FPS
+MOVEMENT_INTER_BOUT_INTERVAL_S = MOVEMENT_INTER_BOUT_INTERVAL_FRAMES / DEFAULT_FPS
 
 FILTER_FRAMES_NO_ANIMAL = True
 MIN_CONFIDENT_NODES_PER_FRAME = 3
@@ -67,6 +71,10 @@ def get_config_snapshot() -> dict:
         "movement_speed_median_window_frames": MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES,
         "movement_entry_debounce_frames": MOVEMENT_ENTRY_DEBOUNCE_FRAMES,
         "movement_exit_debounce_frames": MOVEMENT_EXIT_DEBOUNCE_FRAMES,
+        "min_movement_bout_duration_frames": MIN_MOVEMENT_BOUT_DURATION_FRAMES,
+        "movement_inter_bout_interval_frames": MOVEMENT_INTER_BOUT_INTERVAL_FRAMES,
+        "max_movement_per_frame_cm": MAX_MOVEMENT_PER_FRAME_CM,
+        "jump_filter_lookahead_frames": JUMP_FILTER_LOOKAHEAD_FRAMES,
         "min_movement_bout_duration_s": MIN_MOVEMENT_BOUT_DURATION_S,
         "trace_max_gap_frames": TRACE_MAX_GAP_FRAMES,
         "trace_smoothing_window": TRACE_SMOOTHING_WINDOW,

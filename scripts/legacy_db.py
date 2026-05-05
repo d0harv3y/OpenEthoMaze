@@ -87,8 +87,33 @@ except ImportError:
     HAS_CV2 = False
 
 
+def _set_legacy_paths(db_path: Optional[Path] = None) -> None:
+    """Set global legacy output paths, optionally overriding DB location."""
+    global LEGACY_DIR, LEGACY_DB, LEGACY_MANIFEST
+    if db_path is None:
+        return
+    LEGACY_DB = Path(db_path).expanduser().resolve()
+    LEGACY_DIR = LEGACY_DB.parent
+    LEGACY_MANIFEST = LEGACY_DIR / "trial_manifest_legacy.csv"
+
+
 def _ensure_legacy_dir() -> None:
     LEGACY_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _compact_h5_file(path: Path) -> None:
+    """Rewrite an HDF5 file into a compact copy and replace in-place."""
+    import h5py
+
+    tmp_path = Path(str(path) + ".compact_tmp")
+    if tmp_path.exists():
+        tmp_path.unlink()
+    with h5py.File(path, "r") as src, h5py.File(tmp_path, "w") as dst:
+        for k, v in src.attrs.items():
+            dst.attrs[k] = v
+        for key in src.keys():
+            src.copy(key, dst)
+    tmp_path.replace(path)
 
 
 def _get_video_frame_count(video_path: Path) -> Optional[int]:
@@ -317,6 +342,7 @@ def cmd_sync(
     update_labels: bool,
     no_backup: bool,
     dry_run: bool,
+    prune_unlabeled: bool,
 ) -> None:
     """Sync legacy DB and manifest with discovery; optionally prune and update labels."""
     from tqdm import tqdm
@@ -325,6 +351,7 @@ def cmd_sync(
         print("Dry run: no backup or DB writes.")
         print()
 
+    had_existing_db = LEGACY_DB.exists() and LEGACY_DB.stat().st_size > 0
     if not dry_run:
         _ensure_legacy_dir()
         if not no_backup and LEGACY_DB.exists():
@@ -347,6 +374,9 @@ def cmd_sync(
     print("Loading and applying treatment labels...")
     labels = load_treatment_labels(LABELS_PATH)
     apply_treatment_labels(result, labels)
+    labeled_animal_ids = {
+        key for key, label in labels.items() if getattr(label, "type", "animal_id") == "animal_id"
+    }
     print()
 
     discovery_key_set = {(t.animal_id, t.phase, t.session, t.trial) for t in result.trials}
@@ -442,6 +472,15 @@ def cmd_sync(
         aid for aid in {t.animal_id for t in to_prune}
         if not any(t.animal_id == aid for t in result.trials)
     }
+    if prune_unlabeled and not dry_run:
+        unlabeled_animals = {
+            aid
+            for aid in {t.animal_id for t in db_trials}
+            if labeled_animal_ids and aid not in labeled_animal_ids
+        }
+        if unlabeled_animals:
+            print(f"Pruning unlabeled animals (no row in treatment_labels.csv): {len(unlabeled_animals)}")
+            animals_to_remove |= unlabeled_animals
 
     if to_prune or animals_to_remove:
         if dry_run:
@@ -455,7 +494,7 @@ def cmd_sync(
                 delete_trial_group(LEGACY_DB, t)
             for aid in sorted(animals_to_remove):
                 delete_animal_group(LEGACY_DB, aid)
-            print(f"Pruned {len(to_prune)} trial(s), removed {len(animals_to_remove)} empty animal group(s).")
+            print(f"Pruned {len(to_prune)} trial(s), removed {len(animals_to_remove)} animal group(s).")
     else:
         print("Nothing to prune.")
 
@@ -494,6 +533,10 @@ def cmd_sync(
                     pass
         save_manifest_csv(result, LEGACY_MANIFEST)
         write_trial_manifest_rows(LEGACY_DB, result.trials)
+        if had_existing_db:
+            print("Compacting database file...")
+            _compact_h5_file(LEGACY_DB)
+            print("  Database compacted.")
         print(f"Manifest saved: {LEGACY_MANIFEST}")
     print(f"Sync complete: {LEGACY_DB}")
 
@@ -552,9 +595,15 @@ def cmd_run_inference(
 
     print(f"Running SLEAP-NN inference: {len(with_video)} trial(s), model={model_path}")
     if dry_run:
+        planned = 0
         for m in with_video:
             out = output_dir / m.video_path.with_suffix(".predictions.slp").name if output_dir else m.video_path.with_suffix(".predictions.slp")
+            if skip_existing and out.exists():
+                continue
             print(f"  {m.trial_key} -> {out}")
+            planned += 1
+        if planned == 0:
+            print("No trials would run (all outputs already exist).")
         return
 
     stats = {"success": 0, "failed": 0, "skipped": 0}
@@ -660,6 +709,12 @@ def main() -> int:
         description="Legacy VAST DB: init/sync from discovery + treatment_labels; run inference, pipeline, exports.",
         epilog="Outputs: outputs/legacy/vast_results_legacy.h5, trial_manifest_legacy.csv, exports/",
     )
+    parser.add_argument(
+        "--db-path",
+        type=Path,
+        default=None,
+        help="Path to legacy H5 database (default: E:\\vast_analysis\\vast_results_legacy.h5)",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     # init
@@ -671,6 +726,11 @@ def main() -> int:
     p_sync.add_argument("--update-labels", action="store_true", help="Add new IDs to treatment_labels.csv from discovery")
     p_sync.add_argument("--no-backup", action="store_true", help="Do not backup DB before sync")
     p_sync.add_argument("--dry-run", action="store_true", help="Only report what would be pruned")
+    p_sync.add_argument(
+        "--prune-unlabeled",
+        action="store_true",
+        help="Remove animal groups that have no row in treatment_labels.csv",
+    )
 
     # run-inference
     p_inf = sub.add_parser("run-inference", help="Run SLEAP-NN inference on selected trials (requires sleap-nn env)")
@@ -701,6 +761,7 @@ def main() -> int:
     p_exp.add_argument("--include-mistrials", action="store_true", help="Include mistrials in trial summary CSV")
 
     args = parser.parse_args()
+    _set_legacy_paths(args.db_path)
 
     if args.command == "init":
         cmd_init()
@@ -711,6 +772,7 @@ def main() -> int:
             update_labels=args.update_labels,
             no_backup=args.no_backup,
             dry_run=args.dry_run,
+            prune_unlabeled=args.prune_unlabeled,
         )
         return 0
 

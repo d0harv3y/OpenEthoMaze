@@ -10,6 +10,7 @@ uv run python -m maze.kpms.apply `
 
 uv run python scripts/build_kpms_training_exemplar_table.py `
   --model-dir E:\kpms\orm_kpms_v1 `
+  --results-h5 E:\kpms\orm_kpms_v1\results.h5 `
   --retain-all-sleap-frames
 
 uv run python scripts/render_trial_overlay.py `

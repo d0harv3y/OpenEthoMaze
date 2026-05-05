@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -14,18 +14,16 @@ from .radial_arm.geometry import (
 )
 
 
-def ram_uncalibrated(config: RadialArmControllerConfig) -> bool:
-    ram = config.radial_arm
-    return ram_derived_px_per_cm(ram.template, ram.calibration) <= 0.0
-
-
 def ram_walkable_mask_crop(
     config: RadialArmControllerConfig,
     frame_h: int,
     frame_w: int,
 ) -> Optional[Tuple[np.ndarray, int, int, int, int]]:
     """
-    Build a uint8 mask (255 = trackable) on the crop bbox, with exit hole subtracted.
+    Build a uint8 mask (255 = trackable) on the crop bbox.
+
+    Union of walkable template regions, then subtract a disk at each arm's hole
+    (backup tracking ignores all hole regions; trial exit uses ``exit_arm_index`` only).
 
     Returns ``(mask, x0, y0, x1, y1)`` in full-frame coordinates, or ``None`` if scale
     is not set or OpenCV polygons are empty.
@@ -47,7 +45,7 @@ def ram_walkable_mask_crop(
         arm_length_cm=tcfg.arm_length_cm,
         arm_width_cm=tcfg.arm_width_cm,
         arm_split_cm=tcfg.arm_split_cm,
-        hole_arm_index=tcfg.hole_arm_index,
+        exit_arm_index=int(ram.exit_arm_index),
         hole_radius_cm=tcfg.hole_radius_cm,
         hole_inset_from_arm_end_cm=tcfg.hole_inset_from_arm_end_cm,
     )
@@ -63,8 +61,6 @@ def ram_walkable_mask_crop(
 
     walk_keys = [k for k in polys if k != "hole"]
     pts_list = [np.asarray(polys[k], dtype=np.float64) for k in walk_keys if k in polys]
-    if "hole" in polys:
-        pts_list.append(np.asarray(polys["hole"], dtype=np.float64))
     if not pts_list:
         return None
     all_pts = np.vstack(pts_list)
@@ -95,12 +91,22 @@ def ram_walkable_mask_crop(
         cnt = (poly - np.array([[x0, y0]], dtype=np.float64)).astype(np.int32)
         cv2.fillPoly(mask, [cnt], 255)
 
-    if "hole" in polys:
-        hp = (np.asarray(polys["hole"], dtype=np.float64) - np.array([[x0, y0]], dtype=np.float64)).astype(
-            np.int32
+    for arm_i in range(8):
+        txy = exit_hole_xyr_px(
+            template,
+            exit_arm_index=arm_i,
+            center_x_px=cal.template_center_x_px,
+            center_y_px=cal.template_center_y_px,
+            rotation_deg=cal.template_rotation_deg,
+            px_per_cm=ppc,
         )
-        if hp.shape[0] >= 3:
-            cv2.fillPoly(mask, [hp], 0)
+        if txy is None or txy[2] <= 0:
+            continue
+        ex, ey, er = txy
+        cx_i = int(round(ex - x0))
+        cy_i = int(round(ey - y0))
+        r_i = int(max(1, round(er)))
+        cv2.circle(mask, (cx_i, cy_i), r_i, 0, -1)
 
     if int(np.max(mask)) == 0:
         return None
@@ -122,7 +128,7 @@ def ram_exit_hole_xyr_px(
         arm_length_cm=tcfg.arm_length_cm,
         arm_width_cm=tcfg.arm_width_cm,
         arm_split_cm=tcfg.arm_split_cm,
-        hole_arm_index=tcfg.hole_arm_index,
+        exit_arm_index=int(ram.exit_arm_index),
         hole_radius_cm=tcfg.hole_radius_cm,
         hole_inset_from_arm_end_cm=tcfg.hole_inset_from_arm_end_cm,
     )
@@ -151,7 +157,7 @@ def ram_template_polylines_image(
         arm_length_cm=tcfg.arm_length_cm,
         arm_width_cm=tcfg.arm_width_cm,
         arm_split_cm=tcfg.arm_split_cm,
-        hole_arm_index=tcfg.hole_arm_index,
+        exit_arm_index=int(ram.exit_arm_index),
         hole_radius_cm=tcfg.hole_radius_cm,
         hole_inset_from_arm_end_cm=tcfg.hole_inset_from_arm_end_cm,
     )
@@ -162,3 +168,38 @@ def ram_template_polylines_image(
         rotation_deg=cal.template_rotation_deg,
         px_per_cm=ppc,
     )
+
+
+def ram_all_arm_holes_xyr_px(
+    config: RadialArmControllerConfig,
+) -> Optional[List[Tuple[float, float, float]]]:
+    """Eight hole disks (x, y, r_px) in image space, one per arm, or None if uncalibrated."""
+    ram = config.radial_arm
+    tcfg = ram.template
+    cal = ram.calibration
+    ppc = ram_derived_px_per_cm(tcfg, cal)
+    if ppc <= 0.0:
+        return None
+    template = build_template_from_params(
+        center_midedge_to_midedge_cm=tcfg.center_midedge_to_midedge_cm,
+        arm_length_cm=tcfg.arm_length_cm,
+        arm_width_cm=tcfg.arm_width_cm,
+        arm_split_cm=tcfg.arm_split_cm,
+        exit_arm_index=int(ram.exit_arm_index),
+        hole_radius_cm=tcfg.hole_radius_cm,
+        hole_inset_from_arm_end_cm=tcfg.hole_inset_from_arm_end_cm,
+    )
+    out: list[tuple[float, float, float]] = []
+    for arm_i in range(8):
+        t = exit_hole_xyr_px(
+            template,
+            exit_arm_index=arm_i,
+            center_x_px=cal.template_center_x_px,
+            center_y_px=cal.template_center_y_px,
+            rotation_deg=cal.template_rotation_deg,
+            px_per_cm=ppc,
+        )
+        if t is None:
+            return None
+        out.append(t)
+    return out

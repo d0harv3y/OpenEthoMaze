@@ -17,6 +17,7 @@ from maze.core.h5_layout import open_db, write_feedback_table, write_xy_table
 
 from .shared_config import AcquisitionConfig
 from .radial_arm.config import RadialArmControllerConfig
+from .region_code import encode_region_code_bytes
 from .h5_writer import (
     init_database,
     ensure_trial_group,
@@ -55,7 +56,7 @@ class XYRow:
     centroid_y: float
     dist_to_exit_px: float
     trial_state: str  # "iti" | "wait" | "run"
-    in_exit_zone: bool
+    region_code: str
     valid: bool
     is_moving: bool = False
 
@@ -73,6 +74,9 @@ class TrialRecorder:
         config: AcquisitionConfig,
         run_mode: str = "habituation",
         video_fourcc: str = "mp4v",
+        seek_to_frame: int = 0,
+        virtual_source_video_path: Optional[Path] = None,
+        recording_ram_exit_arm_index: Optional[int] = None,
     ):
         self.output_dir = Path(output_dir)
         self.db_path = Path(db_path)
@@ -91,17 +95,29 @@ class TrialRecorder:
         self._duty_m: List[float] = []
         self._start_time: Optional[float] = None
         self._fps: float = 30.0
+        self._seek_to_frame = int(seek_to_frame)
+        self._virtual_source_video_path = (
+            Path(virtual_source_video_path).resolve()
+            if virtual_source_video_path is not None
+            else None
+        )
+        self._recording_ram_exit_arm_index: Optional[int] = recording_ram_exit_arm_index
 
     def start(self, frame_shape: tuple, fps: float = 30.0) -> Optional[Path]:
         """Start recording; return final video path. Writes to a temp file until stop() to avoid duplicate/partial-file issues (e.g. preview).
         Tries avc1 first (best for browser/Cursor preview); falls back to mp4v with no error if avc1 fails (e.g. OpenH264 missing). No extra installs.
         """
-        if not HAS_CV2:
-            return None
         self._fps = fps
         self._start_time = time.monotonic()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         base = f"{self.animal_id}_{self.session_id}_{self.trial}"
+        if self._virtual_source_video_path is not None:
+            self._video_path = self._virtual_source_video_path
+            self._video_path_temp = None
+            self._video_writer = None
+            return self._video_path
+        if not HAS_CV2:
+            return None
         self._video_path = self.output_dir / f"{base}.mp4"
         self._video_path_temp = self.output_dir / f"{base}_recording.mp4"
         h, w = frame_shape[0], frame_shape[1]
@@ -145,7 +161,7 @@ class TrialRecorder:
         y_px: float,
         dist_to_exit_px: float,
         trial_state: str,
-        in_exit_zone: bool,
+        region_code: str,
         valid: bool,
         duty_pct: float,
         spot_xy: Optional[Tuple[float, float]] = None,
@@ -172,7 +188,7 @@ class TrialRecorder:
                 centroid_y=float(centroid_xy[1]) if centroid_xy is not None else np.nan,
                 dist_to_exit_px=dist_to_exit_px,
                 trial_state=trial_state,
-                in_exit_zone=in_exit_zone,
+                region_code=region_code,
                 valid=valid,
             )
         )
@@ -209,7 +225,10 @@ class TrialRecorder:
         if self._video_writer is not None:
             self._video_writer.release()
             self._video_writer = None
-        if self._video_path_temp is not None and self._video_path_temp.exists():
+        if (
+            self._video_path_temp is not None
+            and self._video_path_temp.exists()
+        ):
             if self._video_path is not None:
                 choice = None
                 if self._video_path.exists():
@@ -236,6 +255,8 @@ class TrialRecorder:
                     self._video_path = new_path
                 else:
                     self._video_path_temp.replace(self._video_path)
+        elif self._virtual_source_video_path is not None:
+            self._video_path = self._virtual_source_video_path
         self._video_path_temp = None
         init_database(self.db_path, arena_type=self.config.arena_type)
         run_phase = self.config.run_phase or "habituation"
@@ -267,15 +288,14 @@ class TrialRecorder:
                 run_phase=run_phase,
                 run_mode=run_mode,
             )
-            arena = self.config.arena
-            # Align pipeline band splitting with controller state labels.
-            # Use the first recorded frame whose state is "run" as trial_start_frame.
-            # This keeps controller and legacy processing on the same pipeline path.
-            trial_start_frame = 0
-            for i, row in enumerate(self._xy_rows):
+            # trial_start_frame: absolute source frame index of first "run" row.
+            # seek_to_frame: absolute frame where analysis window starts (virtual scrubber; 0 live).
+            trial_start_frame_abs = 0
+            for row in self._xy_rows:
                 if (row.trial_state or "").strip().lower() == "run":
-                    trial_start_frame = i
+                    trial_start_frame_abs = int(row.frame_index)
                     break
+            seek_to_frame = int(self._seek_to_frame)
             if self.config.arena_type == "radial_arm" and isinstance(
                 self.config, RadialArmControllerConfig
             ):
@@ -285,9 +305,12 @@ class TrialRecorder:
                     timestamp=timestamp_str,
                     phase=run_phase,
                     run_mode=run_mode,
-                    trial_start_frame=trial_start_frame,
+                    trial_start_frame=trial_start_frame_abs,
+                    seek_to_frame=seek_to_frame,
+                    ram_exit_arm_index=self._recording_ram_exit_arm_index,
                 )
             else:
+                arena = self.config.arena
                 write_trial_settings(
                     g,
                     arena_radius_px=arena.radius_px,
@@ -300,7 +323,9 @@ class TrialRecorder:
                     exit_x=exit_x_px,
                     exit_y=exit_y_px,
                     exit_radius_px=arena.exit_radius_cm * arena.px_per_cm,
-                    trial_start_frame=trial_start_frame,
+                    trial_start_frame=trial_start_frame_abs,
+                    seek_to_frame=seek_to_frame,
+                    analysis_trajectory=self.config.analysis_trajectory,
                 )
             n = len(self._xy_rows)
             duration_s = self._xy_rows[-1].t_s if self._xy_rows else 0.0
@@ -316,7 +341,7 @@ class TrialRecorder:
                         arr[i]["t_s"] = r.t_s
                         arr[i]["dist_to_exit_px"] = r.dist_to_exit_px
                         arr[i]["trial_state"] = r.trial_state.encode("utf-8")
-                        arr[i]["in_exit_zone"] = 1 if r.in_exit_zone else 0
+                        arr[i]["region_code"] = encode_region_code_bytes(r.region_code)
                         arr[i]["is_moving"] = 1 if r.is_moving else 0
 
                     # Point-specific coordinates/validity

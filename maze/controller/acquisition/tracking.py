@@ -43,27 +43,6 @@ except ImportError:
 SleapStatus = Literal["ok", "no_path", "not_single_instance", "load_failed"]
 
 
-def downscale_image_for_tracking(
-    image: np.ndarray,
-    scale: float,
-) -> tuple[np.ndarray, float, float]:
-    """
-    Resize ``image`` for faster inference. Returns ``(small, inv_x, inv_y)`` where
-    full-space x = x_small * inv_x (same for y).
-    """
-    if not HAS_CV2 or scale >= 0.999 or image.size == 0:
-        return image, 1.0, 1.0
-    h, w = int(image.shape[0]), int(image.shape[1])
-    sw = max(1, int(round(float(w) * float(scale))))
-    sh = max(1, int(round(float(h) * float(scale))))
-    if sw == w and sh == h:
-        return image, 1.0, 1.0
-    small = cv2.resize(image, (sw, sh), interpolation=cv2.INTER_AREA)
-    inv_x = float(w) / float(sw)
-    inv_y = float(h) / float(sh)
-    return small, inv_x, inv_y
-
-
 def scale_tracking_result_to_image_space(
     res: TrackingResult,
     inv_x: float,
@@ -195,23 +174,23 @@ def _adaptive_threshold_com_impl(
     # Selection by mode
     if selection_mode == "largest":
         best = max(candidates, key=lambda t: t[2])
-        best_cx, best_cy, best_area, best_contour = best
+        best_cx, best_cy, _, best_contour = best
     elif selection_mode == "closest" and last_xy is not None:
         lx, ly = last_xy
         best = min(candidates, key=lambda t: (t[0] - lx) ** 2 + (t[1] - ly) ** 2)
-        best_cx, best_cy, best_area, best_contour = best
+        best_cx, best_cy, _, best_contour = best
     elif selection_mode == "closest_else_largest" and last_xy is not None:
         lx, ly = last_xy
         best = min(candidates, key=lambda t: (t[0] - lx) ** 2 + (t[1] - ly) ** 2)
-        best_cx, best_cy, best_area, best_contour = best
+        best_cx, best_cy, _, best_contour = best
         if max_jump_px > 0:
             d = ((best_cx - lx) ** 2 + (best_cy - ly) ** 2) ** 0.5
             if d > max_jump_px:
                 best = max(candidates, key=lambda t: t[2])
-                best_cx, best_cy, best_area, best_contour = best
+                best_cx, best_cy, _, best_contour = best
     else:
         best = max(candidates, key=lambda t: t[2])
-        best_cx, best_cy, best_area, best_contour = best
+        best_cx, best_cy, _, best_contour = best
     if not return_blob_mask:
         return (best_cx, best_cy, True, None)
     blob_mask = np.zeros(gray.shape, dtype=np.uint8)
@@ -443,15 +422,34 @@ class HybridTracker:
                         "Install PyTorch with CUDA (e.g. pip install torch --index-url https://download.pytorch.org/whl/cu121) to use GPU."
                     )
 
-                # Pass empty preprocess_config so sleap-nn never sees None
-                # (avoids 'NoneType' has no attribute 'items')
+                # sleap-nn in this environment errors on preprocess_config=None, so
+                # explicitly pass the model's preprocessing block from training_config.
+                # This preserves inference-time parity (resize/channels) with GUI runs.
                 from omegaconf import OmegaConf
+
+                preprocess_cfg = OmegaConf.create({})
+                train_cfg_path = path / "training_config.yaml"
+                if train_cfg_path.exists():
+                    try:
+                        train_cfg = OmegaConf.load(str(train_cfg_path))
+                        pre = (
+                            train_cfg.get("data_config", {})
+                            .get("preprocessing", {})
+                        )
+                        preprocess_cfg = OmegaConf.create(pre)
+                    except Exception:
+                        _LOG.warning(
+                            "SLEAP: failed to load preprocessing from %s; "
+                            "falling back to empty preprocess config",
+                            train_cfg_path,
+                            exc_info=True,
+                        )
 
                 predictor = SingleInstancePredictor.from_trained_models(
                     confmap_ckpt_path=str(path),
                     device=device,
                     batch_size=1,
-                    preprocess_config=OmegaConf.create({}),
+                    preprocess_config=preprocess_cfg,
                 )
 
                 self._sleap_predictor = predictor
@@ -535,13 +533,19 @@ class HybridTracker:
             pred = self._sleap_predictor
             cfg = pred.preprocess_config or {}
             device = next(pred.confmap_model.parameters()).device
+            # Enforce grayscale input for ORM controller inference.
+            image_sleap = image
+            if HAS_CV2 and image_sleap.ndim == 3:
+                image_sleap = cv2.cvtColor(
+                    np.asarray(image_sleap, dtype=np.uint8), cv2.COLOR_BGR2GRAY
+                )
             # (1, C, H, W)
             def ensure_4d(t: "torch.Tensor") -> "torch.Tensor":
                 if t.dim() == 3:
                     return t.unsqueeze(0)
                 return t
 
-            img = _numpy_to_tensor_batch(image).to(device)
+            img = _numpy_to_tensor_batch(image_sleap).to(device)
             if cfg.get("ensure_rgb") and img.shape[1] != 3:
                 img = img.repeat(1, 3, 1, 1)
             elif cfg.get("ensure_grayscale") and img.shape[1] != 1:
@@ -601,14 +605,21 @@ class HybridTracker:
             _LOG.debug("SLEAP: _predict_frame_sleap exception: %s", e, exc_info=True)
             return None
 
-    def track(self, image: np.ndarray) -> TrackingResult:
+    def track(
+        self,
+        image: np.ndarray,
+        *,
+        sleap_image: Optional[np.ndarray] = None,
+    ) -> TrackingResult:
         if not self._run_fallback:
-            return self._track_sleap_only(image)
+            # In SLEAP-only mode, always prefer the explicit SLEAP frame when provided.
+            return self._track_sleap_only(image, sleap_image=sleap_image)
 
         # Always compute fallback so "in-range" can be recorded continuously.
         fallback_res = self._fallback.track(image)
         if self._ensure_sleap() and self._sleap_predictor is not None:
-            res = self._predict_frame_sleap(image)
+            sleap_input = image if sleap_image is None else sleap_image
+            res = self._predict_frame_sleap(sleap_input)
             if res is not None:
                 x, y, conf, pose_xy, pose_scores, inference_time_s = res
                 # Per-node validity: keep nodes above threshold, reject others
@@ -652,11 +663,17 @@ class HybridTracker:
             _LOG.debug("SLEAP: not available (_ensure_sleap=False or no predictor), using fallback")
         return fallback_res
 
-    def _track_sleap_only(self, image: np.ndarray) -> TrackingResult:
+    def _track_sleap_only(
+        self,
+        image: np.ndarray,
+        *,
+        sleap_image: Optional[np.ndarray] = None,
+    ) -> TrackingResult:
         """SLEAP inference only: no adaptive-threshold fallback or in-range stream."""
         if not (self._ensure_sleap() and self._sleap_predictor is not None):
             return TrackingResult(0.0, 0.0, False, "sleap", confidence=0.0)
-        res = self._predict_frame_sleap(image)
+        sleap_input = image if sleap_image is None else sleap_image
+        res = self._predict_frame_sleap(sleap_input)
         if res is None:
             return TrackingResult(0.0, 0.0, False, "sleap", confidence=0.0)
         _x, _y, conf, pose_xy, pose_scores, inference_time_s = res
@@ -817,7 +834,7 @@ def _tracking_worker_loop(
     running_holder: list,
 ) -> None:
     """
-    Background thread: dequeue ``(frame, tracker, inv_x, inv_y, fh, fw)``, run ``track``,
+    Background thread: dequeue ``(frame, sleap_frame, tracker, inv_x, inv_y, fh, fw)``, run ``track``,
     map coordinates back to full crop space when ``inv`` differs from 1.
     """
     while running_holder[0]:
@@ -827,11 +844,18 @@ def _tracking_worker_loop(
             continue
         if item is None:
             break
-        frame, tracker, inv_x, inv_y, fh, fw = item
+        frame, sleap_frame, tracker, inv_x, inv_y, fh, fw = item
         if frame is None or tracker is None:
             continue
         try:
-            res = tracker.track(frame)
+            if sleap_frame is None:
+                res = tracker.track(frame)
+            else:
+                try:
+                    res = tracker.track(frame, sleap_image=sleap_frame)
+                except TypeError:
+                    # Fallback-only trackers don't accept a separate SLEAP image.
+                    res = tracker.track(frame)
             if res is not None:
                 res = scale_tracking_result_to_image_space(
                     res, float(inv_x), float(inv_y), (int(fh), int(fw))
@@ -893,13 +917,6 @@ class TrackingController:
         self._enable_sleap: bool = True
 
     # Internal helpers -----------------------------------------------------------
-
-    def _infer_scale_for_config(self) -> float:
-        try:
-            s = float(getattr(self._config, "track_infer_scale", 1.0))
-        except (TypeError, ValueError):
-            return 1.0
-        return 0.5 if 0.4 <= s <= 0.6 else 1.0
 
     def _ensure_tracker(self) -> object:
         """Build or refresh the cached tracker and return it."""
@@ -1013,16 +1030,23 @@ class TrackingController:
         self._last_tracking_result = None
         self._track_frame_counter = 0
 
-    def submit_frame(self, image: np.ndarray, now_s: float) -> None:
+    def submit_frame(
+        self,
+        image: np.ndarray,
+        now_s: float,
+        *,
+        sleap_image: Optional[np.ndarray] = None,
+    ) -> None:
         """
         Submit a frame for tracking.
 
         Parameters
         ----------
         image:
-            The current camera frame as a numpy array. For consistency with the
-            existing implementation, this should be the *raw* frame before any
-            display-only brightness/contrast adjustments.
+            Frame for fallback tracking (may be masked/cropped).
+        sleap_image:
+            Optional full raw frame for SLEAP inference. When provided, SLEAP
+            runs on this frame while fallback still uses ``image``.
         now_s:
             Timestamp (e.g. `time.monotonic()`) corresponding to this frame.
 
@@ -1031,16 +1055,31 @@ class TrackingController:
         `config.sleap_every_n`) and stores the resulting `TrackingResult`.
         """
         tracker = self._ensure_tracker()
-        scale = self._infer_scale_for_config()
         img_arr = np.asarray(image, dtype=np.uint8)
-        small, inv_x, inv_y = downscale_image_for_tracking(img_arr, scale)
+        sleap_arr = (
+            np.asarray(sleap_image, dtype=np.uint8)
+            if sleap_image is not None
+            else None
+        )
+        inv_x, inv_y = 1.0, 1.0
+        small = img_arr
         fh, fw = int(img_arr.shape[0]), int(img_arr.shape[1])
 
         if self._async_enabled:
             queue_was_full = False
             try:
                 # Worker owns the copy so the caller can safely reuse its array.
-                self._queue.put_nowait((small.copy(), tracker, inv_x, inv_y, fh, fw))
+                self._queue.put_nowait(
+                    (
+                        small.copy(),
+                        (sleap_arr.copy() if sleap_arr is not None else None),
+                        tracker,
+                        inv_x,
+                        inv_y,
+                        fh,
+                        fw,
+                    )
+                )
             except queue.Full:
                 queue_was_full = True
                 if now_s - self._queue_full_log_last_s >= 1.0:
@@ -1070,7 +1109,13 @@ class TrackingController:
             or (self._track_frame_counter % run_every_n == 0)
         )
         if do_track:
-            res = tracker.track(small)
+            if sleap_arr is None:
+                res = tracker.track(small)
+            else:
+                try:
+                    res = tracker.track(small, sleap_image=sleap_arr)
+                except TypeError:
+                    res = tracker.track(small)
             if res is not None:
                 res = scale_tracking_result_to_image_space(res, inv_x, inv_y, (fh, fw))
             self._last_tracking_result = res
@@ -1082,18 +1127,6 @@ class TrackingController:
         with self._lock:
             self._result_holder[0] = res
             self._result_time_holder[0] = now_s
-
-    def get_latest_result(self) -> Optional[TrackingResult]:
-        """
-        Return the most recent `TrackingResult`, if any.
-
-        For async mode, this returns the last result produced by the worker
-        thread. For sync mode, this returns the result computed from the most
-        recent call to `submit_frame`.
-        """
-        with self._lock:
-            res = self._result_holder[0]
-        return res
 
     def get_overlay_state(self, now_s: Optional[float] = None) -> dict[str, Any]:
         """

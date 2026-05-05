@@ -76,15 +76,14 @@ class ExitAngleConfig:
     n_angles: int = 4
     offset_deg: float = -30.0
     step_deg: float = 20.0
+    #: When session seed is manual: default 0-based exit angle index for new padded slots.
+    default_manual_exit_index: int = 0
 
     def angle_deg(self, index: int) -> float:
         """Return angle in degrees for exit index 0..n_angles-1."""
         if index < 0 or index >= self.n_angles:
             raise IndexError(f"Exit index must be 0..{self.n_angles - 1}")
         return self.offset_deg + index * self.step_deg
-
-    def all_angles_deg(self) -> list[float]:
-        return [self.angle_deg(i) for i in range(self.n_angles)]
 
 
 @dataclass

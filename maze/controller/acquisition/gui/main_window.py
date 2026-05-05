@@ -8,7 +8,7 @@ from __future__ import annotations
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -132,6 +132,14 @@ except ImportError:
     SectionWithSettings = None
     HAS_SETTINGS_DIALOG = False
 
+try:
+    from .analysis_settings_dialog import AnalysisSettingsDialog
+
+    HAS_ANALYSIS_SETTINGS_DIALOG = True
+except ImportError:
+    AnalysisSettingsDialog = None
+    HAS_ANALYSIS_SETTINGS_DIALOG = False
+
 class MainWindow(QMainWindow):
     """Main window: profile, calibration, run, export."""
 
@@ -183,7 +191,11 @@ class MainWindow(QMainWindow):
         self._run_timer: Optional[QTimer] = None
         self._run_timer_interval_ms = 100
         self._run_timer_last_s: Optional[float] = None
+        # Virtual duration override: trial elapsed tracks video frame time (see _compute_trial_clock_virtual_dt_s).
+        self._prev_trial_running_virtual_clock: bool = False
+        self._virtual_trial_clock_last_fi: Optional[int] = None
         self._analysis_worker: Optional["AnalysisWorker"] = None
+        self._analysis_settings_dialog = None
         self._central = QWidget()
         self.setCentralWidget(self._central)
         layout = QVBoxLayout(self._central)
@@ -250,61 +262,52 @@ class MainWindow(QMainWindow):
         self._camera_label.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Sunken)
         self._camera_label.setMouseTracking(True)
         camera_ly.addWidget(self._camera_label)
-        # Set arena checkbox and tracking indicators on one row
-        arena_track_row = QHBoxLayout()
-        roi_click_text = (
-            "Place RAM template from next click on preview"
-            if self._task_mode == "ram"
-            else "Set arena center from next click on preview"
-        )
-        self._roi_set_center_click = QCheckBox(roi_click_text)
-        arena_track_row.addWidget(self._roi_set_center_click)
-        arena_track_row.addWidget(QLabel("Source:"))
-        self._track_source_label = QLabel("—")
-        self._track_source_label.setToolTip("Current frame: SLEAP or Fallback")
-        arena_track_row.addWidget(self._track_source_label)
-        arena_track_row.addWidget(QLabel("Display FPS:"))
-        self._track_display_fps_label = QLabel("—")
-        self._track_display_fps_label.setToolTip("Preview frame rate")
-        arena_track_row.addWidget(self._track_display_fps_label)
-        arena_track_row.addWidget(QLabel("Frame:"))
-        self._frame_counter_label = QLabel("—")
-        self._frame_counter_label.setToolTip("Virtual/preview frame index (and total if known)")
-        arena_track_row.addWidget(self._frame_counter_label)
-        arena_track_row.addWidget(QLabel("Gray (hover):"))
+        # Preview click-to-set (arena center / RAM template / backup range) lives in Settings.
+        arena_track_subrow = QHBoxLayout()
+        arena_track_subrow.addWidget(QLabel("Gray (hover):"))
         self._intensity_hover_label = QLabel("—")
         self._intensity_hover_label.setMinimumWidth(36)
         self._intensity_hover_label.setToolTip(
             "Grayscale 0–255 under cursor (same as backup tracking). Move over live preview."
         )
-        arena_track_row.addWidget(self._intensity_hover_label)
-        # Backup range and video controls are split into a second row beneath arena_track_row
-        arena_track_subrow = QHBoxLayout()
-        self._range_from_click_cb = QCheckBox("Set backup range from next click")
-        self._range_from_click_cb.setToolTip(
-            "Next click on preview samples a small neighborhood and sets Tracking → Range low/high."
-        )
-        arena_track_subrow.addWidget(self._range_from_click_cb)
-        arena_track_subrow.addWidget(QLabel("±δ"))
-        self._range_pick_delta_spin = QSpinBox()
-        self._range_pick_delta_spin.setRange(0, 80)
-        self._range_pick_delta_spin.setValue(12)
-        self._range_pick_delta_spin.setToolTip("Half-width added to neighborhood min/max for backup range.")
-        arena_track_subrow.addWidget(self._range_pick_delta_spin)
-        arena_track_subrow.addWidget(QLabel("nbhd"))
-        self._range_pick_half_spin = QSpinBox()
-        self._range_pick_half_spin.setRange(0, 15)
-        self._range_pick_half_spin.setValue(2)
-        self._range_pick_half_spin.setToolTip("Neighborhood half-size in pixels (patch side = 2×nbhd+1).")
-        arena_track_subrow.addWidget(self._range_pick_half_spin)
-        arena_track_subrow.addWidget(QLabel("Video:"))
+        arena_track_subrow.addWidget(self._intensity_hover_label)
+        arena_track_subrow.addStretch()
+
+        # Video and frame indicators are moved to a third row
+        arena_track_third_row = QHBoxLayout()
+        arena_track_third_row.addWidget(QLabel("Tracking Source:"))
+        self._track_source_label = QLabel("—")
+        self._track_source_label.setToolTip("Current frame: SLEAP or Fallback")
+        arena_track_third_row.addWidget(self._track_source_label)
+        arena_track_third_row.addWidget(QLabel("Display FPS:"))
+        self._track_display_fps_label = QLabel("—")
+        self._track_display_fps_label.setToolTip("Preview frame rate")
+        arena_track_third_row.addWidget(self._track_display_fps_label)
+        arena_track_third_row.addWidget(QLabel("Video:"))
         self._video_filename_label = QLabel("—")
         self._video_filename_label.setToolTip("Current virtual video filename")
-        arena_track_subrow.addWidget(self._video_filename_label)
-        arena_track_subrow.addStretch()
- 
-        camera_ly.addLayout(arena_track_row)
+        arena_track_third_row.addWidget(self._video_filename_label)
+        arena_track_third_row.addWidget(QLabel("Frame:"))
+        self._frame_counter_label = QLabel("—")
+        self._frame_counter_label.setToolTip("Virtual/preview frame index (and total if known)")
+        arena_track_third_row.addWidget(self._frame_counter_label)
+        arena_track_third_row.addStretch()
+
         camera_ly.addLayout(arena_track_subrow)
+        camera_ly.addLayout(arena_track_third_row)
+        self._virtual_scrub_row_w = QWidget()
+        scrub_ly = QHBoxLayout(self._virtual_scrub_row_w)
+        scrub_ly.setContentsMargins(0, 0, 0, 0)
+        scrub_ly.addWidget(QLabel("Video position:"))
+        self._virtual_scrub_slider = QSlider(Qt.Orientation.Horizontal)
+        self._virtual_scrub_slider.setMinimum(0)
+        self._virtual_scrub_slider.setMaximum(0)
+        self._virtual_scrub_slider.valueChanged.connect(self._on_virtual_scrub_changed)
+        scrub_ly.addWidget(self._virtual_scrub_slider)
+        self._virtual_scrub_label = QLabel("0 / 0")
+        scrub_ly.addWidget(self._virtual_scrub_label)
+        self._virtual_scrub_row_w.setVisible(False)
+        camera_ly.addWidget(self._virtual_scrub_row_w)
         layout.addWidget(camera_section)
         if SectionWithSettings:
             camera_section.settings_clicked.connect(
@@ -564,7 +567,6 @@ class MainWindow(QMainWindow):
                     track_async=self._config.track_async,
                     track_enable_backup=self._config.track_enable_backup,
                     track_enable_sleap=self._config.track_enable_sleap,
-                    track_infer_scale=float(getattr(self._config, "track_infer_scale", 1.0)),
                     track_sleap_path=self._config.sleap_model_path or "",
                     track_confidence=self._config.sleap_confidence_pct,
                     track_sleap_every_n=self._config.sleap_every_n,
@@ -635,7 +637,8 @@ class MainWindow(QMainWindow):
                 return
         self.close()
 
-    _SETTINGS_TAB_NAMES = ("Task", "Session", "Animals", "Tracking")
+    _SETTINGS_TAB_NAMES_VAST = ("Tracking", "Task", "Session", "Animals", "Trial schedule")
+    _SETTINGS_TAB_NAMES_RAM = ("Tracking", "Task", "Session", "Animals", "Trial schedule")
 
     def _on_settings(self) -> None:
         if not HAS_SETTINGS_DIALOG or SettingsDialog is None:
@@ -659,18 +662,52 @@ class MainWindow(QMainWindow):
         dlg.raise_()
         self._sync_settings_apply_enabled()
 
+    def _on_analysis_settings(self) -> None:
+        if not HAS_ANALYSIS_SETTINGS_DIALOG or AnalysisSettingsDialog is None:
+            self.statusBar().showMessage("Analysis settings dialog unavailable.")
+            return
+        dlg = getattr(self, "_analysis_settings_dialog", None)
+        if dlg is not None and dlg.isVisible():
+            dlg.raise_()
+            dlg.activateWindow()
+            return
+        dlg = AnalysisSettingsDialog(
+            self._config.analysis_trajectory,
+            self,
+            on_apply=self._apply_analysis_trajectory_config,
+        )
+        self._analysis_settings_dialog = dlg
+        dlg.show()
+        dlg.raise_()
+
+    def _apply_analysis_trajectory_config(self, params) -> None:
+        self._config.analysis_trajectory = params
+        self.statusBar().showMessage("Applied analysis settings.")
+
     def _on_open_settings_to_tab(self, tab_name: str | int) -> None:
         if not HAS_SETTINGS_DIALOG or SettingsDialog is None:
             self.statusBar().showMessage("Settings dialog unavailable.")
             return
         if isinstance(tab_name, str):
             normalized = tab_name.strip().lower()
-            tab_index = {
-                "task": 0,
-                "session": 1,
-                "animals": 2,
-                "tracking": 3,
-            }.get(normalized, 0)
+            if self._task_mode == "vast":
+                tab_index = {
+                    "tracking": 0,
+                    "task": 1,
+                    "session": 2,
+                    "animals": 3,
+                    "trial_schedule": 4,
+                    "trial schedule": 4,
+                }.get(normalized, 0)
+            else:
+                tab_index = {
+                    "tracking": 0,
+                    "task": 1,
+                    "session": 2,
+                    "animals": 3,
+                    "trial_schedule": 4,
+                    "trial schedule": 4,
+                }.get(normalized, 0)
         else:
             tab_index = int(tab_name)
         dlg = getattr(self, "_settings_dialog", None)
@@ -685,7 +722,12 @@ class MainWindow(QMainWindow):
             dlg.accepted.connect(lambda: (self._apply_config_to_ui(), self.statusBar().showMessage("Settings applied.")))
         else:
             dlg.set_current_tab(tab_index)
-        tab_name = self._SETTINGS_TAB_NAMES[tab_index] if 0 <= tab_index < len(self._SETTINGS_TAB_NAMES) else "Settings"
+        names = (
+            self._SETTINGS_TAB_NAMES_VAST
+            if self._task_mode == "vast"
+            else self._SETTINGS_TAB_NAMES_RAM
+        )
+        tab_name = names[tab_index] if 0 <= tab_index < len(names) else "Settings"
         self.statusBar().showMessage(f"Settings → {tab_name}")
         dlg.show()
         dlg.raise_()
@@ -740,7 +782,10 @@ class MainWindow(QMainWindow):
                                 self._intensity_hover_label.setText(str(gv))
                 return False
             if event.type() == QEvent.Type.MouseButtonPress:
-                if self._roi_set_center_click.isChecked() and self._camera_controller is not None:
+                if (
+                    bool(getattr(self._config, "preview_set_center_from_next_click", False))
+                    and self._camera_controller is not None
+                ):
                     size = self._camera_controller.get_last_preview_size()
                     if size is not None:
                         iw, ih = size
@@ -763,9 +808,21 @@ class MainWindow(QMainWindow):
                                 self._config.arena.arena_center_x_px = float(ix)
                                 self._config.arena.arena_center_y_px = float(iy)
                                 message = f"Arena center set to ({ix}, {iy})"
-                            self._roi_set_center_click.setChecked(False)
+                            self._config.preview_set_center_from_next_click = False
                             self.statusBar().showMessage(message)
-                elif self._range_from_click_cb.isChecked() and self._camera_controller is not None:
+                            dlg = getattr(self, "_settings_dialog", None)
+                            if dlg is not None and hasattr(dlg, "sync_preview_center_checkbox_from_config"):
+                                dlg.sync_preview_center_checkbox_from_config()
+                            if (
+                                self._task_mode == "ram"
+                                and dlg is not None
+                                and hasattr(dlg, "sync_ram_template_center_widgets")
+                            ):
+                                dlg.sync_ram_template_center_widgets()
+                elif (
+                    bool(getattr(self._config.fallback_tracking, "range_from_next_click", False))
+                    and self._camera_controller is not None
+                ):
                     size = self._camera_controller.get_last_preview_size()
                     frm = self._last_eyedropper_frame_bgr
                     if size is not None and frm is not None:
@@ -786,8 +843,9 @@ class MainWindow(QMainWindow):
                                 gray_neighborhood_patch_bgr,
                             )
 
-                            half = max(0, int(self._range_pick_half_spin.value()))
-                            delta = max(0, int(self._range_pick_delta_spin.value()))
+                            ft = self._config.fallback_tracking
+                            half = max(0, int(getattr(ft, "range_pick_half", 2)))
+                            delta = max(0, int(getattr(ft, "range_pick_delta", 12)))
                             patch = gray_neighborhood_patch_bgr(frm, int(ix), int(iy), half)
                             if patch is not None:
                                 lo, hi = fallback_range_from_gray_patch(patch, delta)
@@ -798,15 +856,21 @@ class MainWindow(QMainWindow):
                                 )
                             else:
                                 self.statusBar().showMessage("Could not sample neighborhood for range.")
-                            self._range_from_click_cb.setChecked(False)
+                            self._config.fallback_tracking.range_from_next_click = False
                             dlg = getattr(self, "_settings_dialog", None)
-                            if (
-                                dlg is not None
-                                and dlg.isVisible()
-                                and hasattr(dlg, "sync_fallback_intensity_range_widgets")
-                            ):
+                            if dlg is not None and hasattr(dlg, "sync_fallback_intensity_range_widgets"):
                                 dlg.sync_fallback_intensity_range_widgets()
         return super().eventFilter(obj, event)
+
+    def _on_virtual_scrub_changed(self, value: int) -> None:
+        if getattr(self._trial_controller, "run_active", False):
+            return
+        if self._camera_controller is None:
+            return
+        self._camera_controller.seek_video_frame(int(value))
+        self._virtual_has_initial_frame = False
+        self._virtual_cached_frame_raw = None
+        self._virtual_cached_frame_index = None
 
     def _on_camera_tick(self) -> None:
         if self._camera_controller is None:
@@ -883,6 +947,23 @@ class MainWindow(QMainWindow):
                             self._frame_counter_label.setText(f"{cur_1b}/—")
                 else:
                     self._frame_counter_label.setText("—")
+                if hasattr(self, "_virtual_scrub_row_w") and virtual_mode:
+                    cur_idx, total = self._camera_controller.get_last_frame_info()
+                    if total is not None and total > 0:
+                        self._virtual_scrub_row_w.setVisible(True)
+                        self._virtual_scrub_slider.blockSignals(True)
+                        self._virtual_scrub_slider.setMaximum(max(0, int(total) - 1))
+                        if not self._virtual_scrub_slider.isSliderDown():
+                            v = 0 if (cur_idx is None or cur_idx < 0) else int(cur_idx)
+                            v = max(0, min(self._virtual_scrub_slider.maximum(), v))
+                            self._virtual_scrub_slider.setValue(v)
+                        self._virtual_scrub_slider.blockSignals(False)
+                        cur_disp = self._virtual_scrub_slider.value()
+                        self._virtual_scrub_label.setText(f"{cur_disp + 1} / {total}")
+                    else:
+                        self._virtual_scrub_row_w.setVisible(False)
+                elif hasattr(self, "_virtual_scrub_row_w"):
+                    self._virtual_scrub_row_w.setVisible(False)
             _tp = time.perf_counter()
             # Raw frame for inference (no brightness/contrast); display uses a copy with adjustments
             flip_now = self._camera_flip.isChecked()
@@ -926,14 +1007,28 @@ class MainWindow(QMainWindow):
             in_range_xy_res = None
             ram_polys_preview = None
             ram_exit_preview = None
+            ram_all_holes_preview = None
+            ram_escape_arm_preview = 0
             if self._task_mode == "ram" and isinstance(self._config, RadialArmControllerConfig):
-                from ..ram_preview_mask import ram_exit_hole_xyr_px, ram_template_polylines_image
+                from ..ram_preview_mask import (
+                    ram_all_arm_holes_xyr_px,
+                    ram_exit_hole_xyr_px,
+                    ram_template_polylines_image,
+                )
 
                 ram_polys_preview = ram_template_polylines_image(self._config)
                 ram_exit_preview = ram_exit_hole_xyr_px(self._config)
+                ram_all_holes_preview = ram_all_arm_holes_xyr_px(self._config)
+                sm = tc.get_state_machine() if tc is not None else None
+                if sm is not None:
+                    ram_escape_arm_preview = int(getattr(sm, "exit_arm_index", 0))
+                else:
+                    ram_escape_arm_preview = int(self._config.radial_arm.exit_arm_index)
             ram_template_ms = (time.perf_counter() - _tp) * 1000.0
             _tp = time.perf_counter()
             if show_track and self._tracking_controller is not None:
+                enable_backup = bool(getattr(self._config, "track_enable_backup", True))
+                enable_sleap = bool(getattr(self._config, "track_enable_sleap", True))
                 to_track = img_raw  # inference sees raw image (no brightness/contrast)
                 track_r = (
                     self._config.arena.tracking_mask_radius_px
@@ -943,7 +1038,10 @@ class MainWindow(QMainWindow):
                 did_crop = False
                 crop_x0, crop_y0 = 0, 0  # offset to add to tracker coords when we crop
                 ram_mask_result = None
+                # Only build masked/cropped fallback input when backup tracker is enabled.
                 if (
+                    enable_backup
+                    and
                     _cv2 is not None
                     and self._task_mode == "ram"
                     and isinstance(self._config, RadialArmControllerConfig)
@@ -956,7 +1054,7 @@ class MainWindow(QMainWindow):
                     did_crop = True
                     to_track = img_raw[crop_y0:crop_y1, crop_x0:crop_x1].copy()
                     to_track = _cv2.bitwise_and(to_track, to_track, mask=mask_crop)
-                elif _cv2 is not None and track_r > 0:
+                elif enable_backup and _cv2 is not None and track_r > 0:
                     # Crop to rectangle around circle so tracker runs on fewer pixels (better FPS).
                     # Display still shows full image; we add crop offset to track_xy/pose_xy and embed blob_mask.
                     crop_x0 = max(0, int(roi_cx - track_r) - 1)
@@ -982,11 +1080,15 @@ class MainWindow(QMainWindow):
                 path = self._config.sleap_model_path or ""
                 self._tracking_controller.set_tracker_sources(
                     path.strip(),
-                    bool(getattr(self._config, "track_enable_backup", True)),
-                    bool(getattr(self._config, "track_enable_sleap", True)),
+                    enable_backup,
+                    enable_sleap,
                 )
                 now = time.monotonic()
-                self._tracking_controller.submit_frame(to_track, now)
+                self._tracking_controller.submit_frame(
+                    to_track,
+                    now,
+                    sleap_image=img_raw,
+                )
                 overlay_state = self._tracking_controller.get_overlay_state(now_s=now)
                 track_xy_res = overlay_state["track_xy"]
                 track_valid_res = overlay_state["track_valid"]
@@ -1001,10 +1103,15 @@ class MainWindow(QMainWindow):
                 # If we cropped, convert from crop coords to full-image coords.
                 # Pass small blob_mask + crop rect so overlay blends only in that slice (no full-frame alloc).
                 if did_crop:
-                    if track_xy_res is not None:
+                    if track_source != "sleap" and track_xy_res is not None:
                         track_xy_res = (track_xy_res[0] + crop_x0, track_xy_res[1] + crop_y0)
-                    if pose_xy is not None and pose_xy.size > 0:
+                    if track_source != "sleap" and pose_xy is not None and pose_xy.size > 0:
                         pose_xy = np.asarray(pose_xy, dtype=np.float64) + np.array([crop_x0, crop_y0])
+                    if in_range_xy_res is not None:
+                        in_range_xy_res = (
+                            in_range_xy_res[0] + crop_x0,
+                            in_range_xy_res[1] + crop_y0,
+                        )
                     blob_mask = blob_mask_res
                     blob_crop_rect = (crop_x0, crop_y0, crop_x1, crop_y1) if blob_mask_res is not None else None
                 else:
@@ -1078,6 +1185,8 @@ class MainWindow(QMainWindow):
                     blob_crop_rect=blob_crop_rect,
                     ram_polys=ram_polys_preview,
                     ram_exit_xyr=ram_exit_preview,
+                    ram_all_holes_xyr=ram_all_holes_preview,
+                    ram_escape_arm_index=ram_escape_arm_preview,
                 )
             else:
                 pose_node_valid = None
@@ -1158,10 +1267,26 @@ class MainWindow(QMainWindow):
                 exit_x, exit_y = tc.get_exit_position_px()
                 duty_pct = tc.get_duty_for_position(x_px, y_px)
                 dist_to_exit_px, in_exit = tc.get_recording_frame_metrics(x_px, y_px)
+                region_code_str = tc.get_region_code_for_recording(x_px, y_px)
                 trial_state_str = tc.get_trial_state_for_recording() or "iti"
                 meta = tc.get_recording_metadata()
                 if self._trial_recorder is None and meta is not None:
                     animal_id, session_id, trial = meta
+                    seek_tf = 0
+                    virt_source: Optional[Path] = None
+                    if self._camera_source.currentText().startswith("Virtual"):
+                        if (
+                            hasattr(self, "_virtual_scrub_row_w")
+                            and self._virtual_scrub_row_w.isVisible()
+                        ):
+                            seek_tf = int(self._virtual_scrub_slider.value())
+                        if self._virtual_video_path is not None:
+                            virt_source = Path(self._virtual_video_path)
+                    recording_ram_exit_arm_index: Optional[int] = None
+                    if isinstance(self._config, RadialArmControllerConfig):
+                        sm_rec = self._trial_controller.get_state_machine()
+                        if sm_rec is not None:
+                            recording_ram_exit_arm_index = int(sm_rec.exit_arm_index)
                     self._trial_recorder = TrialRecorder(
                         output_dir=video_dir,
                         db_path=db_path,
@@ -1170,12 +1295,28 @@ class MainWindow(QMainWindow):
                         trial=trial,
                         config=self._config,
                         run_mode=self._config.run_mode or "continuous",
+                        seek_to_frame=seek_tf,
+                        virtual_source_video_path=virt_source,
+                        recording_ram_exit_arm_index=recording_ram_exit_arm_index,
                     )
                     frame_shape = (img_raw.shape[0], img_raw.shape[1])
                     if img_raw.ndim == 3:
                         frame_shape = img_raw.shape
-                    self._trial_recorder.start(frame_shape=frame_shape, fps=30.0)
-                    self._record_frame_index = 0
+                    rec_fps = 30.0
+                    if self._camera_controller is not None:
+                        v_fps = self._camera_controller.virtual_file_effective_fps(
+                            self._config
+                        )
+                        if v_fps is not None:
+                            rec_fps = float(v_fps)
+                    self._trial_recorder.start(frame_shape=frame_shape, fps=rec_fps)
+                    if virt_source is not None and self._camera_controller is not None:
+                        fi, _ = self._camera_controller.get_last_frame_info()
+                        self._record_frame_index = (
+                            int(fi) if fi is not None else int(seek_tf)
+                        )
+                    else:
+                        self._record_frame_index = 0
                 if self._trial_recorder is not None:
                     try:
                         spot_xy_for_record: Optional[Tuple[float, float]] = None
@@ -1240,21 +1381,31 @@ class MainWindow(QMainWindow):
                                 if spot_xy_for_record is None:
                                     spot_xy_for_record = (float(track_xy[0]), float(track_xy[1]))
 
+                        if (
+                            self._camera_source.currentText().startswith("Virtual")
+                            and self._camera_controller is not None
+                        ):
+                            fi, _ = self._camera_controller.get_last_frame_info()
+                            rec_fi = (
+                                int(fi) if fi is not None else int(self._record_frame_index)
+                            )
+                        else:
+                            rec_fi = int(self._record_frame_index)
+                            self._record_frame_index += 1
                         self._trial_recorder.write_frame(
                             image=img_raw,
-                            frame_index=self._record_frame_index,
+                            frame_index=rec_fi,
                             x_px=x_px,
                             y_px=y_px,
                             dist_to_exit_px=dist_to_exit_px,
                             trial_state=trial_state_str,
-                            in_exit_zone=in_exit,
+                            region_code=region_code_str,
                             valid=track_valid,
                             duty_pct=duty_pct,
                             spot_xy=spot_xy_for_record,
                             in_range_xy=in_range_xy_for_record,
                             centroid_xy=centroid_xy_for_record,
                         )
-                        self._record_frame_index += 1
                     except Exception:
                         pass
             trial_ms = (time.perf_counter() - _tp) * 1000.0
@@ -1314,7 +1465,6 @@ class MainWindow(QMainWindow):
             qt_ms = (time.perf_counter() - _tqt0) * 1000.0
             read_ms = (t1 - t0) * 1000
             process_ms = (time.perf_counter() - t1) * 1000
-            infer_s = float(getattr(self._config, "track_infer_scale", 1.0))
             self._last_frame_phase_ms = {
                 "read": read_ms,
                 "preprocess": preprocess_ms,
@@ -1326,7 +1476,6 @@ class MainWindow(QMainWindow):
                 "dev_hud": dev_ms,
                 "qt_pixmap": qt_ms,
                 "process_total": process_ms,
-                "infer_scale": infer_s,
             }
             tt = "Preview frame rate.\n"
             tt += f"read {read_ms:.1f} ms | process total {process_ms:.1f} ms\n"
@@ -1334,9 +1483,28 @@ class MainWindow(QMainWindow):
                 f"preprocess {preprocess_ms:.1f} | display {display_prep_ms:.1f} | "
                 f"ram_template {ram_template_ms:.1f} | track {track_ms:.1f}\n"
                 f"overlay {overlay_ms:.1f} | trial {trial_ms:.1f} | dev {dev_ms:.1f} | qt {qt_ms:.1f}\n"
-                f"infer_scale={infer_s}  backup={getattr(self._config, 'track_enable_backup', True)} "
+                f"backup={getattr(self._config, 'track_enable_backup', True)} "
                 f"sleap={getattr(self._config, 'track_enable_sleap', True)}"
             )
+            if self._camera_controller is not None:
+                timing = self._camera_controller.virtual_file_timing_info(self._config)
+                if timing is not None:
+                    nominal = timing.get("nominal_fps")
+                    effective = timing.get("effective_fps")
+                    override_s = timing.get("duration_override_s")
+                    nominal_s = f"{float(nominal):.3f}" if nominal is not None else "—"
+                    effective_s = f"{float(effective):.3f}" if effective is not None else "—"
+                    total_s = MainWindow._virtual_timing_frames_label(timing)
+                    override_s_txt = (
+                        f"{float(override_s):.3f}s" if (override_s is not None and float(override_s) > 0.0) else "off"
+                    )
+                    tt += (
+                        "\nvirtual timing: "
+                        f"nominal_fps={nominal_s}, "
+                        f"effective_fps={effective_s}, "
+                        f"frames={total_s}, "
+                        f"duration_override={override_s_txt}"
+                    )
             if hasattr(self, "_track_display_fps_label"):
                 self._track_display_fps_label.setToolTip(tt)
 
@@ -1383,16 +1551,70 @@ class MainWindow(QMainWindow):
                 # Status message: keep simple for now; detailed backend info can
                 # be added via CameraController hooks in the future.
                 if video_path is not None and self._playback_hydration is not None:
-                    self.statusBar().showMessage(self._playback_hydration.status)
+                    timing = (
+                        self._camera_controller.virtual_file_timing_info(self._config)
+                        if self._camera_controller is not None
+                        else None
+                    )
+                    if timing is not None:
+                        nominal = timing.get("nominal_fps")
+                        effective = timing.get("effective_fps")
+                        override_s = timing.get("duration_override_s")
+                        nominal_s = f"{float(nominal):.3f}" if nominal is not None else "—"
+                        effective_s = f"{float(effective):.3f}" if effective is not None else "—"
+                        total_s = MainWindow._virtual_timing_frames_label(timing)
+                        override_s_txt = (
+                            f"{float(override_s):.3f}s"
+                            if (override_s is not None and float(override_s) > 0.0)
+                            else "off"
+                        )
+                        self.statusBar().showMessage(
+                            f"{self._playback_hydration.status} | "
+                            f"virtual timing: nominal {nominal_s} fps, "
+                            f"effective {effective_s} fps, "
+                            f"frames {total_s}, "
+                            f"override {override_s_txt}"
+                        )
+                    else:
+                        self.statusBar().showMessage(self._playback_hydration.status)
                 elif video_path is not None:
-                    self.statusBar().showMessage(f"Virtual video started ({source}): {video_path.name}")
+                    timing = (
+                        self._camera_controller.virtual_file_timing_info(self._config)
+                        if self._camera_controller is not None
+                        else None
+                    )
+                    if timing is not None:
+                        nominal = timing.get("nominal_fps")
+                        effective = timing.get("effective_fps")
+                        override_s = timing.get("duration_override_s")
+                        nominal_s = f"{float(nominal):.3f}" if nominal is not None else "—"
+                        effective_s = f"{float(effective):.3f}" if effective is not None else "—"
+                        total_s = MainWindow._virtual_timing_frames_label(timing)
+                        override_s_txt = (
+                            f"{float(override_s):.3f}s"
+                            if (override_s is not None and float(override_s) > 0.0)
+                            else "off"
+                        )
+                        self.statusBar().showMessage(
+                            f"Virtual video started ({source}): {video_path.name} | "
+                            f"timing nominal {nominal_s} fps, effective {effective_s} fps, "
+                            f"frames {total_s}, override {override_s_txt}"
+                        )
+                    else:
+                        self.statusBar().showMessage(
+                            f"Virtual video started ({source}): {video_path.name}"
+                        )
                 else:
                     self.statusBar().showMessage(f"Camera {device_index} started ({source}).")
             self._camera_timer = QTimer(self)
             self._camera_timer.setTimerType(Qt.TimerType.PreciseTimer)  # better accuracy on Windows for 30 FPS
             self._camera_timer.timeout.connect(self._on_camera_tick)
-            # Target ~30 FPS; actual FPS limited by camera + processing (see Display FPS tooltip for breakdown)
-            self._camera_timer.start(33)
+            tick_ms = (
+                self._camera_controller.preview_timer_interval_ms(self._config)
+                if self._camera_controller is not None
+                else 33
+            )
+            self._camera_timer.start(tick_ms)
             self._camera_start_btn.setEnabled(False)
             self._camera_stop_btn.setEnabled(True)
             # Start tracking controller (async or sync)
@@ -1508,6 +1730,22 @@ class MainWindow(QMainWindow):
             self._arduino_stimulus is not None and self._arduino_stimulus.connected
         )
 
+    @staticmethod
+    def _virtual_timing_frames_label(timing: Dict[str, Any]) -> str:
+        """Frame count for virtual HUD: pacing window / file total when they differ."""
+        total = timing.get("total_frames")
+        tf = timing.get("total_frames_for_effective_fps")
+        override_s = timing.get("duration_override_s")
+        if total is None:
+            return "—"
+        t_int = int(total)
+        if override_s is None or float(override_s) <= 0.0 or tf is None:
+            return str(t_int)
+        tf_int = int(tf)
+        if tf_int != t_int:
+            return f"{tf_int}/{t_int}"
+        return str(t_int)
+
     def _apply_status_and_buttons(self) -> None:
         """Apply trial controller status dict and button states to widgets. See docs/button_flow_state.md."""
         x, y = self._last_track_xy if self._last_track_xy else (0.0, 0.0)
@@ -1543,11 +1781,59 @@ class MainWindow(QMainWindow):
         self._sync_settings_apply_enabled()
 
     def _sync_settings_apply_enabled(self) -> None:
-        dlg = getattr(self, "_settings_dialog", None)
-        if dlg is None or not hasattr(dlg, "set_apply_enabled"):
-            return
         tc = self._trial_controller
-        dlg.set_apply_enabled(not tc.is_trial_running_phase())
+        allow = not tc.is_trial_running_phase()
+        dlg = getattr(self, "_settings_dialog", None)
+        if dlg is not None and hasattr(dlg, "set_apply_enabled"):
+            dlg.set_apply_enabled(allow)
+
+    def _virtual_trial_clock_enabled(self) -> bool:
+        """True when stretched virtual playback should drive ``trial_elapsed_s`` from frame deltas."""
+        v = getattr(self._config, "virtual_duration_override_s", None)
+        if v is None or float(v) <= 0:
+            return False
+        return self._is_video_available() and self._camera_source.currentText().startswith(
+            "Virtual"
+        )
+
+    def _compute_trial_clock_virtual_dt_s(
+        self, running: bool, prev_running: bool
+    ) -> Optional[float]:
+        """
+        Seconds of video time to add to ``trial_elapsed_s`` this run-timer tick.
+
+        Returns ``None`` when the trial controller should use wall-clock ``dt`` instead.
+        """
+        if not self._virtual_trial_clock_enabled():
+            if not running:
+                self._virtual_trial_clock_last_fi = None
+            return None
+        cc = self._camera_controller
+        if cc is None:
+            return None
+        eff = cc.virtual_file_effective_fps(self._config)
+        if eff is None or eff <= 0:
+            return None
+        if not running:
+            self._virtual_trial_clock_last_fi = None
+            return None
+        fi, _ = cc.get_last_frame_info()
+        if fi is None:
+            return 0.0
+        fi_i = int(fi)
+        last_fi = self._virtual_trial_clock_last_fi
+        if not prev_running:
+            self._virtual_trial_clock_last_fi = fi_i
+            return 0.0
+        if last_fi is None:
+            self._virtual_trial_clock_last_fi = fi_i
+            return 0.0
+        dfi = fi_i - int(last_fi)
+        if dfi < 0:
+            self._virtual_trial_clock_last_fi = fi_i
+            return 0.0
+        self._virtual_trial_clock_last_fi = fi_i
+        return dfi / float(eff)
 
     def _on_run_timer(self) -> None:
         now = time.monotonic()
@@ -1563,7 +1849,12 @@ class MainWindow(QMainWindow):
             # Fall back to arena center instead of (0,0) so duty/exit logic
             # doesn't saturate when tracking is temporarily unavailable.
             x, y = config_center_xy(self._config)
-        self._trial_controller.tick(x, y, dt)
+        tc = self._trial_controller
+        running = tc.is_trial_running_phase()
+        prev_running = self._prev_trial_running_virtual_clock
+        trial_clock_dt = self._compute_trial_clock_virtual_dt_s(running, prev_running)
+        self._prev_trial_running_virtual_clock = running
+        tc.tick(x, y, dt, trial_clock_dt_s=trial_clock_dt)
         self._apply_status_and_buttons()
 
     def _on_stop_run(self) -> None:
@@ -1573,6 +1864,8 @@ class MainWindow(QMainWindow):
             self._run_timer.stop()
             self._run_timer = None
         self._run_timer_last_s = None
+        self._prev_trial_running_virtual_clock = False
+        self._virtual_trial_clock_last_fi = None
         self._stop_trial_recorder_if_active()
         self._trial_controller.stop_run()
         self._apply_status_and_buttons()
@@ -1657,7 +1950,7 @@ class MainWindow(QMainWindow):
             print(f"Error in TrialRecorder.stop: {e}")
             traceback.print_exc()
         # Capture trial info only when stop() succeeded, so analysis runs on a trial that was actually written
-        run_analysis = self._task_mode == "vast" and self._config.run_analysis_after_trial
+        run_analysis = self._config.run_analysis_after_trial
         if run_analysis and stop_ok:
             captured = (
                 rec.db_path,
@@ -1710,18 +2003,21 @@ class MainWindow(QMainWindow):
         sid = self._session_id_edit.text().strip()
         lookup_status: Optional[str] = None
 
-        # In virtual mode, Start trial should restart playback from frame 0.
+        # In virtual mode, Start trial seeks to the scrubber position (or frame 0).
         if (
             self._camera_source.currentText().startswith("Virtual")
             and self._camera_controller is not None
         ):
             try:
-                self._camera_controller.rewind()
+                start_f = 0
+                if hasattr(self, "_virtual_scrub_row_w") and self._virtual_scrub_row_w.isVisible():
+                    start_f = int(self._virtual_scrub_slider.value())
+                self._camera_controller.seek_video_frame(start_f)
                 self._virtual_has_initial_frame = False
                 self._virtual_cached_frame_raw = None
                 self._virtual_cached_frame_index = None
             except Exception:
-                # Best-effort only; if rewind fails, playback will continue from current position.
+                # Best-effort only; if seek fails, playback will continue from current position.
                 pass
 
         # Optional legacy-exit seeding:
@@ -1732,7 +2028,7 @@ class MainWindow(QMainWindow):
             self._task_mode == "vast"
             and (
             self._camera_source.currentText().startswith("Virtual")
-            and self._config.session.seed == -1
+            and self._config.session.seed_mode == "legacy"
             and self._virtual_video_path is not None
             )
         ):
@@ -1741,7 +2037,7 @@ class MainWindow(QMainWindow):
                 parsed = parse_virtual_video_identity(self._virtual_video_path.stem)
                 if parsed is not None:
                     animal_id, session_id, trial = parsed
-                    explicit_legacy_db = (self._config.session.legacy_seed_db_path or "").strip()
+                    explicit_legacy_db = (self._config.session.seed_legacy_source or "").strip()
                     if explicit_legacy_db:
                         candidates = [Path(explicit_legacy_db)]
                     else:
@@ -1905,6 +2201,17 @@ class MainWindow(QMainWindow):
         self._run_analysis_after_trial_cb.setChecked(self._config.run_analysis_after_trial)
         if gui:
             self._apply_gui_dict_to_ui(gui)
+        a_dlg = getattr(self, "_analysis_settings_dialog", None)
+        if a_dlg is not None and hasattr(a_dlg, "set_params"):
+            a_dlg.set_params(self._config.analysis_trajectory)
+        if (
+            self._camera_timer is not None
+            and self._camera_timer.isActive()
+            and self._camera_controller is not None
+        ):
+            self._camera_timer.setInterval(
+                self._camera_controller.preview_timer_interval_ms(self._config)
+            )
         self._invalidate_tracker_cache()
         self._apply_status_and_buttons()
 
@@ -1921,12 +2228,6 @@ class MainWindow(QMainWindow):
         elif gui.get("track_backup_only") is not None:
             self._config.track_enable_backup = True
             self._config.track_enable_sleap = not bool(gui["track_backup_only"])
-        if gui.get("track_infer_scale") is not None:
-            try:
-                s = float(gui["track_infer_scale"])
-            except (TypeError, ValueError):
-                s = 1.0
-            self._config.track_infer_scale = 0.5 if 0.4 <= s <= 0.6 else 1.0
         if "track_sleap_path" in gui:
             self._config.sleap_model_path = str(gui.get("track_sleap_path") or "").strip()
         if gui.get("track_confidence") is not None:
@@ -2151,7 +2452,6 @@ class MainWindow(QMainWindow):
                     track_async=self._config.track_async,
                     track_enable_backup=self._config.track_enable_backup,
                     track_enable_sleap=self._config.track_enable_sleap,
-                    track_infer_scale=float(getattr(self._config, "track_infer_scale", 1.0)),
                     track_sleap_path=self._config.sleap_model_path or "",
                     track_confidence=self._config.sleap_confidence_pct,
                     track_sleap_every_n=self._config.sleap_every_n,
@@ -2252,7 +2552,7 @@ def run_gui(
     *,
     task_mode: AcquisitionMode = "vast",
 ) -> int:
-    from ..app_shell import run_mode_gui
+    from .launcher import run_mode_gui
 
     return run_mode_gui(task_mode, debug_log=debug_log, dev=dev)
 

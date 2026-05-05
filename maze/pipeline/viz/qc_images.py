@@ -1,9 +1,10 @@
 """
-QC image generation for VAST pipeline.
+QC image generation for maze pipeline trials (VAST + RAM).
 
 Generates a single composite QC image per trial (ehram parity):
 - Dwell-time heatmap with compensation_factor and TURBO colormap
-- Arena circle at arena center, exit zone at (exit_x, exit_y) with 12.5 cm radius
+- Arena outline (circle for VAST, projected template geometry for RAM)
+- Exit zone at (exit_x, exit_y) using trial exit radius when available
 - Trajectory overlay
 - Dwell time colorbar
 """
@@ -45,6 +46,8 @@ def generate_trial_qc_images(
     arena_center_y_px: float,
     arena_radius_px: float,
     px_per_cm: float,
+    exit_radius_px: Optional[float] = None,
+    ram_geometry_payload: Optional[dict[str, Any]] = None,
     fps: float = 30.0,
     image_size: int = 512,
     xy_list_heatmap: Optional[XYValidList] = None,
@@ -79,6 +82,8 @@ def generate_trial_qc_images(
             arena_center_y_px=arena_center_y_px,
             arena_radius_px=arena_radius_px,
             px_per_cm=px_per_cm,
+            exit_radius_px=exit_radius_px,
+            ram_geometry_payload=ram_geometry_payload,
             fps=fps,
             image_size=image_size,
             xy_list_heatmap=xy_list_heatmap,
@@ -237,6 +242,73 @@ def _render_colorbar(
     return colorbar
 
 
+def _draw_ram_geometry_overlay(
+    image_bgr: np.ndarray,
+    *,
+    ram_geometry_payload: dict[str, Any],
+    scale: float,
+    center_x: float,
+    center_y: float,
+    arena_center_x_px: float,
+    arena_center_y_px: float,
+    px_per_cm: float,
+) -> bool:
+    """Draw RAM template polygons (from geometry payload) in QC-image coordinates."""
+    try:
+        from ...controller.acquisition.radial_arm.geometry import (
+            transform_template_point_to_px,
+        )
+    except ImportError:
+        return False
+
+    template_regions = ram_geometry_payload.get("template_regions_cm", {})
+    calibration = ram_geometry_payload.get("calibration", {})
+    if not isinstance(template_regions, dict) or not template_regions:
+        return False
+
+    template_center_x_px = float(calibration.get("template_center_x_px", arena_center_x_px))
+    template_center_y_px = float(calibration.get("template_center_y_px", arena_center_y_px))
+    template_rotation_deg = float(calibration.get("template_rotation_deg", 0.0))
+    template_px_per_cm = float(calibration.get("px_per_cm", px_per_cm))
+    if template_px_per_cm <= 0:
+        template_px_per_cm = float(px_per_cm)
+    if template_px_per_cm <= 0:
+        return False
+
+    center_color = (0, 220, 255)
+    hole_color = (180, 180, 255)
+    arm_color = (0, 200, 200)
+
+    drew_any = False
+    for name, poly_cm in template_regions.items():
+        arr = np.asarray(poly_cm, dtype=np.float64)
+        if arr.ndim != 2 or arr.shape[0] < 3 or arr.shape[1] < 2:
+            continue
+        pts_qc: list[tuple[int, int]] = []
+        for p in arr:
+            vx, vy = transform_template_point_to_px(
+                (float(p[0]), float(p[1])),
+                center_x_px=template_center_x_px,
+                center_y_px=template_center_y_px,
+                rotation_deg=template_rotation_deg,
+                px_per_cm=template_px_per_cm,
+            )
+            qx = center_x + (float(vx) - arena_center_x_px) * scale
+            qy = center_y + (float(vy) - arena_center_y_px) * scale
+            pts_qc.append((int(round(qx)), int(round(qy))))
+        pts = np.asarray(pts_qc, dtype=np.int32)
+        region_name = str(name)
+        if region_name == "center":
+            c = center_color
+        elif region_name == "hole":
+            c = hole_color
+        else:
+            c = arm_color
+        cv2.polylines(image_bgr, [pts], True, c, 2, cv2.LINE_AA)
+        drew_any = True
+    return drew_any
+
+
 def generate_composite_qc_image(
     trajectory_xy: np.ndarray,
     trajectory_valid: np.ndarray,
@@ -245,6 +317,8 @@ def generate_composite_qc_image(
     arena_center_y_px: float,
     arena_radius_px: float,
     px_per_cm: float,
+    exit_radius_px: Optional[float] = None,
+    ram_geometry_payload: Optional[dict[str, Any]] = None,
     fps: float = 30.0,
     image_size: int = 512,
     margin: int = 20,
@@ -305,13 +379,30 @@ def generate_composite_qc_image(
             center_y=center_y,
         )
 
-    # Arena circle at center
-    radius_scaled = int(arena_radius_px * scale)
-    cv2.circle(base, (int(center_x), int(center_y)), radius_scaled, (200, 200, 200), 2)
+    # Arena outline: draw RAM geometry when available, otherwise circular outline.
+    drew_ram_geometry = False
+    if ram_geometry_payload:
+        drew_ram_geometry = _draw_ram_geometry_overlay(
+            base,
+            ram_geometry_payload=ram_geometry_payload,
+            scale=scale,
+            center_x=center_x,
+            center_y=center_y,
+            arena_center_x_px=arena_center_x_px,
+            arena_center_y_px=arena_center_y_px,
+            px_per_cm=px_per_cm,
+        )
+    if not drew_ram_geometry:
+        radius_scaled = int(arena_radius_px * scale)
+        cv2.circle(base, (int(center_x), int(center_y)), radius_scaled, (200, 200, 200), 2)
 
-    # Exit zone at (exit_x, exit_y) with 12.5 cm radius
-    exit_radius_px = QC_EXIT_ZONE_RADIUS_CM * px_per_cm
-    exit_radius_scaled = int(exit_radius_px * scale)
+    # Exit zone at (exit_x, exit_y): prefer trial-specific radius when available.
+    resolved_exit_radius_px = (
+        float(exit_radius_px)
+        if exit_radius_px is not None and float(exit_radius_px) > 0
+        else float(QC_EXIT_ZONE_RADIUS_CM * px_per_cm)
+    )
+    exit_radius_scaled = int(resolved_exit_radius_px * scale)
     exit_im_x = int(center_x + (exit_x - arena_center_x_px) * scale)
     exit_im_y = int(center_y + (exit_y - arena_center_y_px) * scale)
     cv2.circle(base, (exit_im_x, exit_im_y), exit_radius_scaled, (0, 255, 0), 1)

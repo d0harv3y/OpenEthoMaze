@@ -15,7 +15,19 @@ so no path translation or copy is needed.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Tuple
+from typing import TYPE_CHECKING, Tuple
+
+if TYPE_CHECKING:
+    from maze.pipeline.db import TrialKey
+    from maze.pipeline.io.file_discovery import TrialManifest
+
+# Phases that mark habituation-style trials for manifest / pipeline labeling.
+HABITUATION_RUN_PHASES: frozenset[str] = frozenset({"habituation", "habituation_training"})
+
+
+def is_habituation_run_phase(run_phase: str) -> bool:
+    """True when ``run_phase`` should set ``TrialManifest.is_habituation``."""
+    return run_phase in HABITUATION_RUN_PHASES
 
 
 def run_analysis_for_trial(
@@ -35,7 +47,11 @@ def run_analysis_for_trial(
         session_id: Session key (e.g. S01).
         trial: Trial key (e.g. T01).
         video_path: Final video path for the trial (may be None if recording was discarded).
-        run_phase: Controller run_phase (habituation | habituation_training | VAST).
+        run_phase: Controller ``Settings.run_phase`` at trial stop (task-agnostic string).
+            VAST examples: ``habituation``, ``habituation_training``, experimental phases.
+            RAM examples: ``radial_arm`` for the maze task, or habituation strings when used.
+            Only ``habituation`` and ``habituation_training`` set ``is_habituation`` on the
+            manifest; all other values are treated as non-habituation.
 
     Returns:
         (success, message) for status bar or logging.
@@ -46,7 +62,7 @@ def run_analysis_for_trial(
     except ImportError:
         return (False, "maze.pipeline not available")
 
-    is_habituation = run_phase in ("habituation", "habituation_training")
+    is_habituation = is_habituation_run_phase(run_phase)
     manifest = TrialManifest(
         animal_id=animal_id,
         session=session_id,
@@ -65,3 +81,89 @@ def run_analysis_for_trial(
     if ok:
         return (True, "Analysis done")
     return (False, "Analysis failed (see mistrial_reason in H5)")
+
+
+def _decode_h5_attr(val: object) -> str:
+    if val is None:
+        return ""
+    if isinstance(val, bytes):
+        return val.decode("utf-8", errors="replace").strip()
+    return str(val).strip()
+
+
+def manifest_from_controller_h5(db_path: Path, key: TrialKey) -> TrialManifest:
+    """
+    Build a :class:`~maze.pipeline.io.file_discovery.TrialManifest` from trial attrs
+    in a controller database (``video_path``, ``phase`` / ``stage``).
+
+    ``is_habituation`` follows the same rule as :func:`run_analysis_for_trial`, using
+    recorded ``phase`` (else ``stage``) when present; otherwise it defaults to False.
+    """
+    import h5py
+
+    from maze.pipeline.io.file_discovery import TrialManifest
+
+    with h5py.File(db_path, "r") as h5:
+        g_trial = h5[key.path()]
+        attrs = g_trial.attrs
+        vp = _decode_h5_attr(attrs.get("video_path", ""))
+        video_path = Path(vp) if vp else None
+        phase = _decode_h5_attr(attrs.get("phase", "")) or _decode_h5_attr(
+            attrs.get("stage", "")
+        )
+        is_habituation = is_habituation_run_phase(phase)
+
+    return TrialManifest(
+        animal_id=key.animal_id,
+        session=key.session,
+        trial=key.trial,
+        input_h5_path=db_path,
+        video_path=video_path,
+        sleap_path=None,
+        is_habituation=is_habituation,
+    )
+
+
+def reprocess_controller_h5(
+    db_path: Path,
+    *,
+    animal_id: str | None = None,
+    session: str | None = None,
+    trial: str | None = None,
+    generate_qc: bool = True,
+    quiet: bool = False,
+) -> dict[str, int]:
+    """
+    Run ``process_trial`` for trials already present in a controller H5 (backfill).
+
+    Filters are optional; omit all to process every trial in the file.
+
+    Returns:
+        Counts ``ok``, ``fail`` (pipeline returned False), and ``skipped`` (currently 0;
+        reserved for future filters).
+    """
+    from maze.pipeline.db import list_trials
+    from maze.pipeline.process_trial import process_trial
+
+    keys = list_trials(db_path)
+    if animal_id is not None:
+        keys = [k for k in keys if k.animal_id == animal_id]
+    if session is not None:
+        keys = [k for k in keys if k.session == session]
+    if trial is not None:
+        keys = [k for k in keys if k.trial == trial]
+
+    stats = {"ok": 0, "fail": 0, "skipped": 0}
+    for key in keys:
+        manifest = manifest_from_controller_h5(db_path, key)
+        ok = process_trial(
+            manifest,
+            db_path=db_path,
+            generate_qc=generate_qc,
+            quiet=quiet,
+        )
+        if ok:
+            stats["ok"] += 1
+        else:
+            stats["fail"] += 1
+    return stats

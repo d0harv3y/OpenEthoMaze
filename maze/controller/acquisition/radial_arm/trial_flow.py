@@ -6,14 +6,23 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Optional
 
+import numpy as np
+
 from ....core.session_slots import (
     clamp_slot_index,
     slot_for_trial_index,
     slot_to_animal_trial,
 )
+from ..region_code import ram_region_code
 from ..shared_controller import build_run_button_states, normalize_run_mode_value
 from .config import RadialArmControllerConfig
-from .geometry import build_template_from_params, exit_hole_xyr_px
+from .geometry import (
+    build_template_from_params,
+    exit_hole_xyr_px,
+    projected_region_polygons_px,
+)
+from ..shared_config import ensure_exit_schedule_indices_length
+from ..vast.arena import latin_square_exit_index
 
 
 class RamTrialMode(Enum):
@@ -90,7 +99,26 @@ class RamTrialStateMachine:
             self.on_state_change(new_state)
 
     def _sync_exit_arm(self) -> None:
-        self.exit_arm_index = int(getattr(self.config.radial_arm, "exit_arm_index", 0))
+        n_exits = 8
+        default_i = max(0, min(n_exits - 1, int(getattr(self.config.radial_arm, "exit_arm_index", 0))))
+        if self.config.session.seed_mode == "manual":
+            ensure_exit_schedule_indices_length(
+                self.config.session,
+                n_exits=n_exits,
+                default_exit_index=default_i,
+            )
+            raw = self.config.session.exit_schedule_indices
+            if raw is not None and 0 <= self.slot_idx < len(raw):
+                self.exit_arm_index = max(0, min(n_exits - 1, int(raw[self.slot_idx])))
+                return
+            self.exit_arm_index = default_i
+            return
+        self.exit_arm_index = latin_square_exit_index(
+            self.session_id,
+            self.trial_idx,
+            n_exits,
+            self.config.session.seed_auto_value,
+        )
 
     def start_iti(self) -> None:
         self.iti_elapsed_s = 0.0
@@ -112,13 +140,19 @@ class RamTrialStateMachine:
         self.trial_elapsed_s = 0.0
         self._set_state(RamTrialState.TRIAL_RUNNING)
 
-    def update_trial(self, dt_s: float) -> Optional[RamTrialState]:
+    def update_trial(
+        self,
+        dt_s: float,
+        *,
+        trial_clock_dt_s: Optional[float] = None,
+    ) -> Optional[RamTrialState]:
         if self.state == RamTrialState.WAIT_FOR_START:
             self.begin_trial()
             return self.state
         if self.state != RamTrialState.TRIAL_RUNNING:
             return None
-        self.trial_elapsed_s += dt_s
+        dt_use = dt_s if trial_clock_dt_s is None else trial_clock_dt_s
+        self.trial_elapsed_s += dt_use
         if self.success_override:
             self._set_state(RamTrialState.TRIAL_SUCCESS)
             return self.state
@@ -188,6 +222,9 @@ class RadialArmTrialController:
         self._sm: Optional[RamTrialStateMachine] = None
         self._run_active = False
         self._state_listeners: list[Callable[[RamTrialState], None]] = []
+        self._ram_polys_px: Optional[dict[str, np.ndarray]] = None
+        self._ram_poly_key: Optional[tuple[int, int]] = None
+        self._ram_hole_arm_1b: int = 1
 
     @property
     def run_active(self) -> bool:
@@ -210,19 +247,20 @@ class RadialArmTrialController:
 
     def get_exit_position_px(self) -> tuple[float, float]:
         ram = self._config.radial_arm
+        exit_arm_idx = int(self._sm.exit_arm_index) if self._sm is not None else int(ram.exit_arm_index)
         calibration = ram.calibration
         template = build_template_from_params(
             center_midedge_to_midedge_cm=ram.template.center_midedge_to_midedge_cm,
             arm_length_cm=ram.template.arm_length_cm,
             arm_width_cm=ram.template.arm_width_cm,
             arm_split_cm=ram.template.arm_split_cm,
-            hole_arm_index=ram.template.hole_arm_index,
+            exit_arm_index=exit_arm_idx,
             hole_radius_cm=ram.template.hole_radius_cm,
             hole_inset_from_arm_end_cm=ram.template.hole_inset_from_arm_end_cm,
         )
         exit_x, exit_y, _ = exit_hole_xyr_px(
             template,
-            exit_arm_index=ram.exit_arm_index,
+            exit_arm_index=exit_arm_idx,
             center_x_px=calibration.template_center_x_px,
             center_y_px=calibration.template_center_y_px,
             rotation_deg=calibration.template_rotation_deg,
@@ -280,19 +318,20 @@ class RadialArmTrialController:
         if self._sm is None:
             return (0.0, False)
         ram = self._config.radial_arm
+        exit_arm_idx = int(self._sm.exit_arm_index)
         calibration = ram.calibration
         template = build_template_from_params(
             center_midedge_to_midedge_cm=ram.template.center_midedge_to_midedge_cm,
             arm_length_cm=ram.template.arm_length_cm,
             arm_width_cm=ram.template.arm_width_cm,
             arm_split_cm=ram.template.arm_split_cm,
-            hole_arm_index=ram.template.hole_arm_index,
+            exit_arm_index=exit_arm_idx,
             hole_radius_cm=ram.template.hole_radius_cm,
             hole_inset_from_arm_end_cm=ram.template.hole_inset_from_arm_end_cm,
         )
         exit_x, exit_y, exit_radius_px = exit_hole_xyr_px(
             template,
-            exit_arm_index=ram.exit_arm_index,
+            exit_arm_index=exit_arm_idx,
             center_x_px=calibration.template_center_x_px,
             center_y_px=calibration.template_center_y_px,
             rotation_deg=calibration.template_rotation_deg,
@@ -303,6 +342,40 @@ class RadialArmTrialController:
         dist = float((dx * dx + dy * dy) ** 0.5)
         in_exit = dist <= float(exit_radius_px)
         return (dist, in_exit)
+
+    def get_region_code_for_recording(self, x_px: float, y_px: float) -> str:
+        """Per-frame RAM region label; same rules as :mod:`maze.controller.acquisition.region_code`."""
+        sm = self._sm
+        exit_idx = int(sm.exit_arm_index) if sm is not None else int(
+            self._config.radial_arm.exit_arm_index
+        )
+        slot = int(sm.slot_idx) if sm is not None else -1
+        key = (slot, exit_idx)
+        if key != self._ram_poly_key or self._ram_polys_px is None:
+            self._ram_poly_key = key
+            ram = self._config.radial_arm
+            calibration = ram.calibration
+            template = build_template_from_params(
+                center_midedge_to_midedge_cm=ram.template.center_midedge_to_midedge_cm,
+                arm_length_cm=ram.template.arm_length_cm,
+                arm_width_cm=ram.template.arm_width_cm,
+                arm_split_cm=ram.template.arm_split_cm,
+                exit_arm_index=exit_idx,
+                hole_radius_cm=ram.template.hole_radius_cm,
+                hole_inset_from_arm_end_cm=ram.template.hole_inset_from_arm_end_cm,
+            )
+            self._ram_polys_px = projected_region_polygons_px(
+                template,
+                center_x_px=calibration.template_center_x_px,
+                center_y_px=calibration.template_center_y_px,
+                rotation_deg=calibration.template_rotation_deg,
+                px_per_cm=calibration.px_per_cm,
+            )
+            self._ram_hole_arm_1b = int(template.hole_arm_index) + 1
+        assert self._ram_polys_px is not None
+        return ram_region_code(
+            float(x_px), float(y_px), self._ram_polys_px, self._ram_hole_arm_1b
+        )
 
     def ensure_created(
         self,
@@ -326,6 +399,7 @@ class RadialArmTrialController:
             session_id=session_id,
             slot_idx=initial_slot,
         )
+        self._sm._sync_exit_arm()
         self._sm.on_state_change = self._handle_state_change
 
     def reset(
@@ -338,14 +412,21 @@ class RadialArmTrialController:
         self._run_active = False
         self.ensure_created(session_id, trial_idx, slot_idx=slot_idx)
 
-    def tick(self, x_px: float, y_px: float, dt_s: float) -> None:
+    def tick(
+        self,
+        x_px: float,
+        y_px: float,
+        dt_s: float,
+        *,
+        trial_clock_dt_s: Optional[float] = None,
+    ) -> None:
         del x_px, y_px
         if not self._run_active or self._sm is None:
             return
         if self._sm.state == RamTrialState.ITI:
             self._sm.update_iti(dt_s)
         else:
-            self._sm.update_trial(dt_s)
+            self._sm.update_trial(dt_s, trial_clock_dt_s=trial_clock_dt_s)
 
     def start_run(self) -> None:
         self._run_active = True

@@ -23,6 +23,8 @@ from ..defaults import (
     MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES,
     MOVEMENT_ENTRY_DEBOUNCE_FRAMES,
     MOVEMENT_EXIT_DEBOUNCE_FRAMES,
+    MIN_MOVEMENT_BOUT_DURATION_FRAMES,
+    MOVEMENT_INTER_BOUT_INTERVAL_FRAMES,
     MIN_MOVEMENT_BOUT_DURATION_S,
     MOVEMENT_INTER_BOUT_INTERVAL_S,
     DEFAULT_FPS,
@@ -52,6 +54,8 @@ def calculate_ambulation_metrics(
     speed_median_window_frames: int = MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES,
     entry_debounce_frames: int = MOVEMENT_ENTRY_DEBOUNCE_FRAMES,
     exit_debounce_frames: int = MOVEMENT_EXIT_DEBOUNCE_FRAMES,
+    min_bout_duration_frames: Optional[int] = MIN_MOVEMENT_BOUT_DURATION_FRAMES,
+    inter_bout_interval_frames: Optional[int] = MOVEMENT_INTER_BOUT_INTERVAL_FRAMES,
     min_bout_duration_s: float = MIN_MOVEMENT_BOUT_DURATION_S,
     inter_bout_interval_s: float = MOVEMENT_INTER_BOUT_INTERVAL_S,
 ) -> AmbulationMetrics:
@@ -68,6 +72,8 @@ def calculate_ambulation_metrics(
         speed_median_window_frames: Median filter window for per-frame distance
         entry_debounce_frames: Frames required above start threshold to enter movement
         exit_debounce_frames: Frames required below stop threshold to exit movement
+        min_bout_duration_frames: Minimum movement bout duration in frames (canonical)
+        inter_bout_interval_frames: Merge gap in frames (canonical)
         min_bout_duration_s: Minimum movement bout duration
         inter_bout_interval_s: Merge bouts closer than this interval
         
@@ -108,6 +114,8 @@ def calculate_ambulation_metrics(
         exit_debounce_frames=exit_debounce_frames,
         min_bout_duration_s=min_bout_duration_s,
         inter_bout_interval_s=inter_bout_interval_s,
+        min_bout_duration_frames=min_bout_duration_frames,
+        inter_bout_interval_frames=inter_bout_interval_frames,
     )
     
     # Calculate total distance (only during movement)
@@ -155,6 +163,8 @@ def _detect_movement_bouts(
     exit_debounce_frames: int,
     min_bout_duration_s: float,
     inter_bout_interval_s: float,
+    min_bout_duration_frames: Optional[int] = None,
+    inter_bout_interval_frames: Optional[int] = None,
 ) -> tuple[list[dict], np.ndarray]:
     """
     Detect movement bouts using hysteresis thresholds.
@@ -249,14 +259,22 @@ def _detect_movement_bouts(
         raw_bouts.append((bout_start, len(movement_state)))
     
     # Apply minimum duration filter
-    min_bout_frames = int(min_bout_duration_s * fps)
+    if min_bout_duration_frames is None:
+        min_bout_frames = int(min_bout_duration_s * fps)
+    else:
+        min_bout_frames = int(min_bout_duration_frames)
+    min_bout_frames = max(1, min_bout_frames)
     filtered_bouts = [
         (start, end) for start, end in raw_bouts
         if (end - start) >= min_bout_frames
     ]
     
     # Merge bouts separated by short gaps
-    min_gap_frames = int(inter_bout_interval_s * fps)
+    if inter_bout_interval_frames is None:
+        min_gap_frames = int(inter_bout_interval_s * fps)
+    else:
+        min_gap_frames = int(inter_bout_interval_frames)
+    min_gap_frames = max(0, min_gap_frames)
     if len(filtered_bouts) > 1 and min_gap_frames > 0:
         merged_bouts = [filtered_bouts[0]]
         for start, end in filtered_bouts[1:]:

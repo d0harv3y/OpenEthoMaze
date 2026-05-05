@@ -124,7 +124,10 @@ def apply_legacy_template_config(config: "RadialArmControllerConfig") -> None:
     template.arm_length_cm = float(params["arm_length_cm"])
     template.arm_width_cm = float(params["arm_width_cm"])
     template.arm_split_cm = float(params["arm_split_cm"])
-    template.hole_arm_index = int(params["hole_arm_index"])
+    # Legacy ``hole_arm_index`` aligned escape hole with one arm; use as initial exit arm.
+    config.radial_arm.exit_arm_index = int(
+        params.get("exit_arm_index", params.get("hole_arm_index", config.radial_arm.exit_arm_index))
+    )
     template.hole_radius_cm = float(params["hole_radius_cm"])
     template.hole_inset_from_arm_end_cm = float(params["hole_inset_from_arm_end_cm"])
 

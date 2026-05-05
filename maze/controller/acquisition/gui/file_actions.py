@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import time
 import webbrowser
 from pathlib import Path
@@ -16,68 +15,6 @@ try:
 except ImportError:
     HAS_QT = False
     QWidget = object  # type: ignore[assignment,misc]
-
-
-def export_trials_csv(db_path: Path, output_csv: Path) -> None:
-    """Export trial list and paths to CSV for the merged ORM H5 layout."""
-    import h5py
-
-    rows: list[dict[str, object]] = []
-    with h5py.File(db_path, "r") as h5:
-        for animal_id in h5.keys():
-            if animal_id == "metadata":
-                continue
-            g_animal = h5[animal_id]
-            if not hasattr(g_animal, "keys"):
-                continue
-            for level1 in g_animal.keys():
-                g1 = g_animal[level1]
-                if not hasattr(g1, "keys"):
-                    continue
-                if hasattr(g1, "attrs") and "run_mode" in g1.attrs:
-                    run_mode = str(g1.attrs.get("run_mode", ""))
-                    for trial in g1.keys():
-                        g_trial = g1[trial]
-                        if hasattr(g_trial, "attrs"):
-                            attrs = g_trial.attrs
-                            rows.append(
-                                {
-                                    "animal_id": animal_id,
-                                    "session_id": level1,
-                                    "trial": trial,
-                                    "run_mode": run_mode,
-                                    "video_path": str(attrs.get("video_path", "")),
-                                    "sleap_path": str(attrs.get("sleap_path", "")),
-                                }
-                            )
-                else:
-                    for session_id in g1.keys():
-                        g_session = g1[session_id]
-                        if not hasattr(g_session, "keys"):
-                            continue
-                        run_mode = str(g_session.attrs.get("run_mode", ""))
-                        for trial in g_session.keys():
-                            g_trial = g_session[trial]
-                            if hasattr(g_trial, "attrs"):
-                                attrs = g_trial.attrs
-                                rows.append(
-                                    {
-                                        "animal_id": animal_id,
-                                        "session_id": session_id,
-                                        "trial": trial,
-                                        "run_mode": run_mode,
-                                        "video_path": str(attrs.get("video_path", "")),
-                                        "sleap_path": str(attrs.get("sleap_path", "")),
-                                    }
-                                )
-    output_csv.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_csv, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=["animal_id", "session_id", "trial", "run_mode", "video_path", "sleap_path"],
-        )
-        writer.writeheader()
-        writer.writerows(rows)
 
 
 def launch_h5web_for_path(h5_path: Path, status_cb: Callable[[str], None]) -> None:

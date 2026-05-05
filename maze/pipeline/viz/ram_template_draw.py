@@ -60,6 +60,7 @@ def load_ram_region_polygons_px(
     trial_attrs = data.get("trial_attrs") or {}
 
     tp = template_params
+    exit_arm = _as_int(trial_attrs.get("exit_arm_index"), 0)
     template = build_template_from_params(
         center_midedge_to_midedge_cm=_as_float(
             tp.get("center_midedge_to_midedge_cm"),
@@ -68,7 +69,10 @@ def load_ram_region_polygons_px(
         arm_length_cm=_as_float(tp.get("arm_length_cm"), 55.0),
         arm_width_cm=_as_float(tp.get("arm_width_cm"), 15.0),
         arm_split_cm=_as_float(tp.get("arm_split_cm"), 27.5),
-        hole_arm_index=_as_int(tp.get("hole_arm_index"), 0),
+        exit_arm_index=_as_int(
+            tp.get("exit_arm_index", tp.get("hole_arm_index")),
+            exit_arm,
+        ),
         hole_radius_cm=_as_float(tp.get("hole_radius_cm"), 5.0),
         hole_inset_from_arm_end_cm=_as_float(
             tp.get("hole_inset_from_arm_end_cm"),
