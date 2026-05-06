@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Literal
 
 from ..core.tasks import ARENA_TYPE_CIRCULAR, ARENA_TYPE_RADIAL_ARM
 from .io.file_discovery import TrialManifest
 from .trial_quality import detect_trial_data_quality
+
+PrefilterMode = Literal["auto", "controller", "legacy"]
+
+
+def _is_controller_manifest(manifest: TrialManifest) -> bool:
+    """Best-effort check for controller-origin trials stored directly in results H5."""
+    raw = str(getattr(manifest, "input_h5_path", "") or "").strip()
+    return raw in {"", ".", "None"}
 
 
 @dataclass(frozen=True)
@@ -56,8 +64,17 @@ def expected_frame_diff(arena_type: str) -> int | None:
     return policy_for_arena(arena_type).expected_frame_diff
 
 
-def trial_matches_frame_policy(manifest: TrialManifest, arena_type: str) -> bool:
+def trial_matches_frame_policy(
+    manifest: TrialManifest,
+    arena_type: str,
+    *,
+    mode: PrefilterMode = "auto",
+) -> bool:
     """Return whether the manifest matches the task's frame-count policy."""
+    if mode == "controller":
+        return True
+    if mode == "auto" and _is_controller_manifest(manifest):
+        return True
     diff = expected_frame_diff(arena_type)
     if diff is None:
         return True
@@ -66,6 +83,15 @@ def trial_matches_frame_policy(manifest: TrialManifest, arena_type: str) -> bool
     return (manifest.video_n_frames - manifest.h5_n_frames) == diff
 
 
-def detect_task_mistrial(manifest: TrialManifest, arena_type: str) -> str | None:
+def detect_task_mistrial(
+    manifest: TrialManifest,
+    arena_type: str,
+    *,
+    mode: PrefilterMode = "auto",
+) -> str | None:
     """Run the task-specific data-quality check for one manifest."""
+    if mode == "controller":
+        return None
+    if mode == "auto" and _is_controller_manifest(manifest):
+        return None
     return policy_for_arena(arena_type).quality_check(manifest)

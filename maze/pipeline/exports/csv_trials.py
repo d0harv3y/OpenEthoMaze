@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Set
 
 import csv
 import math
 import numpy as np
 
-from ...core.h5_layout import resolve_ambulation_metrics_group
+from ...core.h5_layout import TASK_DATA_GROUP, resolve_ambulation_metrics_group
+from ...core.tasks import ARENA_TYPE_CIRCULAR, normalize_arena_type
 from ...core.schema import NODE_SUMMARY_DTYPE
 from ..defaults import HYBRID_POINT_NAME
 from ..paths import OUTPUT_H5
@@ -17,8 +18,33 @@ from ..db import (
     TrialKey,
     list_trials,
     open_db,
+    read_arena_type,
     read_animal_label,
 )
+
+
+def _optional_filter_set(raw: Optional[str]) -> Optional[Set[str]]:
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    return {x.strip() for x in s.replace(",", " ").split() if x.strip()}
+
+
+def _trial_matches_export_filters(
+    key: TrialKey,
+    animal_ids: Optional[Set[str]],
+    sessions: Optional[Set[str]],
+    trial_names: Optional[Set[str]],
+) -> bool:
+    if animal_ids and key.animal_id not in animal_ids:
+        return False
+    if sessions and key.session not in sessions:
+        return False
+    if trial_names and key.trial not in trial_names:
+        return False
+    return True
 
 
 def _decode_trial_state(val: Any) -> str:
@@ -128,6 +154,32 @@ def _format_session(key: TrialKey) -> str:
         return f"S{session_num.zfill(2)}"
 
 
+def _task_suffix(task_name: str) -> str:
+    """Stable filename suffix for one task."""
+    return normalize_arena_type(task_name).replace("-", "_")
+
+
+def _trial_task_name(g_trial: Any, fallback_task: str) -> str:
+    """Infer task label from trial attrs/groups; fallback to DB arena type."""
+    raw = g_trial.attrs.get("arena_type", "")
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", errors="replace")
+    txt = str(raw or "").strip()
+    if txt:
+        return normalize_arena_type(txt)
+
+    g_task_root = g_trial.get(TASK_DATA_GROUP)
+    if g_task_root is not None:
+        keys = [normalize_arena_type(name) for name in g_task_root.keys()]
+        if len(keys) == 1:
+            return keys[0]
+        if keys:
+            # If multiple task roots are present, keep a deterministic fallback.
+            return sorted(keys)[0]
+
+    return normalize_arena_type(fallback_task or ARENA_TYPE_CIRCULAR)
+
+
 def _extract_trial_metrics(db_path: Path, key: TrialKey) -> dict[str, Any]:
     """
     Extract metric values for a single trial.
@@ -214,6 +266,10 @@ def export_trial_summary(
     db_path: Optional[Path] = None,
     output_path: Optional[Path] = None,
     include_mistrials: bool = False,
+    *,
+    animal_ids: Optional[str] = None,
+    sessions: Optional[str] = None,
+    trial_names: Optional[str] = None,
 ) -> Path:
     """
     Export trial-level summary metrics to long-format CSV.
@@ -229,6 +285,9 @@ def export_trial_summary(
         db_path: Path to VAST database (uses config default if None)
         output_path: Output CSV path (auto-generated if None)
         include_mistrials: If False (default), omit rows for trials with mistrial_reason set.
+        animal_ids: Optional comma/space-separated animal IDs to include.
+        sessions: Optional session keys (e.g. S01) to include.
+        trial_names: Optional trial keys (e.g. T01) to include.
 
     Returns:
         Path to generated CSV file
@@ -236,16 +295,21 @@ def export_trial_summary(
     db_path = db_path or OUTPUT_H5
 
     if output_path is None:
-        output_path = db_path.parent / "exports" / "vast_trial_summary.csv"
+        output_path = db_path.parent / "exports" / "trial_summary.csv"
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     trials = list_trials(db_path)
+    f_aid = _optional_filter_set(animal_ids)
+    f_sess = _optional_filter_set(sessions)
+    f_trials = _optional_filter_set(trial_names)
 
     # Collect rows in long format
     rows = []
 
     for key in trials:
+        if not _trial_matches_export_filters(key, f_aid, f_sess, f_trials):
+            continue
         # Extract metrics for this trial
         metrics = _extract_trial_metrics(db_path, key)
 
@@ -325,6 +389,10 @@ def export_trial_summary(
 def export_mistrial_summary(
     db_path: Optional[Path] = None,
     output_path: Optional[Path] = None,
+    *,
+    animal_ids: Optional[str] = None,
+    sessions: Optional[str] = None,
+    trial_names: Optional[str] = None,
 ) -> Path:
     """
     Export trials that have a mistrial_reason set (missing data, no tracking, etc.).
@@ -336,16 +404,21 @@ def export_mistrial_summary(
     db_path = db_path or OUTPUT_H5
 
     if output_path is None:
-        output_path = db_path.parent / "exports" / "vast_mistrial_summary.csv"
+        output_path = db_path.parent / "exports" / "mistrial_summary.csv"
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     trials = list_trials(db_path)
     rows: list[dict[str, str]] = []
     reason_counts: dict[str, int] = {}
+    f_aid = _optional_filter_set(animal_ids)
+    f_sess = _optional_filter_set(sessions)
+    f_trials = _optional_filter_set(trial_names)
 
     with open_db(db_path, "r") as h5:
         for key in trials:
+            if not _trial_matches_export_filters(key, f_aid, f_sess, f_trials):
+                continue
             try:
                 g_trial = h5[key.path()]
                 reason = g_trial.attrs.get("mistrial_reason", "")
@@ -386,6 +459,10 @@ def export_all(
     db_path: Optional[Path] = None,
     output_dir: Optional[Path] = None,
     include_mistrials: bool = False,
+    *,
+    animal_ids: Optional[str] = None,
+    sessions: Optional[str] = None,
+    trial_names: Optional[str] = None,
 ) -> dict[str, Path]:
     """
     Export all CSV files.
@@ -410,14 +487,20 @@ def export_all(
     # Trial summary (long format); mistrials excluded by default
     exports["trial_summary"] = export_trial_summary(
         db_path,
-        output_dir / "vast_trial_summary.csv",
+        output_dir / "trial_summary.csv",
         include_mistrials=include_mistrials,
+        animal_ids=animal_ids,
+        sessions=sessions,
+        trial_names=trial_names,
     )
 
     # Mistrial summary (trials with mistrial_reason set)
     exports["mistrial_summary"] = export_mistrial_summary(
         db_path,
-        output_dir / "vast_mistrial_summary.csv",
+        output_dir / "mistrial_summary.csv",
+        animal_ids=animal_ids,
+        sessions=sessions,
+        trial_names=trial_names,
     )
 
     print(f"\nExported {len(exports)} CSV file(s) to {output_dir}")
@@ -428,6 +511,10 @@ def run_exports_for_db(
     db_path: Path,
     output_dir: Optional[Path] = None,
     include_mistrials: bool = False,
+    *,
+    animal_ids: Optional[str] = None,
+    sessions: Optional[str] = None,
+    trial_names: Optional[str] = None,
 ) -> dict[str, Path]:
     """
     Programmatic entry point for running all CSV exports for a single DB.
@@ -441,6 +528,10 @@ def export_all_for_dbs(
     db_paths: list[Path],
     output_dir: Path,
     include_mistrials: bool = False,
+    *,
+    animal_ids: Optional[str] = None,
+    sessions: Optional[str] = None,
+    trial_names: Optional[str] = None,
 ) -> dict[str, Path]:
     """
     Export combined CSVs for multiple databases into a single folder.
@@ -450,101 +541,124 @@ def export_all_for_dbs(
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    f_aid = _optional_filter_set(animal_ids)
+    f_sess = _optional_filter_set(sessions)
+    f_trials = _optional_filter_set(trial_names)
 
-    # Combined trial summary
-    summary_csv = output_dir / "vast_trial_summary.csv"
-    all_rows: list[dict[str, Any]] = []
+    summary_rows_by_task: dict[str, list[dict[str, Any]]] = {}
+    mistrial_rows_by_task: dict[str, list[dict[str, str]]] = {}
+    seen_tasks: set[str] = set()
     for db_path in db_paths:
         db_path = Path(db_path)
+        db_task = normalize_arena_type(read_arena_type(db_path))
         trials = list_trials(db_path)
-        for key in trials:
-            metrics = _extract_trial_metrics(db_path, key)
-            if not include_mistrials and (metrics.get("mistrial_reason") or "").strip():
-                continue
-            labels = read_animal_label(db_path, key.animal_id)
-            experiment = labels.get("experiment", "")
-            strain = labels.get("strain", "")
-            sex = labels.get("sex", "")
-            researcher = labels.get("researcher", "")
-            drug = labels.get("drug", "")
-            treatment = labels.get("tx", "")
-            session = _format_session(key)
-            trial_str = key.trial
-            if include_mistrials and (metrics.get("mistrial_reason") or "").strip():
-                trial_str = "m" + trial_str
-            exit_num = metrics.get("exit_number")
-            base_row = {
-                "experiment": experiment,
-                "session": session,
-                "trial": trial_str,
-                "timestamp": metrics["timestamp"],
-                "animal_id": key.animal_id,
-                "strain": strain,
-                "sex": sex,
-                "researcher": researcher,
-                "drug": drug,
-                "treatment": treatment,
-                "exit#": _format_value(exit_num) if _is_valid_value(exit_num) else "",
-                "sleap_model_path": metrics.get("sleap_model_path") or "",
-                "trajectory_source": metrics.get("trajectory_source") or HYBRID_POINT_NAME,
-            }
-            with open_db(db_path, "r") as h5:
-                g_trial = h5[key.path()]
-                _append_hybrid_summary_metric_rows(all_rows, base_row, g_trial)
-            for output_metric, db_field in METRIC_MAPPING.items():
-                value = metrics.get(db_field)
-                if not _is_valid_value(value):
+        with open_db(db_path, "r") as h5:
+            for key in trials:
+                if not _trial_matches_export_filters(key, f_aid, f_sess, f_trials):
                     continue
-                all_rows.append({
-                    **base_row,
-                    "trial_state": "run",
-                    "metric": output_metric,
-                    "value": _format_value(value),
-                })
+                g_trial = h5[key.path()]
+                task_name = _trial_task_name(g_trial, db_task)
+                seen_tasks.add(task_name)
+
+                metrics = _extract_trial_metrics(db_path, key)
+                if not include_mistrials and (metrics.get("mistrial_reason") or "").strip():
+                    continue
+                labels = read_animal_label(db_path, key.animal_id)
+                experiment = labels.get("experiment", "")
+                strain = labels.get("strain", "")
+                sex = labels.get("sex", "")
+                researcher = labels.get("researcher", "")
+                drug = labels.get("drug", "")
+                treatment = labels.get("tx", "")
+                session = _format_session(key)
+                trial_str = key.trial
+                if include_mistrials and (metrics.get("mistrial_reason") or "").strip():
+                    trial_str = "m" + trial_str
+                exit_num = metrics.get("exit_number")
+                base_row = {
+                    "experiment": experiment,
+                    "session": session,
+                    "trial": trial_str,
+                    "timestamp": metrics["timestamp"],
+                    "animal_id": key.animal_id,
+                    "strain": strain,
+                    "sex": sex,
+                    "researcher": researcher,
+                    "drug": drug,
+                    "treatment": treatment,
+                    "exit#": _format_value(exit_num) if _is_valid_value(exit_num) else "",
+                    "sleap_model_path": metrics.get("sleap_model_path") or "",
+                    "trajectory_source": metrics.get("trajectory_source") or HYBRID_POINT_NAME,
+                }
+                task_rows = summary_rows_by_task.setdefault(task_name, [])
+                g_trial = h5[key.path()]
+                _append_hybrid_summary_metric_rows(task_rows, base_row, g_trial)
+                for output_metric, db_field in METRIC_MAPPING.items():
+                    value = metrics.get(db_field)
+                    if not _is_valid_value(value):
+                        continue
+                    task_rows.append({
+                        **base_row,
+                        "trial_state": "run",
+                        "metric": output_metric,
+                        "value": _format_value(value),
+                    })
+
+                reason = g_trial.attrs.get("mistrial_reason", "")
+                if isinstance(reason, bytes):
+                    reason = reason.decode("utf-8", errors="replace")
+                reason = (reason or "").strip()
+                if reason:
+                    mistrial_rows_by_task.setdefault(task_name, []).append({
+                        "animal_id": key.animal_id,
+                        "phase": key.phase,
+                        "session": key.session,
+                        "trial": key.trial,
+                        "mistrial_reason": reason,
+                    })
 
     fieldnames = [
         "experiment", "session", "trial", "timestamp", "animal_id", "strain", "sex",
         "researcher", "drug", "treatment", "exit#", "sleap_model_path", "trajectory_source",
         "trial_state", "metric", "value",
     ]
-    with summary_csv.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(all_rows)
+    tasks_sorted = sorted(seen_tasks)
+    if len(tasks_sorted) > 1:
+        print(
+            "Warning: Mixed tasks detected across selected H5 files. "
+            "Writing task-specific CSV outputs."
+        )
 
-    # Combined mistrial summary
-    mistrial_csv = output_dir / "vast_mistrial_summary.csv"
-    mistrial_rows: list[dict[str, str]] = []
-    with mistrial_csv.open("w", newline="", encoding="utf-8") as f:
-        fieldnames_m = ["animal_id", "phase", "session", "trial", "mistrial_reason"]
-        writer = csv.DictWriter(f, fieldnames=fieldnames_m)
-        writer.writeheader()
-        for db_path in db_paths:
-            db_path = Path(db_path)
-            trials = list_trials(db_path)
-            with open_db(db_path, "r") as h5:
-                for key in trials:
-                    try:
-                        g_trial = h5[key.path()]
-                        reason = g_trial.attrs.get("mistrial_reason", "")
-                        if isinstance(reason, bytes):
-                            reason = reason.decode("utf-8", errors="replace")
-                        reason = (reason or "").strip()
-                        if not reason:
-                            continue
-                        row = {
-                            "animal_id": key.animal_id,
-                            "phase": key.phase,
-                            "session": key.session,
-                            "trial": key.trial,
-                            "mistrial_reason": reason,
-                        }
-                        mistrial_rows.append(row)
-                        writer.writerow(row)
-                    except Exception:
-                        continue
+    exports: dict[str, Path] = {}
+    fieldnames_m = ["animal_id", "phase", "session", "trial", "mistrial_reason"]
+    for task_name in tasks_sorted:
+        suffix = _task_suffix(task_name)
+        summary_csv = output_dir / f"trial_summary_{suffix}.csv"
+        with summary_csv.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(summary_rows_by_task.get(task_name, []))
+        exports[f"trial_summary_{suffix}"] = summary_csv
 
-    return {
-        "trial_summary": summary_csv,
-        "mistrial_summary": mistrial_csv,
-    }
+        mistrial_csv = output_dir / f"mistrial_summary_{suffix}.csv"
+        with mistrial_csv.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames_m)
+            writer.writeheader()
+            writer.writerows(mistrial_rows_by_task.get(task_name, []))
+        exports[f"mistrial_summary_{suffix}"] = mistrial_csv
+
+    if not exports:
+        # No trials matched filters; still produce default task files for compatibility.
+        suffix = _task_suffix(ARENA_TYPE_CIRCULAR)
+        summary_csv = output_dir / f"trial_summary_{suffix}.csv"
+        with summary_csv.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+        mistrial_csv = output_dir / f"mistrial_summary_{suffix}.csv"
+        with mistrial_csv.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames_m)
+            writer.writeheader()
+        exports[f"trial_summary_{suffix}"] = summary_csv
+        exports[f"mistrial_summary_{suffix}"] = mistrial_csv
+
+    return exports

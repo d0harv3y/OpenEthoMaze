@@ -31,7 +31,6 @@ from maze.core.h5_layout import (
 from maze.core.tasks import ARENA_TYPE_CIRCULAR, ARENA_TYPE_RADIAL_ARM, normalize_arena_type
 from maze.pipeline.db.radial_arm_geometry_io import write_radial_arm_geometry_tree
 from .radial_arm.config import RadialArmControllerConfig
-from .shared_config import AnalysisTrajectoryConfig
 from .radial_arm.geometry import (
     build_template_from_params,
     exit_hole_xyr_px,
@@ -109,9 +108,8 @@ def write_trial_settings(
     exit_radius_px: Optional[float] = None,
     trial_start_frame: int = 0,
     seek_to_frame: int = 0,
-    analysis_trajectory: Optional[AnalysisTrajectoryConfig] = None,
 ) -> None:
-    analysis = analysis_trajectory or AnalysisTrajectoryConfig()
+    """Persist geometry/session attrs only; analysis parameters are written after ``process_trial``."""
     write_group_attrs(
         g_trial,
         {
@@ -128,31 +126,6 @@ def write_trial_settings(
             "exit_radius_px": float(exit_radius_px) if exit_radius_px is not None else None,
             "trial_start_frame": int(trial_start_frame),
             "seek_to_frame": int(seek_to_frame),
-            "movement_start_threshold_m_per_frame": float(
-                analysis.movement_start_threshold_m_per_frame
-            ),
-            "movement_stop_threshold_m_per_frame": float(
-                analysis.movement_stop_threshold_m_per_frame
-            ),
-            "movement_speed_median_window_frames": int(
-                analysis.movement_speed_median_window_frames
-            ),
-            "movement_entry_debounce_frames": int(
-                analysis.movement_entry_debounce_frames
-            ),
-            "movement_exit_debounce_frames": int(
-                analysis.movement_exit_debounce_frames
-            ),
-            "min_movement_bout_duration_frames": int(
-                analysis.min_movement_bout_duration_frames
-            ),
-            "movement_inter_bout_interval_frames": int(
-                analysis.movement_inter_bout_interval_frames
-            ),
-            "max_movement_per_frame_cm": float(analysis.max_movement_per_frame_cm),
-            "jump_filter_lookahead_frames": int(
-                analysis.jump_filter_lookahead_frames
-            ),
         },
     )
 
@@ -227,33 +200,6 @@ def compute_radial_arm_settings_payloads(
         "stimulus_frequency_hz": float(ram.stimulus_frequency_hz),
         "stimulus_enabled": int(bool(ram.stimulus_enabled)),
         "active_edit_region": safe_str(calibration.edit_region_name),
-        "movement_start_threshold_m_per_frame": float(
-            config.analysis_trajectory.movement_start_threshold_m_per_frame
-        ),
-        "movement_stop_threshold_m_per_frame": float(
-            config.analysis_trajectory.movement_stop_threshold_m_per_frame
-        ),
-        "movement_speed_median_window_frames": int(
-            config.analysis_trajectory.movement_speed_median_window_frames
-        ),
-        "movement_entry_debounce_frames": int(
-            config.analysis_trajectory.movement_entry_debounce_frames
-        ),
-        "movement_exit_debounce_frames": int(
-            config.analysis_trajectory.movement_exit_debounce_frames
-        ),
-        "min_movement_bout_duration_frames": int(
-            config.analysis_trajectory.min_movement_bout_duration_frames
-        ),
-        "movement_inter_bout_interval_frames": int(
-            config.analysis_trajectory.movement_inter_bout_interval_frames
-        ),
-        "max_movement_per_frame_cm": float(
-            config.analysis_trajectory.max_movement_per_frame_cm
-        ),
-        "jump_filter_lookahead_frames": int(
-            config.analysis_trajectory.jump_filter_lookahead_frames
-        ),
     }
     task_attrs: Dict[str, Any] = {
         "task_name": ARENA_TYPE_RADIAL_ARM,

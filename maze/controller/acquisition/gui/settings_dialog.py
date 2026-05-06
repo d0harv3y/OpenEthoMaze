@@ -590,7 +590,7 @@ class SettingsDialog(QDialog):
         for i in range(n):
             if self._animals_table.item(i, 0) is None:
                 self._animals_table.setItem(i, 0, QTableWidgetItem(""))
-            for col in (1, 2, 3, 4, 5):
+            for col in (1, 2, 3, 4, 5, 6, 7):
                 if self._animals_table.item(i, col) is None:
                     self._animals_table.setItem(i, col, QTableWidgetItem(""))
 
@@ -647,8 +647,19 @@ class SettingsDialog(QDialog):
         w = QWidget()
         layout = QVBoxLayout(w)
         self._animals_table = QTableWidget()
-        self._animals_table.setColumnCount(6)
-        self._animals_table.setHorizontalHeaderLabels(["Animal ID", "Sex", "Strain", "Treatment", "Drug", "Notes"])
+        self._animals_table.setColumnCount(8)
+        self._animals_table.setHorizontalHeaderLabels(
+            [
+                "Animal ID",
+                "Sex",
+                "Strain",
+                "Treatment",
+                "Drug",
+                "Experiment",
+                "Researcher",
+                "Notes",
+            ]
+        )
         self._animals_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self._animals_table)
         return w
@@ -953,7 +964,9 @@ class SettingsDialog(QDialog):
             self._animals_table.setItem(i, 2, QTableWidgetItem(animal.strain or ""))
             self._animals_table.setItem(i, 3, QTableWidgetItem(animal.tx or ""))
             self._animals_table.setItem(i, 4, QTableWidgetItem(animal.drug or ""))
-            self._animals_table.setItem(i, 5, QTableWidgetItem(animal.notes or ""))
+            self._animals_table.setItem(i, 5, QTableWidgetItem(animal.experiment or ""))
+            self._animals_table.setItem(i, 6, QTableWidgetItem(animal.researcher or ""))
+            self._animals_table.setItem(i, 7, QTableWidgetItem(animal.notes or ""))
         if not sess.animals:
             self._animals_table.setItem(0, 0, QTableWidgetItem(""))
         # Fallback tracking
@@ -1087,7 +1100,9 @@ class SettingsDialog(QDialog):
             strain_item = self._animals_table.item(i, 2)
             tx_item = self._animals_table.item(i, 3)
             drug_item = self._animals_table.item(i, 4)
-            notes_item = self._animals_table.item(i, 5)
+            experiment_item = self._animals_table.item(i, 5)
+            researcher_item = self._animals_table.item(i, 6)
+            notes_item = self._animals_table.item(i, 7)
             aid = (id_item.text() or "").strip() if id_item else ""
             if not aid and i >= c.session.num_animals:
                 continue
@@ -1097,6 +1112,12 @@ class SettingsDialog(QDialog):
                 strain=(strain_item.text() or "").strip() or None if strain_item else None,
                 sex=(sex_item.text() or "").strip() or None if sex_item else None,
                 drug=(drug_item.text() or "").strip() or None if drug_item else None,
+                experiment=(experiment_item.text() or "").strip() or None
+                if experiment_item
+                else None,
+                researcher=(researcher_item.text() or "").strip() or None
+                if researcher_item
+                else None,
                 notes=(notes_item.text() or "").strip() or None if notes_item else None,
             ))
         c.session.ensure_animals()

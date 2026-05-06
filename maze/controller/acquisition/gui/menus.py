@@ -20,8 +20,6 @@ def build_main_window_menus(window, *, reload_last_profile_checked: bool) -> Non
     file_menu.addAction("Open acquisition profile in editor", window._on_open_profile_in_editor)
     file_menu.addAction("Reload acquisition profile", window._on_reload_profile)
     file_menu.addSeparator()
-    export_action = file_menu.addAction("Run exports…", window._on_run_exports)
-    export_action.setEnabled(getattr(window, "_task_mode", "vast") == "vast")
     file_menu.addAction("Open current DB in h5web", window._on_open_current_db_h5web)
     file_menu.addAction("Open H5 in h5web…", window._on_open_h5web)
     file_menu.addSeparator()
@@ -30,6 +28,14 @@ def build_main_window_menus(window, *, reload_last_profile_checked: bool) -> Non
     settings_menu = menubar.addMenu("&Settings")
     settings_menu.addAction("acquisition…", window._on_settings)
     settings_menu.addAction("analysis…", window._on_analysis_settings)
+
+    pipeline_menu = menubar.addMenu("&Pipeline")
+    discovery_action = pipeline_menu.addAction("Discovery…", window._on_pipeline_discovery)
+    discovery_action.setEnabled(False)
+    inference_action = pipeline_menu.addAction("Virtual acquisition…", window._on_pipeline_inference)
+    inference_action.setEnabled(False)
+    pipeline_menu.addAction("Analyze…", window._on_pipeline_analyze)
+    pipeline_menu.addAction("Export…", window._on_run_exports)
 
     help_menu = menubar.addMenu("&Help")
     help_menu.addAction("View error log", window._on_view_error_log)

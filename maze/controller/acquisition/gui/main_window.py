@@ -140,6 +140,22 @@ except ImportError:
     AnalysisSettingsDialog = None
     HAS_ANALYSIS_SETTINGS_DIALOG = False
 
+try:
+    from .pipeline_dialogs import (
+        open_analyze_dialog,
+        open_discovery_dialog,
+        open_inference_dialog,
+        prompt_export_filters,
+    )
+
+    HAS_PIPELINE_DIALOGS = True
+except ImportError:
+    open_analyze_dialog = None  # type: ignore[misc, assignment]
+    open_discovery_dialog = None  # type: ignore[misc, assignment]
+    open_inference_dialog = None  # type: ignore[misc, assignment]
+    prompt_export_filters = None  # type: ignore[misc, assignment]
+    HAS_PIPELINE_DIALOGS = False
+
 class MainWindow(QMainWindow):
     """Main window: profile, calibration, run, export."""
 
@@ -673,16 +689,33 @@ class MainWindow(QMainWindow):
             return
         dlg = AnalysisSettingsDialog(
             self._config.analysis_trajectory,
+            self._config.analysis_trace_quality,
             self,
-            on_apply=self._apply_analysis_trajectory_config,
+            on_apply=self._apply_analysis_config,
         )
         self._analysis_settings_dialog = dlg
         dlg.show()
         dlg.raise_()
 
-    def _apply_analysis_trajectory_config(self, params) -> None:
-        self._config.analysis_trajectory = params
+    def _apply_analysis_config(self, traj, trace_quality) -> None:
+        self._config.analysis_trajectory = traj
+        self._config.analysis_trace_quality = trace_quality
         self.statusBar().showMessage("Applied analysis settings.")
+
+    def _on_pipeline_discovery(self) -> None:
+        if not HAS_QT or not HAS_PIPELINE_DIALOGS or open_discovery_dialog is None:
+            return
+        open_discovery_dialog(self, self._config)
+
+    def _on_pipeline_inference(self) -> None:
+        if not HAS_QT or not HAS_PIPELINE_DIALOGS or open_inference_dialog is None:
+            return
+        open_inference_dialog(self, self._config)
+
+    def _on_pipeline_analyze(self) -> None:
+        if not HAS_QT or not HAS_PIPELINE_DIALOGS or open_analyze_dialog is None:
+            return
+        open_analyze_dialog(self, self._config)
 
     def _on_open_settings_to_tab(self, tab_name: str | int) -> None:
         if not HAS_SETTINGS_DIALOG or SettingsDialog is None:
@@ -1975,6 +2008,10 @@ class MainWindow(QMainWindow):
                 trial=trial,
                 video_path=video_path,
                 run_phase=run_phase,
+                analysis_profile=(
+                    self._config.analysis_trajectory,
+                    self._config.analysis_trace_quality,
+                ),
             )
             self._analysis_worker.finished.connect(
                 self._on_analysis_finished,
@@ -2203,7 +2240,10 @@ class MainWindow(QMainWindow):
             self._apply_gui_dict_to_ui(gui)
         a_dlg = getattr(self, "_analysis_settings_dialog", None)
         if a_dlg is not None and hasattr(a_dlg, "set_params"):
-            a_dlg.set_params(self._config.analysis_trajectory)
+            a_dlg.set_params(
+                self._config.analysis_trajectory,
+                self._config.analysis_trace_quality,
+            )
         if (
             self._camera_timer is not None
             and self._camera_timer.isActive()
@@ -2476,10 +2516,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Stopped.")
 
     def _on_run_exports(self) -> None:
-        """Run VAST CSV exports on one or more databases."""
-        if self._task_mode != "vast":
-            self.statusBar().showMessage("Exports are only available for VAST right now.")
-            return
+        """Run CSV exports on one or more trial databases."""
         if not HAS_QT:
             return
         # Default selection: current controller output DB
@@ -2491,7 +2528,7 @@ class MainWindow(QMainWindow):
 
         paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "Select VAST results H5 file(s)",
+            "Select results H5 file(s)",
             start_path,
             "HDF5 (*.h5 *.hdf5);;All (*)",
         )
@@ -2508,15 +2545,37 @@ class MainWindow(QMainWindow):
             return
         out_dir = Path(out_dir_str)
 
+        animal_f = sess_f = trial_f = ""
+        if HAS_PIPELINE_DIALOGS and prompt_export_filters is not None:
+            flt = prompt_export_filters(self)
+            if flt is None:
+                return
+            animal_f, sess_f, trial_f = flt
+
         from maze.pipeline.exports.csv_trials import export_all_for_dbs
 
         try:
             db_paths = [Path(p) for p in paths]
-            export_all_for_dbs(
+            exports = export_all_for_dbs(
                 db_paths=db_paths,
                 output_dir=out_dir,
                 include_mistrials=False,
+                animal_ids=animal_f or None,
+                sessions=sess_f or None,
+                trial_names=trial_f or None,
             )
+            task_suffixes = {
+                name.rsplit("_", 1)[-1]
+                for name in exports.keys()
+                if "_" in name
+            }
+            if len(task_suffixes) > 1:
+                QMessageBox.warning(
+                    self,
+                    "Export",
+                    "Mixed tasks detected. Export generated separate CSV files per task "
+                    f"in {out_dir}.",
+                )
             self.statusBar().showMessage(f"Exports completed → {out_dir}")
         except Exception as e:
             self.statusBar().showMessage(f"Exports failed: {e}")

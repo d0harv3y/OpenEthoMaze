@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -24,9 +25,20 @@ from .ambulation_xy import read_xy_table
 from .trial_key import TrialKey
 
 from ..defaults import (
+    FILTER_FRAMES_NO_ANIMAL,
     IN_RANGE_POINT_NAME,
     JUMP_FILTER_LOOKAHEAD_FRAMES,
     MAX_MOVEMENT_PER_FRAME_CM,
+    MIN_CONFIDENT_NODES_PER_FRAME,
+    MIN_MEAN_CONFIDENCE_PER_FRAME,
+    MIN_NODE_CONFIDENCE_THRESHOLD,
+    MIN_VALID_FRAME_RUN_LENGTH,
+    TRACE_APPLY_SMOOTHING,
+    TRACE_CONFIDENCE_THRESHOLD,
+    TRACE_INTERPOLATE_LOW_CONF,
+    TRACE_INTERPOLATE_NANS,
+    TRACE_MAX_GAP_FRAMES,
+    TRACE_SMOOTHING_WINDOW,
 )
 
 
@@ -495,6 +507,59 @@ def read_trial_settings(
                     )
                 ),
             ),
+            filter_frames_no_animal=bool(
+                attrs.get("filter_frames_no_animal", FILTER_FRAMES_NO_ANIMAL)
+            ),
+            min_confident_nodes_per_frame=max(
+                0,
+                int(
+                    attrs.get(
+                        "min_confident_nodes_per_frame",
+                        MIN_CONFIDENT_NODES_PER_FRAME,
+                    )
+                ),
+            ),
+            min_node_confidence_threshold=float(
+                attrs.get(
+                    "min_node_confidence_threshold",
+                    MIN_NODE_CONFIDENCE_THRESHOLD,
+                )
+            ),
+            min_valid_frame_run_length=max(
+                0,
+                int(
+                    attrs.get(
+                        "min_valid_frame_run_length",
+                        MIN_VALID_FRAME_RUN_LENGTH,
+                    )
+                ),
+            ),
+            min_mean_confidence_per_frame=(
+                float(attrs["min_mean_confidence_per_frame"])
+                if "min_mean_confidence_per_frame" in attrs
+                and attrs["min_mean_confidence_per_frame"] is not None
+                else MIN_MEAN_CONFIDENCE_PER_FRAME
+            ),
+            trace_interpolate_nans=bool(
+                attrs.get("trace_interpolate_nans", TRACE_INTERPOLATE_NANS)
+            ),
+            trace_max_gap_frames=max(
+                0,
+                int(attrs.get("trace_max_gap_frames", TRACE_MAX_GAP_FRAMES)),
+            ),
+            trace_interpolate_low_conf=bool(
+                attrs.get("trace_interpolate_low_conf", TRACE_INTERPOLATE_LOW_CONF)
+            ),
+            trace_confidence_threshold=float(
+                attrs.get("trace_confidence_threshold", TRACE_CONFIDENCE_THRESHOLD)
+            ),
+            trace_apply_smoothing=bool(
+                attrs.get("trace_apply_smoothing", TRACE_APPLY_SMOOTHING)
+            ),
+            trace_smoothing_window=max(
+                1,
+                int(attrs.get("trace_smoothing_window", TRACE_SMOOTHING_WINDOW)),
+            ),
         )
         h5_fps = float(attrs["h5_fps"]) if "h5_fps" in attrs else None
         trial_start_frame = (
@@ -510,6 +575,69 @@ def read_trial_settings(
             use_absolute_frame_index=use_abs,
         )
     return settings, h5_fps, timing
+
+
+def persist_effective_analysis_params(
+    db_path: Optional[Path],
+    key: TrialKey,
+    settings: TrialSettings,
+) -> None:
+    """Write movement, trace-quality, and completion attrs after a successful ``process_trial`` run."""
+    if db_path is None:
+        return
+    completed = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with open_db(db_path, "a") as h5:
+        g = h5[key.path()]
+        g.attrs["movement_start_threshold_m_per_frame"] = float(
+            settings.movement_start_threshold_m_per_frame
+        )
+        g.attrs["movement_stop_threshold_m_per_frame"] = float(
+            settings.movement_stop_threshold_m_per_frame
+        )
+        g.attrs["movement_speed_median_window_frames"] = int(
+            settings.movement_speed_median_window_frames
+        )
+        g.attrs["movement_entry_debounce_frames"] = int(
+            settings.movement_entry_debounce_frames
+        )
+        g.attrs["movement_exit_debounce_frames"] = int(
+            settings.movement_exit_debounce_frames
+        )
+        g.attrs["min_movement_bout_duration_frames"] = int(
+            settings.min_movement_bout_duration_frames
+        )
+        g.attrs["movement_inter_bout_interval_frames"] = int(
+            settings.movement_inter_bout_interval_frames
+        )
+        g.attrs["max_movement_per_frame_cm"] = float(settings.max_movement_per_frame_cm)
+        g.attrs["jump_filter_lookahead_frames"] = int(
+            settings.jump_filter_lookahead_frames
+        )
+        g.attrs["filter_frames_no_animal"] = int(bool(settings.filter_frames_no_animal))
+        g.attrs["min_confident_nodes_per_frame"] = int(
+            settings.min_confident_nodes_per_frame
+        )
+        g.attrs["min_node_confidence_threshold"] = float(
+            settings.min_node_confidence_threshold
+        )
+        g.attrs["min_valid_frame_run_length"] = int(
+            settings.min_valid_frame_run_length
+        )
+        if settings.min_mean_confidence_per_frame is not None:
+            g.attrs["min_mean_confidence_per_frame"] = float(
+                settings.min_mean_confidence_per_frame
+            )
+        elif "min_mean_confidence_per_frame" in g.attrs:
+            del g.attrs["min_mean_confidence_per_frame"]
+        g.attrs["trace_interpolate_nans"] = int(bool(settings.trace_interpolate_nans))
+        g.attrs["trace_max_gap_frames"] = int(settings.trace_max_gap_frames)
+        g.attrs["trace_interpolate_low_conf"] = int(
+            bool(settings.trace_interpolate_low_conf)
+        )
+        g.attrs["trace_confidence_threshold"] = float(settings.trace_confidence_threshold)
+        g.attrs["trace_apply_smoothing"] = int(bool(settings.trace_apply_smoothing))
+        g.attrs["trace_smoothing_window"] = int(settings.trace_smoothing_window)
+        g.attrs["analysis_completed_at"] = safe_str(completed)
 
 
 def write_radial_arm_trial_settings(

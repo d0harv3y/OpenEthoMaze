@@ -7,10 +7,14 @@ from typing import Callable, Optional
 import numpy as np
 
 from ..profile import load_analysis_profile, save_analysis_profile
-from ..shared_config import AnalysisTrajectoryConfig
+from ..shared_config import AnalysisTraceQualityConfig, AnalysisTrajectoryConfig
 from ....pipeline.defaults import (
+    FILTER_FRAMES_NO_ANIMAL,
     JUMP_FILTER_LOOKAHEAD_FRAMES,
     MAX_MOVEMENT_PER_FRAME_CM,
+    MIN_CONFIDENT_NODES_PER_FRAME,
+    MIN_NODE_CONFIDENCE_THRESHOLD,
+    MIN_VALID_FRAME_RUN_LENGTH,
     MOVEMENT_ENTRY_DEBOUNCE_FRAMES,
     MOVEMENT_EXIT_DEBOUNCE_FRAMES,
     MOVEMENT_INTER_BOUT_INTERVAL_FRAMES,
@@ -18,6 +22,12 @@ from ....pipeline.defaults import (
     MOVEMENT_START_THRESHOLD_M_PER_FRAME,
     MOVEMENT_STOP_THRESHOLD_M_PER_FRAME,
     MIN_MOVEMENT_BOUT_DURATION_FRAMES,
+    TRACE_APPLY_SMOOTHING,
+    TRACE_CONFIDENCE_THRESHOLD,
+    TRACE_INTERPOLATE_LOW_CONF,
+    TRACE_INTERPOLATE_NANS,
+    TRACE_MAX_GAP_FRAMES,
+    TRACE_SMOOTHING_WINDOW,
 )
 from .analysis_preview_model import (
     TrajectorySource,
@@ -35,6 +45,7 @@ try:
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QColor, QFont, QPainter, QPen
     from PySide6.QtWidgets import (
+        QCheckBox,
         QComboBox,
         QDialog,
         QDoubleSpinBox,
@@ -46,6 +57,7 @@ try:
         QLabel,
         QPushButton,
         QSpinBox,
+        QTabWidget,
         QVBoxLayout,
         QWidget,
     )
@@ -233,14 +245,18 @@ class AnalysisSettingsDialog(QDialog):
     def __init__(
         self,
         params: AnalysisTrajectoryConfig,
+        trace_quality: AnalysisTraceQualityConfig,
         parent: Optional[QWidget] = None,
         *,
-        on_apply: Optional[Callable[[AnalysisTrajectoryConfig], None]] = None,
+        on_apply: Optional[
+            Callable[[AnalysisTrajectoryConfig, AnalysisTraceQualityConfig], None]
+        ] = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Analysis settings")
         self.setWindowModality(Qt.WindowModality.NonModal)
         self._params = AnalysisTrajectoryConfig(**vars(params))
+        self._trace_params = AnalysisTraceQualityConfig(**vars(trace_quality))
         self._on_apply = on_apply
         self._source: TrajectorySource = demo_source()
         self._loaded_db_path: Optional[Path] = None
@@ -275,7 +291,6 @@ class AnalysisSettingsDialog(QDialog):
         layout.addLayout(top)
 
         body = QHBoxLayout()
-        left = QVBoxLayout()
         params_box = QGroupBox("Trace/trajectory (frame-based)")
         params_box.setToolTip(
             "All bout and jump settings are in frames; seconds in summaries use the source FPS. "
@@ -401,7 +416,51 @@ class AnalysisSettingsDialog(QDialog):
         _lbl_px = QLabel("px/cm (read-only):")
         _lbl_px.setToolTip(_tip_px)
         form.addRow(_lbl_px, self._pxcm_label)
-        left.addWidget(params_box)
+
+        tq_box = QGroupBox("SLEAP trace quality (pipeline)")
+        tq_box.setToolTip(
+            "Used in offline process_trial: confidence gating, gap interpolation, smoothing. "
+            "Preview does not yet reflect these settings; tab is disabled until preview parity."
+        )
+        tq_form = QFormLayout(tq_box)
+        self._filter_animal_cb = QCheckBox("Apply per-frame confident-node gate")
+        self._filter_animal_cb.setToolTip(
+            "When on, frames with too few high-confidence nodes are excluded before metrics."
+        )
+        tq_form.addRow(self._filter_animal_cb)
+        self._min_conf_nodes = QSpinBox()
+        self._min_conf_nodes.setRange(0, 50)
+        self._min_conf_nodes.setToolTip("Minimum nodes at/above confidence threshold per frame.")
+        tq_form.addRow("Min confident nodes / frame:", self._min_conf_nodes)
+        self._min_node_conf = QDoubleSpinBox()
+        self._min_node_conf.setRange(0.0, 1.0)
+        self._min_node_conf.setDecimals(3)
+        self._min_node_conf.setSingleStep(0.05)
+        tq_form.addRow("Node confidence threshold:", self._min_node_conf)
+        self._min_valid_run = QSpinBox()
+        self._min_valid_run.setRange(0, 200)
+        tq_form.addRow("Min valid frame run length:", self._min_valid_run)
+        self._min_mean_conf = QDoubleSpinBox()
+        self._min_mean_conf.setRange(0.0, 1.0)
+        self._min_mean_conf.setDecimals(3)
+        self._min_mean_conf.setToolTip("0 = do not apply mean-confidence gate per frame.")
+        tq_form.addRow("Min mean node confidence (0=off):", self._min_mean_conf)
+        self._tr_interp_nan = QCheckBox("Interpolate short NaN gaps")
+        tq_form.addRow(self._tr_interp_nan)
+        self._tr_max_gap = QSpinBox()
+        self._tr_max_gap.setRange(0, 500)
+        tq_form.addRow("Max gap length (frames):", self._tr_max_gap)
+        self._tr_interp_low = QCheckBox("Interpolate low-confidence segments (short gaps)")
+        tq_form.addRow(self._tr_interp_low)
+        self._tr_conf_thr = QDoubleSpinBox()
+        self._tr_conf_thr.setRange(0.0, 1.0)
+        self._tr_conf_thr.setDecimals(3)
+        tq_form.addRow("Low-confidence threshold:", self._tr_conf_thr)
+        self._tr_smooth_cb = QCheckBox("Apply temporal smoothing")
+        tq_form.addRow(self._tr_smooth_cb)
+        self._tr_smooth_win = QSpinBox()
+        self._tr_smooth_win.setRange(1, 51)
+        tq_form.addRow("Smoothing window (frames):", self._tr_smooth_win)
 
         stats_box = QGroupBox("Summary")
         stats_box.setToolTip(
@@ -441,7 +500,26 @@ class AnalysisSettingsDialog(QDialog):
         stats_grid.addWidget(_sb_lbl4, 4, 0)
         self._summary_max.setToolTip(_sb_lbl4.toolTip())
         stats_grid.addWidget(self._summary_max, 4, 1)
-        left.addWidget(stats_box)
+
+        traj_tab = QWidget()
+        traj_tab_lay = QVBoxLayout(traj_tab)
+        traj_tab_lay.addWidget(params_box)
+        traj_tab_lay.addWidget(stats_box)
+        traj_tab_lay.addStretch()
+        trace_tab = QWidget()
+        trace_tab_lay = QVBoxLayout(trace_tab)
+        trace_tab_lay.addWidget(tq_box)
+        trace_tab_lay.addStretch()
+        settings_tabs = QTabWidget()
+        settings_tabs.addTab(traj_tab, "Trajectory")
+        settings_tabs.addTab(trace_tab, "SLEAP trace quality")
+        settings_tabs.setTabEnabled(1, False)
+        settings_tabs.setTabToolTip(
+            1,
+            "These parameters apply in the offline pipeline; live preview for them is not implemented yet.",
+        )
+        left = QVBoxLayout()
+        left.addWidget(settings_tabs)
         left.addStretch()
         body.addLayout(left, 0)
 
@@ -504,6 +582,7 @@ class AnalysisSettingsDialog(QDialog):
 
         self._source_combo.currentIndexChanged.connect(self._on_source_index_changed)
         self._fill_from_params(self._params)
+        self._fill_trace_params(self._trace_params)
         self._refresh_preview()
 
     def _fill_from_params(self, p: AnalysisTrajectoryConfig) -> None:
@@ -517,8 +596,30 @@ class AnalysisSettingsDialog(QDialog):
         self._max_jump_cm.setValue(float(p.max_movement_per_frame_cm))
         self._jump_lookahead.setValue(int(p.jump_filter_lookahead_frames))
 
-    def set_params(self, params: AnalysisTrajectoryConfig) -> None:
+    def _fill_trace_params(self, q: AnalysisTraceQualityConfig) -> None:
+        self._filter_animal_cb.setChecked(bool(q.filter_frames_no_animal))
+        self._min_conf_nodes.setValue(int(q.min_confident_nodes_per_frame))
+        self._min_node_conf.setValue(float(q.min_node_confidence_threshold))
+        self._min_valid_run.setValue(int(q.min_valid_frame_run_length))
+        self._min_mean_conf.setValue(
+            float(q.min_mean_confidence_per_frame)
+            if q.min_mean_confidence_per_frame is not None
+            else 0.0
+        )
+        self._tr_interp_nan.setChecked(bool(q.trace_interpolate_nans))
+        self._tr_max_gap.setValue(int(q.trace_max_gap_frames))
+        self._tr_interp_low.setChecked(bool(q.trace_interpolate_low_conf))
+        self._tr_conf_thr.setValue(float(q.trace_confidence_threshold))
+        self._tr_smooth_cb.setChecked(bool(q.trace_apply_smoothing))
+        self._tr_smooth_win.setValue(int(q.trace_smoothing_window))
+
+    def set_params(
+        self,
+        params: AnalysisTrajectoryConfig,
+        trace_quality: AnalysisTraceQualityConfig,
+    ) -> None:
         self._fill_from_params(params)
+        self._fill_trace_params(trace_quality)
         self._refresh_preview()
 
     def _read_params(self) -> AnalysisTrajectoryConfig:
@@ -532,6 +633,24 @@ class AnalysisSettingsDialog(QDialog):
             movement_inter_bout_interval_frames=int(self._inter_gap.value()),
             max_movement_per_frame_cm=float(self._max_jump_cm.value()),
             jump_filter_lookahead_frames=int(self._jump_lookahead.value()),
+        )
+
+    def _read_trace_params(self) -> AnalysisTraceQualityConfig:
+        mean_raw = float(self._min_mean_conf.value())
+        return AnalysisTraceQualityConfig(
+            filter_frames_no_animal=self._filter_animal_cb.isChecked(),
+            min_confident_nodes_per_frame=int(self._min_conf_nodes.value()),
+            min_node_confidence_threshold=float(self._min_node_conf.value()),
+            min_valid_frame_run_length=int(self._min_valid_run.value()),
+            min_mean_confidence_per_frame=(
+                mean_raw if mean_raw > 0.0 else None
+            ),
+            trace_interpolate_nans=self._tr_interp_nan.isChecked(),
+            trace_max_gap_frames=int(self._tr_max_gap.value()),
+            trace_interpolate_low_conf=self._tr_interp_low.isChecked(),
+            trace_confidence_threshold=float(self._tr_conf_thr.value()),
+            trace_apply_smoothing=self._tr_smooth_cb.isChecked(),
+            trace_smoothing_window=int(self._tr_smooth_win.value()),
         )
 
     def _refresh_preview(self) -> None:
@@ -610,11 +729,26 @@ class AnalysisSettingsDialog(QDialog):
                 jump_filter_lookahead_frames=JUMP_FILTER_LOOKAHEAD_FRAMES,
             )
         )
+        self._fill_trace_params(
+            AnalysisTraceQualityConfig(
+                filter_frames_no_animal=FILTER_FRAMES_NO_ANIMAL,
+                min_confident_nodes_per_frame=MIN_CONFIDENT_NODES_PER_FRAME,
+                min_node_confidence_threshold=MIN_NODE_CONFIDENCE_THRESHOLD,
+                min_valid_frame_run_length=MIN_VALID_FRAME_RUN_LENGTH,
+                min_mean_confidence_per_frame=None,
+                trace_interpolate_nans=TRACE_INTERPOLATE_NANS,
+                trace_max_gap_frames=TRACE_MAX_GAP_FRAMES,
+                trace_interpolate_low_conf=TRACE_INTERPOLATE_LOW_CONF,
+                trace_confidence_threshold=TRACE_CONFIDENCE_THRESHOLD,
+                trace_apply_smoothing=TRACE_APPLY_SMOOTHING,
+                trace_smoothing_window=TRACE_SMOOTHING_WINDOW,
+            )
+        )
         self._refresh_preview()
 
     def _on_apply_clicked(self) -> None:
         if self._on_apply is not None:
-            self._on_apply(self._read_params())
+            self._on_apply(self._read_params(), self._read_trace_params())
 
     def _on_save_profile(self) -> None:
         default_path = read_last_analysis_profile_path()
@@ -628,7 +762,11 @@ class AnalysisSettingsDialog(QDialog):
         if not path_str:
             return
         p = Path(path_str)
-        save_analysis_profile(analysis_trajectory=self._read_params(), path=p)
+        save_analysis_profile(
+            analysis_trajectory=self._read_params(),
+            analysis_trace_quality=self._read_trace_params(),
+            path=p,
+        )
         save_last_analysis_profile_path(p)
 
     def _on_load_profile(self) -> None:
@@ -643,7 +781,8 @@ class AnalysisSettingsDialog(QDialog):
         if not path_str:
             return
         p = Path(path_str)
-        params = load_analysis_profile(p)
-        self._fill_from_params(params)
+        traj, tq = load_analysis_profile(p)
+        self._fill_from_params(traj)
+        self._fill_trace_params(tq)
         save_last_analysis_profile_path(p)
         self._refresh_preview()

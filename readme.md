@@ -1,5 +1,6 @@
-placeholder for Open Rodent Maze  
+placeholder for Open Etho Maze   
 its sloppy  
+this repo aims to be a data aquisition and processing pipeline using SLEAP & keypoint-moseq for animal ethology studies   
 
 mostly optional things to install  
 vimba sdk (camera dependent)  
@@ -29,5 +30,3 @@ uv run maze-daq --ram
 legacy RAM alias:  
 uv run maze-ram-daq  
 
-
-uv sync --extra gui --extra sleap --extra kpms --extra dev --reinstall-package torch --reinstall-package torchvision  

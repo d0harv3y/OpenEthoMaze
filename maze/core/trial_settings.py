@@ -33,6 +33,18 @@ class TrialSettings:
     movement_inter_bout_interval_frames: int = 4
     max_movement_per_frame_cm: float = 15.0
     jump_filter_lookahead_frames: int = 3
+    # Trace quality / confidence gating (aligned with ``maze.pipeline.defaults``).
+    filter_frames_no_animal: bool = True
+    min_confident_nodes_per_frame: int = 3
+    min_node_confidence_threshold: float = 0.55
+    min_valid_frame_run_length: int = 5
+    min_mean_confidence_per_frame: Optional[float] = None
+    trace_interpolate_nans: bool = True
+    trace_max_gap_frames: int = 15
+    trace_interpolate_low_conf: bool = True
+    trace_confidence_threshold: float = 0.55
+    trace_apply_smoothing: bool = True
+    trace_smoothing_window: int = 3
 
     @property
     def exit_pos(self) -> Optional[tuple[float, float]]:

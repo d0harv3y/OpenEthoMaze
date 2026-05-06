@@ -826,6 +826,28 @@ def _build_or_refresh_tracker(
     return tracker, key
 
 
+def build_tracker_for_batch_encode(
+    config: AcquisitionConfig,
+    *,
+    model_dir: str,
+) -> object:
+    """
+    Fresh tracker for offline video passes (pipeline inference materialization).
+
+    Uses the same hybrid/fallback construction as the live GUI; ``model_dir`` overrides
+    ``config.sleap_model_path`` for this encode only.
+    """
+    tracker, _ = _build_or_refresh_tracker(
+        config,
+        None,
+        None,
+        sleap_path=str(model_dir or "").strip(),
+        enable_backup=bool(getattr(config, "track_enable_backup", True)),
+        enable_sleap=bool(str(model_dir or "").strip()),
+    )
+    return tracker
+
+
 def _tracking_worker_loop(
     q: queue.Queue,
     lock: threading.Lock,

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 
 import numpy as np
 
@@ -34,8 +34,6 @@ from .defaults import (
     AMBIULATION_POINT_NAMES,
     IN_RANGE_POINT_NAME,
     HYBRID_POINT_NAME,
-    TRACE_MAX_GAP_FRAMES,
-    FILTER_FRAMES_NO_ANIMAL,
 )
 from .paths import OUTPUT_H5
 from .io.file_discovery import TrialManifest, load_treatment_labels
@@ -69,6 +67,7 @@ from .db import (
     read_radial_arm_trial_settings,
     read_spot_frame_index_column,
     read_trial_settings,
+    persist_effective_analysis_params,
     read_feedback_series,
     write_mistrial_reason,
     write_video_meta,
@@ -85,6 +84,12 @@ from .db import (
     TrialTiming,
 )
 from .db.trial_settings_io import radial_arm_exit_hole_from_geometry_payload
+
+if TYPE_CHECKING:
+    from maze.controller.acquisition.shared_config import (
+        AnalysisTraceQualityConfig,
+        AnalysisTrajectoryConfig,
+    )
 
 log = logging.getLogger(__name__)
 
@@ -193,6 +198,9 @@ def process_trial(
     db_path: Optional[Path] = None,
     generate_qc: bool = True,
     quiet: bool = False,
+    analysis_profile: Optional[
+        tuple["AnalysisTrajectoryConfig", "AnalysisTraceQualityConfig"]
+    ] = None,
 ) -> bool:
     """
     Process a single trial through the complete pipeline.
@@ -202,6 +210,8 @@ def process_trial(
         db_path: Path to output database (uses config default if None)
         generate_qc: Whether to generate QC visualizations
         quiet: If True, suppress per-trial status messages (for batch mode)
+        analysis_profile: When set, merge trajectory + trace-quality from the GUI profile
+            into settings before processing; effective values are persisted on success.
 
     Returns:
         True if processing succeeded, False otherwise
@@ -223,6 +233,15 @@ def process_trial(
     try:
         # Step 1: Read trial settings from output database (written by init_db)
         settings, h5_fps, timing = read_trial_settings(db_path, key)
+        if analysis_profile is not None:
+            from maze.pipeline.analysis_profile_merge import (
+                merge_analysis_profile_into_trial_settings,
+            )
+
+            traj_p, tq_p = analysis_profile
+            settings = merge_analysis_profile_into_trial_settings(
+                settings, traj_p, tq_p
+            )
         if h5_fps is None:
             h5_fps = DEFAULT_FPS
         timing = complete_trial_timing(db_path, key, timing)
@@ -365,10 +384,21 @@ def _process_with_sleap(
     valid_frames_full = filter_frames_no_animal(
         trace_data.traces,
         n_frames,
+        min_confident_nodes=settings.min_confident_nodes_per_frame,
+        min_confidence=settings.min_node_confidence_threshold,
+        min_valid_run_length=settings.min_valid_frame_run_length,
+        min_mean_confidence=settings.min_mean_confidence_per_frame,
     )
     valid_frames_analysis = valid_frames_full[start_frame:]  # length n_analysis
     # Process traces (interpolation, smoothing) full length
-    params = TraceProcessingParams()
+    params = TraceProcessingParams(
+        interpolate_nans=settings.trace_interpolate_nans,
+        max_gap_frames=settings.trace_max_gap_frames,
+        interpolate_low_conf=settings.trace_interpolate_low_conf,
+        confidence_threshold=settings.trace_confidence_threshold,
+        apply_smoothing=settings.trace_apply_smoothing,
+        smoothing_window=settings.trace_smoothing_window,
+    )
     processed_traces = process_trace_data(
         trace_data.traces,
         trace_data.node_names,
@@ -403,7 +433,7 @@ def _process_with_sleap(
     # Valid masks for full-length traces (before analysis-window split)
     spot_valid_full = ~np.any(np.isnan(spot_xy_full), axis=1)
     inrange_valid_full = ~np.any(np.isnan(inrange_xy_full), axis=1)
-    if FILTER_FRAMES_NO_ANIMAL:
+    if settings.filter_frames_no_animal:
         spot_valid_full = spot_valid_full & valid_frames_full
         inrange_valid_full = inrange_valid_full & valid_frames_full
 
@@ -416,7 +446,7 @@ def _process_with_sleap(
     spot_valid_analysis = spot_valid_full[start_frame:]
     max_gap_spot = _max_gap_in_trace(spot_xy, spot_valid_analysis)
 
-    # Per-frame replacement mask: frames inside any invalid run longer than TRACE_MAX_GAP_FRAMES.
+    # Per-frame replacement mask: frames inside any invalid run longer than trace_max_gap_frames.
     replace_with_inrange_full = np.zeros(n_frames, dtype=bool)
     invalid_spot = ~np.asarray(spot_valid_full, dtype=bool)
     if np.any(invalid_spot):
@@ -425,7 +455,7 @@ def _process_with_sleap(
         ends = np.where(changes == -1)[0]
         lengths = ends - starts
         for s, e, L in zip(starts, ends, lengths):
-            if L > TRACE_MAX_GAP_FRAMES:
+            if L > settings.trace_max_gap_frames:
                 replace_with_inrange_full[s:e] = True
 
     use_inrange_here_full = replace_with_inrange_full & inrange_valid_full
@@ -440,7 +470,7 @@ def _process_with_sleap(
         "y": hybrid_xy_full[:, 1],
     }
     hybrid_valid_full = ~np.any(np.isnan(hybrid_xy_full), axis=1)
-    if FILTER_FRAMES_NO_ANIMAL:
+    if settings.filter_frames_no_animal:
         hybrid_valid_full = hybrid_valid_full & valid_frames_full
     hybrid_xy_run = hybrid_xy_full[start_frame:]
     hybrid_valid_run = hybrid_valid_full[start_frame:]
@@ -484,7 +514,7 @@ def _process_with_sleap(
 
         # Full valid mask: finite coords and (optionally) frame-level confidence filter.
         valid_full = ~np.any(np.isnan(xy_full), axis=1)
-        if FILTER_FRAMES_NO_ANIMAL:
+        if settings.filter_frames_no_animal:
             valid_full = valid_full & valid_frames_full
 
         # ITI band: between seek_row and run_row; run band: from run_row onward.
@@ -652,13 +682,13 @@ def _process_with_sleap(
 
     # Primary trajectory for export: prefer hybrid; record when in-range contributed.
     spot_valid = ~np.any(np.isnan(spot_xy), axis=1)
-    if FILTER_FRAMES_NO_ANIMAL:
+    if settings.filter_frames_no_animal:
         spot_valid = spot_valid & valid_frames_analysis
     inrange_valid = ~np.any(np.isnan(inrange_xy), axis=1)
-    if FILTER_FRAMES_NO_ANIMAL:
+    if settings.filter_frames_no_animal:
         inrange_valid = inrange_valid & valid_frames_analysis
     use_inrange_primary = (
-        max_gap_spot > TRACE_MAX_GAP_FRAMES
+        max_gap_spot > settings.trace_max_gap_frames
         and np.any(inrange_valid)
     )
     primary_trajectory = HYBRID_POINT_NAME
@@ -716,7 +746,7 @@ def _process_with_sleap(
             # Use hybrid trajectory for QC overlay
             xy_traj_full = hybrid_xy_full
             traj_valid_full = ~np.any(np.isnan(xy_traj_full), axis=1)
-            if FILTER_FRAMES_NO_ANIMAL:
+            if settings.filter_frames_no_animal:
                 traj_valid_full = traj_valid_full & valid_frames_full
             xy_traj_iti = xy_traj_full[seek_row:run_row]
             valid_traj_iti = traj_valid_full[seek_row:run_row]
@@ -790,6 +820,7 @@ def _process_with_sleap(
         except Exception as e:
             from tqdm import tqdm
             tqdm.write(f"  Warning: Failed to generate QC images: {e}")
+    persist_effective_analysis_params(db_path, key, settings)
     return True
 
 

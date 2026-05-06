@@ -17,6 +17,7 @@ from .radial_arm.config import (
 )
 from .shared_config import (
     AcquisitionConfig,
+    AnalysisTraceQualityConfig,
     AnalysisTrajectoryConfig,
     AnimalInfo,
     FallbackTrackingConfig,
@@ -137,6 +138,8 @@ def _animal_to_dict(animal: AnimalInfo) -> Dict[str, Any]:
         "strain": animal.strain,
         "sex": animal.sex,
         "drug": animal.drug,
+        "experiment": animal.experiment,
+        "researcher": animal.researcher,
         "notes": animal.notes,
     }
 
@@ -148,6 +151,8 @@ def _animal_from_dict(data: Dict[str, Any]) -> AnimalInfo:
         strain=data.get("strain"),
         sex=data.get("sex"),
         drug=data.get("drug"),
+        experiment=data.get("experiment"),
+        researcher=data.get("researcher"),
         notes=data.get("notes"),
     )
 
@@ -336,6 +341,96 @@ def _analysis_trajectory_from_dict(data: Dict[str, Any]) -> AnalysisTrajectoryCo
     )
 
 
+def _analysis_trace_quality_to_dict(
+    config: AnalysisTraceQualityConfig,
+) -> Dict[str, Any]:
+    return {
+        "filter_frames_no_animal": config.filter_frames_no_animal,
+        "min_confident_nodes_per_frame": config.min_confident_nodes_per_frame,
+        "min_node_confidence_threshold": config.min_node_confidence_threshold,
+        "min_valid_frame_run_length": config.min_valid_frame_run_length,
+        "min_mean_confidence_per_frame": config.min_mean_confidence_per_frame,
+        "trace_interpolate_nans": config.trace_interpolate_nans,
+        "trace_max_gap_frames": config.trace_max_gap_frames,
+        "trace_interpolate_low_conf": config.trace_interpolate_low_conf,
+        "trace_confidence_threshold": config.trace_confidence_threshold,
+        "trace_apply_smoothing": config.trace_apply_smoothing,
+        "trace_smoothing_window": config.trace_smoothing_window,
+    }
+
+
+def _analysis_trace_quality_from_dict(
+    data: Dict[str, Any],
+) -> AnalysisTraceQualityConfig:
+    from maze.pipeline.defaults import (
+        FILTER_FRAMES_NO_ANIMAL,
+        MIN_CONFIDENT_NODES_PER_FRAME,
+        MIN_MEAN_CONFIDENCE_PER_FRAME,
+        MIN_NODE_CONFIDENCE_THRESHOLD,
+        MIN_VALID_FRAME_RUN_LENGTH,
+        TRACE_APPLY_SMOOTHING,
+        TRACE_CONFIDENCE_THRESHOLD,
+        TRACE_INTERPOLATE_LOW_CONF,
+        TRACE_INTERPOLATE_NANS,
+        TRACE_MAX_GAP_FRAMES,
+        TRACE_SMOOTHING_WINDOW,
+    )
+
+    mean_conf = data.get("min_mean_confidence_per_frame", MIN_MEAN_CONFIDENCE_PER_FRAME)
+    return AnalysisTraceQualityConfig(
+        filter_frames_no_animal=bool(
+            data.get("filter_frames_no_animal", FILTER_FRAMES_NO_ANIMAL)
+        ),
+        min_confident_nodes_per_frame=max(
+            0,
+            int(
+                data.get(
+                    "min_confident_nodes_per_frame",
+                    MIN_CONFIDENT_NODES_PER_FRAME,
+                )
+            ),
+        ),
+        min_node_confidence_threshold=float(
+            data.get(
+                "min_node_confidence_threshold",
+                MIN_NODE_CONFIDENCE_THRESHOLD,
+            )
+        ),
+        min_valid_frame_run_length=max(
+            0,
+            int(
+                data.get(
+                    "min_valid_frame_run_length",
+                    MIN_VALID_FRAME_RUN_LENGTH,
+                )
+            ),
+        ),
+        min_mean_confidence_per_frame=(
+            float(mean_conf) if mean_conf is not None else None
+        ),
+        trace_interpolate_nans=bool(
+            data.get("trace_interpolate_nans", TRACE_INTERPOLATE_NANS)
+        ),
+        trace_max_gap_frames=max(
+            0,
+            int(data.get("trace_max_gap_frames", TRACE_MAX_GAP_FRAMES)),
+        ),
+        trace_interpolate_low_conf=bool(
+            data.get("trace_interpolate_low_conf", TRACE_INTERPOLATE_LOW_CONF)
+        ),
+        trace_confidence_threshold=float(
+            data.get("trace_confidence_threshold", TRACE_CONFIDENCE_THRESHOLD)
+        ),
+        trace_apply_smoothing=bool(
+            data.get("trace_apply_smoothing", TRACE_APPLY_SMOOTHING)
+        ),
+        trace_smoothing_window=max(
+            1,
+            int(data.get("trace_smoothing_window", TRACE_SMOOTHING_WINDOW)),
+        ),
+    )
+
+
 def _shared_to_dict(config: AcquisitionConfig) -> Dict[str, Any]:
     return {
         "session": _session_to_dict(config.session),
@@ -366,6 +461,9 @@ def _shared_to_dict(config: AcquisitionConfig) -> Dict[str, Any]:
             getattr(config, "preview_set_center_from_next_click", False)
         ),
         "analysis_trajectory": _analysis_trajectory_to_dict(config.analysis_trajectory),
+        "analysis_trace_quality": _analysis_trace_quality_to_dict(
+            config.analysis_trace_quality
+        ),
     }
 
 
@@ -438,6 +536,9 @@ def _shared_kwargs_from_dict(
         ),
         "analysis_trajectory": _analysis_trajectory_from_dict(
             data.get("analysis_trajectory", {})
+        ),
+        "analysis_trace_quality": _analysis_trace_quality_from_dict(
+            data.get("analysis_trace_quality", {})
         ),
     }
 
@@ -717,21 +818,26 @@ def load_profile(
 def save_analysis_profile(
     *,
     analysis_trajectory: AnalysisTrajectoryConfig,
+    analysis_trace_quality: AnalysisTraceQualityConfig | None = None,
     path: Path,
 ) -> None:
     """Save only analysis settings (separate from acquisition profiles)."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    tq = analysis_trace_quality or AnalysisTraceQualityConfig()
     data: Dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "kind": "analysis_profile",
         "analysis_trajectory": _analysis_trajectory_to_dict(analysis_trajectory),
+        "analysis_trace_quality": _analysis_trace_quality_to_dict(tq),
     }
     with open(path, "w", encoding="utf-8") as file:
         json.dump(data, file, indent=2, ensure_ascii=False)
 
 
-def load_analysis_profile(path: Path) -> AnalysisTrajectoryConfig:
+def load_analysis_profile(
+    path: Path,
+) -> tuple[AnalysisTrajectoryConfig, AnalysisTraceQualityConfig]:
     """Load analysis settings profile saved by :func:`save_analysis_profile`."""
     path = Path(path)
     with open(path, "r", encoding="utf-8") as file:
@@ -740,4 +846,11 @@ def load_analysis_profile(path: Path) -> AnalysisTrajectoryConfig:
         raise ValueError("Invalid analysis profile format.")
     if str(data.get("kind", "")).strip().lower() not in ("", "analysis_profile"):
         raise ValueError("This file is not an analysis settings profile.")
-    return _analysis_trajectory_from_dict(data.get("analysis_trajectory", {}))
+    traj = _analysis_trajectory_from_dict(data.get("analysis_trajectory", {}))
+    tq_raw = data.get("analysis_trace_quality")
+    trace_q = (
+        _analysis_trace_quality_from_dict(tq_raw)
+        if isinstance(tq_raw, dict)
+        else AnalysisTraceQualityConfig()
+    )
+    return traj, trace_q

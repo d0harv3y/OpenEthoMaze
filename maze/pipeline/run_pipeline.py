@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Literal, Optional
 
 from tqdm import tqdm
 
@@ -29,6 +29,8 @@ from .trial_filters import (
     trial_matches_frame_policy,
 )
 from .process_trial import process_trial
+
+PrefilterMode = Literal["auto", "controller", "legacy"]
 
 
 def _attr_str(attrs, key: str) -> str:
@@ -93,6 +95,8 @@ def run_pipeline(
     max_workers: int = MAX_WORKERS,
     generate_qc: bool = True,
     skip_mistrials: bool = True,
+    analysis_profile: Optional[tuple[Any, Any]] = None,
+    prefilter_mode: PrefilterMode = "auto",
 ) -> dict[str, int]:
     """
     Run the pipeline on all discovered trials.
@@ -107,6 +111,11 @@ def run_pipeline(
         max_workers: Maximum parallel workers
         generate_qc: Whether to generate QC visualizations
         skip_mistrials: If True, skip trials with missing data and write mistrial_reason to DB
+        analysis_profile: Optional ``(AnalysisTrajectoryConfig, AnalysisTraceQualityConfig)`` tuple
+        prefilter_mode: Input-quality prefilter behavior:
+            - ``legacy``: enforce frame/file preflight checks
+            - ``controller``: bypass preflight blockers (x/y-only analysis allowed)
+            - ``auto``: infer from manifest source (default)
 
     Returns:
         Dictionary with processing statistics
@@ -136,7 +145,15 @@ def run_pipeline(
         trials = [t for t in trials if t.trial in trial_names]
 
     n_before_frame_filter = len(trials)
-    trials = [t for t in trials if trial_matches_frame_policy(t, arena_type)]
+    trials = [
+        t
+        for t in trials
+        if trial_matches_frame_policy(
+            t,
+            arena_type,
+            mode=prefilter_mode,
+        )
+    ]
     n_excluded_frame_diff = n_before_frame_filter - len(trials)
     if n_excluded_frame_diff > 0:
         expected_diff = expected_frame_diff(arena_type)
@@ -155,7 +172,11 @@ def run_pipeline(
     mistrial_trials: list[tuple[TrialManifest, str]] = []
     processable: list[TrialManifest] = []
     for trial in trials:
-        reason = detect_task_mistrial(trial, arena_type)
+        reason = detect_task_mistrial(
+            trial,
+            arena_type,
+            mode=prefilter_mode,
+        )
         if reason is not None:
             mistrial_trials.append((trial, reason))
         else:
@@ -190,9 +211,13 @@ def run_pipeline(
     }
 
     if parallel and max_workers > 1:
-        stats = _run_parallel(trials, db_path, max_workers, generate_qc, stats)
+        stats = _run_parallel(
+            trials, db_path, max_workers, generate_qc, stats, analysis_profile
+        )
     else:
-        stats = _run_sequential(trials, db_path, generate_qc, stats)
+        stats = _run_sequential(
+            trials, db_path, generate_qc, stats, analysis_profile
+        )
 
     print("\nPipeline complete:")
     print(f"  Total: {stats['total']}")
@@ -219,6 +244,7 @@ def _run_sequential(
     db_path: Path,
     generate_qc: bool,
     stats: dict[str, int],
+    analysis_profile: Optional[tuple[Any, Any]] = None,
 ) -> dict[str, int]:
     """Run trials sequentially with clean progress display."""
     pipeline_logger = logging.getLogger("maze_pipeline")
@@ -226,7 +252,9 @@ def _run_sequential(
     tqdm_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
     pipeline_logger.addHandler(tqdm_handler)
     try:
-        return _run_sequential_impl(trials, db_path, generate_qc, stats)
+        return _run_sequential_impl(
+            trials, db_path, generate_qc, stats, analysis_profile
+        )
     finally:
         pipeline_logger.removeHandler(tqdm_handler)
 
@@ -236,6 +264,7 @@ def _run_sequential_impl(
     db_path: Path,
     generate_qc: bool,
     stats: dict[str, int],
+    analysis_profile: Optional[tuple[Any, Any]] = None,
 ) -> dict[str, int]:
     """Inner loop for sequential processing."""
     pbar = tqdm(trials, desc="Processing", unit="trial")
@@ -250,6 +279,7 @@ def _run_sequential_impl(
                 db_path=db_path,
                 generate_qc=generate_qc,
                 quiet=True,
+                analysis_profile=analysis_profile,
             )
             if success:
                 stats["success"] += 1
@@ -268,11 +298,14 @@ def _run_parallel(
     max_workers: int,
     generate_qc: bool,
     stats: dict[str, int],
+    analysis_profile: Optional[tuple[Any, Any]] = None,
 ) -> dict[str, int]:
     """Run trials in parallel."""
     del max_workers
     print("Warning: Parallel mode uses sequential HDF5 writes")
-    return _run_sequential(trials, db_path, generate_qc, stats)
+    return _run_sequential(
+        trials, db_path, generate_qc, stats, analysis_profile
+    )
 
 
 def run_single_trial(
@@ -323,7 +356,12 @@ def run_single_trial(
         return False
 
     manifest = matching[0]
-    return process_trial(manifest, db_path=db_path, generate_qc=generate_qc)
+    return process_trial(
+        manifest,
+        db_path=db_path,
+        generate_qc=generate_qc,
+        analysis_profile=analysis_profile,
+    )
 
 
 load_manifests_from_db = load_trial_manifests_from_db

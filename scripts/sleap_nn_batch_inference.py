@@ -29,11 +29,15 @@ from datetime import datetime
 import logging
 
 # Configure logging before importing sleap_nn (it uses loguru; we keep stdlib for script output)
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_PATH = LOG_DIR / "sleap_nn_inference.log"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("sleap_nn_inference.log"),
+        logging.FileHandler(LOG_PATH, encoding="utf-8"),
         logging.StreamHandler(sys.stdout),
     ],
 )

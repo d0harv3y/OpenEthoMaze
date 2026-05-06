@@ -28,7 +28,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 # -----------------------------------------------------------------------------
 # Imports (legacy VAST source adapter + shared pipeline surfaces)
@@ -174,6 +174,13 @@ def _expand_filter_arg(vals: Optional[list[str]]) -> Optional[list[str]]:
     return out if out else None
 
 
+def _resolve_data_dirs(data_dirs: Optional[Sequence[Path]]) -> Optional[list[Path]]:
+    if not data_dirs:
+        return None
+    out = [Path(p) for p in data_dirs if str(p).strip()]
+    return out or None
+
+
 def _normalize_session(s: str) -> str:
     if s and s[0].upper() in ("S", "H"):
         return s
@@ -189,11 +196,12 @@ def _normalize_trial(s: str) -> str:
 # -----------------------------------------------------------------------------
 # Subcommand: init
 # -----------------------------------------------------------------------------
-def cmd_init() -> None:
+def cmd_init(*, data_dirs: Optional[Sequence[Path]] = None) -> None:
     """Initialize legacy DB and manifest from discovery + treatment_labels.csv."""
     _ensure_legacy_dir()
     print(f"Initializing legacy database: {LEGACY_DB}")
-    print(f"Data directories: {DATA_DIRS}")
+    resolved_data_dirs = _resolve_data_dirs(data_dirs)
+    print(f"Data directories: {resolved_data_dirs or DATA_DIRS}")
     print(f"Treatment labels: {LABELS_PATH}")
     print()
 
@@ -201,7 +209,7 @@ def cmd_init() -> None:
     print("Created metadata structure")
 
     print("\nDiscovering trials...")
-    result = discover_trials()
+    result = discover_trials(resolved_data_dirs)
     print(f"  Input H5: {len(result.input_h5_files)}, Videos: {len(result.video_files)}, SLEAP: {len(result.sleap_files)}")
     print(f"  Total trials: {len(result.trials)}, Matched videos: {result.n_matched_videos}, Matched SLEAP: {result.n_matched_sleap}")
 
@@ -343,6 +351,8 @@ def cmd_sync(
     no_backup: bool,
     dry_run: bool,
     prune_unlabeled: bool,
+    *,
+    data_dirs: Optional[Sequence[Path]] = None,
 ) -> None:
     """Sync legacy DB and manifest with discovery; optionally prune and update labels."""
     from tqdm import tqdm
@@ -363,8 +373,9 @@ def cmd_sync(
             init_database(LEGACY_DB)
             print(f"Initialized {LEGACY_DB}\n")
 
-    print("Discovering trials...")
-    result = discover_trials()
+    resolved_data_dirs = _resolve_data_dirs(data_dirs)
+    print(f"Discovering trials in: {resolved_data_dirs or DATA_DIRS}")
+    result = discover_trials(resolved_data_dirs)
     print(f"  Trials: {len(result.trials)}\n")
 
     if update_labels and not dry_run:
@@ -671,6 +682,7 @@ def cmd_run_pipeline(
         generate_qc=not no_qc,
         skip_mistrials=not no_skip_mistrials,
         max_workers=workers,
+        prefilter_mode="legacy",
     )
     if stats.get("failed", 0) > 0:
         sys.exit(1)
@@ -719,10 +731,26 @@ def main() -> int:
 
     # init
     p_init = sub.add_parser("init", help="Initialize legacy DB and manifest from discovery + treatment_labels.csv")
+    p_init.add_argument(
+        "--data-dir",
+        dest="data_dirs",
+        action="append",
+        type=Path,
+        default=None,
+        help="Override discovery root (repeat for multiple roots).",
+    )
     p_init.set_defaults(func=lambda: cmd_init())
 
     # sync
     p_sync = sub.add_parser("sync", help="Sync DB and manifest; optionally --update-labels, prune missing trials")
+    p_sync.add_argument(
+        "--data-dir",
+        dest="data_dirs",
+        action="append",
+        type=Path,
+        default=None,
+        help="Override discovery root (repeat for multiple roots).",
+    )
     p_sync.add_argument("--update-labels", action="store_true", help="Add new IDs to treatment_labels.csv from discovery")
     p_sync.add_argument("--no-backup", action="store_true", help="Do not backup DB before sync")
     p_sync.add_argument("--dry-run", action="store_true", help="Only report what would be pruned")
@@ -764,7 +792,7 @@ def main() -> int:
     _set_legacy_paths(args.db_path)
 
     if args.command == "init":
-        cmd_init()
+        cmd_init(data_dirs=args.data_dirs)
         return 0
 
     if args.command == "sync":
@@ -773,6 +801,7 @@ def main() -> int:
             no_backup=args.no_backup,
             dry_run=args.dry_run,
             prune_unlabeled=args.prune_unlabeled,
+            data_dirs=args.data_dirs,
         )
         return 0
 

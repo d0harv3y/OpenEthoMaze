@@ -5,6 +5,9 @@
 # Test temp / output directories
 tests/
 outputs/
+inputmap/
+logs/
+my_todo*.txt
 
 # Python bytecode / extensions
 __pycache__/

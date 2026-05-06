@@ -4,8 +4,13 @@ from dataclasses import dataclass, field
 from typing import Literal, Optional
 
 from ...pipeline.defaults import (
+    FILTER_FRAMES_NO_ANIMAL,
     JUMP_FILTER_LOOKAHEAD_FRAMES,
     MAX_MOVEMENT_PER_FRAME_CM,
+    MIN_CONFIDENT_NODES_PER_FRAME,
+    MIN_MEAN_CONFIDENCE_PER_FRAME,
+    MIN_NODE_CONFIDENCE_THRESHOLD,
+    MIN_VALID_FRAME_RUN_LENGTH,
     MOVEMENT_ENTRY_DEBOUNCE_FRAMES,
     MOVEMENT_EXIT_DEBOUNCE_FRAMES,
     MOVEMENT_INTER_BOUT_INTERVAL_FRAMES,
@@ -13,6 +18,12 @@ from ...pipeline.defaults import (
     MOVEMENT_START_THRESHOLD_M_PER_FRAME,
     MOVEMENT_STOP_THRESHOLD_M_PER_FRAME,
     MIN_MOVEMENT_BOUT_DURATION_FRAMES,
+    TRACE_APPLY_SMOOTHING,
+    TRACE_CONFIDENCE_THRESHOLD,
+    TRACE_INTERPOLATE_LOW_CONF,
+    TRACE_INTERPOLATE_NANS,
+    TRACE_MAX_GAP_FRAMES,
+    TRACE_SMOOTHING_WINDOW,
 )
 
 
@@ -25,6 +36,8 @@ class AnimalInfo:
     strain: Optional[str] = None
     sex: Optional[str] = None
     drug: Optional[str] = None
+    experiment: Optional[str] = None
+    researcher: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -113,6 +126,23 @@ class AnalysisTrajectoryConfig:
 
 
 @dataclass
+class AnalysisTraceQualityConfig:
+    """SLEAP trace interpolation, smoothing, and per-frame confidence gates (pipeline-aligned)."""
+
+    trace_interpolate_nans: bool = TRACE_INTERPOLATE_NANS
+    trace_max_gap_frames: int = TRACE_MAX_GAP_FRAMES
+    trace_interpolate_low_conf: bool = TRACE_INTERPOLATE_LOW_CONF
+    trace_confidence_threshold: float = TRACE_CONFIDENCE_THRESHOLD
+    trace_apply_smoothing: bool = TRACE_APPLY_SMOOTHING
+    trace_smoothing_window: int = TRACE_SMOOTHING_WINDOW
+    min_confident_nodes_per_frame: int = MIN_CONFIDENT_NODES_PER_FRAME
+    min_node_confidence_threshold: float = MIN_NODE_CONFIDENCE_THRESHOLD
+    min_valid_frame_run_length: int = MIN_VALID_FRAME_RUN_LENGTH
+    min_mean_confidence_per_frame: Optional[float] = MIN_MEAN_CONFIDENCE_PER_FRAME
+    filter_frames_no_animal: bool = FILTER_FRAMES_NO_ANIMAL
+
+
+@dataclass
 class AcquisitionConfig:
     """Shared acquisition shell configuration independent of task geometry."""
 
@@ -145,4 +175,7 @@ class AcquisitionConfig:
     preview_set_center_from_next_click: bool = False
     analysis_trajectory: AnalysisTrajectoryConfig = field(
         default_factory=AnalysisTrajectoryConfig
+    )
+    analysis_trace_quality: AnalysisTraceQualityConfig = field(
+        default_factory=AnalysisTraceQualityConfig
     )

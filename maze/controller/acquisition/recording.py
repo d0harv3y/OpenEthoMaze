@@ -273,8 +273,8 @@ class TrialRecorder:
                     sex=animal_meta.sex,
                     tx=animal_meta.tx,
                     strain=animal_meta.strain,
-                    experiment=None,
-                    researcher=None,
+                    experiment=animal_meta.experiment,
+                    researcher=animal_meta.researcher,
                     drug=animal_meta.drug,
                     notes=animal_meta.notes,
                 )
@@ -325,7 +325,6 @@ class TrialRecorder:
                     exit_radius_px=arena.exit_radius_cm * arena.px_per_cm,
                     trial_start_frame=trial_start_frame_abs,
                     seek_to_frame=seek_to_frame,
-                    analysis_trajectory=self.config.analysis_trajectory,
                 )
             n = len(self._xy_rows)
             duration_s = self._xy_rows[-1].t_s if self._xy_rows else 0.0

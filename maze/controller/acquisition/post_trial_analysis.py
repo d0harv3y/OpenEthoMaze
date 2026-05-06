@@ -15,7 +15,7 @@ so no path translation or copy is needed.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 if TYPE_CHECKING:
     from maze.pipeline.db import TrialKey
@@ -37,6 +37,7 @@ def run_analysis_for_trial(
     trial: str,
     video_path: Path | None,
     run_phase: str,
+    analysis_profile: Optional[tuple[Any, Any]] = None,
 ) -> Tuple[bool, str]:
     """
     Run pipeline process_trial for the given controller-recorded trial.
@@ -77,6 +78,7 @@ def run_analysis_for_trial(
         db_path=db_path,
         generate_qc=True,
         quiet=True,
+        analysis_profile=analysis_profile,
     )
     if ok:
         return (True, "Analysis done")
