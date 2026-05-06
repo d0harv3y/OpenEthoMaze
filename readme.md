@@ -2,6 +2,7 @@ placeholder for Open Etho Maze
 its sloppy  
 this repo aims to be a data aquisition and processing pipeline using SLEAP & keypoint-moseq for animal ethology studies   
 
+
 mostly optional things to install  
 vimba sdk (camera dependent)  
 enable jumbo frames in device properties if that is something your camera does  
@@ -11,7 +12,6 @@ avrdude for firmware flashing
 
 uv  
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"  
-
 
 
 cd to/your/repo/root  
@@ -30,3 +30,9 @@ uv run maze-daq --ram
 legacy RAM alias:  
 uv run maze-ram-daq  
 
+
+### wip Demo 
+
+![Unified overlay demo](docs/demo_unified_overlay.gif)
+
+![S01T01 unified overlay](docs/demo_1_S01T01_unified_overlay.gif)

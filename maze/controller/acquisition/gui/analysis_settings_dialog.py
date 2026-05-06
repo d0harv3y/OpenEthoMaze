@@ -166,7 +166,21 @@ class TrajectoryPreviewWidget(QWidget):
             last = pt
 
         # Movement bouts in color.
-        colors = [QColor(252, 141, 98), QColor(102, 194, 165), QColor(141, 160, 203)]
+        # Expanded categorical palette so long sessions keep distinct bout colors.
+        colors = [
+            QColor(166, 206, 227),
+            QColor(31, 120, 180),
+            QColor(178, 223, 138),
+            QColor(51, 160, 44),
+            QColor(251, 154, 153),
+            QColor(227, 26, 28),
+            QColor(253, 191, 111),
+            QColor(255, 127, 0),
+            QColor(202, 178, 214),
+            QColor(106, 61, 154),
+            QColor(255, 255, 153),
+            QColor(177, 89, 40),
+        ]
         for bi, bout in enumerate(self._bouts):
             c = colors[bi % len(colors)]
             pen = QPen(c, 2.2)
