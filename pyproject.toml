@@ -96,6 +96,7 @@ min_confidence = 80
 "scripts/kpms_review_artifacts.py" = ["E402"]
 "scripts/kpms_apply_syllable_merge.py" = ["E402"]
 "scripts/kpms_clean_syllable_bouts.py" = ["E402"]
+"scripts/trial_summary_data_dictionary.py" = ["E402"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
