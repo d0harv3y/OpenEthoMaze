@@ -1,16 +1,9 @@
+"""Shared helpers for VAST and RAM acquisition GUIs."""
+
 from __future__ import annotations
-
-"""
-Shared helpers for VAST and RAM acquisition GUIs.
-
-Per-frame spatial labels (:class:`VastRegionCodeTracker`, :func:`ram_region_code`, etc.)
-live in :mod:`maze.controller.acquisition.region_code` so the pipeline can import the same
-rules without duplicating geometry logic.
-"""
 
 from typing import Any
 
-from .region_code import REGION_ANNULUS, REGION_CENTER, REGION_OOB
 from .shared_config import AcquisitionConfig
 from .radial_arm.geometry import build_template_from_params, max_template_radius_cm
 

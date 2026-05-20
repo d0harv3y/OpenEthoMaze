@@ -397,15 +397,12 @@ def build_xy_table_with_exit(
 
     n_frames = len(xy)
     exit_x, exit_y = exit_pos
-    exit_zone_radius_px = exit_zone_radius_cm * px_per_cm
+    _exit_zone_radius_px = exit_zone_radius_cm * px_per_cm  # reserved for exit-zone flags
 
     # Calculate distances to exit (pixels)
     dx = xy[:, 0] - exit_x
     dy = xy[:, 1] - exit_y
     distance_to_exit_px = np.sqrt(dx**2 + dy**2)
-
-    # In exit zone
-    in_exit_zone = distance_to_exit_px <= exit_zone_radius_px
 
     # Create structured array
     table = np.zeros(n_frames, dtype=xy_table_dtype())

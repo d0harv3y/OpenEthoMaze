@@ -1,37 +1,86 @@
-placeholder for Open Etho Maze   
-its sloppy  
-this repo aims to be a data aquisition and processing pipeline using SLEAP & keypoint-moseq for animal ethology studies   
+# Open Etho Maze
 
+Data acquisition and processing for vision-based animal ethology: SLEAP pose tracking, keypoint-MoSeq, and maze metrics (ambulation, exploration bouts, arm entries, object investigations, etc.).
 
-mostly optional things to install  
-vimba sdk (camera dependent)  
-enable jumbo frames in device properties if that is something your camera does  
-~~cuda (gpu dependent)~~  
-python manager (3.12 for other dependencies... torchvision?)  
-avrdude for firmware flashing  
+**Inputs:** video and strata labels  
+**Outputs:** long-format CSVs of ambulation and exploration metrics
 
-uv  
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"  
+## Prerequisites
 
+- Python **3.12** (managed by [uv](https://docs.astral.sh/uv/))
+- Optional lab hardware: Vimba SDK (Allied Vision cameras), jumbo frames if your camera supports them, avrdude for firmware flashing
 
-cd to/your/repo/root  
-uv sync --extra gui --extra sleap --extra kpms --reinstall-package torch --reinstall-package torchvision  
-verify  
-uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.version.cuda,  torch.cuda.device_count())"  
+Install uv (PowerShell):
 
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
 
-run from root:  
-uv run maze-daq  
+## Install
 
-explicit modes:  
-uv run maze-daq --vast  
-uv run maze-daq --ram  
+From the repository root.
 
-legacy RAM alias:  
-uv run maze-ram-daq  
+**Lean core** (pipeline, HDF5, scripts; no Qt, SLEAP, or local HTTP stack):
 
+```bash
+uv sync
+```
 
-### wip Demo 
+**Typical lab workstation** (GUI + SLEAP inference + kpMS):
+
+```bash
+uv sync --extra gui --extra sleap --extra kpms
+```
+
+After changing the `sleap` extra or PyTorch pins, refresh CUDA wheels if needed:
+
+```bash
+uv sync --extra gui --extra sleap --extra kpms --reinstall-package torch --reinstall-package torchvision
+uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.version.cuda, torch.cuda.device_count())"
+```
+
+**Local HTTP service** (waitress, optional LLM/YOLO; Phase B — not required for DAQ-only use):
+
+```bash
+uv sync --extra local-service
+```
+
+**Development** (pytest, ruff, black, mypy, etc.):
+
+```bash
+uv sync --extra dev
+```
+
+Combine extras as needed, e.g. `uv sync --extra gui --extra sleap --extra kpms --extra dev`.
+
+Per-machine data roots: copy `maze/pipeline/paths_local.example.py` to `maze/pipeline/paths_local.py` (gitignored) and edit paths.
+
+After editing `pyproject.toml` dependency groups, regenerate the lockfile locally:
+
+```bash
+uv lock
+uv sync
+```
+
+## Run acquisition GUI
+
+From repo root:
+
+```bash
+uv run maze-daq
+```
+
+Modes:
+
+```bash
+uv run maze-daq --vast
+uv run maze-daq --ram
+uv run maze-ram-daq
+```
+
+Requires `--extra gui` (and usually `--extra sleap` for inference menus).
+
+## Demo
 
 ![Unified overlay demo](docs/demo_unified_overlay.gif)
 

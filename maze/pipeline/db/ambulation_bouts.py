@@ -5,13 +5,13 @@ from typing import Any, Optional
 
 import numpy as np
 
+from ._shared import ensure_group, open_db
+from .trial_key import TrialKey
+
 
 def _encode_trial_state(state: Any) -> bytes:
     raw = str(state or "run").strip().lower().encode("utf-8")[:16]
     return raw.ljust(16, b"\0")
-
-from ._shared import ensure_group, open_db
-from .trial_key import TrialKey
 
 
 def movement_bout_dtype() -> np.dtype:

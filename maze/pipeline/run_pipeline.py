@@ -315,6 +315,7 @@ def run_single_trial(
     db_path: Optional[Path] = None,
     generate_qc: bool = True,
     phase: Optional[str] = None,
+    analysis_profile: Optional[tuple[Any, Any]] = None,
 ) -> bool:
     """
     Run pipeline on a single trial.
@@ -326,6 +327,7 @@ def run_single_trial(
         db_path: Output database path
         generate_qc: Whether to generate QC visualizations
         phase: If set ("habituation" or "experimental"), only consider that phase
+        analysis_profile: Optional ``(AnalysisTrajectoryConfig, AnalysisTraceQualityConfig)`` tuple
 
     Returns:
         True if processing succeeded

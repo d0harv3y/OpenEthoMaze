@@ -1,7 +1,7 @@
 [project]
 name = "maze"
 version = "0.1.0"
-description = "ORM — controller, pipeline, and core for rodent behavior maze tasks"
+description = "OEM — controller, pipeline, and core for ethology behavior maze tasks"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = "==3.12.*"
@@ -15,20 +15,12 @@ dependencies = [
     "tqdm>=4.60.0",
     "pyserial>=3.5",
     "vmbpy",
-    "h5grove[flask]>=4.0.0rc0",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "black>=23.0.0",
-    "ruff>=0.1.0",
-    "vulture>=2.15",
-    "pydeps",
-    "graphviz",
-]
 gui = [
     "PySide6>=6.0",
+    "h5grove[flask]>=4.0.0rc0",
 ]
 sleap = [
     "sleap-io",
@@ -42,6 +34,23 @@ sleap = [
     "torchvision==0.25.0+cu130; sys_platform == 'win32' or sys_platform == 'linux'",
     "torch==2.10.0; sys_platform != 'win32' and sys_platform != 'linux'",
     "torchvision==0.25.0; sys_platform != 'win32' and sys_platform != 'linux'",
+]
+local-service = [
+    "waitress",
+    "llama-cpp-python",
+    "ultralytics",
+]
+dev = [
+    "pytest",
+    "pytest-xdist",
+    "ruff",
+    "black",
+    "mypy",
+    "vulture",
+    "pydeps",
+    "graphviz",
+    "httpx",
+    "rich",
 ]
 # jax<0.7: tensorflow_probability (via jax-moseq) still uses APIs removed in JAX 0.7
 # (see keypoint-moseq setup.cfg install_requires). Without these pins, uv can pull jax>=0.7.
@@ -80,6 +89,10 @@ packages = ["maze"]
 [tool.ruff]
 line-length = 100
 extend-exclude = ["scripts/archive"]
+
+[tool.black]
+line-length = 100
+extend-exclude = "/(scripts\\/archive)/"
 
 # Dead-code finder (optional dev dependency). From ORM/: ``uv run vulture``
 # CLI flags override these settings. Lower min_confidence for more hits (more false positives).

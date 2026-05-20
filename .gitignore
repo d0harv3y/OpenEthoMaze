@@ -2,11 +2,11 @@
 # Unified VAST repo ignores
 ########################################
 
-# Test temp / output directories
-tests/
+# Test / run output directories (tests/ is tracked; see tests/conftest.py)
 outputs/
 inputmap/
 logs/
+scratch/
 my_todo*.txt
 
 # Python bytecode / extensions
@@ -54,5 +54,9 @@ desktop.ini
 # Data / large artifacts (tune as needed)
 *.h5
 *.mp4
+
+# Per-machine path overrides (copy paths_local.example.py → paths_local.py)
+maze/pipeline/paths_local.py
+maze/pipeline/config_local.py
 
 # local config

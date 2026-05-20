@@ -71,8 +71,7 @@ from maze.pipeline.exports import export_all
 
 # VAST project root (parent of scripts/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-# LEGACY_DIR = PROJECT_ROOT / "outputs" / "legacy"
-LEGACY_DIR = Path(r"E:\vast_analysis")
+LEGACY_DIR = PROJECT_ROOT / "outputs" / "legacy"
 LEGACY_DB = LEGACY_DIR / "vast_results_legacy.h5"
 LEGACY_MANIFEST = LEGACY_DIR / "trial_manifest_legacy.csv"
 LABELS_PATH = PROJECT_ROOT / "inputs" / "treatment_labels.csv"
@@ -725,7 +724,7 @@ def main() -> int:
         "--db-path",
         type=Path,
         default=None,
-        help="Path to legacy H5 database (default: E:\\vast_analysis\\vast_results_legacy.h5)",
+        help="Path to legacy H5 database (default: <repo>/outputs/legacy/vast_results_legacy.h5)",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

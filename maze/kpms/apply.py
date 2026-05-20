@@ -22,8 +22,9 @@ from .io import ensure_dir, write_json
 from .manifest_subset import SubsetConfig, filter_manifests, load_manifests
 from .preprocess import KpmsPreprocessConfig, build_kpms_inputs
 
-# Default manifest path (legacy VAST sync output).
-DEFAULT_MANIFEST_CSV = Path(r"C:\Users\admin\code\IMPRESS\ORM\outputs\legacy\trial_manifest_legacy.csv")
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+# Default manifest path (legacy_db sync output under repo outputs/legacy/).
+DEFAULT_MANIFEST_CSV = _REPO_ROOT / "outputs" / "legacy" / "trial_manifest_legacy.csv"
 
 DEFAULT_RESULTS_NAME = "results_apply.h5"
 

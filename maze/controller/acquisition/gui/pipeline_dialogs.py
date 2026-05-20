@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from ..shared_config import AcquisitionConfig
 
 try:
-    from PySide6.QtCore import Qt, QThread, Signal
+    from PySide6.QtCore import QThread, Signal
     from PySide6.QtWidgets import (
         QCheckBox,
         QDialog,
@@ -236,7 +236,6 @@ if HAS_QT:
 
         def run(self) -> None:
             import io
-            import sys
             from contextlib import redirect_stderr, redirect_stdout
 
             from maze.pipeline.run_pipeline import run_pipeline
