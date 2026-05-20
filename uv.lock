@@ -1859,6 +1859,7 @@ name = "maze"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "h5grove", extra = ["flask"] },
     { name = "h5py" },
     { name = "matplotlib" },
     { name = "numpy" },
@@ -1884,7 +1885,6 @@ dev = [
     { name = "vulture" },
 ]
 gui = [
-    { name = "h5grove", extra = ["flask"] },
     { name = "pyside6" },
 ]
 kpms = [
@@ -1912,7 +1912,7 @@ sleap = [
 requires-dist = [
     { name = "black", marker = "extra == 'dev'" },
     { name = "graphviz", marker = "extra == 'dev'" },
-    { name = "h5grove", extras = ["flask"], marker = "extra == 'gui'", specifier = ">=4.0.0rc0" },
+    { name = "h5grove", extras = ["flask"], specifier = ">=4.0.0rc0" },
     { name = "h5py", specifier = ">=3.0.0" },
     { name = "httpx", marker = "extra == 'dev'" },
     { name = "jax", marker = "extra == 'kpms'", specifier = "<0.7.0" },

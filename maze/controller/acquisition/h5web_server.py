@@ -23,27 +23,32 @@ from h5grove.flask_utils import (
 
 
 def get_h5web_static_dir() -> Optional[Path]:
-    """Return path to web/h5web_dist (built React app), or None if not found."""
-    # Package dir: maze/controller/acquisition/; repo root is one level up from there.
+    """Return ``maze/controller/web/h5web_dist`` if the built SPA is present, else None.
+
+    Build the frontend from ``maze/controller/web/h5web`` (``npm install && npm run build``).
+    """
     package_dir = Path(__file__).resolve().parent
-    repo_root = package_dir.parent
-    static_dir = repo_root / "web" / "h5web_dist"
+    controller_dir = package_dir.parent
+    static_dir = controller_dir / "web" / "h5web_dist"
     if static_dir.is_dir() and (static_dir / "index.html").exists():
         return static_dir
     return None
 
 
-def create_app(h5_base_dir: Path, static_dir: Path) -> Flask:
-    """Flask app: h5grove API under /api + static files for the h5web frontend at /.
+def register_h5web_routes(
+    app: Flask,
+    *,
+    h5_base_dir: Path,
+    static_dir: Path,
+) -> None:
+    """Register h5grove API under ``/api`` and static h5web frontend routes on ``app``.
 
-    Keep h5grove (Python) on the same major line as the embedded @h5web/app build;
-    rebuild ``web/h5web_dist``
-    after bumping the npm package.
+    Sets ``app.config["H5_BASE_DIR"]`` to the resolved ``h5_base_dir`` (HDF5 paths for
+    ``?file=`` are relative to this directory). Keep h5grove (Python) on the same major
+    line as the embedded ``@h5web/app`` build; rebuild ``h5web_dist`` after bumping npm deps.
     """
-    app = Flask(__name__)
     app.config["H5_BASE_DIR"] = str(h5_base_dir.resolve())
 
-    # h5grove endpoints under /api/*
     @app.route("/api/", strict_slashes=False)
     def api_root():
         return h5_root_route()
@@ -68,16 +73,19 @@ def create_app(h5_base_dir: Path, static_dir: Path) -> Flask:
     def index():
         return send_from_directory(static_dir, "index.html")
 
-    # Serve built assets under /assets/... so that /api/... remains handled by h5grove.
     @app.route("/assets/<path:path>")
     def static_files(path: str):
         return send_from_directory(static_dir / "assets", path)
 
-    # Optional: favicon (avoid 404 noise)
     @app.route("/favicon.ico")
     def favicon():
         return send_from_directory(static_dir, "favicon.ico")
 
+
+def create_app(h5_base_dir: Path, static_dir: Path) -> Flask:
+    """Flask app with h5web + h5grove routes (backward-compatible factory for GUI embedding)."""
+    app = Flask(__name__)
+    register_h5web_routes(app, h5_base_dir=h5_base_dir, static_dir=static_dir)
     return app
 
 

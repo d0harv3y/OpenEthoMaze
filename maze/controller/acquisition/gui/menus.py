@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from maze.controller.local_service_launcher import (
+    is_waitress_available,
+    waitress_unavailable_message,
+)
+
 
 def build_main_window_menus(window, *, reload_last_profile_checked: bool) -> None:
     """Build the main window menus while keeping ``MainWindow`` as composition root."""
@@ -18,6 +23,17 @@ def build_main_window_menus(window, *, reload_last_profile_checked: bool) -> Non
     file_menu.addSeparator()
     file_menu.addAction("Open current DB in h5web", window._on_open_current_db_h5web)
     file_menu.addAction("Open H5 in h5web…", window._on_open_h5web)
+    window._start_local_service_action = file_menu.addAction(
+        "Start local ORM service…",
+        window._on_start_local_service,
+    )
+    window._start_local_service_action.setEnabled(is_waitress_available())
+    if is_waitress_available():
+        window._start_local_service_action.setToolTip(
+            "Spawn maze-local-service in a subprocess (h5web + /orm/* on localhost)."
+        )
+    else:
+        window._start_local_service_action.setToolTip(waitress_unavailable_message())
     file_menu.addSeparator()
     file_menu.addAction("Exit", window._on_file_exit)
 

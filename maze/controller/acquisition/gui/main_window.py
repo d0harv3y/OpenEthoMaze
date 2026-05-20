@@ -2684,6 +2684,17 @@ class MainWindow(QMainWindow):
             return
         launch_h5web_for_path(Path(h5_path_str), self.statusBar().showMessage)
 
+    def _on_start_local_service(self) -> None:
+        """Spawn long-lived maze-local-service (subprocess; does not block Qt)."""
+        from maze.controller.local_service_launcher import start_local_service_interactive
+
+        output_dir = Path(self._config.output_dir) if self._config.output_dir else None
+        start_local_service_interactive(
+            parent=self,
+            output_dir=output_dir,
+            status_cb=self.statusBar().showMessage,
+        )
+
 
 def run_gui(
     debug_log: bool = False,

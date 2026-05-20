@@ -15,12 +15,13 @@ dependencies = [
     "tqdm>=4.60.0",
     "pyserial>=3.5",
     "vmbpy",
+    # h5web viewer + maze-local-service HTTP stack (no Qt)
+    "h5grove[flask]>=4.0.0rc0",
 ]
 
 [project.optional-dependencies]
 gui = [
     "PySide6>=6.0",
-    "h5grove[flask]>=4.0.0rc0",
 ]
 sleap = [
     "sleap-io",
@@ -80,6 +81,7 @@ maze-export-ram-trial-manifest = "maze.cli.export_ram_trial_manifest_csv:main"
 maze-fix-ele-h5-session-animal-ids = "maze.cli.fix_ele_h5_session_animal_ids:main"
 maze-sleap-nn-batch-inference = "maze.cli.sleap_nn_batch_inference:main"
 maze-langfuse-demo = "maze.cli.langfuse_demo:main"
+maze-local-service = "maze.controller.local_service.__main__:main"
 
 [tool.uv.sources]
 torch = [
@@ -102,11 +104,11 @@ build-backend = "hatchling.build"
 packages = ["maze"]
 
 [tool.ruff]
-line-length = 100
+line-length = 180
 extend-exclude = ["scripts/archive"]
 
 [tool.black]
-line-length = 100
+line-length = 180
 extend-exclude = "/(scripts\\/archive)/"
 
 # Dead-code finder (optional dev dependency). From ORM/: ``uv run vulture``
@@ -119,3 +121,7 @@ min_confidence = 80
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "llm_integration: optional discover test requiring MAZE_LLM_GGUF and local-service extra",
+    "yolo_integration: optional detect test requiring MAZE_YOLO_WEIGHTS and local-service extra",
+]

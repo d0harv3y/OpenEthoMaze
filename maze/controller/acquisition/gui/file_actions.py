@@ -24,7 +24,9 @@ def launch_h5web_for_path(h5_path: Path, status_cb: Callable[[str], None]) -> No
         return
     static_dir = get_h5web_static_dir()
     if static_dir is None:
-        status_cb("h5web viewer not found (run: cd web/h5web && npm run build)")
+        status_cb(
+            "h5web viewer not found (build: cd maze/controller/web/h5web && npm run build)"
+        )
         return
     try:
         port, _ = run_server(h5_path, static_dir)

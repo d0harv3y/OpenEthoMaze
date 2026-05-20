@@ -45,6 +45,24 @@ uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available
 uv sync --extra local-service
 ```
 
+The unified service binds **127.0.0.1** by default (localhost only). Optional model paths:
+
+| Variable | Purpose |
+|----------|---------|
+| `MAZE_LLM_GGUF` | Path to a GGUF file for `POST /orm/discover` (llama-cpp-python) |
+| `MAZE_YOLO_WEIGHTS` | Default `.pt` weights for `POST /orm/detect` |
+| `MAZE_YOLO_WEIGHTS_DIR` | Directory allowed for alternate YOLO weight files |
+
+Run (core install includes h5grove; add `--extra local-service` for waitress):
+
+```bash
+uv run maze-local-service --data-root /path/to/cohort/root
+```
+
+Open h5web at `http://127.0.0.1:8765/?file=<path-relative-to-data-root>` (override host/port with `--host` / `--port`).
+
+From the acquisition GUI (with `--extra gui` and `--extra local-service`): **File → Start local ORM service…** spawns the same process in a subprocess using the output folder (or last-used directory) as `--data-root`. Ephemeral **Open H5 in h5web** in the GUI still uses the in-process viewer.
+
 **Development** (pytest, ruff, black, mypy, etc.):
 
 ```bash
