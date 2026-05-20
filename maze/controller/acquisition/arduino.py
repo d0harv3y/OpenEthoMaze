@@ -12,6 +12,7 @@ from typing import List, Optional
 
 try:
     import serial
+
     HAS_SERIAL = True
 except ImportError:
     HAS_SERIAL = False

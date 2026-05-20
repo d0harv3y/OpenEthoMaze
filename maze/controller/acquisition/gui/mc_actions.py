@@ -110,9 +110,7 @@ def flash_firmware(*, parent, dev_mode: bool, port_combo, status_cb) -> None:
         return
     try:
         firmware_dir = (
-            Path(__file__).resolve().parent.parent.parent
-            / "firmware"
-            / "vast_controller_duty"
+            Path(__file__).resolve().parent.parent.parent / "firmware" / "vast_controller_duty"
         )
     except Exception:
         firmware_dir = None

@@ -65,6 +65,21 @@ kpms = [
 maze-daq = "maze.controller.acquisition.__main__:main"
 vast-daq = "maze.controller.acquisition.__main__:main"
 maze-ram-daq = "maze.controller.acquisition.radial_arm.__main__:main"
+maze-legacy-db = "maze.cli.legacy_db:main"
+maze-render-trial-overlay = "maze.cli.render_trial_overlay:main"
+maze-render-ram-trial-overlay = "maze.cli.render_ram_trial_overlay:main"
+maze-reprocess-controller-h5 = "maze.cli.reprocess_controller_h5:main"
+maze-trial-summary-dictionary = "maze.cli.trial_summary_data_dictionary:main"
+maze-kpms-review-artifacts = "maze.cli.kpms_review_artifacts:main"
+maze-kpms-apply-syllable-merge = "maze.cli.kpms_apply_syllable_merge:main"
+maze-kpms-clean-syllable-bouts = "maze.cli.kpms_clean_syllable_bouts:main"
+maze-kpms-build-training-exemplar-table = "maze.cli.build_kpms_training_exemplar_table:main"
+maze-generate-selected-trials-nor-kpms = "maze.cli.generate_selected_trials_from_nor_kpms_results:main"
+maze-overlay-slp-bout = "maze.cli.overlay_slp_bout_pipeline:main"
+maze-export-ram-trial-manifest = "maze.cli.export_ram_trial_manifest_csv:main"
+maze-fix-ele-h5-session-animal-ids = "maze.cli.fix_ele_h5_session_animal_ids:main"
+maze-sleap-nn-batch-inference = "maze.cli.sleap_nn_batch_inference:main"
+maze-langfuse-demo = "maze.cli.langfuse_demo:main"
 
 [tool.uv.sources]
 torch = [
@@ -101,15 +116,6 @@ paths = ["maze"]
 exclude = ["tests/", "scripts/archive/"]
 min_confidence = 80
 
-[tool.ruff.lint.per-file-ignores]
-# Run as ``python scripts/…`` with sys.path bootstrap before ``maze`` imports.
-"scripts/render_trial_overlay.py" = ["E402"]
-"scripts/build_kpms_training_exemplar_table.py" = ["E402"]
-"scripts/generate_selected_trials_from_nor_kpms_results.py" = ["E402"]
-"scripts/kpms_review_artifacts.py" = ["E402"]
-"scripts/kpms_apply_syllable_merge.py" = ["E402"]
-"scripts/kpms_clean_syllable_bouts.py" = ["E402"]
-"scripts/trial_summary_data_dictionary.py" = ["E402"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

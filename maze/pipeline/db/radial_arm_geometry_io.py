@@ -41,9 +41,7 @@ def _remove_child_if_present(g_task: h5py.Group, name: str) -> None:
         del g_task[name]
 
 
-def write_radial_arm_geometry_tree(
-    g_task: h5py.Group, geometry_payload: dict[str, Any]
-) -> None:
+def write_radial_arm_geometry_tree(g_task: h5py.Group, geometry_payload: dict[str, Any]) -> None:
     """Write geometry from the same dict shape as :func:`compute_radial_arm_settings_payloads`."""
     _purge_legacy_ram_geometry_attrs(g_task)
     for child in ("calibration", "template_params", "template_regions_cm"):
@@ -109,6 +107,7 @@ def _legacy_geometry_payload_from_attrs(g_task: h5py.Group) -> dict[str, Any]:
         loaded = {}
     if isinstance(loaded, dict) and loaded:
         return loaded
+
     # Piecemeal JSON attrs
     def _load(name: str) -> dict[str, Any]:
         r = g_task.attrs.get(name, "{}")

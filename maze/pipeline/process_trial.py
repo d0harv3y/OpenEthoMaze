@@ -222,6 +222,7 @@ def process_trial(
     def log(msg: str) -> None:
         if not quiet:
             from tqdm import tqdm
+
             tqdm.write(msg)
 
     # Create trial key (path = /animal_id/session/trial; phase derived from session)
@@ -239,9 +240,7 @@ def process_trial(
             )
 
             traj_p, tq_p = analysis_profile
-            settings = merge_analysis_profile_into_trial_settings(
-                settings, traj_p, tq_p
-            )
+            settings = merge_analysis_profile_into_trial_settings(settings, traj_p, tq_p)
         if h5_fps is None:
             h5_fps = DEFAULT_FPS
         timing = complete_trial_timing(db_path, key, timing)
@@ -283,7 +282,11 @@ def process_trial(
             point_name=IN_RANGE_POINT_NAME,
             fps=h5_fps or DEFAULT_FPS,
         )
-        if trace_data_inrange is None and manifest.input_h5_path and manifest.input_h5_path.exists():
+        if (
+            trace_data_inrange is None
+            and manifest.input_h5_path
+            and manifest.input_h5_path.exists()
+        ):
             trace_data_inrange = trace_data_from_legacy_xy(
                 manifest.input_h5_path,
                 manifest.animal_id,
@@ -328,6 +331,7 @@ def process_trial(
         # Always print errors, even in quiet mode (use tqdm.write so bar stays at bottom in batch)
         import traceback
         from tqdm import tqdm
+
         tqdm.write(f"  Error processing {key.path()}: {e}")
         tqdm.write(traceback.format_exc())
         # Record as mistrial so it appears in mistrial summary
@@ -353,9 +357,7 @@ def _process_with_sleap(
     (e.g. no analysis frames or invalid arena), so the caller can mark the trial as failed.
     """
     if timing is None:
-        timing = TrialTiming(
-            seek_to_frame=0, run_start_frame=0, use_absolute_frame_index=False
-        )
+        timing = TrialTiming(seek_to_frame=0, run_start_frame=0, use_absolute_frame_index=False)
     # FPS: h5_fps (from DB, from input H5 timer0) when available, else SLEAP trace, else config default. Not changed by pipeline.
     if fps_override and fps_override > 0:
         fps = fps_override
@@ -623,9 +625,7 @@ def _process_with_sleap(
             nb["end_frame"] = start_frame + int(b["end_frame"])
             combined_bouts.append(nb)
         combined_bouts.sort(key=lambda x: int(x["start_frame"]))
-        write_movement_bouts(
-            db_path, key, point_name, combined_bouts, analysis_start_frame=0
-        )
+        write_movement_bouts(db_path, key, point_name, combined_bouts, analysis_start_frame=0)
 
         run_summary = {
             "total_distance_m": amb_run.total_distance_m,
@@ -658,25 +658,29 @@ def _process_with_sleap(
                 center_zone_radius_cm=center_zone_radius_cm,
                 task_context=task_context,
             )
-            band_summaries.append({
-                "trial_state": "iti_wait",
-                "total_distance_m": amb_iti.total_distance_m,
-                "mean_speed_mps": amb_iti.mean_speed_mps,
-                "max_speed_mps": amb_iti.max_speed_mps,
-                "time_moving_s": amb_iti.time_moving_s,
-                "time_immobile_s": amb_iti.time_immobile_s,
-                "n_movement_bouts": amb_iti.n_movement_bouts,
-                **summary_fields_for_task(
-                    arena_type=arena_type,
-                    exit_metrics=task_iti.exit_metrics,
-                    center_metrics=task_iti.center_metrics,
-                ),
-            })
+            band_summaries.append(
+                {
+                    "trial_state": "iti_wait",
+                    "total_distance_m": amb_iti.total_distance_m,
+                    "mean_speed_mps": amb_iti.mean_speed_mps,
+                    "max_speed_mps": amb_iti.max_speed_mps,
+                    "time_moving_s": amb_iti.time_moving_s,
+                    "time_immobile_s": amb_iti.time_immobile_s,
+                    "n_movement_bouts": amb_iti.n_movement_bouts,
+                    **summary_fields_for_task(
+                        arena_type=arena_type,
+                        exit_metrics=task_iti.exit_metrics,
+                        center_metrics=task_iti.center_metrics,
+                    ),
+                }
+            )
 
-        band_summaries.append({
-            "trial_state": "run",
-            **run_summary,
-        })
+        band_summaries.append(
+            {
+                "trial_state": "run",
+                **run_summary,
+            }
+        )
         write_node_summary_by_state(db_path, key, point_name, band_summaries)
         write_trial_attrs(db_path, key, task_run.extra_trial_attrs)
 
@@ -687,10 +691,7 @@ def _process_with_sleap(
     inrange_valid = ~np.any(np.isnan(inrange_xy), axis=1)
     if settings.filter_frames_no_animal:
         inrange_valid = inrange_valid & valid_frames_analysis
-    use_inrange_primary = (
-        max_gap_spot > settings.trace_max_gap_frames
-        and np.any(inrange_valid)
-    )
+    use_inrange_primary = max_gap_spot > settings.trace_max_gap_frames and np.any(inrange_valid)
     primary_trajectory = HYBRID_POINT_NAME
     write_primary_trajectory(db_path, key, primary_trajectory)
 
@@ -716,13 +717,12 @@ def _process_with_sleap(
             incongruent_padded = np.concatenate([[False], incongruent, [False]])
             n_incongruent_bouts = int(np.sum(np.diff(incongruent_padded.astype(np.int8)) == 1))
             incongruent_duration_s = float(np.sum(incongruent)) / fps if fps > 0 else 0.0
-    write_feedback_error_summary(
-        db_path, key, n_incongruent_bouts, incongruent_duration_s
-    )
+    write_feedback_error_summary(db_path, key, n_incongruent_bouts, incongruent_duration_s)
 
     if generate_qc:
         try:
             from .viz.qc_images import generate_trial_qc_images
+
             # Heatmap from all nodes (split into iti_wait vs run bands); trajectory from hybrid point.
             xy_all_nodes_iti: list[tuple[np.ndarray, np.ndarray]] = []
             xy_all_nodes_run: list[tuple[np.ndarray, np.ndarray]] = []
@@ -739,9 +739,7 @@ def _process_with_sleap(
                 xy_all_nodes_iti.append(
                     (xy_full[seek_row:run_row], valid_full_node[seek_row:run_row])
                 )
-                xy_all_nodes_run.append(
-                    (xy_full[run_row:], valid_full_node[run_row:])
-                )
+                xy_all_nodes_run.append((xy_full[run_row:], valid_full_node[run_row:]))
 
             # Use hybrid trajectory for QC overlay
             xy_traj_full = hybrid_xy_full
@@ -755,7 +753,9 @@ def _process_with_sleap(
 
             # QC image attributes (provenance: what went into heatmap/trajectory and why)
             primary_reason = "in_range_fallback" if use_inrange_primary else "spot"
-            heatmap_source = ",".join(heatmap_node_names) if heatmap_node_names else primary_trajectory
+            heatmap_source = (
+                ",".join(heatmap_node_names) if heatmap_node_names else primary_trajectory
+            )
             qc_attrs = {
                 "heatmap_source": heatmap_source,
                 "trajectory_source": primary_trajectory,
@@ -819,6 +819,7 @@ def _process_with_sleap(
             pass
         except Exception as e:
             from tqdm import tqdm
+
             tqdm.write(f"  Warning: Failed to generate QC images: {e}")
     persist_effective_analysis_params(db_path, key, settings)
     return True
@@ -830,29 +831,29 @@ def _calculate_spot_xy(
 ) -> np.ndarray:
     """
     Calculate spot position (average of front-body nodes).
-    
+
     Args:
         traces: Processed traces dictionary
         n_frames: Number of frames
-        
+
     Returns:
         Array of shape (n_frames, 2) with spot XY positions
     """
     x_arrays = []
     y_arrays = []
-    
+
     for node_name in SPOT_NODE_NAMES:
         if node_name in traces:
-            x_arrays.append(traces[node_name]['x'])
-            y_arrays.append(traces[node_name]['y'])
-    
+            x_arrays.append(traces[node_name]["x"])
+            y_arrays.append(traces[node_name]["y"])
+
     if not x_arrays:
         # Fall back to any available SLEAP nodes first.
         for node_name in traces:
             if node_name == IN_RANGE_POINT_NAME:
                 continue
-            x_arrays.append(traces[node_name]['x'])
-            y_arrays.append(traces[node_name]['y'])
+            x_arrays.append(traces[node_name]["x"])
+            y_arrays.append(traces[node_name]["y"])
     if not x_arrays:
         return np.full((n_frames, 2), np.nan)
 

@@ -39,130 +39,124 @@ def get_skeleton_edges() -> list[tuple[int, int]]:
 @dataclass
 class TraceData:
     """Container for SLEAP trace data for a single trial."""
-    
+
     # Per-node tracking data: {node_name: {'x': array, 'y': array, 'score': array, 'visible': array}}
     traces: dict[str, dict[str, np.ndarray]] = field(default_factory=dict)
-    
+
     # Ordered list of node names
     node_names: list[str] = field(default_factory=list)
-    
+
     # Number of frames
     n_frames: int = 0
-    
+
     # Original file path
     source_path: Optional[Path] = None
-    
+
     # FPS (may be extracted from file or set externally)
     fps: float = 30.0
-    
+
     def get_node_xy(self, node_name: str) -> Optional[np.ndarray]:
         """
         Get XY coordinates for a node.
-        
+
         Returns:
             Array of shape (n_frames, 2) or None if node not found
         """
         if node_name not in self.traces:
             return None
         node = self.traces[node_name]
-        return np.column_stack([node['x'], node['y']])
-    
+        return np.column_stack([node["x"], node["y"]])
+
     def get_centroid(self) -> np.ndarray:
         """
         Compute centroid (mean of all nodes) for each frame.
-        
+
         Returns:
             Array of shape (n_frames, 2)
         """
         x_all = []
         y_all = []
-        
+
         for node_name in self.node_names:
             if node_name in self.traces:
-                x_all.append(self.traces[node_name]['x'])
-                y_all.append(self.traces[node_name]['y'])
-        
+                x_all.append(self.traces[node_name]["x"])
+                y_all.append(self.traces[node_name]["y"])
+
         if not x_all:
             return np.full((self.n_frames, 2), np.nan)
-        
+
         x_stack = np.column_stack(x_all)
         y_stack = np.column_stack(y_all)
-        
-        return np.column_stack([
-            np.nanmean(x_stack, axis=1),
-            np.nanmean(y_stack, axis=1)
-        ])
-    
+
+        return np.column_stack([np.nanmean(x_stack, axis=1), np.nanmean(y_stack, axis=1)])
+
     def get_spot(self, spot_nodes: tuple[str, ...] = SPOT_NODE_NAMES) -> np.ndarray:
         """
         Compute "spot" position (mean of selected front-body nodes).
-        
+
         Args:
             spot_nodes: Tuple of node names to average
-            
+
         Returns:
             Array of shape (n_frames, 2)
         """
         x_all = []
         y_all = []
-        
+
         for node_name in spot_nodes:
             if node_name in self.traces:
-                x_all.append(self.traces[node_name]['x'])
-                y_all.append(self.traces[node_name]['y'])
-        
+                x_all.append(self.traces[node_name]["x"])
+                y_all.append(self.traces[node_name]["y"])
+
         if not x_all:
             # Fall back to centroid
             return self.get_centroid()
-        
+
         x_stack = np.column_stack(x_all)
         y_stack = np.column_stack(y_all)
-        
-        return np.column_stack([
-            np.nanmean(x_stack, axis=1),
-            np.nanmean(y_stack, axis=1)
-        ])
-    
+
+        return np.column_stack([np.nanmean(x_stack, axis=1), np.nanmean(y_stack, axis=1)])
+
     def get_confidence_mask(self, threshold: float = 0.2) -> np.ndarray:
         """
         Get per-frame mask where enough nodes have sufficient confidence.
-        
+
         Args:
             threshold: Minimum confidence score
-            
+
         Returns:
             Boolean array of shape (n_frames,)
         """
         confident_counts = np.zeros(self.n_frames)
-        
+
         for node_name in self.node_names:
             if node_name in self.traces:
-                scores = self.traces[node_name].get('score', np.ones(self.n_frames))
-                confident_counts += (scores >= threshold)
-        
+                scores = self.traces[node_name].get("score", np.ones(self.n_frames))
+                confident_counts += scores >= threshold
+
         return confident_counts >= 3  # At least 3 confident nodes
 
 
 def load_slp_file(slp_path: Path) -> Optional[TraceData]:
     """
     Load SLEAP .h5.slp or .slp file.
-    
+
     The .h5.slp format contains:
     - metadata: JSON with node names
     - pred_points: Predicted keypoint coordinates
     - instances: Instance groupings
     - frames: Frame-level indexing
-    
+
     Args:
         slp_path: Path to SLEAP file
-        
+
     Returns:
         TraceData object or None if loading fails
     """
     if not slp_path.exists():
         print(f"SLEAP file not found: {slp_path}")
         return None
-    
+
     try:
         with h5py.File(slp_path, "r") as f:
             # Get node names from metadata
@@ -171,74 +165,76 @@ def load_slp_file(slp_path: Path) -> Optional[TraceData]:
                 meta_json = meta_json.decode("utf-8")
             meta = json.loads(meta_json)
             original_node_labels = [n["name"] for n in meta["nodes"]]
-            
+
             # Get raw data
             pred_points = f["pred_points"][:]
             instances = f["instances"][:]
             frames = f["frames"][:]
-            
+
             n_frames = len(frames)
             n_nodes = len(original_node_labels)
-            
+
             # Initialize trace arrays
             traces = {}
             for node_name in STANDARD_NODE_NAMES:
                 traces[node_name] = {
-                    'x': np.full(n_frames, np.nan, dtype=np.float32),
-                    'y': np.full(n_frames, np.nan, dtype=np.float32),
-                    'score': np.zeros(n_frames, dtype=np.float32),
-                    'visible': np.zeros(n_frames, dtype=bool),
+                    "x": np.full(n_frames, np.nan, dtype=np.float32),
+                    "y": np.full(n_frames, np.nan, dtype=np.float32),
+                    "score": np.zeros(n_frames, dtype=np.float32),
+                    "visible": np.zeros(n_frames, dtype=bool),
                 }
-            
+
             # Process each frame
             for frame_idx, frame_data in enumerate(frames):
-                instance_start = frame_data['instance_id_start']
-                instance_end = frame_data['instance_id_end']
-                
+                instance_start = frame_data["instance_id_start"]
+                instance_end = frame_data["instance_id_end"]
+
                 if instance_start >= instance_end:
                     continue
-                
+
                 # Get first instance for this frame
                 instance_data = instances[instance_start]
-                point_start = instance_data['point_id_start']
-                point_end = instance_data['point_id_end']
-                
+                point_start = instance_data["point_id_start"]
+                point_end = instance_data["point_id_end"]
+
                 if point_start >= point_end:
                     continue
-                
+
                 instance_points = pred_points[point_start:point_end]
-                
+
                 # Map points to standard node order using fixed indices
                 for point_idx, point_data in enumerate(instance_points):
                     if point_idx >= n_nodes:
                         break
-                    
+
                     # Use fixed index mapping (ignore SLEAP metadata names)
                     if point_idx < len(STANDARD_NODE_NAMES):
                         node_name = STANDARD_NODE_NAMES[point_idx]
                     else:
                         continue
-                    
-                    x = point_data['x']
-                    y = point_data['y']
-                    score = point_data.get('score', 1.0) if hasattr(point_data, 'get') else (
-                        point_data['score'] if 'score' in point_data.dtype.names else 1.0
+
+                    x = point_data["x"]
+                    y = point_data["y"]
+                    score = (
+                        point_data.get("score", 1.0)
+                        if hasattr(point_data, "get")
+                        else (point_data["score"] if "score" in point_data.dtype.names else 1.0)
                     )
-                    
+
                     visible = not (np.isnan(x) or np.isnan(y))
-                    
-                    traces[node_name]['x'][frame_idx] = x
-                    traces[node_name]['y'][frame_idx] = y
-                    traces[node_name]['score'][frame_idx] = score
-                    traces[node_name]['visible'][frame_idx] = visible
-            
+
+                    traces[node_name]["x"][frame_idx] = x
+                    traces[node_name]["y"][frame_idx] = y
+                    traces[node_name]["score"][frame_idx] = score
+                    traces[node_name]["visible"][frame_idx] = visible
+
             return TraceData(
                 traces=traces,
                 node_names=list(STANDARD_NODE_NAMES),
                 n_frames=n_frames,
                 source_path=slp_path,
             )
-    
+
     except Exception as e:
         print(f"Failed to load SLEAP file {slp_path}: {e}")
         return None
@@ -247,27 +243,27 @@ def load_slp_file(slp_path: Path) -> Optional[TraceData]:
 def load_analysis_h5(h5_path: Path) -> Optional[TraceData]:
     """
     Load SLEAP .analysis.h5 export file.
-    
+
     The analysis.h5 format contains:
     - tracks: Shape (T, 2, N, F) - tracks, xy, nodes, frames
     - point_scores: Confidence scores
     - node_names: Node name list
     - track_occupancy: Which frames have valid tracks
-    
+
     Args:
         h5_path: Path to analysis H5 file
-        
+
     Returns:
         TraceData object or None if loading fails
     """
     if not h5_path.exists():
         print(f"SLEAP analysis file not found: {h5_path}")
         return None
-    
+
     try:
         with h5py.File(h5_path, "r") as f:
             tracks = f["tracks"][:]  # (T, 2, N, F) or similar
-            
+
             # Handle different array shapes
             if tracks.ndim == 4:
                 # (tracks, xy, nodes, frames) -> use first track
@@ -278,7 +274,7 @@ def load_analysis_h5(h5_path: Path) -> Optional[TraceData]:
             else:
                 print(f"Unexpected tracks shape: {tracks.shape}")
                 return None
-            
+
             # Get scores if available
             if "point_scores" in f:
                 scores_all = f["point_scores"][:]
@@ -286,7 +282,7 @@ def load_analysis_h5(h5_path: Path) -> Optional[TraceData]:
                     scores_all = scores_all[0]  # (nodes, frames)
             else:
                 scores_all = np.ones((n_nodes, n_frames))
-            
+
             # Initialize traces with standard node names
             traces = {}
             for i, node_name in enumerate(STANDARD_NODE_NAMES):
@@ -300,21 +296,21 @@ def load_analysis_h5(h5_path: Path) -> Optional[TraceData]:
                     y = np.full(n_frames, np.nan)
                     scores = np.zeros(n_frames)
                     visible = np.zeros(n_frames, dtype=bool)
-                
+
                 traces[node_name] = {
-                    'x': x.astype(np.float32),
-                    'y': y.astype(np.float32),
-                    'score': scores.astype(np.float32),
-                    'visible': visible,
+                    "x": x.astype(np.float32),
+                    "y": y.astype(np.float32),
+                    "score": scores.astype(np.float32),
+                    "visible": visible,
                 }
-            
+
             return TraceData(
                 traces=traces,
                 node_names=list(STANDARD_NODE_NAMES),
                 n_frames=n_frames,
                 source_path=h5_path,
             )
-    
+
     except Exception as e:
         print(f"Failed to load SLEAP analysis file {h5_path}: {e}")
         return None
@@ -483,56 +479,56 @@ def apply_jump_filter(
 ) -> TraceData:
     """
     Filter out tracking jumps that exceed physical plausibility.
-    
+
     Large jumps (>max_jump_cm per frame) are set to NaN unless
     confirmed by consistent position in subsequent frames.
-    
+
     Args:
         trace: Input TraceData
         max_jump_cm: Maximum allowed jump in cm
         px_per_cm: Calibration factor
         lookahead_frames: Frames to check for confirmation
-        
+
     Returns:
         Filtered TraceData (modified in place)
     """
     max_jump_px = max_jump_cm * px_per_cm
-    
+
     for node_name in trace.node_names:
         if node_name not in trace.traces:
             continue
-        
-        x = trace.traces[node_name]['x'].copy()
-        y = trace.traces[node_name]['y'].copy()
-        
+
+        x = trace.traces[node_name]["x"].copy()
+        y = trace.traces[node_name]["y"].copy()
+
         for i in range(1, len(x)):
-            if np.isnan(x[i]) or np.isnan(x[i-1]):
+            if np.isnan(x[i]) or np.isnan(x[i - 1]):
                 continue
-            
-            dx = x[i] - x[i-1]
-            dy = y[i] - y[i-1]
-            jump = np.sqrt(dx*dx + dy*dy)
-            
+
+            dx = x[i] - x[i - 1]
+            dy = y[i] - y[i - 1]
+            jump = np.sqrt(dx * dx + dy * dy)
+
             if jump > max_jump_px:
                 # Check if jump is confirmed by subsequent frames
                 confirmed = False
                 for j in range(1, lookahead_frames + 1):
                     if i + j >= len(x):
                         break
-                    if np.isnan(x[i+j]):
+                    if np.isnan(x[i + j]):
                         continue
                     # If subsequent frame is close to jumped position, it's real
-                    dist = np.sqrt((x[i+j] - x[i])**2 + (y[i+j] - y[i])**2)
+                    dist = np.sqrt((x[i + j] - x[i]) ** 2 + (y[i + j] - y[i]) ** 2)
                     if dist < max_jump_px:
                         confirmed = True
                         break
-                
+
                 if not confirmed:
                     x[i] = np.nan
                     y[i] = np.nan
-        
-        trace.traces[node_name]['x'] = x
-        trace.traces[node_name]['y'] = y
-        trace.traces[node_name]['visible'] = ~(np.isnan(x) | np.isnan(y))
-    
+
+        trace.traces[node_name]["x"] = x
+        trace.traces[node_name]["y"] = y
+        trace.traces[node_name]["visible"] = ~(np.isnan(x) | np.isnan(y))
+
     return trace

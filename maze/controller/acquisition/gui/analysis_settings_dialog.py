@@ -488,19 +488,21 @@ class AnalysisSettingsDialog(QDialog):
         self._summary_mean = QLabel("0.00 m/s")
         self._summary_max = QLabel("0.00 m/s")
         _sb_lbl0 = QLabel("Movement bouts:")
-        _sb_lbl0.setToolTip("Count of movement bouts after debouncing, min duration, and gap merge.")
+        _sb_lbl0.setToolTip(
+            "Count of movement bouts after debouncing, min duration, and gap merge."
+        )
         stats_grid.addWidget(_sb_lbl0, 0, 0)
         self._summary_bouts.setToolTip(_sb_lbl0.toolTip())
         stats_grid.addWidget(self._summary_bouts, 0, 1)
         _sb_lbl1 = QLabel("Total distance:")
-        _sb_lbl1.setToolTip("Path length along valid preview points, in meters (px/cm and frame gaps).")
+        _sb_lbl1.setToolTip(
+            "Path length along valid preview points, in meters (px/cm and frame gaps)."
+        )
         stats_grid.addWidget(_sb_lbl1, 1, 0)
         self._summary_dist.setToolTip(_sb_lbl1.toolTip())
         stats_grid.addWidget(self._summary_dist, 1, 1)
         _sb_lbl2 = QLabel("Time still:")
-        _sb_lbl2.setToolTip(
-            "Estimated time not in a movement bout (frames outside bouts / FPS)."
-        )
+        _sb_lbl2.setToolTip("Estimated time not in a movement bout (frames outside bouts / FPS).")
         stats_grid.addWidget(_sb_lbl2, 2, 0)
         self._summary_still.setToolTip(_sb_lbl2.toolTip())
         stats_grid.addWidget(self._summary_still, 2, 1)
@@ -656,9 +658,7 @@ class AnalysisSettingsDialog(QDialog):
             min_confident_nodes_per_frame=int(self._min_conf_nodes.value()),
             min_node_confidence_threshold=float(self._min_node_conf.value()),
             min_valid_frame_run_length=int(self._min_valid_run.value()),
-            min_mean_confidence_per_frame=(
-                mean_raw if mean_raw > 0.0 else None
-            ),
+            min_mean_confidence_per_frame=(mean_raw if mean_raw > 0.0 else None),
             trace_interpolate_nans=self._tr_interp_nan.isChecked(),
             trace_max_gap_frames=int(self._tr_max_gap.value()),
             trace_interpolate_low_conf=self._tr_interp_low.isChecked(),

@@ -82,9 +82,7 @@ def _arena_from_dict(data: Dict[str, Any]) -> ArenaConfig:
         radius_px = (diameter_cm / 2.0) * float(data["px_per_cm"])
     radius_px = float(radius_px) if radius_px is not None else 0.0
     tracking_radius_px = data.get("tracking_radius_px")
-    tracking_radius_px = (
-        float(tracking_radius_px) if tracking_radius_px is not None else 0.0
-    )
+    tracking_radius_px = float(tracking_radius_px) if tracking_radius_px is not None else 0.0
     return ArenaConfig(
         diameter_cm=diameter_cm,
         diameter_display_unit=str(data.get("diameter_display_unit", "ft")),
@@ -189,9 +187,7 @@ def _session_from_dict(data: Dict[str, Any]) -> SessionConfig:
         iti_s=float(data.get("iti_s", 30.0)),
         seed_mode=mode,
         seed_auto_value=(
-            int(data["seed_auto_value"])
-            if data.get("seed_auto_value") is not None
-            else None
+            int(data["seed_auto_value"]) if data.get("seed_auto_value") is not None else None
         ),
         seed_legacy_source=data.get("seed_legacy_source"),
         exit_schedule_indices=schedule_indices,
@@ -378,9 +374,7 @@ def _analysis_trace_quality_from_dict(
 
     mean_conf = data.get("min_mean_confidence_per_frame", MIN_MEAN_CONFIDENCE_PER_FRAME)
     return AnalysisTraceQualityConfig(
-        filter_frames_no_animal=bool(
-            data.get("filter_frames_no_animal", FILTER_FRAMES_NO_ANIMAL)
-        ),
+        filter_frames_no_animal=bool(data.get("filter_frames_no_animal", FILTER_FRAMES_NO_ANIMAL)),
         min_confident_nodes_per_frame=max(
             0,
             int(
@@ -405,12 +399,8 @@ def _analysis_trace_quality_from_dict(
                 )
             ),
         ),
-        min_mean_confidence_per_frame=(
-            float(mean_conf) if mean_conf is not None else None
-        ),
-        trace_interpolate_nans=bool(
-            data.get("trace_interpolate_nans", TRACE_INTERPOLATE_NANS)
-        ),
+        min_mean_confidence_per_frame=(float(mean_conf) if mean_conf is not None else None),
+        trace_interpolate_nans=bool(data.get("trace_interpolate_nans", TRACE_INTERPOLATE_NANS)),
         trace_max_gap_frames=max(
             0,
             int(data.get("trace_max_gap_frames", TRACE_MAX_GAP_FRAMES)),
@@ -421,9 +411,7 @@ def _analysis_trace_quality_from_dict(
         trace_confidence_threshold=float(
             data.get("trace_confidence_threshold", TRACE_CONFIDENCE_THRESHOLD)
         ),
-        trace_apply_smoothing=bool(
-            data.get("trace_apply_smoothing", TRACE_APPLY_SMOOTHING)
-        ),
+        trace_apply_smoothing=bool(data.get("trace_apply_smoothing", TRACE_APPLY_SMOOTHING)),
         trace_smoothing_window=max(
             1,
             int(data.get("trace_smoothing_window", TRACE_SMOOTHING_WINDOW)),
@@ -461,9 +449,7 @@ def _shared_to_dict(config: AcquisitionConfig) -> Dict[str, Any]:
             getattr(config, "preview_set_center_from_next_click", False)
         ),
         "analysis_trajectory": _analysis_trajectory_to_dict(config.analysis_trajectory),
-        "analysis_trace_quality": _analysis_trace_quality_to_dict(
-            config.analysis_trace_quality
-        ),
+        "analysis_trace_quality": _analysis_trace_quality_to_dict(config.analysis_trace_quality),
     }
 
 
@@ -510,14 +496,10 @@ def _shared_kwargs_from_dict(
             if data.get("virtual_duration_override_s") is not None
             else None
         ),
-        "fallback_tracking": _fallback_tracking_from_dict(
-            data.get("fallback_tracking", {})
-        ),
+        "fallback_tracking": _fallback_tracking_from_dict(data.get("fallback_tracking", {})),
         "sleap_confidence_pct": int(data.get("sleap_confidence_pct", 50)),
         "sleap_every_n": max(1, min(5, int(data.get("sleap_every_n", 1)))),
-        "sleap_exit_min_keypoints": max(
-            1, int(data.get("sleap_exit_min_keypoints", 2))
-        ),
+        "sleap_exit_min_keypoints": max(1, int(data.get("sleap_exit_min_keypoints", 2))),
         "fallback_exit_blob_overlap_pct": max(
             0.0, min(100.0, float(data.get("fallback_exit_blob_overlap_pct", 15.0)))
         ),
@@ -527,16 +509,12 @@ def _shared_kwargs_from_dict(
         "track_async": bool(data.get("track_async", False)),
         "track_enable_backup": _eb,
         "track_enable_sleap": _es,
-        "overlay_opacity_pct": max(
-            0, min(100, int(data.get("overlay_opacity_pct", 70)))
-        ),
+        "overlay_opacity_pct": max(0, min(100, int(data.get("overlay_opacity_pct", 70)))),
         "arduino_port": data.get("arduino_port") or None,
         "preview_set_center_from_next_click": bool(
             data.get("preview_set_center_from_next_click", False)
         ),
-        "analysis_trajectory": _analysis_trajectory_from_dict(
-            data.get("analysis_trajectory", {})
-        ),
+        "analysis_trajectory": _analysis_trajectory_from_dict(data.get("analysis_trajectory", {})),
         "analysis_trace_quality": _analysis_trace_quality_from_dict(
             data.get("analysis_trace_quality", {})
         ),
@@ -559,8 +537,7 @@ def _vast_task_from_dict(data: Dict[str, Any]) -> VastTaskConfig:
         arena=_arena_from_dict(data.get("arena", {})),
         exit_angles=_exit_angles_from_dict(data.get("exit_angles", {})),
         stimulus=_stimulus_from_dict(data.get("stimulus", {})),
-        run_phase=str(data.get("run_phase", "habituation") or "habituation")
-        .strip()
+        run_phase=str(data.get("run_phase", "habituation") or "habituation").strip()
         or "habituation",
         hab_training_duty_pct=float(data.get("hab_training_duty_pct", 60.0)),
         wait_not_center_duty_pct=float(data.get("wait_not_center_duty_pct", 0.0)),
@@ -619,16 +596,12 @@ def _radial_arm_task_from_dict(data: Dict[str, Any]) -> RadialArmTaskConfig:
     template_data = data.get("template", {}) if isinstance(data, dict) else {}
     calibration_data = data.get("calibration", {}) if isinstance(data, dict) else {}
     template = RadialArmTemplateConfig(
-        center_midedge_to_midedge_cm=float(
-            template_data.get("center_midedge_to_midedge_cm", 80.0)
-        ),
+        center_midedge_to_midedge_cm=float(template_data.get("center_midedge_to_midedge_cm", 80.0)),
         arm_length_cm=float(template_data.get("arm_length_cm", 55.0)),
         arm_width_cm=float(template_data.get("arm_width_cm", 15.0)),
         arm_split_cm=float(template_data.get("arm_split_cm", 27.5)),
         hole_radius_cm=float(template_data.get("hole_radius_cm", 5.0)),
-        hole_inset_from_arm_end_cm=float(
-            template_data.get("hole_inset_from_arm_end_cm", 10.0)
-        ),
+        hole_inset_from_arm_end_cm=float(template_data.get("hole_inset_from_arm_end_cm", 10.0)),
     )
     ram = RadialArmTaskConfig(
         template=template,
@@ -752,9 +725,7 @@ def save_profile(
         json.dump(data, file, indent=2, ensure_ascii=False)
 
 
-def _merge_gui_into_config(
-    config: AcquisitionConfig, gui: Optional[Dict[str, Any]]
-) -> None:
+def _merge_gui_into_config(config: AcquisitionConfig, gui: Optional[Dict[str, Any]]) -> None:
     """Apply legacy GUI dict keys into config for backward compatibility."""
     if not gui or not isinstance(gui, dict):
         return
@@ -806,9 +777,7 @@ def load_profile(
     if last_session_id is None:
         last_session_id = ""
     session_id = str(last_session_id) if last_session_id else ""
-    trial_idx = (
-        max(0, min(int(data.get("last_trial_idx", 0)), n_trials - 1)) if n_trials else 0
-    )
+    trial_idx = max(0, min(int(data.get("last_trial_idx", 0)), n_trials - 1)) if n_trials else 0
     slot_idx = data.get("last_slot_idx")
     if slot_idx is not None:
         slot_idx = max(0, min(int(slot_idx), total_slots)) if total_slots else 0

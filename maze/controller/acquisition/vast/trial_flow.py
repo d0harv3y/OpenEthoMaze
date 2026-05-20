@@ -390,13 +390,13 @@ class TrialStateMachine:
             normalized = max(0.0, min(1.0, normalized))
         stimulus = cfg.stimulus
         if stimulus.min_at_exit:
-            duty = stimulus.max_duty_pct + (
-                stimulus.min_duty_pct - stimulus.max_duty_pct
-            ) * normalized
+            duty = (
+                stimulus.max_duty_pct + (stimulus.min_duty_pct - stimulus.max_duty_pct) * normalized
+            )
         else:
-            duty = stimulus.min_duty_pct + (
-                stimulus.max_duty_pct - stimulus.min_duty_pct
-            ) * normalized
+            duty = (
+                stimulus.min_duty_pct + (stimulus.max_duty_pct - stimulus.min_duty_pct) * normalized
+            )
         return max(stimulus.min_duty_pct, min(stimulus.max_duty_pct, duty))
 
     def advance_to_next_trial(self) -> bool:

@@ -198,9 +198,7 @@ def compute_trace_region_codes(
     n = int(xy.shape[0])
     out: list[str] = []
     if arena_type == ARENA_TYPE_RADIAL_ARM and geometry_payload:
-        polys, hole_1b = projected_ram_polys_from_geometry_payload(
-            geometry_payload, exit_arm_index
-        )
+        polys, hole_1b = projected_ram_polys_from_geometry_payload(geometry_payload, exit_arm_index)
         for i in range(n):
             x, y = float(xy[i, 0]), float(xy[i, 1])
             if not np.isfinite(x) or not np.isfinite(y):

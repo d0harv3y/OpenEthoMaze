@@ -16,6 +16,7 @@ import numpy as np
 
 try:
     import cv2
+
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
@@ -165,9 +166,7 @@ def render_overlay_video(
         step_px = np.sqrt(dx**2 + dy**2)
         step_valid = valid[:-1] & valid[1:]
         # Only count distance when animal is moving (match export total_distance_m)
-        step_m = np.where(
-            step_valid & is_moving[:-1], step_px / (px_per_cm * 100.0), 0.0
-        )
+        step_m = np.where(step_valid & is_moving[:-1], step_px / (px_per_cm * 100.0), 0.0)
         cum_distance_m[1:] = np.cumsum(step_m)
         # Cumulative time still
         frame_duration_s = 1.0 / fps if fps > 0 else 0.0
@@ -206,9 +205,7 @@ def render_overlay_video(
             skeleton_edges = []
     n_slice = 0
     if node_xy_sliced and STANDARD_NODE_NAMES:
-        first_node = next(
-            (n for n in STANDARD_NODE_NAMES if n in node_xy_sliced), None
-        )
+        first_node = next((n for n in STANDARD_NODE_NAMES if n in node_xy_sliced), None)
         if first_node is not None:
             n_slice = len(node_xy_sliced[first_node]["x"])
 
@@ -260,7 +257,7 @@ def render_overlay_video(
             # Skeleton overlay (edges between nodes)
             if node_xy_sliced and skeleton_edges and i < n_slice:
                 skeleton_color = (0, 200, 255)
-                for (a, b) in skeleton_edges:
+                for a, b in skeleton_edges:
                     if a >= len(STANDARD_NODE_NAMES) or b >= len(STANDARD_NODE_NAMES):
                         continue
                     na = STANDARD_NODE_NAMES[a]
@@ -271,10 +268,7 @@ def render_overlay_video(
                     ya = node_xy_sliced[na]["y"][i]
                     xb = node_xy_sliced[nb]["x"][i]
                     yb = node_xy_sliced[nb]["y"][i]
-                    if (
-                        np.isfinite(xa) and np.isfinite(ya)
-                        and np.isfinite(xb) and np.isfinite(yb)
-                    ):
+                    if np.isfinite(xa) and np.isfinite(ya) and np.isfinite(xb) and np.isfinite(yb):
                         pt_a = (int(round(xa)), int(round(ya)))
                         pt_b = (int(round(xb)), int(round(yb)))
                         cv2.line(frame, pt_a, pt_b, skeleton_color, 1, line_type)
@@ -284,8 +278,7 @@ def render_overlay_video(
                 sx, sy = float(x[i]), float(y[i])
                 if np.isfinite(sx) and np.isfinite(sy):
                     cv2.circle(
-                        frame, (int(round(sx)), int(round(sy))), 3,
-                        (0, 255, 0), -1, line_type
+                        frame, (int(round(sx)), int(round(sy))), 3, (0, 255, 0), -1, line_type
                     )
 
             y_line = 28
@@ -312,11 +305,23 @@ def render_overlay_video(
     # Re-encode to H.264 for Cursor/browser preview (same as ehram_pipeline).
     try:
         cmd = [
-            "ffmpeg", "-y", "-i", str(tmp_file),
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(tmp_file),
             "-an",
-            "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-            "-c:v", "libx264", "-profile:v", "baseline", "-level", "3.0",
-            "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+            "-vf",
+            "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            "-c:v",
+            "libx264",
+            "-profile:v",
+            "baseline",
+            "-level",
+            "3.0",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
             str(output_file),
         ]
         subprocess.run(cmd, check=True, capture_output=True, text=True)

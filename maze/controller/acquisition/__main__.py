@@ -43,7 +43,8 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Write DEBUG-level messages to the log file (default: off, only INFO/WARNING/ERROR)",
     )
     p.add_argument(
-        "-d", "--dev",
+        "-d",
+        "--dev",
         action="store_true",
         default=False,
         help="Enable dev features (e.g. Flash firmware button in MC panel).",

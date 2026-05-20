@@ -21,8 +21,7 @@ class InferenceBackend(ABC):
         output_path: Path,
         device: str,
         batch_size: int,
-    ) -> Optional[Path]:
-        ...
+    ) -> Optional[Path]: ...
 
 
 class SleapNnBackend(InferenceBackend):

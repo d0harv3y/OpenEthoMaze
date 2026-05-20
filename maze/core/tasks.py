@@ -10,9 +10,7 @@ layout choices separate from shared anatomy constants in ``maze.core.anatomy``.
 ARENA_TYPE_CIRCULAR = "circular"
 ARENA_TYPE_RADIAL_ARM = "radial_arm"
 
-SUPPORTED_ARENA_TYPES: frozenset[str] = frozenset(
-    {ARENA_TYPE_CIRCULAR, ARENA_TYPE_RADIAL_ARM}
-)
+SUPPORTED_ARENA_TYPES: frozenset[str] = frozenset({ARENA_TYPE_CIRCULAR, ARENA_TYPE_RADIAL_ARM})
 
 
 def normalize_arena_type(value: object) -> str:

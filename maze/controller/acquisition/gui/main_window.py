@@ -75,12 +75,14 @@ try:
     )
     from PySide6.QtCore import Qt, QRegularExpression, QTimer, QEvent, QUrl
     from PySide6.QtGui import QRegularExpressionValidator
+
     HAS_QT = True
 except ImportError:
     HAS_QT = False
 
 try:
     from PySide6.QtGui import QDesktopServices
+
     HAS_DESKTOP_SERVICES = True
 except ImportError:
     HAS_DESKTOP_SERVICES = False
@@ -103,6 +105,7 @@ except (ImportError, RuntimeError):
 # Tracking: backup (adaptive threshold) and optional SLEAP
 try:
     from ..tracking import AdaptiveThresholdTracker, HybridTracker, TrackingController
+
     HAS_TRACKING = True
 except ImportError:
     AdaptiveThresholdTracker = None
@@ -113,6 +116,7 @@ except ImportError:
 # MC (Arduino) serial for vibration stimulus
 try:
     from ..arduino import ArduinoStimulus, HAS_SERIAL
+
     if HAS_SERIAL:
         import serial.tools.list_ports as _list_ports
     else:
@@ -126,6 +130,7 @@ except ImportError:
 try:
     from .settings_dialog import SettingsDialog
     from .section_with_settings import SectionWithSettings
+
     HAS_SETTINGS_DIALOG = True
 except ImportError:
     SettingsDialog = None
@@ -156,6 +161,7 @@ except ImportError:
     prompt_export_filters = None  # type: ignore[misc, assignment]
     HAS_PIPELINE_DIALOGS = False
 
+
 class MainWindow(QMainWindow):
     """Main window: profile, calibration, run, export."""
 
@@ -169,12 +175,20 @@ class MainWindow(QMainWindow):
         self._db_path: Optional[Path] = None
         self._update_window_title()
         self._camera_timer: Optional[QTimer] = None
-        self._last_preview_img_size: Optional[Tuple[int, int]] = None  # (width, height) for click mapping
+        self._last_preview_img_size: Optional[Tuple[int, int]] = (
+            None  # (width, height) for click mapping
+        )
         # Last flipped raw frame (BGR or gray) for eyedropper hover; updated each camera tick.
         self._last_eyedropper_frame_bgr: Optional[np.ndarray] = None
-        self._last_track_xy: Optional[Tuple[float, float]] = None  # latest valid tracking position for run loop
+        self._last_track_xy: Optional[Tuple[float, float]] = (
+            None  # latest valid tracking position for run loop
+        )
         self._pose_jump_state = PoseJumpState()
-        self._tracking_controller = TrackingController(self._config) if HAS_TRACKING and TrackingController is not None else None
+        self._tracking_controller = (
+            TrackingController(self._config)
+            if HAS_TRACKING and TrackingController is not None
+            else None
+        )
         self._camera_controller = CameraController(self._config) if HAS_CAMERA else None
         self._display_fps_times: list = []  # ring of frame timestamps for display FPS (max 30)
         self._display_fps_max_samples = 30
@@ -217,7 +231,11 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(self._central)
 
         # Camera preview
-        camera_section = SectionWithSettings("Camera", "Open Settings → Task") if SectionWithSettings else QGroupBox("Camera")
+        camera_section = (
+            SectionWithSettings("Camera", "Open Settings → Task")
+            if SectionWithSettings
+            else QGroupBox("Camera")
+        )
         camera_ly = camera_section.content_layout() if SectionWithSettings else QVBoxLayout()
         if not SectionWithSettings:
             camera_section.setLayout(camera_ly)
@@ -228,7 +246,9 @@ class MainWindow(QMainWindow):
         if HAS_VIMBA:
             self._camera_source.addItem("GigE (Vimba)")
         self._camera_source.addItem("Virtual (video file)")
-        self._camera_source.setToolTip("OpenCV = USB/DirectShow index. GigE = Allied Vision (e.g. Manta) via Vimba.")
+        self._camera_source.setToolTip(
+            "OpenCV = USB/DirectShow index. GigE = Allied Vision (e.g. Manta) via Vimba."
+        )
         cam_row.addWidget(self._camera_source)
         cam_row.addWidget(QLabel("Device:"))
         self._camera_device = QSpinBox()
@@ -326,9 +346,7 @@ class MainWindow(QMainWindow):
         camera_ly.addWidget(self._virtual_scrub_row_w)
         layout.addWidget(camera_section)
         if SectionWithSettings:
-            camera_section.settings_clicked.connect(
-                lambda: self._on_open_settings_to_tab("task")
-            )
+            camera_section.settings_clicked.connect(lambda: self._on_open_settings_to_tab("task"))
 
         # MC (microcontroller) panel: COM port, Connect, status
         mc_section = QGroupBox("MC")
@@ -344,7 +362,9 @@ class MainWindow(QMainWindow):
         self._mc_connect_btn = QPushButton("Connect", clicked=self._on_mc_connect)
         mc_ly.addWidget(self._mc_connect_btn)
         self._mc_flash_btn = QPushButton("Flash firmware", clicked=self._on_mc_flash)
-        self._mc_flash_btn.setToolTip("Compile and upload firmware via arduino-cli (dev only; run with -d/--dev).")
+        self._mc_flash_btn.setToolTip(
+            "Compile and upload firmware via arduino-cli (dev only; run with -d/--dev)."
+        )
         self._mc_flash_btn.setEnabled(dev)
         mc_ly.addWidget(self._mc_flash_btn)
         self._mc_status_label = QLabel("Disconnected")
@@ -363,25 +383,33 @@ class MainWindow(QMainWindow):
             self._on_mc_refresh_ports()
 
         # Output folder (main layout)
-        out_section = SectionWithSettings("Output", "Open Settings → Session") if SectionWithSettings else QGroupBox("Output")
+        out_section = (
+            SectionWithSettings("Output", "Open Settings → Session")
+            if SectionWithSettings
+            else QGroupBox("Output")
+        )
         out_ly = QHBoxLayout()
         if SectionWithSettings:
             out_section.content_layout().addLayout(out_ly)
         else:
             out_section.setLayout(out_ly)
         self._output_dir_edit = QLineEdit()
-        self._output_dir_edit.setPlaceholderText("Folder for H5 file; videos in <h5_stem>_vids subfolder")
+        self._output_dir_edit.setPlaceholderText(
+            "Folder for H5 file; videos in <h5_stem>_vids subfolder"
+        )
         out_ly.addWidget(self._output_dir_edit)
         self._output_browse_btn = QPushButton("Browse…", clicked=self._on_browse_output)
         out_ly.addWidget(self._output_browse_btn)
         layout.addWidget(out_section)
         if SectionWithSettings:
-            out_section.settings_clicked.connect(
-                lambda: self._on_open_settings_to_tab("session")
-            )
+            out_section.settings_clicked.connect(lambda: self._on_open_settings_to_tab("session"))
 
         # Session controls (session ID, run mode)
-        session_section = SectionWithSettings("Session controls", "Open Settings → Session") if SectionWithSettings else QGroupBox("Session controls")
+        session_section = (
+            SectionWithSettings("Session controls", "Open Settings → Session")
+            if SectionWithSettings
+            else QGroupBox("Session controls")
+        )
         session_ly = QHBoxLayout()
         if SectionWithSettings:
             session_section.content_layout().addLayout(session_ly)
@@ -395,7 +423,9 @@ class MainWindow(QMainWindow):
         session_ly.addWidget(QLabel("Session ID:"))
         self._session_id_edit = QLineEdit()
         self._session_id_edit.setPlaceholderText("e.g. 2025-02-19-A")
-        self._session_id_edit.setToolTip("Letters, digits, hyphen, period only (no underscore; used as delimiter in filenames).")
+        self._session_id_edit.setToolTip(
+            "Letters, digits, hyphen, period only (no underscore; used as delimiter in filenames)."
+        )
         if HAS_QT:
             session_id_validator = QRegularExpressionValidator(
                 QRegularExpression(r"^[a-zA-Z0-9.\-]*$")
@@ -452,7 +482,9 @@ class MainWindow(QMainWindow):
         status_row1.addWidget(self._status_trial_timer)
         status_row1.addWidget(QLabel("Duty %:"))
         self._status_duty = QLabel("—")
-        self._status_duty.setToolTip("Feedback intensity that would be written (from current position)")
+        self._status_duty.setToolTip(
+            "Feedback intensity that would be written (from current position)"
+        )
         status_row1.addWidget(self._status_duty)
         status_ly.addLayout(status_row1)
         # status_ly.addLayout(status_row2)
@@ -570,14 +602,12 @@ class MainWindow(QMainWindow):
         )
 
     def _on_save_profile_as(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save profile as", "", "JSON (*.json);;All (*)"
-        )
+        path, _ = QFileDialog.getSaveFileName(self, "Save profile as", "", "JSON (*.json);;All (*)")
         if path:
             try:
                 self._apply_ui_to_config()
                 snapshot = self._trial_controller.get_session_snapshot()
-                session_id, trial_idx, slot_idx = (snapshot if snapshot else (None, None, None))
+                session_id, trial_idx, slot_idx = snapshot if snapshot else (None, None, None)
                 gui = gui_to_dict(
                     track_show=self._config.track_show,
                     track_async=self._config.track_async,
@@ -592,9 +622,18 @@ class MainWindow(QMainWindow):
                     camera_flip=self._camera_flip.isChecked(),
                     camera_source=self._camera_source.currentText(),
                     camera_device=self._camera_device.value(),
-                    arduino_port=(self._mc_port_combo.currentData() or self._mc_port_combo.currentText() or "").strip(),
+                    arduino_port=(
+                        self._mc_port_combo.currentData() or self._mc_port_combo.currentText() or ""
+                    ).strip(),
                 )
-                save_profile(self._config, Path(path), session_id=session_id, trial_idx=trial_idx, slot_idx=slot_idx, gui=gui)
+                save_profile(
+                    self._config,
+                    Path(path),
+                    session_id=session_id,
+                    trial_idx=trial_idx,
+                    slot_idx=slot_idx,
+                    gui=gui,
+                )
                 self._profile_path = Path(path)
                 self._update_window_title()
                 self._save_last_profile_path()
@@ -752,7 +791,12 @@ class MainWindow(QMainWindow):
                 initial_tab_index=tab_index,
             )
             self._settings_dialog = dlg
-            dlg.accepted.connect(lambda: (self._apply_config_to_ui(), self.statusBar().showMessage("Settings applied.")))
+            dlg.accepted.connect(
+                lambda: (
+                    self._apply_config_to_ui(),
+                    self.statusBar().showMessage("Settings applied."),
+                )
+            )
         else:
             dlg.set_current_tab(tab_index)
         names = (
@@ -776,7 +820,9 @@ class MainWindow(QMainWindow):
         self._analysis_worker = None
         if w is not None:
             w.wait()
-        self.statusBar().showMessage(message if message else ("Analysis done" if success else "Analysis failed"))
+        self.statusBar().showMessage(
+            message if message else ("Analysis done" if success else "Analysis failed")
+        )
 
     def _on_end_trial(self) -> None:
         msg = self._trial_controller.do_end_trial()
@@ -844,7 +890,9 @@ class MainWindow(QMainWindow):
                             self._config.preview_set_center_from_next_click = False
                             self.statusBar().showMessage(message)
                             dlg = getattr(self, "_settings_dialog", None)
-                            if dlg is not None and hasattr(dlg, "sync_preview_center_checkbox_from_config"):
+                            if dlg is not None and hasattr(
+                                dlg, "sync_preview_center_checkbox_from_config"
+                            ):
                                 dlg.sync_preview_center_checkbox_from_config()
                             if (
                                 self._task_mode == "ram"
@@ -888,10 +936,14 @@ class MainWindow(QMainWindow):
                                     f"Backup intensity range set to [{lo}, {hi}] (neighborhood ±{delta})."
                                 )
                             else:
-                                self.statusBar().showMessage("Could not sample neighborhood for range.")
+                                self.statusBar().showMessage(
+                                    "Could not sample neighborhood for range."
+                                )
                             self._config.fallback_tracking.range_from_next_click = False
                             dlg = getattr(self, "_settings_dialog", None)
-                            if dlg is not None and hasattr(dlg, "sync_fallback_intensity_range_widgets"):
+                            if dlg is not None and hasattr(
+                                dlg, "sync_fallback_intensity_range_widgets"
+                            ):
                                 dlg.sync_fallback_intensity_range_widgets()
         return super().eventFilter(obj, event)
 
@@ -1000,7 +1052,10 @@ class MainWindow(QMainWindow):
             _tp = time.perf_counter()
             # Raw frame for inference (no brightness/contrast); display uses a copy with adjustments
             flip_now = self._camera_flip.isChecked()
-            if self._last_preview_flip_checked is not None and flip_now != self._last_preview_flip_checked:
+            if (
+                self._last_preview_flip_checked is not None
+                and flip_now != self._last_preview_flip_checked
+            ):
                 self._reset_sleap_node_jump_state()
             self._last_preview_flip_checked = flip_now
             if flip_now and _cv2 is not None:
@@ -1011,7 +1066,10 @@ class MainWindow(QMainWindow):
             # Virtual file playback: frame index went backward → video looped or seek; reset GUI pose-jump state.
             if virtual_mode and not paused_virtual and self._camera_controller is not None:
                 playback_cur_idx, _ = self._camera_controller.get_last_frame_info()
-                if playback_cur_idx is not None and self._last_virtual_playback_frame_idx is not None:
+                if (
+                    playback_cur_idx is not None
+                    and self._last_virtual_playback_frame_idx is not None
+                ):
                     if playback_cur_idx < self._last_virtual_playback_frame_idx:
                         self._reset_sleap_node_jump_state()
                 if playback_cur_idx is not None:
@@ -1028,13 +1086,17 @@ class MainWindow(QMainWindow):
                 img_display = _cv2.cvtColor(img_display, _cv2.COLOR_GRAY2BGR)
             display_prep_ms = (time.perf_counter() - _tp) * 1000.0
             _tp = time.perf_counter()
-            show_track = self._config.track_show and HAS_TRACKING and AdaptiveThresholdTracker is not None
+            show_track = (
+                self._config.track_show and HAS_TRACKING and AdaptiveThresholdTracker is not None
+            )
             roi_cx, roi_cy, roi_r = config_tracking_roi(self._config)
             roi_center = (roi_cx, roi_cy) if roi_r > 0 else None
             track_xy, track_valid = None, False
             track_source = "fallback"
             pose_xy, pose_scores, pose_edge_inds, pose_node_names = None, None, None, None
-            pose_node_valid_from_res = None  # per-node confidence validity from tracker (SLEAP only)
+            pose_node_valid_from_res = (
+                None  # per-node confidence validity from tracker (SLEAP only)
+            )
             blob_mask = None
             blob_crop_rect = None
             in_range_xy_res = None
@@ -1074,8 +1136,7 @@ class MainWindow(QMainWindow):
                 # Only build masked/cropped fallback input when backup tracker is enabled.
                 if (
                     enable_backup
-                    and
-                    _cv2 is not None
+                    and _cv2 is not None
                     and self._task_mode == "ram"
                     and isinstance(self._config, RadialArmControllerConfig)
                 ):
@@ -1139,14 +1200,18 @@ class MainWindow(QMainWindow):
                     if track_source != "sleap" and track_xy_res is not None:
                         track_xy_res = (track_xy_res[0] + crop_x0, track_xy_res[1] + crop_y0)
                     if track_source != "sleap" and pose_xy is not None and pose_xy.size > 0:
-                        pose_xy = np.asarray(pose_xy, dtype=np.float64) + np.array([crop_x0, crop_y0])
+                        pose_xy = np.asarray(pose_xy, dtype=np.float64) + np.array(
+                            [crop_x0, crop_y0]
+                        )
                     if in_range_xy_res is not None:
                         in_range_xy_res = (
                             in_range_xy_res[0] + crop_x0,
                             in_range_xy_res[1] + crop_y0,
                         )
                     blob_mask = blob_mask_res
-                    blob_crop_rect = (crop_x0, crop_y0, crop_x1, crop_y1) if blob_mask_res is not None else None
+                    blob_crop_rect = (
+                        (crop_x0, crop_y0, crop_x1, crop_y1) if blob_mask_res is not None else None
+                    )
                 else:
                     blob_mask = blob_mask_res
                     blob_crop_rect = None
@@ -1160,7 +1225,10 @@ class MainWindow(QMainWindow):
                     track_xy = getattr(self, "_last_track_xy", None)
                     track_valid = False
                 self._track_source_label.setText(overlay_state["source_label"])
-                if self._last_overlay_track_source is not None and track_source != self._last_overlay_track_source:
+                if (
+                    self._last_overlay_track_source is not None
+                    and track_source != self._last_overlay_track_source
+                ):
                     self._reset_sleap_node_jump_state()
                 self._last_overlay_track_source = track_source
 
@@ -1206,7 +1274,12 @@ class MainWindow(QMainWindow):
                 ):
                     pose_node_valid = pose_node_valid & pose_node_valid_from_res
                 img_display = draw_roi_and_tracking_overlay(
-                    img_display, roi_center, roi_r, track_xy, track_valid, opacity,
+                    img_display,
+                    roi_center,
+                    roi_r,
+                    track_xy,
+                    track_valid,
+                    opacity,
                     overlay_info=self._trial_controller.get_overlay_info(),
                     track_source=track_source,
                     pose_xy=pose_xy,
@@ -1229,12 +1302,8 @@ class MainWindow(QMainWindow):
             exit_x_px, exit_y_px = tc.get_exit_position_px()
             exit_success_override = None
             if self._task_mode == "vast":
-                exit_radius_px = (
-                    self._config.arena.exit_radius_cm * self._config.arena.px_per_cm
-                )
-                required_kp = max(
-                    1, int(getattr(self._config, "sleap_exit_min_keypoints", 2))
-                )
+                exit_radius_px = self._config.arena.exit_radius_cm * self._config.arena.px_per_cm
+                required_kp = max(1, int(getattr(self._config, "sleap_exit_min_keypoints", 2)))
                 min_frac = max(
                     0.0,
                     min(
@@ -1272,8 +1341,16 @@ class MainWindow(QMainWindow):
                 _, in_exit = tc.get_recording_frame_metrics(fallback_x, fallback_y)
                 exit_success_override = bool(in_exit)
             tc.set_exit_success_override(exit_success_override)
-            x_px = float(self._last_track_xy[0]) if self._last_track_xy is not None else (roi_cx or 0.0)
-            y_px = float(self._last_track_xy[1]) if self._last_track_xy is not None else (roi_cy or 0.0)
+            x_px = (
+                float(self._last_track_xy[0])
+                if self._last_track_xy is not None
+                else (roi_cx or 0.0)
+            )
+            y_px = (
+                float(self._last_track_xy[1])
+                if self._last_track_xy is not None
+                else (roi_cy or 0.0)
+            )
             duty_pct = tc.get_duty_for_position(x_px, y_px)
             if self._arduino_stimulus is not None and self._arduino_stimulus.connected:
                 self._arduino_stimulus.set_duty(duty_pct)
@@ -1337,17 +1414,13 @@ class MainWindow(QMainWindow):
                         frame_shape = img_raw.shape
                     rec_fps = 30.0
                     if self._camera_controller is not None:
-                        v_fps = self._camera_controller.virtual_file_effective_fps(
-                            self._config
-                        )
+                        v_fps = self._camera_controller.virtual_file_effective_fps(self._config)
                         if v_fps is not None:
                             rec_fps = float(v_fps)
                     self._trial_recorder.start(frame_shape=frame_shape, fps=rec_fps)
                     if virt_source is not None and self._camera_controller is not None:
                         fi, _ = self._camera_controller.get_last_frame_info()
-                        self._record_frame_index = (
-                            int(fi) if fi is not None else int(seek_tf)
-                        )
+                        self._record_frame_index = int(fi) if fi is not None else int(seek_tf)
                     else:
                         self._record_frame_index = 0
                 if self._trial_recorder is not None:
@@ -1381,7 +1454,11 @@ class MainWindow(QMainWindow):
                                         name = str(pose_node_names[j])
                                         if name not in fore_names:
                                             continue
-                                        if pose_node_valid is not None and j < pose_node_valid.shape[0] and not bool(pose_node_valid[j]):
+                                        if (
+                                            pose_node_valid is not None
+                                            and j < pose_node_valid.shape[0]
+                                            and not bool(pose_node_valid[j])
+                                        ):
                                             continue
                                         xj = float(pose_xy[j, 0])
                                         yj = float(pose_xy[j, 1])
@@ -1389,7 +1466,10 @@ class MainWindow(QMainWindow):
                                             pts.append((xj, yj))
                                     if pts:
                                         xs, ys = zip(*pts)
-                                        spot_xy_for_record = (float(np.mean(xs)), float(np.mean(ys)))
+                                        spot_xy_for_record = (
+                                            float(np.mean(xs)),
+                                            float(np.mean(ys)),
+                                        )
                                 # SLEAP centroid from all valid nodes.
                                 if (
                                     pose_xy is not None
@@ -1398,7 +1478,11 @@ class MainWindow(QMainWindow):
                                 ):
                                     pts_all: list[tuple[float, float]] = []
                                     for j in range(pose_xy.shape[0]):
-                                        if pose_node_valid is not None and j < pose_node_valid.shape[0] and not bool(pose_node_valid[j]):
+                                        if (
+                                            pose_node_valid is not None
+                                            and j < pose_node_valid.shape[0]
+                                            and not bool(pose_node_valid[j])
+                                        ):
                                             continue
                                         xj = float(pose_xy[j, 0])
                                         yj = float(pose_xy[j, 1])
@@ -1419,9 +1503,7 @@ class MainWindow(QMainWindow):
                             and self._camera_controller is not None
                         ):
                             fi, _ = self._camera_controller.get_last_frame_info()
-                            rec_fi = (
-                                int(fi) if fi is not None else int(self._record_frame_index)
-                            )
+                            rec_fi = int(fi) if fi is not None else int(self._record_frame_index)
                         else:
                             rec_fi = int(self._record_frame_index)
                             self._record_frame_index += 1
@@ -1490,11 +1572,13 @@ class MainWindow(QMainWindow):
             _tqt0 = time.perf_counter()
             pix = frame_to_pixmap(img_display)
             if pix is not None:
-                self._camera_label.setPixmap(pix.scaled(
-                    self._camera_label.size(),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                ))
+                self._camera_label.setPixmap(
+                    pix.scaled(
+                        self._camera_label.size(),
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
             qt_ms = (time.perf_counter() - _tqt0) * 1000.0
             read_ms = (t1 - t0) * 1000
             process_ms = (time.perf_counter() - t1) * 1000
@@ -1529,7 +1613,9 @@ class MainWindow(QMainWindow):
                     effective_s = f"{float(effective):.3f}" if effective is not None else "—"
                     total_s = MainWindow._virtual_timing_frames_label(timing)
                     override_s_txt = (
-                        f"{float(override_s):.3f}s" if (override_s is not None and float(override_s) > 0.0) else "off"
+                        f"{float(override_s):.3f}s"
+                        if (override_s is not None and float(override_s) > 0.0)
+                        else "off"
                     )
                     tt += (
                         "\nvirtual timing: "
@@ -1640,7 +1726,9 @@ class MainWindow(QMainWindow):
                 else:
                     self.statusBar().showMessage(f"Camera {device_index} started ({source}).")
             self._camera_timer = QTimer(self)
-            self._camera_timer.setTimerType(Qt.TimerType.PreciseTimer)  # better accuracy on Windows for 30 FPS
+            self._camera_timer.setTimerType(
+                Qt.TimerType.PreciseTimer
+            )  # better accuracy on Windows for 30 FPS
             self._camera_timer.timeout.connect(self._on_camera_tick)
             tick_ms = (
                 self._camera_controller.preview_timer_interval_ms(self._config)
@@ -1751,17 +1839,11 @@ class MainWindow(QMainWindow):
 
     def _is_video_available(self) -> bool:
         """True if camera is running and we can record video (required to run trials)."""
-        return bool(
-            HAS_CAMERA
-            and self._camera_timer is not None
-            and self._camera_timer.isActive()
-        )
+        return bool(HAS_CAMERA and self._camera_timer is not None and self._camera_timer.isActive())
 
     def _is_mc_connected(self) -> bool:
         """True if MC (Arduino) is connected and correct firmware is running."""
-        return bool(
-            self._arduino_stimulus is not None and self._arduino_stimulus.connected
-        )
+        return bool(self._arduino_stimulus is not None and self._arduino_stimulus.connected)
 
     @staticmethod
     def _virtual_timing_frames_label(timing: Dict[str, Any]) -> str:
@@ -1798,11 +1880,7 @@ class MainWindow(QMainWindow):
         # In dev mode, camera and MC are not required for run buttons.
         # For virtual acquisition (video file playback), allow running even if MC is not connected.
         virtual_mode = video_ok and self._camera_source.currentText().startswith("Virtual")
-        device_ready = (
-            (mc_ok or virtual_mode)
-            if self._task_spec.requires_mc_connection
-            else True
-        )
+        device_ready = (mc_ok or virtual_mode) if self._task_spec.requires_mc_connection else True
         run_ok = self._dev_mode or (video_ok and device_ready)
         self._start_trial_btn.setEnabled(bs["start"] and run_ok)
         self._previous_trial_btn.setEnabled(bs["previous"] and run_ok)
@@ -1945,7 +2023,9 @@ class MainWindow(QMainWindow):
                 rec.trial,
             )
             new_h5_key = f"/{rec.animal_id}/{rec.session_id}/{rec.trial}{suffix}"
-            new_video_path = rec.output_dir / f"{rec.animal_id}_{rec.session_id}_{rec.trial}{suffix}.mp4"
+            new_video_path = (
+                rec.output_dir / f"{rec.animal_id}_{rec.session_id}_{rec.trial}{suffix}.mp4"
+            )
             choice = ask_trial_overwrite_merged(
                 self,
                 h5_key=existing_h5_key if h5_conflict else None,
@@ -1980,6 +2060,7 @@ class MainWindow(QMainWindow):
             stop_ok = True
         except Exception as e:
             import traceback
+
             print(f"Error in TrialRecorder.stop: {e}")
             traceback.print_exc()
         # Capture trial info only when stop() succeeded, so analysis runs on a trial that was actually written
@@ -2061,13 +2142,10 @@ class MainWindow(QMainWindow):
         # when session seed is "legacy" (-1) and we're in Virtual mode,
         # copy exit_x/exit_y from the original legacy H5 trial that corresponds
         # to the selected virtual video.
-        if (
-            self._task_mode == "vast"
-            and (
+        if self._task_mode == "vast" and (
             self._camera_source.currentText().startswith("Virtual")
             and self._config.session.seed_mode == "legacy"
             and self._virtual_video_path is not None
-            )
         ):
             self._trial_controller.clear_legacy_exit_xy()
             try:
@@ -2110,15 +2188,21 @@ class MainWindow(QMainWindow):
                                             f"(exit #{loaded_exit_idx})."
                                         )
                                     else:
-                                        lookup_status = f"Legacy exit lookup: loaded from {legacy_db_path}."
+                                        lookup_status = (
+                                            f"Legacy exit lookup: loaded from {legacy_db_path}."
+                                        )
                                 else:
                                     lookup_status = "Legacy exit lookup: exit_x/exit_y missing; using computed exit."
                             else:
-                                lookup_status = "Legacy exit lookup: trial not found; using computed exit."
+                                lookup_status = (
+                                    "Legacy exit lookup: trial not found; using computed exit."
+                                )
                     else:
                         lookup_status = "Legacy exit lookup: H5 not found; using computed exit."
                 else:
-                    lookup_status = "Legacy exit lookup: couldn't parse video name; using computed exit."
+                    lookup_status = (
+                        "Legacy exit lookup: couldn't parse video name; using computed exit."
+                    )
             except Exception as e:
                 lookup_status = f"Legacy exit lookup failed ({e}); using computed exit."
 
@@ -2129,9 +2213,8 @@ class MainWindow(QMainWindow):
             sid = self._playback_hydration.session_id or sid
             if hasattr(self._trial_controller, "clear_legacy_exit_xy"):
                 self._trial_controller.clear_legacy_exit_xy()
-            if (
-                self._playback_hydration.legacy_exit_xy is not None
-                and hasattr(self._trial_controller, "set_legacy_exit_xy")
+            if self._playback_hydration.legacy_exit_xy is not None and hasattr(
+                self._trial_controller, "set_legacy_exit_xy"
             ):
                 self._trial_controller.set_legacy_exit_xy(
                     self._playback_hydration.legacy_exit_xy[0],
@@ -2332,6 +2415,7 @@ class MainWindow(QMainWindow):
     def _gui_log_error(self, message: str) -> None:
         """Append a message to the GUI error log (View error log) and to the rotating file log."""
         from datetime import datetime
+
         line = f"[{datetime.now().strftime('%H:%M:%S')}] {message}"
         self._gui_error_log.append(line)
         if len(self._gui_error_log) > 1000:
@@ -2364,20 +2448,26 @@ class MainWindow(QMainWindow):
         layout.addWidget(te)
         btn_layout = QHBoxLayout()
         copy_btn = QPushButton("Copy")
+
         def copy_log():
             cb = QApplication.clipboard()
             if cb:
                 cb.setText(te.toPlainText())
+
         copy_btn.clicked.connect(copy_log)
         clear_btn = QPushButton("Clear")
+
         def clear_log():
             self._gui_error_log.clear()
             te.setPlainText("No errors logged.")
+
         clear_btn.clicked.connect(clear_log)
         if log_path is not None and HAS_DESKTOP_SERVICES:
             open_folder_btn = QPushButton("Open log folder")
+
             def open_folder():
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(app_logging.get_log_dir())))
+
             open_folder_btn.clicked.connect(open_folder)
             btn_layout.addWidget(open_folder_btn)
         close_btn = QPushButton("Close")
@@ -2398,15 +2488,11 @@ class MainWindow(QMainWindow):
     def _apply_startup_profile(self) -> None:
         """On startup: optionally load last profile and restore position; else ensure state machine at (0,0)."""
         if not read_reload_last_profile():
-            self._trial_controller.ensure_created(
-                self._session_id_edit.text().strip(), 0
-            )
+            self._trial_controller.ensure_created(self._session_id_edit.text().strip(), 0)
             self._apply_status_and_buttons()
             return
         if not HAS_QT_SETTINGS:
-            self._trial_controller.ensure_created(
-                self._session_id_edit.text().strip(), 0
-            )
+            self._trial_controller.ensure_created(self._session_id_edit.text().strip(), 0)
             self._apply_status_and_buttons()
             return
         path = read_last_profile_path(task_mode=self._task_mode)
@@ -2427,28 +2513,20 @@ class MainWindow(QMainWindow):
                 self._apply_status_and_buttons()
                 self.statusBar().showMessage(f"Loaded last profile: {path}")
             except ProfileTaskMismatchError:
-                self._trial_controller.ensure_created(
-                    self._session_id_edit.text().strip(), 0
-                )
+                self._trial_controller.ensure_created(self._session_id_edit.text().strip(), 0)
                 self._apply_status_and_buttons()
                 self.statusBar().showMessage(
                     "Last profile is for a different task; skipped auto-load."
                 )
             except Exception:
-                self._trial_controller.ensure_created(
-                    self._session_id_edit.text().strip(), 0
-                )
+                self._trial_controller.ensure_created(self._session_id_edit.text().strip(), 0)
                 self._apply_status_and_buttons()
         else:
-            self._trial_controller.ensure_created(
-                self._session_id_edit.text().strip(), 0
-            )
+            self._trial_controller.ensure_created(self._session_id_edit.text().strip(), 0)
             self._apply_status_and_buttons()
 
     def _on_load_profile(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Load profile", "", "JSON (*.json);;All (*)"
-        )
+        path, _ = QFileDialog.getOpenFileName(self, "Load profile", "", "JSON (*.json);;All (*)")
         if path:
             try:
                 self._config, session_id, ti, gui, slot = load_profile(
@@ -2486,7 +2564,7 @@ class MainWindow(QMainWindow):
             try:
                 self._apply_ui_to_config()
                 snapshot = self._trial_controller.get_session_snapshot()
-                session_id, trial_idx, slot_idx = (snapshot if snapshot else (None, None, None))
+                session_id, trial_idx, slot_idx = snapshot if snapshot else (None, None, None)
                 gui = gui_to_dict(
                     track_show=self._config.track_show,
                     track_async=self._config.track_async,
@@ -2501,9 +2579,18 @@ class MainWindow(QMainWindow):
                     camera_flip=self._camera_flip.isChecked(),
                     camera_source=self._camera_source.currentText(),
                     camera_device=self._camera_device.value(),
-                    arduino_port=(self._mc_port_combo.currentData() or self._mc_port_combo.currentText() or "").strip(),
+                    arduino_port=(
+                        self._mc_port_combo.currentData() or self._mc_port_combo.currentText() or ""
+                    ).strip(),
                 )
-                save_profile(self._config, path, session_id=session_id, trial_idx=trial_idx, slot_idx=slot_idx, gui=gui)
+                save_profile(
+                    self._config,
+                    path,
+                    session_id=session_id,
+                    trial_idx=trial_idx,
+                    slot_idx=slot_idx,
+                    gui=gui,
+                )
                 self._profile_path = path
                 self._update_window_title()
                 self._save_last_profile_path()
@@ -2564,11 +2651,7 @@ class MainWindow(QMainWindow):
                 sessions=sess_f or None,
                 trial_names=trial_f or None,
             )
-            task_suffixes = {
-                name.rsplit("_", 1)[-1]
-                for name in exports.keys()
-                if "_" in name
-            }
+            task_suffixes = {name.rsplit("_", 1)[-1] for name in exports.keys() if "_" in name}
             if len(task_suffixes) > 1:
                 QMessageBox.warning(
                     self,
@@ -2586,10 +2669,7 @@ class MainWindow(QMainWindow):
         if not output_dir:
             self.statusBar().showMessage("No output folder set.")
             return
-        h5_name = (
-            (self._config.h5_filename or "trials.h5").strip()
-            or "trials.h5"
-        )
+        h5_name = (self._config.h5_filename or "trials.h5").strip() or "trials.h5"
         if Path(h5_name).name != h5_name:
             h5_name = Path(h5_name).name
         db_path = Path(output_dir) / h5_name

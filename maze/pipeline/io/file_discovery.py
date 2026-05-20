@@ -114,21 +114,21 @@ def enrich_manifests_from_treatment_labels(
 @dataclass
 class TrialManifest:
     """Container for a single trial's file paths and metadata."""
-    
+
     animal_id: str
     session: str  # e.g., "S01", "S05", "hS01" (habituation)
-    trial: str    # e.g., "T01", "T02"
-    
+    trial: str  # e.g., "T01", "T02"
+
     # File paths
     input_h5_path: Path
     video_path: Optional[Path] = None
     sleap_path: Optional[Path] = None
-    
+
     # Metadata inferred from file structure
     is_habituation: bool = False
     cohort: Optional[str] = None
     researcher: Optional[str] = None  # "Kevan Lim" or "Nickolas Pasetto"
-    
+
     # Treatment labels (populated from treatment_labels.csv)
     strain: Optional[str] = None  # F344-WT, F344t-AD, AZm -/-, AZm +/+
     experiment: Optional[str] = None  # VAST_NP, LAST_NP, VASTcontKL
@@ -143,7 +143,7 @@ class TrialManifest:
     timestamp: Optional[datetime] = None
 
     # Frame counts for validation (more reliable than duration)
-    h5_n_frames: Optional[int] = None    # Frame count from H5 data array
+    h5_n_frames: Optional[int] = None  # Frame count from H5 data array
     video_n_frames: Optional[int] = None  # Frame count from AVI file
 
     # Original session key before renumbering (for loading from H5/video)
@@ -169,12 +169,12 @@ class TrialManifest:
         if self.kpms_recording_key:
             return self.kpms_recording_key
         return f"{self.animal_id}-{self.session}-{self.trial}"
-    
+
     @property
     def phase(self) -> str:
         """Return 'habituation' or 'experimental' based on is_habituation flag."""
         return "habituation" if self.is_habituation else "experimental"
-    
+
     @property
     def effective_animal_id(self) -> str:
         """Return inferred_id if available, otherwise animal_id."""
@@ -184,17 +184,17 @@ class TrialManifest:
 @dataclass
 class DiscoveryResult:
     """Result of file discovery across the data directory."""
-    
+
     trials: list[TrialManifest] = field(default_factory=list)
     input_h5_files: list[Path] = field(default_factory=list)
     video_files: list[Path] = field(default_factory=list)
     sleap_files: list[Path] = field(default_factory=list)
-    
+
     # Statistics
     n_matched_videos: int = 0
     n_matched_sleap: int = 0
     n_unmatched_videos: int = 0
-    
+
     def __repr__(self) -> str:
         return (
             f"DiscoveryResult(trials={len(self.trials)}, "
@@ -235,11 +235,7 @@ def _parse_session_range(h5_path: Path) -> tuple[bool, Optional[int], Optional[i
 
     # Fallback: check habituation-like tokens in file names.
     # Includes legacy day-style naming (e.g., "...day45.hdf5").
-    if (
-        re.search(r"_H\d", name)
-        or "HABITUATION" in name
-        or re.search(r"_D\d|_DAY\d", name)
-    ):
+    if re.search(r"_H\d", name) or "HABITUATION" in name or re.search(r"_D\d|_DAY\d", name):
         return (True, None, None)
 
     return (False, None, None)
@@ -326,56 +322,56 @@ def _session_in_range(
 def _infer_cohort_from_path(file_path: Path) -> Optional[str]:
     """Extract cohort information from file path."""
     path_str = str(file_path).lower()
-    
+
     # Look for cohort patterns in path
     cohort_match = re.search(r"cohort\s*(\d+)", path_str, re.IGNORECASE)
     if cohort_match:
         return f"cohort{cohort_match.group(1)}"
-    
+
     return None
 
 
 def _infer_researcher_from_path(file_path: Path) -> Optional[str]:
     """Extract researcher name from file path."""
     path_parts = file_path.parts
-    
+
     for part in path_parts:
         if "kevan" in part.lower():
             return "Kevan Lim"
         elif "nickolas" in part.lower() or "pasetto" in part.lower():
             return "Nickolas Pasetto"
-    
+
     return None
 
 
 def discover_input_h5_files(data_dir: Path = DATA_DIR) -> list[Path]:
     """
     Recursively find all input HDF5 files in the data directory.
-    
+
     Args:
         data_dir: Root directory to search
-        
+
     Returns:
         List of paths to .hdf5 files
     """
     h5_files = []
-    
+
     for ext in ("*.hdf5", "*.h5"):
         # Exclude SLEAP files (.h5.slp, .analysis.h5)
         for path in data_dir.rglob(ext):
             if not path.name.endswith((".h5.slp", ".analysis.h5", ".slp")):
                 h5_files.append(path)
-    
+
     return sorted(h5_files)
 
 
 def discover_video_files(data_dir: Path = DATA_DIR) -> list[Path]:
     """
     Recursively find all video files in the data directory.
-    
+
     Args:
         data_dir: Root directory to search
-        
+
     Returns:
         List of paths to .avi files
     """
@@ -386,28 +382,28 @@ def discover_video_files(data_dir: Path = DATA_DIR) -> list[Path]:
 def discover_sleap_files(data_dir: Path = DATA_DIR) -> list[Path]:
     """
     Recursively find all SLEAP prediction files in the data directory.
-    
+
     Args:
         data_dir: Root directory to search
-        
+
     Returns:
         List of paths to SLEAP files (.slp, .h5.slp, .analysis.h5)
     """
     sleap_files = []
-    
+
     for ext in ("*.slp", "*.h5.slp", "*.analysis.h5"):
         sleap_files.extend(data_dir.rglob(ext))
-    
+
     return sorted(sleap_files)
 
 
 def parse_video_filename(video_path: Path) -> Optional[tuple[str, str, str]]:
     """
     Parse animal_id, session, trial from video filename.
-    
+
     Args:
         video_path: Path to video file
-        
+
     Returns:
         Tuple of (animal_id, session, trial) or None if parsing fails
         Session/trial are formatted as "S01", "T01" etc.
@@ -418,17 +414,17 @@ def parse_video_filename(video_path: Path) -> Optional[tuple[str, str, str]]:
         session = f"S{match.group(2).zfill(2)}"
         trial = f"T{match.group(3).zfill(2)}"
         return (animal_id, session, trial)
-    
+
     return None
 
 
 def parse_sleap_filename(sleap_path: Path) -> Optional[tuple[str, str, str]]:
     """
     Parse animal_id, session, trial from SLEAP filename.
-    
+
     Args:
         sleap_path: Path to SLEAP file
-        
+
     Returns:
         Tuple of (animal_id, session, trial) or None if parsing fails
     """
@@ -438,36 +434,36 @@ def parse_sleap_filename(sleap_path: Path) -> Optional[tuple[str, str, str]]:
         session = f"S{match.group(2).zfill(2)}"
         trial = f"T{match.group(3).zfill(2)}"
         return (animal_id, session, trial)
-    
+
     return None
 
 
 def extract_trials_from_h5(h5_path: Path) -> list[tuple[str, str, str]]:
     """
     Extract all trial paths from an input H5 file.
-    
+
     The H5 structure is: <animal_id>/<session>/<trial>/[data, settings]
-    
+
     Args:
         h5_path: Path to input H5 file
-        
+
     Returns:
         List of (animal_id, session, trial) tuples
     """
     trials = []
-    
+
     try:
         with h5py.File(h5_path, "r") as f:
             for animal_id in f.keys():
                 animal_group = f[animal_id]
                 if not isinstance(animal_group, h5py.Group):
                     continue
-                    
+
                 for session in animal_group.keys():
                     session_group = animal_group[session]
                     if not isinstance(session_group, h5py.Group):
                         continue
-                        
+
                     for trial in session_group.keys():
                         trial_group = session_group[trial]
                         if isinstance(trial_group, h5py.Group):
@@ -476,7 +472,7 @@ def extract_trials_from_h5(h5_path: Path) -> list[tuple[str, str, str]]:
                                 trials.append((animal_id, session, trial))
     except Exception as e:
         print(f"Warning: Failed to read H5 file {h5_path}: {e}")
-    
+
     return trials
 
 
@@ -485,16 +481,16 @@ def discover_trials(
 ) -> DiscoveryResult:
     """
     Discover all trials by scanning input H5 files and matching to videos/SLEAP files.
-    
+
     This function:
     1. Finds all input H5 files and extracts trial structure
     2. Finds all video files and parses their filenames
     3. Finds all SLEAP prediction files
     4. Matches videos/SLEAP to trials from H5 files
-    
+
     Args:
         data_dir: Root directory or list of root directories to search. If None, uses DATA_DIRS from config.
-        
+
     Returns:
         DiscoveryResult containing all discovered trials and file mappings
     """
@@ -504,7 +500,7 @@ def discover_trials(
         dirs = [data_dir]
     else:
         dirs = list(data_dir)
-    
+
     result = DiscoveryResult()
     for d in dirs:
         if not d.exists():
@@ -513,16 +509,16 @@ def discover_trials(
         result.input_h5_files.extend(discover_input_h5_files(d))
         result.video_files.extend(discover_video_files(d))
         result.sleap_files.extend(discover_sleap_files(d))
-    
+
     result.input_h5_files = sorted(set(result.input_h5_files))
     result.video_files = sorted(set(result.video_files))
     result.sleap_files = sorted(set(result.sleap_files))
-    
+
     print(f"Scanning {len(dirs)} directory(ies) for files...")
     print(f"  Found {len(result.input_h5_files)} input H5 files")
     print(f"  Found {len(result.video_files)} video files")
     print(f"  Found {len(result.sleap_files)} SLEAP files")
-    
+
     # Build phase-aware lookups so habituation manifests get files from habituation
     # folders and experimental from the rest (avoids mixing long hab videos into experimental).
     video_lookup_hab: dict[tuple[str, str, str], Path] = {}
@@ -553,7 +549,7 @@ def discover_trials(
             d[parsed] = sleap_path
         elif sleap_path.name.endswith(".h5.slp") and not existing.name.endswith(".h5.slp"):
             d[parsed] = sleap_path
-    
+
     # Extract trials from each H5 file and create manifests
     # Use a dict keyed by (animal_id, phase, session, trial) to deduplicate true duplicates
     # (same phase from different files), while keeping both habituation and experimental trials
@@ -665,26 +661,24 @@ def get_unique_animals(result: DiscoveryResult) -> list[str]:
 
 
 def get_trials_for_animal(
-    result: DiscoveryResult, 
-    animal_id: str,
-    phase: Optional[str] = None
+    result: DiscoveryResult, animal_id: str, phase: Optional[str] = None
 ) -> list[TrialManifest]:
     """
     Get all trials for a specific animal.
-    
+
     Args:
         result: DiscoveryResult from discover_trials()
         animal_id: Animal ID to filter by
         phase: Optional phase filter ("habituation" or "experimental")
-        
+
     Returns:
         List of TrialManifest objects for the animal
     """
     trials = [t for t in result.trials if t.animal_id == animal_id]
-    
+
     if phase:
         trials = [t for t in trials if t.phase == phase]
-    
+
     # Sort by session then trial
     return sorted(trials, key=lambda t: (t.session, t.trial))
 
@@ -694,7 +688,7 @@ class TreatmentLabel:
     """Treatment label for an animal or cohort."""
 
     type: str  # "cohort" or "animal_id"
-    key: str   # cohort name (e.g., "cohort2") or animal ID (e.g., "2314")
+    key: str  # cohort name (e.g., "cohort2") or animal ID (e.g., "2314")
     strain: str
     experiment: str
     researcher: str
@@ -710,21 +704,21 @@ _TREATMENT_LABELS_CACHE: dict[Path, tuple[float, dict[str, "TreatmentLabel"]]] =
 def load_treatment_labels(labels_path: Optional[Path] = None) -> dict[str, TreatmentLabel]:
     """
     Load treatment labels from CSV file.
-    
+
     Args:
         labels_path: Path to treatment_labels.csv. If None, uses default in inputs/.
-        
+
     Returns:
         Dictionary mapping key (cohort name or animal_id) to TreatmentLabel
     """
     import csv
-    
+
     if labels_path is None:
         # Default location relative to this module
         labels_path = Path(__file__).parent.parent.parent.parent / "inputs" / "treatment_labels.csv"
-    
+
     labels: dict[str, TreatmentLabel] = {}
-    
+
     labels_path = Path(labels_path).resolve()
 
     if not labels_path.exists():
@@ -735,7 +729,7 @@ def load_treatment_labels(labels_path: Optional[Path] = None) -> dict[str, Treat
     cached = _TREATMENT_LABELS_CACHE.get(labels_path)
     if cached is not None and cached[0] == mtime:
         return dict(cached[1])
-    
+
     with open(labels_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -751,13 +745,23 @@ def load_treatment_labels(labels_path: Optional[Path] = None) -> dict[str, Treat
                 notes=row.get("notes", ""),
             )
             labels[row["key"]] = label
-    
+
     print(f"Loaded {len(labels)} treatment labels from {labels_path}")
     _TREATMENT_LABELS_CACHE[labels_path] = (mtime, dict(labels))
     return labels
 
 
-TREATMENT_LABELS_HEADER = ["type", "key", "strain", "experiment", "researcher", "sex", "tx", "drug", "notes"]
+TREATMENT_LABELS_HEADER = [
+    "type",
+    "key",
+    "strain",
+    "experiment",
+    "researcher",
+    "sex",
+    "tx",
+    "drug",
+    "notes",
+]
 
 
 def update_treatment_labels_from_discovery(
@@ -799,17 +803,19 @@ def update_treatment_labels_from_discovery(
     new_rows: list[dict[str, str]] = []
     for aid in animal_ids:
         if ("animal_id", aid) not in seen:
-            new_rows.append({
-                "type": "animal_id",
-                "key": aid,
-                "strain": "",
-                "experiment": "",
-                "researcher": "",
-                "sex": "",
-                "tx": "",
-                "drug": "",
-                "notes": "",
-            })
+            new_rows.append(
+                {
+                    "type": "animal_id",
+                    "key": aid,
+                    "strain": "",
+                    "experiment": "",
+                    "researcher": "",
+                    "sex": "",
+                    "tx": "",
+                    "drug": "",
+                    "notes": "",
+                }
+            )
             seen.add(("animal_id", aid))
 
     with open(labels_path, "w", newline="", encoding="utf-8") as f:
@@ -820,7 +826,9 @@ def update_treatment_labels_from_discovery(
         writer.writerows(new_rows)
 
     if new_rows:
-        print(f"Updated {labels_path}: added {len(new_rows)} new row(s) (fill in strain/experiment/sex/tx as needed).")
+        print(
+            f"Updated {labels_path}: added {len(new_rows)} new row(s) (fill in strain/experiment/sex/tx as needed)."
+        )
     else:
         print(f"Treatment labels already up to date: {labels_path}")
 
@@ -828,15 +836,15 @@ def update_treatment_labels_from_discovery(
 def _infer_experiment_from_path(file_path: Path) -> Optional[str]:
     """
     Infer experiment type from file path.
-    
+
     Returns:
         "VASTcontKL" for Kevan Lim data, None for Nick's data (use cohort lookup)
     """
     path_str = str(file_path).lower()
-    
+
     if "vastcontkl" in path_str or "kevan" in path_str:
         return "VASTcontKL"
-    
+
     return None
 
 
@@ -893,11 +901,7 @@ def check_duplicates(result: DiscoveryResult) -> list[tuple[str, list[TrialManif
         key = f"{trial.animal_id}/{trial.phase}/{trial.session}/{trial.trial}"
         by_key[key].append(trial)
 
-    duplicates = [
-        (key, trials)
-        for key, trials in by_key.items()
-        if len(trials) > 1
-    ]
+    duplicates = [(key, trials) for key, trials in by_key.items() if len(trials) > 1]
 
     return duplicates
 
@@ -1009,7 +1013,7 @@ def find_potential_duplicates(
 
     for i, t1 in enumerate(with_timestamps):
         # Only compare with subsequent trials (avoid duplicate pairs)
-        for t2 in with_timestamps[i + 1:]:
+        for t2 in with_timestamps[i + 1 :]:
             delta = t2.timestamp - t1.timestamp
 
             # Stop checking if we're past the threshold (list is sorted)
@@ -1118,7 +1122,9 @@ if __name__ == "__main__":
     result = discover_trials()
     print(f"\n{result}")
     print(f"\nUnique animals: {len(get_unique_animals(result))}")
-    
+
     # Show first few trials
     for trial in result.trials[:5]:
-        print(f"  {trial.trial_key}: video={trial.video_path is not None}, sleap={trial.sleap_path is not None}")
+        print(
+            f"  {trial.trial_key}: video={trial.video_path is not None}, sleap={trial.sleap_path is not None}"
+        )

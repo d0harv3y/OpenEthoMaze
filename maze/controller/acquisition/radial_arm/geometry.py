@@ -179,11 +179,7 @@ def build_template_from_params(
     hole_inset_from_arm_end_cm: float = 10.0,
 ) -> RadialArmTemplateGeometry:
     """Build the canonical RAM template from ORM-native parameters."""
-    split_cm = (
-        float(arm_split_cm)
-        if arm_split_cm is not None
-        else float(arm_length_cm) / 2.0
-    )
+    split_cm = float(arm_split_cm) if arm_split_cm is not None else float(arm_length_cm) / 2.0
     apothem_cm = float(center_midedge_to_midedge_cm) / 2.0
 
     n_sides = 16

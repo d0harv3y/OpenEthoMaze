@@ -36,6 +36,7 @@ VideoPathConflictChoice = Union[
 
 try:
     import cv2
+
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
@@ -44,6 +45,7 @@ except ImportError:
 @dataclass
 class XYRow:
     """One row of xy table (built during trial). trial_state is 'iti' | 'wait' | 'run'."""
+
     frame_index: int
     t_s: float
     x: float
@@ -179,7 +181,8 @@ class TrialRecorder:
             XYRow(
                 frame_index=frame_index,
                 t_s=t_s,
-                x=x_px, y=y_px,
+                x=x_px,
+                y=y_px,
                 spot_x=float(spot_xy[0]) if spot_xy is not None else np.nan,
                 spot_y=float(spot_xy[1]) if spot_xy is not None else np.nan,
                 in_range_x=float(in_range_xy[0]) if in_range_xy is not None else np.nan,
@@ -216,28 +219,30 @@ class TrialRecorder:
         exit_x_px: float,
         exit_y_px: float,
         timestamp_str: Optional[str] = None,
-        on_video_path_conflict: Optional[
-            Callable[[Path], VideoPathConflictChoice]
-        ] = None,
+        on_video_path_conflict: Optional[Callable[[Path], VideoPathConflictChoice]] = None,
         conflict_choice: Optional[VideoPathConflictChoice] = None,
     ) -> None:
         """Flush video and write H5 trial group. If conflict_choice is set, use it for video path conflict instead of calling on_video_path_conflict."""
         if self._video_writer is not None:
             self._video_writer.release()
             self._video_writer = None
-        if (
-            self._video_path_temp is not None
-            and self._video_path_temp.exists()
-        ):
+        if self._video_path_temp is not None and self._video_path_temp.exists():
             if self._video_path is not None:
                 choice = None
                 if self._video_path.exists():
-                    choice = conflict_choice if conflict_choice is not None else (
-                        on_video_path_conflict(self._video_path)
-                        if on_video_path_conflict is not None
-                        else None
+                    choice = (
+                        conflict_choice
+                        if conflict_choice is not None
+                        else (
+                            on_video_path_conflict(self._video_path)
+                            if on_video_path_conflict is not None
+                            else None
+                        )
                     )
-                elif conflict_choice is not None and conflict_choice not in ("overwrite", "discard"):
+                elif conflict_choice is not None and conflict_choice not in (
+                    "overwrite",
+                    "discard",
+                ):
                     # keep_both from merged dialog when only H5 conflicted; still save video to new trial path
                     choice = conflict_choice
                 if choice == "discard":
@@ -249,8 +254,10 @@ class TrialRecorder:
                 elif choice == "overwrite":
                     self._video_path_temp.replace(self._video_path)
                 elif choice is not None:
-                        # keep_both: caller already updated self.trial (e.g. + "(2)"); use current path
-                    new_path = self.output_dir / f"{self.animal_id}_{self.session_id}_{self.trial}.mp4"
+                    # keep_both: caller already updated self.trial (e.g. + "(2)"); use current path
+                    new_path = (
+                        self.output_dir / f"{self.animal_id}_{self.session_id}_{self.trial}.mp4"
+                    )
                     self._video_path_temp.replace(new_path)
                     self._video_path = new_path
                 else:
@@ -346,15 +353,21 @@ class TrialRecorder:
                     # Point-specific coordinates/validity
                     arr_spot[i]["x"] = r.spot_x
                     arr_spot[i]["y"] = r.spot_y
-                    arr_spot[i]["valid"] = 1 if (np.isfinite(r.spot_x) and np.isfinite(r.spot_y)) else 0
+                    arr_spot[i]["valid"] = (
+                        1 if (np.isfinite(r.spot_x) and np.isfinite(r.spot_y)) else 0
+                    )
 
                     arr_in_range[i]["x"] = r.in_range_x
                     arr_in_range[i]["y"] = r.in_range_y
-                    arr_in_range[i]["valid"] = 1 if (np.isfinite(r.in_range_x) and np.isfinite(r.in_range_y)) else 0
+                    arr_in_range[i]["valid"] = (
+                        1 if (np.isfinite(r.in_range_x) and np.isfinite(r.in_range_y)) else 0
+                    )
 
                     arr_centroid[i]["x"] = r.centroid_x
                     arr_centroid[i]["y"] = r.centroid_y
-                    arr_centroid[i]["valid"] = 1 if (np.isfinite(r.centroid_x) and np.isfinite(r.centroid_y)) else 0
+                    arr_centroid[i]["valid"] = (
+                        1 if (np.isfinite(r.centroid_x) and np.isfinite(r.centroid_y)) else 0
+                    )
 
                 write_xy_table(g, "spot", arr_spot, self._fps)
                 write_xy_table(g, "in-range", arr_in_range, self._fps)

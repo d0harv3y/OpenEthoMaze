@@ -345,9 +345,7 @@ def draw_roi_and_tracking_overlay(
                 )
         if pose_node_names is not None and len(pose_node_names) >= n_nodes:
             fore_inds = [
-                i
-                for i in range(n_nodes)
-                if node_valid[i] and is_spot_node_name(pose_node_names[i])
+                i for i in range(n_nodes) if node_valid[i] and is_spot_node_name(pose_node_names[i])
             ]
             if fore_inds:
                 pts = pose_xy[fore_inds]

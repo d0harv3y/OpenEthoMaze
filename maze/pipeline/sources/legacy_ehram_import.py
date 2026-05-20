@@ -128,21 +128,15 @@ def import_legacy_ram_work_items(
             apply_legacy_template_config(cfg)
             cfg.radial_arm.exit_arm_index = escape_idx
 
-            ts = (
-                item.timestamp.isoformat()
-                if item.timestamp is not None
-                else None
-            )
+            ts = item.timestamp.isoformat() if item.timestamp is not None else None
             phase = str(item.phase or "legacy_ram").strip() or "legacy_ram"
 
-            trial_attrs, task_attrs, geometry_payload = (
-                compute_radial_arm_settings_payloads(
-                    cfg,
-                    timestamp=ts,
-                    phase=phase,
-                    run_mode="continuous",
-                    trial_start_frame=0,
-                )
+            trial_attrs, task_attrs, geometry_payload = compute_radial_arm_settings_payloads(
+                cfg,
+                timestamp=ts,
+                phase=phase,
+                run_mode="continuous",
+                trial_start_frame=0,
             )
             write_radial_arm_trial_settings(
                 path,
@@ -180,9 +174,7 @@ def discover_and_import_legacy_ram(
     :func:`import_legacy_ram_work_items`.
     """
     bootstrap_legacy_ram_database(db_path)
-    items = discover_legacy_ehram_work_items(
-        base_dir, trial_ns_path=trial_ns_path
-    )
+    items = discover_legacy_ehram_work_items(base_dir, trial_ns_path=trial_ns_path)
     return import_legacy_ram_work_items(
         db_path,
         items,

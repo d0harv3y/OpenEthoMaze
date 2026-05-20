@@ -24,17 +24,12 @@ def merge_ehram_memory_metrics_into_ram_attrs(
     ram_attrs: dict[str, Any],
 ) -> None:
     """Fill *ram_attrs* from ``ambulation metrics/*/summary`` or ``results/table`` when missing."""
-    need = any(
-        k not in ram_attrs or ram_attrs.get(k) in (None, "", "--")
-        for k in _MEMORY_KEYS
-    )
+    need = any(k not in ram_attrs or ram_attrs.get(k) in (None, "", "--") for k in _MEMORY_KEYS)
     if not need:
         return
     counts = _read_ehram_memory_counts(pipeline_db, key)
     for k in _MEMORY_KEYS:
-        if k in counts and (
-            k not in ram_attrs or ram_attrs.get(k) in (None, "", "--")
-        ):
+        if k in counts and (k not in ram_attrs or ram_attrs.get(k) in (None, "", "--")):
             ram_attrs[k] = counts[k]
 
 

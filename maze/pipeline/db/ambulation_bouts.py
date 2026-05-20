@@ -55,22 +55,14 @@ def write_movement_bouts(
 
         bout_array = np.zeros((len(bouts),), dtype=movement_bout_dtype())
         for i, bout in enumerate(bouts):
-            bout_array[i]["start_frame"] = int(
-                analysis_start_frame + bout.get("start_frame", 0)
-            )
-            bout_array[i]["end_frame"] = int(
-                analysis_start_frame + bout.get("end_frame", 0)
-            )
+            bout_array[i]["start_frame"] = int(analysis_start_frame + bout.get("start_frame", 0))
+            bout_array[i]["end_frame"] = int(analysis_start_frame + bout.get("end_frame", 0))
             bout_array[i]["duration_frames"] = int(bout.get("duration_frames", 0))
             bout_array[i]["duration_s"] = float(bout.get("duration_s", 0.0))
-            bout_array[i]["total_distance_m"] = float(
-                bout.get("total_distance_m", 0.0)
-            )
+            bout_array[i]["total_distance_m"] = float(bout.get("total_distance_m", 0.0))
             bout_array[i]["mean_speed_mps"] = float(bout.get("mean_speed_mps", 0.0))
             bout_array[i]["max_speed_mps"] = float(bout.get("max_speed_mps", 0.0))
-            bout_array[i]["trial_state"] = _encode_trial_state(
-                bout.get("trial_state", "run")
-            )
+            bout_array[i]["trial_state"] = _encode_trial_state(bout.get("trial_state", "run"))
 
         if "movement_bouts" in g_pt:
             del g_pt["movement_bouts"]

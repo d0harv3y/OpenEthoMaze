@@ -28,6 +28,7 @@ XYValidList = list[tuple[np.ndarray, np.ndarray]]
 
 try:
     import cv2
+
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
@@ -96,6 +97,7 @@ def generate_trial_qc_images(
             write_qc_image(db_path, key, image_name, composite, attrs=merged)
     except Exception as e:
         import warnings
+
         warnings.warn(f"QC composite skipped for {key.path()}: {e}", stacklevel=1)
 
 
@@ -142,17 +144,17 @@ def _render_dwell_heatmap_bgr(  # returns (bgr, colorbar_min_s, colorbar_max_s)
 
     if blur_sigma > 0 and np.nanmax(dwell_time_s) > 0:
         dwell_time_s = cv2.GaussianBlur(
-            dwell_time_s, (0, 0),
-            sigmaX=float(blur_sigma), sigmaY=float(blur_sigma),
+            dwell_time_s,
+            (0, 0),
+            sigmaX=float(blur_sigma),
+            sigmaY=float(blur_sigma),
         )
         compensation_factor = 2.0 * math.pi * blur_sigma * blur_sigma
         dwell_time_s = dwell_time_s * compensation_factor
 
     if max_dwell_time_s > 0:
         scale_max = float(max_dwell_time_s)
-        heat8 = np.clip(
-            (dwell_time_s / scale_max) * 255.0, 0, 255
-        ).astype(np.uint8)
+        heat8 = np.clip((dwell_time_s / scale_max) * 255.0, 0, 255).astype(np.uint8)
     else:
         max_val = float(np.nanmax(dwell_time_s))
         scale_max = max_val if max_val > 0 else 0.0
@@ -207,17 +209,17 @@ def _render_dwell_heatmap_bgr_multi(
 
     if blur_sigma > 0 and np.nanmax(dwell_time_s) > 0:
         dwell_time_s = cv2.GaussianBlur(
-            dwell_time_s, (0, 0),
-            sigmaX=float(blur_sigma), sigmaY=float(blur_sigma),
+            dwell_time_s,
+            (0, 0),
+            sigmaX=float(blur_sigma),
+            sigmaY=float(blur_sigma),
         )
         compensation_factor = 2.0 * math.pi * blur_sigma * blur_sigma
         dwell_time_s = dwell_time_s * compensation_factor
 
     if max_dwell_time_s > 0:
         scale_max = float(max_dwell_time_s)
-        heat8 = np.clip(
-            (dwell_time_s / scale_max) * 255.0, 0, 255
-        ).astype(np.uint8)
+        heat8 = np.clip((dwell_time_s / scale_max) * 255.0, 0, 255).astype(np.uint8)
     else:
         max_val = float(np.nanmax(dwell_time_s))
         scale_max = max_val if max_val > 0 else 0.0

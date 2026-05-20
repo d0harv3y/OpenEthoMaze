@@ -35,9 +35,7 @@ def write_reload_last_profile(enabled: bool) -> None:
     settings.setValue(KEY_RELOAD_LAST_PROFILE, bool(enabled))
 
 
-def save_last_profile_path(
-    profile_path: Optional[Path], *, task_mode: str = "vast"
-) -> None:
+def save_last_profile_path(profile_path: Optional[Path], *, task_mode: str = "vast") -> None:
     """Persist last profile path for the given task (``vast`` or ``ram``).
 
     Also updates the legacy global key so older builds still see a last path.

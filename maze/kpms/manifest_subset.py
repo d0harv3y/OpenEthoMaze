@@ -43,7 +43,7 @@ class SubsetConfig:
     max_trials: int | None = None
     random_seed: int = 42
     # Stratification keys for representative subsampling (must be TrialManifest attrs).
-    balance_columns: tuple[str, ...] = ("sex", "tx", "phase","strain")
+    balance_columns: tuple[str, ...] = ("sex", "tx", "phase", "strain")
     # When loading from CSV, fill blank sex/tx/strain/... from inputs/treatment_labels.csv
     enrich_from_treatment_labels: bool = True
 
@@ -80,7 +80,7 @@ def sample_representative_subset(
     manifests: list[TrialManifest],
     max_trials: int | None,
     random_seed: int,
-    balance_columns: tuple[str, ...] = ("sex", "tx", "phase","strain"),
+    balance_columns: tuple[str, ...] = ("sex", "tx", "phase", "strain"),
 ) -> list[TrialManifest]:
     """
     Select a representative subset by stratifying on ``balance_columns`` only.
@@ -149,4 +149,3 @@ def _stratum_key(m: TrialManifest, columns: tuple[str, ...]) -> tuple[str, ...]:
 
 def _trial_sort_key(m: TrialManifest) -> tuple[str, str, str]:
     return (m.animal_id, m.session, m.trial)
-

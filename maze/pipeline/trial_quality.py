@@ -17,9 +17,13 @@ REASON_MISSING_VIDEO = "missing_video"
 REASON_MISSING_FRAME_COUNTS = "missing_frame_counts"
 REASON_FRAME_MISMATCH = "frame_mismatch"
 REASON_MISSING_SLEAP = "missing_sleap"
-REASON_NO_TRACKING = "no_tracking"  # Set from process_trial when SLEAP and realtime xy both unavailable
+REASON_NO_TRACKING = (
+    "no_tracking"  # Set from process_trial when SLEAP and realtime xy both unavailable
+)
 REASON_PROCESSING_ERROR = "processing_error"  # Set from process_trial when an exception occurs
-REASON_NO_EXIT_XY = "no_exit_xy"  # Experimental trial with no exit number/coords in H5; used arena center
+REASON_NO_EXIT_XY = (
+    "no_exit_xy"  # Experimental trial with no exit number/coords in H5; used arena center
+)
 
 
 def detect_trial_data_quality(

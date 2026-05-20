@@ -80,6 +80,19 @@ uv run maze-ram-daq
 
 Requires `--extra gui` (and usually `--extra sleap` for inference menus).
 
+## Batch tools (CLI)
+
+Implemented in `maze/cli/` and exposed as console scripts after `uv sync`. See [scripts/README.md](scripts/README.md) for the full list. Examples:
+
+```bash
+uv run maze-legacy-db init
+uv run maze-legacy-db sync
+uv run maze-render-trial-overlay --help
+uv run maze-reprocess-controller-h5 path/to/controller.h5
+```
+
+kpMS tools need `--extra kpms`; SLEAP batch inference needs `--extra sleap`. Shims under `scripts/*.py` still work via `uv run python scripts/<name>.py` but prefer `uv run maze-<name>`.
+
 ## Demo
 
 ![Unified overlay demo](docs/demo_unified_overlay.gif)

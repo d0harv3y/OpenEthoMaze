@@ -14,7 +14,6 @@ from ...controller.acquisition.radial_arm.legacy_template import (
     legacy_escape_hole_xyr,
 )
 
-
 ENTRY_DEBOUNCE_FRAMES = 10
 
 
@@ -57,8 +56,7 @@ def _point_in_polygon(point_xy: np.ndarray, poly_xy: np.ndarray) -> bool:
         xi, yi = float(poly[i, 0]), float(poly[i, 1])
         xj, yj = float(poly[j, 0]), float(poly[j, 1])
         intersects = ((yi > y) != (yj > y)) and (
-            x
-            < ((xj - xi) * (y - yi) / ((yj - yi) if (yj - yi) != 0 else 1e-12)) + xi
+            x < ((xj - xi) * (y - yi) / ((yj - yi) if (yj - yi) != 0 else 1e-12)) + xi
         )
         if intersects:
             inside = not inside
@@ -141,9 +139,7 @@ def bounds_from_geometry_payload(
             )
         ),
         hole_radius_cm=float(template_params.get("hole_radius_cm", 5.0)),
-        hole_inset_from_arm_end_cm=float(
-            template_params.get("hole_inset_from_arm_end_cm", 10.0)
-        ),
+        hole_inset_from_arm_end_cm=float(template_params.get("hole_inset_from_arm_end_cm", 10.0)),
     )
     px_per_cm = float(calibration.get("px_per_cm", 0.0) or 0.0)
     projected = projected_region_polygons_px(
@@ -312,14 +308,20 @@ def compute_arm_memory_metrics(
             is_entry_from_outside = prev is None or int(prev[0]) != arm
             if is_entry_from_outside and pending_front_entry is None:
                 pending_front_entry = (arm, i)
-            if pending_front_entry is not None and (i - pending_front_entry[1] + 1) >= debounce_frames:
+            if (
+                pending_front_entry is not None
+                and (i - pending_front_entry[1] + 1) >= debounce_frames
+            ):
                 check_pending_entry(i, arm, half)
         else:
             prev = decode_arm_from_region_code(int(codes[i - 1])) if i > 0 else None
             prev_same_back = prev is not None and int(prev[0]) == arm and int(prev[1]) == 1
             if not prev_same_back and pending_back_entry is None:
                 pending_back_entry = (arm, i)
-            if pending_back_entry is not None and (i - pending_back_entry[1] + 1) >= debounce_frames:
+            if (
+                pending_back_entry is not None
+                and (i - pending_back_entry[1] + 1) >= debounce_frames
+            ):
                 check_pending_entry(i, arm, half)
 
     if current_arm is not None:

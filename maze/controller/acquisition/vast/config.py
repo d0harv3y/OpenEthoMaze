@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from ....core.tasks import ARENA_TYPE_CIRCULAR
 from ..shared_config import AcquisitionConfig
 
-
 # Feet to cm (for arena diameter)
 FT_TO_CM = 30.48
 M_TO_CM = 100.0
@@ -24,7 +23,9 @@ class ArenaConfig:
 
     diameter_cm: float = 121.92  # 4 ft default
     diameter_display_unit: str = "ft"  # "ft" or "m" for UI display
-    radius_px: float = 200.0  # arena circle radius in pixels (from ROI); used to derive px_per_cm and draw ROI
+    radius_px: float = (
+        200.0  # arena circle radius in pixels (from ROI); used to derive px_per_cm and draw ROI
+    )
     tracking_radius_px: float = 250.0  # mask radius for tracking; 0 = use radius_px (same as ROI)
     center_pct: float = 0.7  # center circle diameter = center_pct * arena diameter
     exit_radius_cm: float = 12.5

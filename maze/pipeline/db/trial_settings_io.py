@@ -86,9 +86,7 @@ def _radial_arm_shared_attr_fallback(g_trial) -> dict[str, Any]:
     if not template_regions_cm:
         return {}
 
-    px_per_cm = float(
-        g_trial.attrs.get("px_per_cm", calibration.get("px_per_cm", 0.0)) or 0.0
-    )
+    px_per_cm = float(g_trial.attrs.get("px_per_cm", calibration.get("px_per_cm", 0.0)) or 0.0)
     center_x_px = float(
         g_trial.attrs.get(
             "arena_center_x_px",
@@ -139,9 +137,7 @@ def _radial_arm_shared_attr_fallback(g_trial) -> dict[str, Any]:
             )
         ),
         hole_radius_cm=float(template_params.get("hole_radius_cm", 5.0)),
-        hole_inset_from_arm_end_cm=float(
-            template_params.get("hole_inset_from_arm_end_cm", 10.0)
-        ),
+        hole_inset_from_arm_end_cm=float(template_params.get("hole_inset_from_arm_end_cm", 10.0)),
     )
     exit_x_px, exit_y_px, exit_radius_px = exit_hole_xyr_px(
         template,
@@ -200,9 +196,7 @@ def radial_arm_exit_hole_from_geometry_payload(
         arm_split_cm=float(template_params.get("arm_split_cm", 27.5)),
         exit_arm_index=template_shape_exit,
         hole_radius_cm=float(template_params.get("hole_radius_cm", 5.0)),
-        hole_inset_from_arm_end_cm=float(
-            template_params.get("hole_inset_from_arm_end_cm", 10.0)
-        ),
+        hole_inset_from_arm_end_cm=float(template_params.get("hole_inset_from_arm_end_cm", 10.0)),
     )
     ex, ey, er = exit_hole_xyr_px(
         template,
@@ -235,9 +229,7 @@ def infer_first_run_row_from_xy(db_path: Optional[Path], key: TrialKey) -> int:
     return 0
 
 
-def read_spot_frame_index_column(
-    db_path: Optional[Path], key: TrialKey
-) -> Optional[np.ndarray]:
+def read_spot_frame_index_column(db_path: Optional[Path], key: TrialKey) -> Optional[np.ndarray]:
     """Return ``frame_index`` column from spot xy table if present."""
     if db_path is None:
         return None
@@ -397,28 +389,18 @@ def read_trial_settings(
                 int(attrs["exit_number"])
                 if "exit_number" in attrs
                 else (
-                    int(fallback_attrs["exit_number"])
-                    if "exit_number" in fallback_attrs
-                    else None
+                    int(fallback_attrs["exit_number"]) if "exit_number" in fallback_attrs else None
                 )
             ),
             exit_x=(
                 float(attrs["exit_x"])
                 if "exit_x" in attrs
-                else (
-                    float(fallback_attrs["exit_x"])
-                    if "exit_x" in fallback_attrs
-                    else None
-                )
+                else (float(fallback_attrs["exit_x"]) if "exit_x" in fallback_attrs else None)
             ),
             exit_y=(
                 float(attrs["exit_y"])
                 if "exit_y" in attrs
-                else (
-                    float(fallback_attrs["exit_y"])
-                    if "exit_y" in fallback_attrs
-                    else None
-                )
+                else (float(fallback_attrs["exit_y"]) if "exit_y" in fallback_attrs else None)
             ),
             exit_radius_px=(
                 float(attrs["exit_radius_px"])
@@ -490,9 +472,7 @@ def read_trial_settings(
             max_movement_per_frame_cm=float(
                 attrs.get(
                     "max_movement_per_frame_cm",
-                    fallback_attrs.get(
-                        "max_movement_per_frame_cm", MAX_MOVEMENT_PER_FRAME_CM
-                    ),
+                    fallback_attrs.get("max_movement_per_frame_cm", MAX_MOVEMENT_PER_FRAME_CM),
                 )
             ),
             jump_filter_lookahead_frames=max(
@@ -553,22 +533,16 @@ def read_trial_settings(
             trace_confidence_threshold=float(
                 attrs.get("trace_confidence_threshold", TRACE_CONFIDENCE_THRESHOLD)
             ),
-            trace_apply_smoothing=bool(
-                attrs.get("trace_apply_smoothing", TRACE_APPLY_SMOOTHING)
-            ),
+            trace_apply_smoothing=bool(attrs.get("trace_apply_smoothing", TRACE_APPLY_SMOOTHING)),
             trace_smoothing_window=max(
                 1,
                 int(attrs.get("trace_smoothing_window", TRACE_SMOOTHING_WINDOW)),
             ),
         )
         h5_fps = float(attrs["h5_fps"]) if "h5_fps" in attrs else None
-        trial_start_frame = (
-            int(attrs["trial_start_frame"]) if "trial_start_frame" in attrs else 0
-        )
+        trial_start_frame = int(attrs["trial_start_frame"]) if "trial_start_frame" in attrs else 0
         use_abs = "seek_to_frame" in attrs
-        seek_to_frame = (
-            int(_decode_attr(attrs["seek_to_frame"])) if use_abs else 0
-        )
+        seek_to_frame = int(_decode_attr(attrs["seek_to_frame"])) if use_abs else 0
         timing = TrialTiming(
             seek_to_frame=seek_to_frame,
             run_start_frame=trial_start_frame,
@@ -597,12 +571,8 @@ def persist_effective_analysis_params(
         g.attrs["movement_speed_median_window_frames"] = int(
             settings.movement_speed_median_window_frames
         )
-        g.attrs["movement_entry_debounce_frames"] = int(
-            settings.movement_entry_debounce_frames
-        )
-        g.attrs["movement_exit_debounce_frames"] = int(
-            settings.movement_exit_debounce_frames
-        )
+        g.attrs["movement_entry_debounce_frames"] = int(settings.movement_entry_debounce_frames)
+        g.attrs["movement_exit_debounce_frames"] = int(settings.movement_exit_debounce_frames)
         g.attrs["min_movement_bout_duration_frames"] = int(
             settings.min_movement_bout_duration_frames
         )
@@ -610,30 +580,18 @@ def persist_effective_analysis_params(
             settings.movement_inter_bout_interval_frames
         )
         g.attrs["max_movement_per_frame_cm"] = float(settings.max_movement_per_frame_cm)
-        g.attrs["jump_filter_lookahead_frames"] = int(
-            settings.jump_filter_lookahead_frames
-        )
+        g.attrs["jump_filter_lookahead_frames"] = int(settings.jump_filter_lookahead_frames)
         g.attrs["filter_frames_no_animal"] = int(bool(settings.filter_frames_no_animal))
-        g.attrs["min_confident_nodes_per_frame"] = int(
-            settings.min_confident_nodes_per_frame
-        )
-        g.attrs["min_node_confidence_threshold"] = float(
-            settings.min_node_confidence_threshold
-        )
-        g.attrs["min_valid_frame_run_length"] = int(
-            settings.min_valid_frame_run_length
-        )
+        g.attrs["min_confident_nodes_per_frame"] = int(settings.min_confident_nodes_per_frame)
+        g.attrs["min_node_confidence_threshold"] = float(settings.min_node_confidence_threshold)
+        g.attrs["min_valid_frame_run_length"] = int(settings.min_valid_frame_run_length)
         if settings.min_mean_confidence_per_frame is not None:
-            g.attrs["min_mean_confidence_per_frame"] = float(
-                settings.min_mean_confidence_per_frame
-            )
+            g.attrs["min_mean_confidence_per_frame"] = float(settings.min_mean_confidence_per_frame)
         elif "min_mean_confidence_per_frame" in g.attrs:
             del g.attrs["min_mean_confidence_per_frame"]
         g.attrs["trace_interpolate_nans"] = int(bool(settings.trace_interpolate_nans))
         g.attrs["trace_max_gap_frames"] = int(settings.trace_max_gap_frames)
-        g.attrs["trace_interpolate_low_conf"] = int(
-            bool(settings.trace_interpolate_low_conf)
-        )
+        g.attrs["trace_interpolate_low_conf"] = int(bool(settings.trace_interpolate_low_conf))
         g.attrs["trace_confidence_threshold"] = float(settings.trace_confidence_threshold)
         g.attrs["trace_apply_smoothing"] = int(bool(settings.trace_apply_smoothing))
         g.attrs["trace_smoothing_window"] = int(settings.trace_smoothing_window)
@@ -677,8 +635,6 @@ def read_radial_arm_trial_settings(
             "trial_attrs": {
                 name: _decode_attr(g_trial.attrs[name]) for name in g_trial.attrs.keys()
             },
-            "task_attrs": {
-                name: _decode_attr(g_task.attrs[name]) for name in g_task.attrs.keys()
-            },
+            "task_attrs": {name: _decode_attr(g_task.attrs[name]) for name in g_task.attrs.keys()},
             "geometry_payload": geometry_payload,
         }

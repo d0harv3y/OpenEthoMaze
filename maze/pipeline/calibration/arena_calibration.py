@@ -68,10 +68,10 @@ def parse_roi_string(roi_str: str) -> ArenaCalibration:
         params[key] = value
 
     return ArenaCalibration(
-        arena_center_x_px=params.get('x', 0.0),
-        arena_center_y_px=params.get('y', 0.0),
-        arena_radius_px=params.get('r', 0.0),
-        px_per_cm=params.get('pxcm', DEFAULT_PX_PER_CM),
+        arena_center_x_px=params.get("x", 0.0),
+        arena_center_y_px=params.get("y", 0.0),
+        arena_radius_px=params.get("r", 0.0),
+        px_per_cm=params.get("pxcm", DEFAULT_PX_PER_CM),
     )
 
 

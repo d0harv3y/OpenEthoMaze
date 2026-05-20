@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 
-
 # ---------------------------------------------------------------------------
 # Per-frame XY row (controller-side recording, px units only)
 # ---------------------------------------------------------------------------
@@ -88,4 +87,3 @@ AMBULATION_GROUP = "ambulation_metrics"
 AMBULATION_GROUP_LEGACY = "ambulation metrics"
 XY_DATASET_NAME = "xy"
 TASK_DATA_GROUP = "task_data"
-

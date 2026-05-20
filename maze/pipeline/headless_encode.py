@@ -126,9 +126,7 @@ def materialize_xy_tables_from_video(
         spot_xy, centroid_xy = _spot_centroid_from_result(res)
         dist_exit = 0.0
         if spot_xy is not None:
-            dist_exit = float(
-                math.hypot(spot_xy[0] - exit_x_px, spot_xy[1] - exit_y_px)
-            )
+            dist_exit = float(math.hypot(spot_xy[0] - exit_x_px, spot_xy[1] - exit_y_px))
         valid = bool(getattr(res, "valid", False))
         rows.append(
             XYRow(

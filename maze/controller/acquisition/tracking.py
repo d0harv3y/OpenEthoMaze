@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
 try:
     import cv2
+
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
@@ -78,6 +79,7 @@ def scale_tracking_result_to_image_space(
 @dataclass
 class TrackingResult:
     """Single-frame position and validity. Optional full pose for SLEAP overlay."""
+
     x_px: float
     y_px: float
     valid: bool
@@ -88,7 +90,9 @@ class TrackingResult:
     pose_scores: Optional[np.ndarray] = None  # (nodes,)
     pose_edge_inds: Optional[List[Tuple[int, int]]] = None  # (node_i, node_j) for drawing edges
     pose_node_names: Optional[List[str]] = None  # (nodes,) names for spot/fore-nodes; SLEAP only
-    pose_node_valid: Optional[np.ndarray] = None  # (nodes,) bool: True where node score >= threshold; SLEAP only
+    pose_node_valid: Optional[np.ndarray] = (
+        None  # (nodes,) bool: True where node score >= threshold; SLEAP only
+    )
     # Performance and fallback-reason indicators
     inference_time_s: float = 0.0  # time in SLEAP inference this frame; 0 for fallback
     sleap_confidence: Optional[float] = None  # raw SLEAP conf when fallback due to low conf
@@ -286,7 +290,9 @@ class AdaptiveThresholdTracker:
             self._last_xy = (cx, cy)
         _LOG.debug(
             "fallback track: cx=%.1f cy=%.1f valid=%s",
-            cx, cy, valid,
+            cx,
+            cy,
+            valid,
         )
         return TrackingResult(
             x_px=cx,
@@ -302,6 +308,7 @@ class AdaptiveThresholdTracker:
 def _numpy_to_tensor_batch(img: np.ndarray) -> "torch.Tensor":
     """Convert numpy image (H, W) or (H, W, C) to torch (1, C, H, W) float."""
     import torch
+
     arr = np.asarray(img, dtype=np.float32)
     if arr.ndim == 2:
         arr = arr[np.newaxis, :, :]  # (1, H, W)
@@ -410,9 +417,7 @@ class HybridTracker:
                     device = "cuda:0"  # explicit first GPU for inference
                     try:
                         device_name = torch.cuda.get_device_name(0)
-                        _LOG.info(
-                            "SLEAP: using CUDA device 0 (%s)", device_name
-                        )
+                        _LOG.info("SLEAP: using CUDA device 0 (%s)", device_name)
                     except Exception:
                         _LOG.info("SLEAP: using CUDA device 0")
                 else:
@@ -432,10 +437,7 @@ class HybridTracker:
                 if train_cfg_path.exists():
                     try:
                         train_cfg = OmegaConf.load(str(train_cfg_path))
-                        pre = (
-                            train_cfg.get("data_config", {})
-                            .get("preprocessing", {})
-                        )
+                        pre = train_cfg.get("data_config", {}).get("preprocessing", {})
                         preprocess_cfg = OmegaConf.create(pre)
                     except Exception:
                         _LOG.warning(
@@ -466,9 +468,7 @@ class HybridTracker:
 
                 self._sleap_last_fail_s = time.monotonic()
                 # Include traceback so Help -> View error log has the real origin.
-                self._sleap_status_error = (
-                    f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
-                )
+                self._sleap_status_error = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
                 if not self._sleap_load_failure_logged:
                     self._sleap_load_failure_logged = True
                     app_logging.log_error(
@@ -503,9 +503,7 @@ class HybridTracker:
                 return [(int(arr[i, 0]), int(arr[i, 1])) for i in range(len(arr))]
         edges = getattr(skel, "edges", None)
         if edges is not None:
-            name_to_idx = {
-                name: i for i, name in enumerate(getattr(skel, "node_names", []))
-            }
+            name_to_idx = {name: i for i, name in enumerate(getattr(skel, "node_names", []))}
             out = []
             for e in edges:
                 a, b = e[0], e[1]
@@ -530,6 +528,7 @@ class HybridTracker:
                 resize_image,
             )
             import torchvision.transforms.v2.functional as tvf
+
             pred = self._sleap_predictor
             cfg = pred.preprocess_config or {}
             device = next(pred.confmap_model.parameters()).device
@@ -539,6 +538,7 @@ class HybridTracker:
                 image_sleap = cv2.cvtColor(
                     np.asarray(image_sleap, dtype=np.uint8), cv2.COLOR_BGR2GRAY
                 )
+
             # (1, C, H, W)
             def ensure_4d(t: "torch.Tensor") -> "torch.Tensor":
                 if t.dim() == 3:
@@ -576,11 +576,13 @@ class HybridTracker:
                 return None
             out = out_list[0]
             peaks = out["pred_instance_peaks"]  # (1, nodes, 2)
-            vals = out["pred_peak_values"]      # (1, nodes)
+            vals = out["pred_peak_values"]  # (1, nodes)
             peaks = peaks.cpu().numpy()
             vals = vals.cpu().numpy()
             if peaks.size == 0 or vals.size == 0:
-                _LOG.debug("SLEAP: peaks or vals empty (peaks.size=%s vals.size=%s)", peaks.size, vals.size)
+                _LOG.debug(
+                    "SLEAP: peaks or vals empty (peaks.size=%s vals.size=%s)", peaks.size, vals.size
+                )
                 return None
             # Valid keypoints: above model threshold
             thresh = pred.peak_threshold if hasattr(pred, "peak_threshold") else 0.2
@@ -589,7 +591,8 @@ class HybridTracker:
                 max_val = float(np.max(vals[0])) if vals.size else 0
                 _LOG.debug(
                     "SLEAP: no keypoints above threshold %.2f (max score=%.3f)",
-                    thresh, max_val,
+                    thresh,
+                    max_val,
                 )
                 return None
             pts = peaks[0][valid]
@@ -623,16 +626,16 @@ class HybridTracker:
             if res is not None:
                 x, y, conf, pose_xy, pose_scores, inference_time_s = res
                 # Per-node validity: keep nodes above threshold, reject others
-                pose_node_valid = np.asarray(
-                    pose_scores >= self.confidence_threshold, dtype=bool
-                )
+                pose_node_valid = np.asarray(pose_scores >= self.confidence_threshold, dtype=bool)
                 n_valid = int(np.sum(pose_node_valid))
                 if n_valid < self.min_nodes_required:
                     # Too few nodes above threshold: fall back to backup tracker
                     min_score = float(np.min(pose_scores)) if pose_scores.size else 0.0
                     _LOG.debug(
                         "SLEAP: %d nodes above threshold (need %d), min=%.3f; using fallback",
-                        n_valid, self.min_nodes_required, min_score,
+                        n_valid,
+                        self.min_nodes_required,
+                        min_score,
                     )
                     fallback_res.sleap_confidence = conf
                     fallback_res.inference_time_s = inference_time_s
@@ -1078,11 +1081,7 @@ class TrackingController:
         """
         tracker = self._ensure_tracker()
         img_arr = np.asarray(image, dtype=np.uint8)
-        sleap_arr = (
-            np.asarray(sleap_image, dtype=np.uint8)
-            if sleap_image is not None
-            else None
-        )
+        sleap_arr = np.asarray(sleap_image, dtype=np.uint8) if sleap_image is not None else None
         inv_x, inv_y = 1.0, 1.0
         small = img_arr
         fh, fw = int(img_arr.shape[0]), int(img_arr.shape[1])
@@ -1174,7 +1173,11 @@ class TrackingController:
 
         if res is None:
             stale_label = "—"
-            if self._async_enabled and result_time > 0 and (now_s - result_time) > _TRACKING_STALE_S:
+            if (
+                self._async_enabled
+                and result_time > 0
+                and (now_s - result_time) > _TRACKING_STALE_S
+            ):
                 stale_label = "catching up"
             return {
                 "track_xy": None,

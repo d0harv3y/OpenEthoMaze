@@ -39,7 +39,9 @@ def align_coordinates_results(
     return coord, conf, res
 
 
-def video_paths_for_results(manifests: list[TrialManifest], result_keys: list[str]) -> dict[str, str]:
+def video_paths_for_results(
+    manifests: list[TrialManifest], result_keys: list[str]
+) -> dict[str, str]:
     """Map kpMS recording key -> video file path (existing files only)."""
     by_kpms: dict[str, TrialManifest] = {}
     for m in manifests:

@@ -40,6 +40,7 @@ try:
     )
     from PySide6.QtCore import Qt, QRegularExpression, QSettings
     from PySide6.QtGui import QCloseEvent, QRegularExpressionValidator
+
     HAS_QT = True
 except ImportError:
     # If PySide6 is unavailable or incomplete, fail the import cleanly so
@@ -243,7 +244,9 @@ class SettingsDialog(QDialog):
             "Extra pixels around template bbox for tracking crop. 0 = auto (~20% of bbox half-extent), "
             "similar to VAST when tracking mask radius uses the 1.2× default."
         )
-        calibration_f.addRow("Tracking mask margin (px, 0=auto):", self._ram_tracking_mask_margin_px)
+        calibration_f.addRow(
+            "Tracking mask margin (px, 0=auto):", self._ram_tracking_mask_margin_px
+        )
         # TODO(RAM edit tools): wire this into per-region editing/highlighting; currently metadata-only.
         self._ram_edit_region_name = QLineEdit()
         self._ram_edit_region_name.setPlaceholderText("e.g. arm0_front")
@@ -394,7 +397,9 @@ class SettingsDialog(QDialog):
         self._wait_not_center_duty = QDoubleSpinBox()
         self._wait_not_center_duty.setRange(0, 100)
         self._wait_not_center_duty.setSuffix(" %")
-        self._wait_not_center_duty.setToolTip("Stimulus intensity during Wait exit (VAST and habituation_training only). Default 0.")
+        self._wait_not_center_duty.setToolTip(
+            "Stimulus intensity during Wait exit (VAST and habituation_training only). Default 0."
+        )
         hab_f.addRow("Wait-not-center duty %:", self._wait_not_center_duty)
         layout.addWidget(hab_g)
         return w
@@ -404,9 +409,13 @@ class SettingsDialog(QDialog):
         f = QFormLayout(w)
         self._session_id_edit = QLineEdit()
         self._session_id_edit.setPlaceholderText("e.g. 2025-02-19-A")
-        self._session_id_edit.setToolTip("Letters, digits, hyphen, period only (no underscore; used as delimiter in filenames).")
+        self._session_id_edit.setToolTip(
+            "Letters, digits, hyphen, period only (no underscore; used as delimiter in filenames)."
+        )
         if HAS_QT:
-            self._session_id_edit.setValidator(QRegularExpressionValidator(QRegularExpression(r"^[a-zA-Z0-9.\-]*$")))
+            self._session_id_edit.setValidator(
+                QRegularExpressionValidator(QRegularExpression(r"^[a-zA-Z0-9.\-]*$"))
+            )
         self._session_id_edit.textChanged.connect(self._refresh_trial_schedule_tab)
         f.addRow("Session ID:", self._session_id_edit)
         self._phase_combo = QComboBox()
@@ -449,16 +458,18 @@ class SettingsDialog(QDialog):
         self._session_seed_mode.addItem("Auto", "auto")
         self._session_seed_mode.addItem("Legacy", "legacy")
         self._session_seed_mode.addItem("Manual", "manual")
-        self._session_seed_mode.currentIndexChanged.connect(
-            self._sync_seed_value_widget_state
-        )
+        self._session_seed_mode.currentIndexChanged.connect(self._sync_seed_value_widget_state)
         f.addRow("Seed mode:", self._session_seed_mode)
         self._session_seed_value = QLineEdit()
-        self._session_seed_value.setPlaceholderText("Auto: integer seed | Legacy: path to legacy .h5")
+        self._session_seed_value.setPlaceholderText(
+            "Auto: integer seed | Legacy: path to legacy .h5"
+        )
         f.addRow("Seed value:", self._session_seed_value)
         out_row = QHBoxLayout()
         self._output_dir_edit = QLineEdit()
-        self._output_dir_edit.setPlaceholderText("Output folder for H5 file; videos in <h5_stem>_vids subfolder")
+        self._output_dir_edit.setPlaceholderText(
+            "Output folder for H5 file; videos in <h5_stem>_vids subfolder"
+        )
         out_row.addWidget(self._output_dir_edit)
         self._output_browse_btn = QPushButton("Browse…")
         self._output_browse_btn.clicked.connect(self._on_browse_output)
@@ -538,9 +549,7 @@ class SettingsDialog(QDialog):
         for slot in range(total):
             aidx, tidx = slot_to_animal_trial(slot, n_a, n_t, mode)
             aid = (
-                str(animals[aidx % max(1, len(animals))].animal_id)
-                if animals
-                else str(1000 + aidx)
+                str(animals[aidx % max(1, len(animals))].animal_id) if animals else str(1000 + aidx)
             )
             self._schedule_table.setItem(slot, 0, QTableWidgetItem(str(slot)))
             self._schedule_table.setItem(slot, 1, QTableWidgetItem(aid))
@@ -609,7 +618,9 @@ class SettingsDialog(QDialog):
             self._session_seed_value.setPlaceholderText("Path to legacy .h5 to replay exits")
         else:
             self._session_seed_value.setEnabled(True)
-            self._session_seed_value.setPlaceholderText("Integer seed (blank = deterministic from Session ID)")
+            self._session_seed_value.setPlaceholderText(
+                "Integer seed (blank = deterministic from Session ID)"
+            )
         if hasattr(self, "_schedule_seed_mode_hint"):
             self._refresh_trial_schedule_tab()
 
@@ -675,13 +686,19 @@ class SettingsDialog(QDialog):
         self._track_show_cb.setToolTip("Draw tracking overlay on camera preview.")
         options_ly.addWidget(self._track_show_cb)
         self._track_async_cb = QCheckBox("Async tracking (smoother display)")
-        self._track_async_cb.setToolTip("Run tracking in background thread; display uses last result.")
+        self._track_async_cb.setToolTip(
+            "Run tracking in background thread; display uses last result."
+        )
         options_ly.addWidget(self._track_async_cb)
         self._track_enable_backup_cb = QCheckBox("Enable backup tracking")
-        self._track_enable_backup_cb.setToolTip("Adaptive-threshold blob tracker (in-range intensity).")
+        self._track_enable_backup_cb.setToolTip(
+            "Adaptive-threshold blob tracker (in-range intensity)."
+        )
         options_ly.addWidget(self._track_enable_backup_cb)
         self._track_enable_sleap_cb = QCheckBox("Enable SLEAP tracking")
-        self._track_enable_sleap_cb.setToolTip("Requires a SLEAP model directory below. When off, only backup runs if enabled.")
+        self._track_enable_sleap_cb.setToolTip(
+            "Requires a SLEAP model directory below. When off, only backup runs if enabled."
+        )
         options_ly.addWidget(self._track_enable_sleap_cb)
         self._track_exit_either_success_cb = QCheckBox("Use either success condition")
         self._track_exit_either_success_cb.setToolTip(
@@ -697,26 +714,36 @@ class SettingsDialog(QDialog):
         f = QFormLayout(fallback_g)
         self._fallback_min_area = QSpinBox()
         self._fallback_min_area.setRange(1, 10000)
-        self._fallback_min_area.setToolTip("Minimum contour area (px) to count as a blob. Smaller = more sensitive.")
+        self._fallback_min_area.setToolTip(
+            "Minimum contour area (px) to count as a blob. Smaller = more sensitive."
+        )
         f.addRow("Min area (px):", self._fallback_min_area)
         self._fallback_max_area = QSpinBox()
         self._fallback_max_area.setRange(0, 1000000)
         self._fallback_max_area.setSpecialValueText("None")
-        self._fallback_max_area.setToolTip("Maximum contour area (px). 0 = no limit. Use to reject huge blobs (e.g. whole arena).")
+        self._fallback_max_area.setToolTip(
+            "Maximum contour area (px). 0 = no limit. Use to reject huge blobs (e.g. whole arena)."
+        )
         f.addRow("Max area (px, 0=off):", self._fallback_max_area)
         self._fallback_morph_kernel = QSpinBox()
         self._fallback_morph_kernel.setRange(1, 31)
         self._fallback_morph_kernel.setSingleStep(2)
-        self._fallback_morph_kernel.setToolTip("Morphology kernel size (odd). Close holes, remove noise.")
+        self._fallback_morph_kernel.setToolTip(
+            "Morphology kernel size (odd). Close holes, remove noise."
+        )
         f.addRow("Morph kernel size:", self._fallback_morph_kernel)
         self._fallback_range_low = QSpinBox()
         self._fallback_range_low.setRange(0, 255)
-        self._fallback_range_low.setToolTip("Intensity range: minimum (0–255). Pixel on if intensity in [low, high].")
+        self._fallback_range_low.setToolTip(
+            "Intensity range: minimum (0–255). Pixel on if intensity in [low, high]."
+        )
         f.addRow("Range low (0–255):", self._fallback_range_low)
         self._fallback_range_high = QSpinBox()
         self._fallback_range_high.setRange(0, 255)
         self._fallback_range_high.setValue(255)
-        self._fallback_range_high.setToolTip("Intensity range: maximum (0–255). Pixel on if intensity in [low, high].")
+        self._fallback_range_high.setToolTip(
+            "Intensity range: maximum (0–255). Pixel on if intensity in [low, high]."
+        )
         f.addRow("Range high (0–255):", self._fallback_range_high)
         pick_row = QHBoxLayout()
         self._fallback_range_from_next_click_cb = QCheckBox("Set backup range from next click")
@@ -753,29 +780,41 @@ class SettingsDialog(QDialog):
         self._fallback_max_jump.setRange(0, 2000)
         self._fallback_max_jump.setDecimals(0)
         self._fallback_max_jump.setSpecialValueText("None")
-        self._fallback_max_jump.setToolTip("Max allowed jump (px) from last position. 0 = no limit. Larger values reduce jitter rejection.")
+        self._fallback_max_jump.setToolTip(
+            "Max allowed jump (px) from last position. 0 = no limit. Larger values reduce jitter rejection."
+        )
         f.addRow("Max jump (px, 0=off):", self._fallback_max_jump)
         self._fallback_selection_mode = QComboBox()
         self._fallback_selection_mode.addItem("Largest by area", "largest")
         self._fallback_selection_mode.addItem("Closest to last position", "closest")
-        self._fallback_selection_mode.addItem("Closest, else largest (if jump too far)", "closest_else_largest")
-        self._fallback_selection_mode.setToolTip("How to choose which blob to track when several are detected.")
+        self._fallback_selection_mode.addItem(
+            "Closest, else largest (if jump too far)", "closest_else_largest"
+        )
+        self._fallback_selection_mode.setToolTip(
+            "How to choose which blob to track when several are detected."
+        )
         f.addRow("Blob selection:", self._fallback_selection_mode)
         self._fallback_min_circularity = QDoubleSpinBox()
         self._fallback_min_circularity.setRange(0, 1.0)
         self._fallback_min_circularity.setDecimals(2)
         self._fallback_min_circularity.setSingleStep(0.05)
         self._fallback_min_circularity.setSpecialValueText("Off")
-        self._fallback_min_circularity.setToolTip("Reject blobs with circularity below this (4π×area/perimeter²). 0 = off. Use to filter elongated shapes (e.g. tail, cable).")
+        self._fallback_min_circularity.setToolTip(
+            "Reject blobs with circularity below this (4π×area/perimeter²). 0 = off. Use to filter elongated shapes (e.g. tail, cable)."
+        )
         f.addRow("Min circularity (0=off):", self._fallback_min_circularity)
         self._fallback_show_blob_cb = QCheckBox("Show blob overlay")
         self._fallback_show_blob_cb.setChecked(True)
-        self._fallback_show_blob_cb.setToolTip("Draw green tint where fallback tracker detected the blob. Disable for better FPS when tracking in-range pixels.")
+        self._fallback_show_blob_cb.setToolTip(
+            "Draw green tint where fallback tracker detected the blob. Disable for better FPS when tracking in-range pixels."
+        )
         f.addRow("", self._fallback_show_blob_cb)
         self._fallback_max_contours = QSpinBox()
         self._fallback_max_contours.setRange(0, 10000)
         self._fallback_max_contours.setSpecialValueText("No limit")
-        self._fallback_max_contours.setToolTip("Max contours to consider per frame (0 = no limit). Keeps largest by area. Can reduce FPS drops when many in-range pixels.")
+        self._fallback_max_contours.setToolTip(
+            "Max contours to consider per frame (0 = no limit). Keeps largest by area. Can reduce FPS drops when many in-range pixels."
+        )
         f.addRow("Max contours (0=off):", self._fallback_max_contours)
         self._fallback_exit_blob_overlap_pct = QDoubleSpinBox()
         self._fallback_exit_blob_overlap_pct.setRange(0.0, 100.0)
@@ -794,8 +833,12 @@ class SettingsDialog(QDialog):
         sleap_f = QFormLayout(sleap_g)
         sleap_path_row = QHBoxLayout()
         self._sleap_model_path_edit = QLineEdit()
-        self._sleap_model_path_edit.setPlaceholderText("Optional: path to single-instance model dir")
-        self._sleap_model_path_edit.setToolTip("Folder with training_config.yaml and best.ckpt (single-instance). Leave empty for backup tracker only.")
+        self._sleap_model_path_edit.setPlaceholderText(
+            "Optional: path to single-instance model dir"
+        )
+        self._sleap_model_path_edit.setToolTip(
+            "Folder with training_config.yaml and best.ckpt (single-instance). Leave empty for backup tracker only."
+        )
         sleap_path_row.addWidget(self._sleap_model_path_edit)
         self._sleap_browse_btn = QPushButton("Browse…")
         self._sleap_browse_btn.clicked.connect(self._on_browse_sleap_model)
@@ -805,7 +848,9 @@ class SettingsDialog(QDialog):
         self._fallback_min_sleap_nodes = QSpinBox()
         self._fallback_min_sleap_nodes.setRange(1, 64)
         self._fallback_min_sleap_nodes.setValue(1)
-        self._fallback_min_sleap_nodes.setToolTip("SLEAP: use backup tracker if fewer than this many nodes pass the confidence threshold. 1 = use SLEAP whenever at least one node passes.")
+        self._fallback_min_sleap_nodes.setToolTip(
+            "SLEAP: use backup tracker if fewer than this many nodes pass the confidence threshold. 1 = use SLEAP whenever at least one node passes."
+        )
         sleap_f.addRow("Min SLEAP nodes (else backup):", self._fallback_min_sleap_nodes)
         self._sleap_confidence_pct = QSpinBox()
         self._sleap_confidence_pct.setRange(0, 100)
@@ -816,7 +861,9 @@ class SettingsDialog(QDialog):
         sleap_f.addRow("Confidence (%):", self._sleap_confidence_pct)
         self._sleap_every_n = QSpinBox()
         self._sleap_every_n.setRange(1, 5)
-        self._sleap_every_n.setToolTip("1 = every frame; 2+ = run SLEAP every N-th frame (reuse result for others, better FPS).")
+        self._sleap_every_n.setToolTip(
+            "1 = every frame; 2+ = run SLEAP every N-th frame (reuse result for others, better FPS)."
+        )
         sleap_f.addRow("Run SLEAP every (frames):", self._sleap_every_n)
         self._fallback_node_max_jump = QDoubleSpinBox()
         self._fallback_node_max_jump.setRange(0, 500)
@@ -864,7 +911,12 @@ class SettingsDialog(QDialog):
         self._push_session_id_to_parent()
         if parent is not None and hasattr(parent, "_apply_config_to_ui"):
             parent._apply_config_to_ui()
-        if HAS_QT and parent is not None and hasattr(parent, "statusBar") and parent.statusBar is not None:
+        if (
+            HAS_QT
+            and parent is not None
+            and hasattr(parent, "statusBar")
+            and parent.statusBar is not None
+        ):
             parent.statusBar().showMessage("Settings applied.")
 
     def _fill_from_config(self) -> None:
@@ -975,7 +1027,9 @@ class SettingsDialog(QDialog):
         self._fallback_max_area.setValue(ft.max_area)
         self._fallback_morph_kernel.setValue(ft.morph_kernel_size | 1)
         self._fallback_max_jump.setValue(ft.max_jump_px)
-        idx_sm = self._fallback_selection_mode.findData(getattr(ft, "selection_mode", "closest_else_largest"))
+        idx_sm = self._fallback_selection_mode.findData(
+            getattr(ft, "selection_mode", "closest_else_largest")
+        )
         if idx_sm >= 0:
             self._fallback_selection_mode.setCurrentIndex(idx_sm)
         else:
@@ -985,7 +1039,9 @@ class SettingsDialog(QDialog):
         self._fallback_range_high.setValue(getattr(ft, "range_high", 255))
         self._sync_fallback_range_pick_widgets_from_config()
         self._fallback_node_max_jump.setValue(getattr(ft, "node_max_jump_px", 0.0))
-        self._node_jump_confirm_frames.setValue(max(1, int(getattr(ft, "node_jump_confirm_frames", 2))))
+        self._node_jump_confirm_frames.setValue(
+            max(1, int(getattr(ft, "node_jump_confirm_frames", 2)))
+        )
         self._fallback_min_sleap_nodes.setValue(getattr(ft, "min_sleap_nodes", 1))
         self._fallback_show_blob_cb.setChecked(getattr(ft, "show_blob_overlay", True))
         self._fallback_max_contours.setValue(getattr(ft, "max_contours", 0))
@@ -995,13 +1051,19 @@ class SettingsDialog(QDialog):
         self._track_enable_backup_cb.setChecked(getattr(c, "track_enable_backup", True))
         self._track_enable_sleap_cb.setChecked(getattr(c, "track_enable_sleap", True))
         self._sync_track_enable_sleap_widget()
-        self._track_exit_either_success_cb.setChecked(getattr(c, "track_exit_either_success", False))
+        self._track_exit_either_success_cb.setChecked(
+            getattr(c, "track_exit_either_success", False)
+        )
         self._sleap_model_path_edit.setText(getattr(c, "sleap_model_path", "") or "")
         # SLEAP
         self._sleap_confidence_pct.setValue(getattr(c, "sleap_confidence_pct", 50))
         self._sleap_every_n.setValue(max(1, min(5, getattr(c, "sleap_every_n", 1))))
-        self._sleap_exit_min_keypoints.setValue(max(1, int(getattr(c, "sleap_exit_min_keypoints", 2))))
-        self._fallback_exit_blob_overlap_pct.setValue(max(0.0, min(100.0, float(getattr(c, "fallback_exit_blob_overlap_pct", 15.0)))))
+        self._sleap_exit_min_keypoints.setValue(
+            max(1, int(getattr(c, "sleap_exit_min_keypoints", 2)))
+        )
+        self._fallback_exit_blob_overlap_pct.setValue(
+            max(0.0, min(100.0, float(getattr(c, "fallback_exit_blob_overlap_pct", 15.0))))
+        )
         self.sync_preview_center_checkbox_from_config()
         self._refresh_trial_schedule_tab()
 
@@ -1079,13 +1141,9 @@ class SettingsDialog(QDialog):
         c.session.seed_auto_value = None
         c.session.seed_legacy_source = None
         if c.session.seed_mode == "legacy":
-            c.session.seed_legacy_source = (
-                self._session_seed_value.text().strip() or None
-            )
+            c.session.seed_legacy_source = self._session_seed_value.text().strip() or None
         elif c.session.seed_mode == "auto":
-            c.session.seed_auto_value = _parse_seed_auto_value(
-                self._session_seed_value.text()
-            )
+            c.session.seed_auto_value = _parse_seed_auto_value(self._session_seed_value.text())
         c.output_dir = self._output_dir_edit.text().strip() or None
         c.h5_filename = self._h5_filename_edit.text().strip() or "trials.h5"
         m = self._mode_combo.currentData()
@@ -1106,20 +1164,22 @@ class SettingsDialog(QDialog):
             aid = (id_item.text() or "").strip() if id_item else ""
             if not aid and i >= c.session.num_animals:
                 continue
-            c.session.animals.append(AnimalInfo(
-                animal_id=aid or str(1000 + i),
-                tx=(tx_item.text() or "").strip() or None if tx_item else None,
-                strain=(strain_item.text() or "").strip() or None if strain_item else None,
-                sex=(sex_item.text() or "").strip() or None if sex_item else None,
-                drug=(drug_item.text() or "").strip() or None if drug_item else None,
-                experiment=(experiment_item.text() or "").strip() or None
-                if experiment_item
-                else None,
-                researcher=(researcher_item.text() or "").strip() or None
-                if researcher_item
-                else None,
-                notes=(notes_item.text() or "").strip() or None if notes_item else None,
-            ))
+            c.session.animals.append(
+                AnimalInfo(
+                    animal_id=aid or str(1000 + i),
+                    tx=(tx_item.text() or "").strip() or None if tx_item else None,
+                    strain=(strain_item.text() or "").strip() or None if strain_item else None,
+                    sex=(sex_item.text() or "").strip() or None if sex_item else None,
+                    drug=(drug_item.text() or "").strip() or None if drug_item else None,
+                    experiment=(
+                        (experiment_item.text() or "").strip() or None if experiment_item else None
+                    ),
+                    researcher=(
+                        (researcher_item.text() or "").strip() or None if researcher_item else None
+                    ),
+                    notes=(notes_item.text() or "").strip() or None if notes_item else None,
+                )
+            )
         c.session.ensure_animals()
         if c.session.seed_mode == "manual":
             ensure_exit_schedule_indices_length(
@@ -1193,7 +1253,9 @@ class SettingsDialog(QDialog):
         c.sleap_confidence_pct = max(0, min(100, self._sleap_confidence_pct.value()))
         c.sleap_every_n = max(1, min(5, self._sleap_every_n.value()))
         c.sleap_exit_min_keypoints = max(1, self._sleap_exit_min_keypoints.value())
-        c.fallback_exit_blob_overlap_pct = max(0.0, min(100.0, self._fallback_exit_blob_overlap_pct.value()))
+        c.fallback_exit_blob_overlap_pct = max(
+            0.0, min(100.0, self._fallback_exit_blob_overlap_pct.value())
+        )
 
     def _sync_fallback_range_pick_widgets_from_config(self) -> None:
         ft = getattr(self._config, "fallback_tracking", None) or FallbackTrackingConfig()

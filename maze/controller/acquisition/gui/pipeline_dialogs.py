@@ -162,9 +162,7 @@ if HAS_QT:
                         )
                         key = TrialKey.from_manifest(m)
                         write_sleap_path(self._db_path, key, str(existing.resolve()))
-                        write_sleap_model_path(
-                            self._db_path, key, str(self._model_path.resolve())
-                        )
+                        write_sleap_model_path(self._db_path, key, str(self._model_path.resolve()))
                         if self._materialize_xy and vp.exists():
                             materialize_xy_tables_from_video(
                                 db_path=self._db_path,
@@ -188,9 +186,7 @@ if HAS_QT:
                         continue
                     key = TrialKey.from_manifest(m)
                     write_sleap_path(self._db_path, key, str(pred.resolve()))
-                    write_sleap_model_path(
-                        self._db_path, key, str(self._model_path.resolve())
-                    )
+                    write_sleap_model_path(self._db_path, key, str(self._model_path.resolve()))
                     if self._materialize_xy:
                         materialize_xy_tables_from_video(
                             db_path=self._db_path,
@@ -280,7 +276,9 @@ if HAS_QT:
         default_lbl = _orm_root / "inputs" / "treatment_labels.csv"
         lbl_edit.setText(str(default_lbl))
         dirs_edit = QLineEdit("; ".join(str(p) for p in DATA_DIRS))
-        dirs_edit.setPlaceholderText("One path per line, or separate with ; (empty = use paths.py defaults)")
+        dirs_edit.setPlaceholderText(
+            "One path per line, or separate with ; (empty = use paths.py defaults)"
+        )
 
         def browse_h5() -> None:
             p, _ = QFileDialog.getOpenFileName(
@@ -290,9 +288,7 @@ if HAS_QT:
                 h5_edit.setText(p)
 
         def browse_lbl() -> None:
-            p, _ = QFileDialog.getOpenFileName(
-                dlg, "Treatment labels", "", "CSV (*.csv)"
-            )
+            p, _ = QFileDialog.getOpenFileName(dlg, "Treatment labels", "", "CSV (*.csv)")
             if p:
                 lbl_edit.setText(p)
 
@@ -455,8 +451,10 @@ if HAS_QT:
             nonlocal worker
             worker = None
             log.appendPlainText(msg + "\n")
-            QMessageBox.information(dlg, "Virtual acquisition", msg) if ok else QMessageBox.warning(
-                dlg, "Virtual acquisition", msg
+            (
+                QMessageBox.information(dlg, "Virtual acquisition", msg)
+                if ok
+                else QMessageBox.warning(dlg, "Virtual acquisition", msg)
             )
 
         def run_inf() -> None:

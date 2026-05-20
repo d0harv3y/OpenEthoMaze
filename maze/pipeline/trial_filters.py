@@ -26,7 +26,9 @@ class TrialFilterPolicy:
     quality_check: Callable[[TrialManifest], str | None]
 
 
-def _shared_quality_checker(expected_frame_diff: int | None) -> Callable[[TrialManifest], str | None]:
+def _shared_quality_checker(
+    expected_frame_diff: int | None,
+) -> Callable[[TrialManifest], str | None]:
     def check(manifest: TrialManifest) -> str | None:
         return detect_trial_data_quality(
             manifest,

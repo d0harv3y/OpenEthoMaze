@@ -11,7 +11,9 @@ def ram_apothem_cm_from_template(template: RadialArmTemplateConfig) -> float:
     return float(template.center_midedge_to_midedge_cm) / 2.0
 
 
-def ram_derived_px_per_cm(template: RadialArmTemplateConfig, calibration: RadialArmCalibrationConfig) -> float:
+def ram_derived_px_per_cm(
+    template: RadialArmTemplateConfig, calibration: RadialArmCalibrationConfig
+) -> float:
     """pixels per cm from hub apothem knob and physical print size (VAST-style ratio)."""
     ap_cm = ram_apothem_cm_from_template(template)
     ap_px = float(calibration.apothem_px)

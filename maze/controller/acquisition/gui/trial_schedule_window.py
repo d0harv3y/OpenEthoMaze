@@ -49,7 +49,7 @@ class TrialScheduleWindow(QDialog):
         layout = QVBoxLayout(self)
         title_row = QHBoxLayout()
         self._session_label = QLabel("Session:—")
-   
+
         title_row.addWidget(self._session_label)
         title_row.addStretch()
         layout.addLayout(title_row)
@@ -110,9 +110,13 @@ class TrialScheduleWindow(QDialog):
         if not self._apply_ok_by_parent:
             self._apply_btn.setToolTip("Apply is disabled while a trial is running.")
         elif not man:
-            self._apply_btn.setToolTip("Switch session seed to â€œmanualâ€ in Settings to edit exits here.")
+            self._apply_btn.setToolTip(
+                "Switch session seed to â€œmanualâ€ in Settings to edit exits here."
+            )
         else:
-            self._apply_btn.setToolTip("Write manual exit indices from the table into the session config.")
+            self._apply_btn.setToolTip(
+                "Write manual exit indices from the table into the session config."
+            )
 
     def refresh_from_config(self) -> None:
         """Reload the table from ``self._config`` (e.g. after Settings or profile apply)."""
@@ -160,14 +164,16 @@ class TrialScheduleWindow(QDialog):
             c.session.ensure_animals()
             animals = c.session.animals
             aid = (
-                str(animals[aidx % max(1, len(animals))].animal_id)
-                if animals
-                else str(1000 + aidx)
+                str(animals[aidx % max(1, len(animals))].animal_id) if animals else str(1000 + aidx)
             )
             self._table.setItem(slot, 0, QTableWidgetItem(str(slot)))
             self._table.setItem(slot, 1, QTableWidgetItem(aid))
             self._table.setItem(slot, 2, QTableWidgetItem(f"T{tidx + 1:02d}"))
-            if man and c.session.exit_schedule_indices and slot < len(c.session.exit_schedule_indices):
+            if (
+                man
+                and c.session.exit_schedule_indices
+                and slot < len(c.session.exit_schedule_indices)
+            ):
                 exit_1 = int(c.session.exit_schedule_indices[slot]) + 1
             elif man:
                 exit_1 = int(default_i) + 1
@@ -282,4 +288,3 @@ class TrialScheduleWindow(QDialog):
             event.ignore()
             return
         super().closeEvent(event)
-

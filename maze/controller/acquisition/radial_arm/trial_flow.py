@@ -45,6 +45,8 @@ def parse_ram_trial_mode(config: RadialArmControllerConfig) -> RamTrialMode:
         return RamTrialMode(run_mode)
     except ValueError:
         return RamTrialMode.CONTINUOUS
+
+
 @dataclass
 class RamTrialStateMachine:
     config: RadialArmControllerConfig
@@ -100,7 +102,9 @@ class RamTrialStateMachine:
 
     def _sync_exit_arm(self) -> None:
         n_exits = 8
-        default_i = max(0, min(n_exits - 1, int(getattr(self.config.radial_arm, "exit_arm_index", 0))))
+        default_i = max(
+            0, min(n_exits - 1, int(getattr(self.config.radial_arm, "exit_arm_index", 0)))
+        )
         if self.config.session.seed_mode == "manual":
             ensure_exit_schedule_indices_length(
                 self.config.session,
@@ -247,7 +251,9 @@ class RadialArmTrialController:
 
     def get_exit_position_px(self) -> tuple[float, float]:
         ram = self._config.radial_arm
-        exit_arm_idx = int(self._sm.exit_arm_index) if self._sm is not None else int(ram.exit_arm_index)
+        exit_arm_idx = (
+            int(self._sm.exit_arm_index) if self._sm is not None else int(ram.exit_arm_index)
+        )
         calibration = ram.calibration
         template = build_template_from_params(
             center_midedge_to_midedge_cm=ram.template.center_midedge_to_midedge_cm,
@@ -346,8 +352,10 @@ class RadialArmTrialController:
     def get_region_code_for_recording(self, x_px: float, y_px: float) -> str:
         """Per-frame RAM region label; same rules as :mod:`maze.controller.acquisition.region_code`."""
         sm = self._sm
-        exit_idx = int(sm.exit_arm_index) if sm is not None else int(
-            self._config.radial_arm.exit_arm_index
+        exit_idx = (
+            int(sm.exit_arm_index)
+            if sm is not None
+            else int(self._config.radial_arm.exit_arm_index)
         )
         slot = int(sm.slot_idx) if sm is not None else -1
         key = (slot, exit_idx)
@@ -373,9 +381,7 @@ class RadialArmTrialController:
             )
             self._ram_hole_arm_1b = int(template.hole_arm_index) + 1
         assert self._ram_polys_px is not None
-        return ram_region_code(
-            float(x_px), float(y_px), self._ram_polys_px, self._ram_hole_arm_1b
-        )
+        return ram_region_code(float(x_px), float(y_px), self._ram_polys_px, self._ram_hole_arm_1b)
 
     def ensure_created(
         self,

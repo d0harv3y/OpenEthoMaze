@@ -44,7 +44,9 @@ class FitConfig:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Fit keypoint-MoSeq model from ORM manifest subset.")
+    parser = argparse.ArgumentParser(
+        description="Fit keypoint-MoSeq model from ORM manifest subset."
+    )
     parser.add_argument("--manifest-csv", type=str, default=None)
     parser.add_argument("--project-dir", type=str, required=True)
     parser.add_argument("--model-name", type=str, default="orm_kpms_fit")
@@ -58,7 +60,7 @@ def parse_args() -> argparse.Namespace:
         default="sex,tx,phase,strain",
         help=(
             "Comma-separated TrialManifest fields for stratified subsampling "
-        "(default: sex,tx,cohort,phase). See maze.kpms.manifest_subset.BALANCE_COLUMN_CHOICES."
+            "(default: sex,tx,cohort,phase). See maze.kpms.manifest_subset.BALANCE_COLUMN_CHOICES."
         ),
     )
     parser.add_argument(
@@ -77,9 +79,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _prepare_checkpoint_path(
-    checkpoint_path: Path, data: dict, *, force_new: bool
-) -> None:
+def _prepare_checkpoint_path(checkpoint_path: Path, data: dict, *, force_new: bool) -> None:
     """Avoid stale data/ in checkpoint.h5 (kpms only writes data on first create).
 
     If the file already exists from a prior run, on-disk `data/mask` can disagree
@@ -108,11 +108,7 @@ def main() -> None:
     project_dir = Path(args.project_dir)
     ensure_dir(project_dir)
 
-    balance_cols = tuple(
-        c.strip()
-        for c in str(args.balance_by).split(",")
-        if c.strip()
-    )
+    balance_cols = tuple(c.strip() for c in str(args.balance_by).split(",") if c.strip())
     subset_cfg = SubsetConfig(
         manifest_csv=Path(args.manifest_csv) if args.manifest_csv else None,
         include_habituation=args.include_habituation,
@@ -151,9 +147,7 @@ def main() -> None:
     )
     data = convert_data_precision(data, x64=True)
 
-    _prepare_checkpoint_path(
-        model_out / "checkpoint.h5", data, force_new=bool(args.force_new)
-    )
+    _prepare_checkpoint_path(model_out / "checkpoint.h5", data, force_new=bool(args.force_new))
 
     def _idx(name: str, fallback: int) -> list[int]:
         try:
@@ -253,4 +247,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

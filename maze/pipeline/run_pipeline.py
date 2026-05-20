@@ -211,13 +211,9 @@ def run_pipeline(
     }
 
     if parallel and max_workers > 1:
-        stats = _run_parallel(
-            trials, db_path, max_workers, generate_qc, stats, analysis_profile
-        )
+        stats = _run_parallel(trials, db_path, max_workers, generate_qc, stats, analysis_profile)
     else:
-        stats = _run_sequential(
-            trials, db_path, generate_qc, stats, analysis_profile
-        )
+        stats = _run_sequential(trials, db_path, generate_qc, stats, analysis_profile)
 
     print("\nPipeline complete:")
     print(f"  Total: {stats['total']}")
@@ -252,9 +248,7 @@ def _run_sequential(
     tqdm_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
     pipeline_logger.addHandler(tqdm_handler)
     try:
-        return _run_sequential_impl(
-            trials, db_path, generate_qc, stats, analysis_profile
-        )
+        return _run_sequential_impl(trials, db_path, generate_qc, stats, analysis_profile)
     finally:
         pipeline_logger.removeHandler(tqdm_handler)
 
@@ -303,9 +297,7 @@ def _run_parallel(
     """Run trials in parallel."""
     del max_workers
     print("Warning: Parallel mode uses sequential HDF5 writes")
-    return _run_sequential(
-        trials, db_path, generate_qc, stats, analysis_profile
-    )
+    return _run_sequential(trials, db_path, generate_qc, stats, analysis_profile)
 
 
 def run_single_trial(

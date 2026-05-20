@@ -471,9 +471,7 @@ def _fit_rgba_to_box(rgba: np.ndarray, max_w: int, max_h: int) -> np.ndarray:
     return cv2.resize(rgba, (nw, nh), interpolation=cv2.INTER_AREA)
 
 
-def _open_pipeline_trial_group(
-    h5: h5py.File, key: TrialKey, manifest: TrialManifest
-) -> h5py.Group:
+def _open_pipeline_trial_group(h5: h5py.File, key: TrialKey, manifest: TrialManifest) -> h5py.Group:
     """Require ORM trial layout ``/animal_id/session/trial`` (ambulation metrics / spot / xy)."""
     path = key.path()
     p = path.lstrip("/")
@@ -499,9 +497,7 @@ def _open_pipeline_trial_group(
             f"{path!r}, not the monolithic my_NOR_results.h5. "
             f"kpMS results_apply.h5 groups stay keyed like {manifest.kpms_results_dict_key!r}."
         )
-    raise ValueError(
-        f"Pipeline HDF5 has no trial group {path!r}.{sub_preview}{nor_hint}"
-    )
+    raise ValueError(f"Pipeline HDF5 has no trial group {path!r}.{sub_preview}{nor_hint}")
 
 
 def render_unified_overlay_video(
@@ -665,11 +661,7 @@ def render_unified_overlay_video(
     # Motor HUD only when no RAM template polys: if ``ram_polys`` is set, the RAM HUD path runs
     # even when ``_read_arena_type`` is circular (default or unchanged ``arena_info``).
     m_hud_frames: Optional[np.ndarray] = None
-    if (
-        arena_type == ARENA_TYPE_CIRCULAR
-        and cfg.show_circular_motor_hud
-        and ram_polys is None
-    ):
+    if arena_type == ARENA_TYPE_CIRCULAR and cfg.show_circular_motor_hud and ram_polys is None:
         fb = read_feedback_series(pipeline_db, key)
         if fb is not None:
             _w_fb, m_fb = fb
@@ -899,7 +891,11 @@ def render_unified_overlay_video(
                         )
                     if "hole" in ram_polys:
                         draw_exit_circle = False
-                elif arena_type == ARENA_TYPE_CIRCULAR and settings.arena_radius_px > 0 and not ram_polys:
+                elif (
+                    arena_type == ARENA_TYPE_CIRCULAR
+                    and settings.arena_radius_px > 0
+                    and not ram_polys
+                ):
                     cx, cy = (
                         int(round(settings.arena_center_x_px)),
                         int(round(settings.arena_center_y_px)),
@@ -971,11 +967,7 @@ def render_unified_overlay_video(
                     # exn = attrs.get("exit_number", settings.exit_number)
                     # put(f"exit: {int(exn) if exn is not None else '--'}")
                     if m_hud_frames is not None:
-                        mv = (
-                            float(m_hud_frames[i])
-                            if i < len(m_hud_frames)
-                            else float("nan")
-                        )
+                        mv = float(m_hud_frames[i]) if i < len(m_hud_frames) else float("nan")
                         put(f"Motor: {_hud_scalar_or_dash(mv)}")
 
             if tray_w > 0 and exemplar_loops and cfg.layers.syllable_tray > 0:

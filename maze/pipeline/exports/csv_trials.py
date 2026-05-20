@@ -76,7 +76,6 @@ METRIC_MAPPING = {
 }
 
 
-
 def _is_valid_value(value: Any) -> bool:
     """Check if a value is valid (not None/NaN/Inf)."""
     if value is None:
@@ -130,12 +129,14 @@ def _append_hybrid_summary_metric_rows(
                 value = raw
             if not _is_valid_value(value):
                 continue
-            rows.append({
-                **base_row,
-                "trial_state": band,
-                "metric": field,
-                "value": _format_value(value),
-            })
+            rows.append(
+                {
+                    **base_row,
+                    "trial_state": band,
+                    "metric": field,
+                    "value": _format_value(value),
+                }
+            )
 
 
 def _format_session(key: TrialKey) -> str:
@@ -361,18 +362,33 @@ def export_trial_summary(
             value = metrics.get(db_field)
             if not _is_valid_value(value):
                 continue
-            rows.append({
-                **base_row,
-                "trial_state": "run",
-                "metric": output_metric,
-                "value": _format_value(value),
-            })
+            rows.append(
+                {
+                    **base_row,
+                    "trial_state": "run",
+                    "metric": output_metric,
+                    "value": _format_value(value),
+                }
+            )
 
     # Write CSV
     fieldnames = [
-        "experiment", "session", "trial", "timestamp", "animal_id", "strain", "sex",
-        "researcher", "drug", "treatment", "exit#", "sleap_model_path", "trajectory_source",
-        "trial_state", "metric", "value",
+        "experiment",
+        "session",
+        "trial",
+        "timestamp",
+        "animal_id",
+        "strain",
+        "sex",
+        "researcher",
+        "drug",
+        "treatment",
+        "exit#",
+        "sleap_model_path",
+        "trajectory_source",
+        "trial_state",
+        "metric",
+        "value",
     ]
 
     with open(output_path, "w", newline="", encoding="utf-8") as f:
@@ -427,13 +443,15 @@ def export_mistrial_summary(
                 reason = (reason or "").strip()
                 if not reason:
                     continue
-                rows.append({
-                    "animal_id": key.animal_id,
-                    "phase": key.phase,
-                    "session": key.session,
-                    "trial": key.trial,
-                    "mistrial_reason": reason,
-                })
+                rows.append(
+                    {
+                        "animal_id": key.animal_id,
+                        "phase": key.phase,
+                        "session": key.session,
+                        "trial": key.trial,
+                        "mistrial_reason": reason,
+                    }
+                )
                 reason_counts[reason] = reason_counts.get(reason, 0) + 1
             except Exception:
                 continue
@@ -597,30 +615,47 @@ def export_all_for_dbs(
                     value = metrics.get(db_field)
                     if not _is_valid_value(value):
                         continue
-                    task_rows.append({
-                        **base_row,
-                        "trial_state": "run",
-                        "metric": output_metric,
-                        "value": _format_value(value),
-                    })
+                    task_rows.append(
+                        {
+                            **base_row,
+                            "trial_state": "run",
+                            "metric": output_metric,
+                            "value": _format_value(value),
+                        }
+                    )
 
                 reason = g_trial.attrs.get("mistrial_reason", "")
                 if isinstance(reason, bytes):
                     reason = reason.decode("utf-8", errors="replace")
                 reason = (reason or "").strip()
                 if reason:
-                    mistrial_rows_by_task.setdefault(task_name, []).append({
-                        "animal_id": key.animal_id,
-                        "phase": key.phase,
-                        "session": key.session,
-                        "trial": key.trial,
-                        "mistrial_reason": reason,
-                    })
+                    mistrial_rows_by_task.setdefault(task_name, []).append(
+                        {
+                            "animal_id": key.animal_id,
+                            "phase": key.phase,
+                            "session": key.session,
+                            "trial": key.trial,
+                            "mistrial_reason": reason,
+                        }
+                    )
 
     fieldnames = [
-        "experiment", "session", "trial", "timestamp", "animal_id", "strain", "sex",
-        "researcher", "drug", "treatment", "exit#", "sleap_model_path", "trajectory_source",
-        "trial_state", "metric", "value",
+        "experiment",
+        "session",
+        "trial",
+        "timestamp",
+        "animal_id",
+        "strain",
+        "sex",
+        "researcher",
+        "drug",
+        "treatment",
+        "exit#",
+        "sleap_model_path",
+        "trajectory_source",
+        "trial_state",
+        "metric",
+        "value",
     ]
     tasks_sorted = sorted(seen_tasks)
     if len(tasks_sorted) > 1:

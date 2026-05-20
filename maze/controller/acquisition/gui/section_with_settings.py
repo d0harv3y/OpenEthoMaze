@@ -17,6 +17,7 @@ try:
         QWidget,
     )
     from PySide6.QtCore import Signal
+
     HAS_QT = True
 except ImportError:
     HAS_QT = False

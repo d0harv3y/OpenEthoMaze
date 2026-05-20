@@ -37,9 +37,7 @@ def write_qc_image(
                 try:
                     import cv2
 
-                    arr = cv2.resize(
-                        arr, (new_w, new_h), interpolation=cv2.INTER_AREA
-                    )
+                    arr = cv2.resize(arr, (new_w, new_h), interpolation=cv2.INTER_AREA)
                 except Exception:
                     step = max(1, int(np.ceil(cur_max / max_dim)))
                     if arr.ndim == 3:
@@ -95,9 +93,7 @@ def read_qc_image(
                 try:
                     import cv2
 
-                    decoded = cv2.imdecode(
-                        np.asarray(data, dtype=np.uint8), cv2.IMREAD_UNCHANGED
-                    )
+                    decoded = cv2.imdecode(np.asarray(data, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
                     if decoded is not None:
                         return decoded
                 except Exception:

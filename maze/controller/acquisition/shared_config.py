@@ -151,9 +151,7 @@ class AcquisitionConfig:
     h5_filename: str = "trials.h5"
     arena_type: str = ""
     run_mode: str = "continuous"
-    fallback_tracking: FallbackTrackingConfig = field(
-        default_factory=FallbackTrackingConfig
-    )
+    fallback_tracking: FallbackTrackingConfig = field(default_factory=FallbackTrackingConfig)
     sleap_confidence_pct: int = 50
     sleap_every_n: int = 1
     sleap_exit_min_keypoints: int = 2
@@ -173,9 +171,7 @@ class AcquisitionConfig:
     virtual_duration_override_s: Optional[float] = None
     # Next preview click sets arena center (VAST) or RAM template center (RAM).
     preview_set_center_from_next_click: bool = False
-    analysis_trajectory: AnalysisTrajectoryConfig = field(
-        default_factory=AnalysisTrajectoryConfig
-    )
+    analysis_trajectory: AnalysisTrajectoryConfig = field(default_factory=AnalysisTrajectoryConfig)
     analysis_trace_quality: AnalysisTraceQualityConfig = field(
         default_factory=AnalysisTraceQualityConfig
     )

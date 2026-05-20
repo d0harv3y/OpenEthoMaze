@@ -18,7 +18,11 @@ from maze.kpms.preprocess import KpmsPreprocessConfig
 from maze.pipeline.db.trial_key import TrialKey
 from maze.pipeline.io.file_discovery import load_manifest_csv
 
-from .unified_overlay import UnifiedOverlayConfig, render_unified_overlay_video, resolve_unique_manifest
+from .unified_overlay import (
+    UnifiedOverlayConfig,
+    render_unified_overlay_video,
+    resolve_unique_manifest,
+)
 
 
 def _float_or_none(s: str | None) -> float | None:

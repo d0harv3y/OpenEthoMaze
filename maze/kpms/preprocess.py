@@ -110,4 +110,3 @@ def _stack_nodes(
         xy[:, i, 1] = y
         conf[:, i] = score
     return xy, conf
-

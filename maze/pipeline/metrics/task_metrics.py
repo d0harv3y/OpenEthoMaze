@@ -55,11 +55,11 @@ def calculate_task_metrics(
     """Dispatch task-specific metric calculations for a trajectory band."""
     if arena_type == ARENA_TYPE_RADIAL_ARM:
         geometry_payload = (
-            dict(task_context.get("geometry_payload", {}))
-            if isinstance(task_context, dict)
-            else {}
+            dict(task_context.get("geometry_payload", {})) if isinstance(task_context, dict) else {}
         )
-        exit_arm_index = int(task_context.get("exit_arm_index", -1)) if isinstance(task_context, dict) else -1
+        exit_arm_index = (
+            int(task_context.get("exit_arm_index", -1)) if isinstance(task_context, dict) else -1
+        )
         extra_attrs = radial_arm_metric_defaults()
         if geometry_payload and exit_arm_index >= 0:
             bounds = bounds_from_geometry_payload(

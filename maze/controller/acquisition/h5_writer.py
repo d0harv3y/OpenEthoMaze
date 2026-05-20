@@ -159,8 +159,7 @@ def compute_radial_arm_settings_payloads(
         hole_inset_from_arm_end_cm=template_cfg.hole_inset_from_arm_end_cm,
     )
     template_regions_cm = {
-        name: np.asarray(poly, dtype=float).tolist()
-        for name, poly in template.regions_cm.items()
+        name: np.asarray(poly, dtype=float).tolist() for name, poly in template.regions_cm.items()
     }
     max_radius_cm = max_template_radius_cm(template)
     trial_exit_arm_index = int(ram.exit_arm_index)

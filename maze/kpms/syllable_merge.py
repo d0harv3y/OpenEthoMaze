@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+
 @dataclass(frozen=True)
 class SyllableMergeSpec:
     """Groups of raw syllable ids to merge (each inner list becomes one new id after mapping)."""

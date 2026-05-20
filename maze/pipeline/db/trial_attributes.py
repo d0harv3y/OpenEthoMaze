@@ -94,9 +94,7 @@ def write_analysis_duration(
 ) -> None:
     """Write analysis-window duration (excludes ITI) for reporting."""
     with open_db(db_path, "a") as h5:
-        write_group_attrs(
-            h5[key.path()], {"analysis_duration_s": float(analysis_duration_s)}
-        )
+        write_group_attrs(h5[key.path()], {"analysis_duration_s": float(analysis_duration_s)})
 
 
 def write_primary_trajectory(
@@ -108,9 +106,7 @@ def write_primary_trajectory(
     if db_path is None:
         return
     with open_db(db_path, "a") as h5:
-        write_group_attrs(
-            h5[key.path()], {"primary_trajectory": safe_str(primary_trajectory)}
-        )
+        write_group_attrs(h5[key.path()], {"primary_trajectory": safe_str(primary_trajectory)})
 
 
 def write_mistrial_reason(
@@ -146,9 +142,7 @@ def write_sleap_model_path(
     if db_path is None:
         return
     with open_db(db_path, "a") as h5:
-        write_group_attrs(
-            h5[key.path()], {"sleap_model_path": safe_str(model_path)}
-        )
+        write_group_attrs(h5[key.path()], {"sleap_model_path": safe_str(model_path)})
 
 
 def write_animal_notes_attr(
@@ -173,24 +167,14 @@ def write_config_params(
         write_group_attrs(
             h5[key.path()],
             {
-                "movement_start_threshold": float(
-                    defaults.MOVEMENT_START_THRESHOLD_M_PER_FRAME
-                ),
-                "movement_stop_threshold": float(
-                    defaults.MOVEMENT_STOP_THRESHOLD_M_PER_FRAME
-                ),
+                "movement_start_threshold": float(defaults.MOVEMENT_START_THRESHOLD_M_PER_FRAME),
+                "movement_stop_threshold": float(defaults.MOVEMENT_STOP_THRESHOLD_M_PER_FRAME),
                 "movement_speed_median_window_frames": int(
                     defaults.MOVEMENT_SPEED_MEDIAN_WINDOW_FRAMES
                 ),
-                "movement_entry_debounce_frames": int(
-                    defaults.MOVEMENT_ENTRY_DEBOUNCE_FRAMES
-                ),
-                "movement_exit_debounce_frames": int(
-                    defaults.MOVEMENT_EXIT_DEBOUNCE_FRAMES
-                ),
-                "min_movement_bout_duration_s": float(
-                    defaults.MIN_MOVEMENT_BOUT_DURATION_S
-                ),
+                "movement_entry_debounce_frames": int(defaults.MOVEMENT_ENTRY_DEBOUNCE_FRAMES),
+                "movement_exit_debounce_frames": int(defaults.MOVEMENT_EXIT_DEBOUNCE_FRAMES),
+                "min_movement_bout_duration_s": float(defaults.MIN_MOVEMENT_BOUT_DURATION_S),
                 "trace_max_gap_frames": int(defaults.TRACE_MAX_GAP_FRAMES),
                 "trace_smoothing_window": int(defaults.TRACE_SMOOTHING_WINDOW),
                 "exit_zone_radius_cm": float(defaults.EXIT_ZONE_RADIUS_CM),

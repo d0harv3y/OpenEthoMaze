@@ -110,9 +110,7 @@ def manifest_from_controller_h5(db_path: Path, key: TrialKey) -> TrialManifest:
         attrs = g_trial.attrs
         vp = _decode_h5_attr(attrs.get("video_path", ""))
         video_path = Path(vp) if vp else None
-        phase = _decode_h5_attr(attrs.get("phase", "")) or _decode_h5_attr(
-            attrs.get("stage", "")
-        )
+        phase = _decode_h5_attr(attrs.get("phase", "")) or _decode_h5_attr(attrs.get("stage", ""))
         is_habituation = is_habituation_run_phase(phase)
 
     return TrialManifest(

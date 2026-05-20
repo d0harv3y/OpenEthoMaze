@@ -22,12 +22,14 @@ import numpy as np
 
 try:
     import cv2
+
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
 
 try:
     import vmbpy
+
     HAS_VIMBA = True
 except ImportError:
     vmbpy = None
@@ -39,8 +41,9 @@ HAS_CAMERA = HAS_CV2 or HAS_VIMBA
 @dataclass
 class Frame:
     """Single frame with timestamp."""
+
     image: np.ndarray  # (H, W) or (H, W, C), dtype uint8
-    timestamp: float   # monotonic time from start
+    timestamp: float  # monotonic time from start
     frame_index: int
 
 
@@ -361,7 +364,10 @@ class VimbaCamera(BaseCamera):
                 out["height"] = int(h.get())
         except Exception:
             pass
-        for key, feat in (("decimation_horizontal", "DecimationHorizontal"), ("decimation_vertical", "DecimationVertical")):
+        for key, feat in (
+            ("decimation_horizontal", "DecimationHorizontal"),
+            ("decimation_vertical", "DecimationVertical"),
+        ):
             try:
                 f = self._cam.get_feature_by_name(feat)
                 if f is not None:
@@ -384,7 +390,9 @@ class VimbaCamera(BaseCamera):
         if self._device_index >= len(cams):
             self._vmb.__exit__(None, None, None)
             self._vmb = None
-            raise RuntimeError(f"Camera index {self._device_index} out of range (found {len(cams)}).")
+            raise RuntimeError(
+                f"Camera index {self._device_index} out of range (found {len(cams)})."
+            )
         self._cam = cams[self._device_index]
         self._cam.__enter__()
         try:
@@ -610,9 +618,13 @@ class CameraController:
         if frame is None or getattr(frame, "image", None) is None:
             return None
         img = frame.image
-        self._last_frame_index = int(getattr(frame, "frame_index", -1)) if frame is not None else None
+        self._last_frame_index = (
+            int(getattr(frame, "frame_index", -1)) if frame is not None else None
+        )
         try:
-            self._last_total_frames = self._camera.total_frames() if hasattr(self._camera, "total_frames") else None
+            self._last_total_frames = (
+                self._camera.total_frames() if hasattr(self._camera, "total_frames") else None
+            )
         except Exception:
             self._last_total_frames = None
         if isinstance(img, np.ndarray):
@@ -662,7 +674,9 @@ class CameraController:
         # Guard absurd container values so the Qt timer stays reasonable.
         return float(max(1.0, min(fps, 360.0)))
 
-    def virtual_file_effective_fps(self, config: Optional[AcquisitionConfig] = None) -> Optional[float]:
+    def virtual_file_effective_fps(
+        self, config: Optional[AcquisitionConfig] = None
+    ) -> Optional[float]:
         """
         Effective virtual FPS for GUI pacing/recording.
 

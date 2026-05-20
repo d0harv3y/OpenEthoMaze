@@ -154,7 +154,9 @@ def init_app_logging(debug_log: bool = False) -> Optional[Path]:
         logger.setLevel(file_level)
         # Avoid duplicate handlers if init is called more than once
         for h in logger.handlers[:]:
-            if isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", "").endswith(".log"):
+            if isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", "").endswith(
+                ".log"
+            ):
                 logger.removeHandler(h)
         logger.addHandler(handler)
         global _current_log_path

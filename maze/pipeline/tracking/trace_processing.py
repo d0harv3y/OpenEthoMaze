@@ -36,7 +36,7 @@ from ..defaults import (
 @dataclass(frozen=True)
 class TraceProcessingParams:
     """Parameters for trace processing."""
-    
+
     interpolate_nans: bool = TRACE_INTERPOLATE_NANS
     max_gap_frames: int = TRACE_MAX_GAP_FRAMES
     interpolate_low_conf: bool = TRACE_INTERPOLATE_LOW_CONF
@@ -69,15 +69,15 @@ def process_xy_trace(
     """
     if params is None:
         params = TraceProcessingParams()
-    
+
     xy0 = np.asarray(xy, dtype=float)
     v0 = np.asarray(valid, dtype=bool)
-    
+
     if xy0.ndim != 2 or xy0.shape[1] != 2:
         raise ValueError("xy must be (F, 2)")
-    
+
     n_frames = xy0.shape[0]
-    
+
     x = xy0[:, 0].copy()
     y = xy0[:, 1].copy()
 
@@ -95,14 +95,8 @@ def process_xy_trace(
         sc = np.asarray(score, dtype=float)
         if sc.shape[0] == n_frames:
             low_conf = sc < params.confidence_threshold
-            x = _interp_short_gaps_1d(
-                np.where(low_conf, np.nan, x),
-                max_gap=params.max_gap_frames
-            )
-            y = _interp_short_gaps_1d(
-                np.where(low_conf, np.nan, y),
-                max_gap=params.max_gap_frames
-            )
+            x = _interp_short_gaps_1d(np.where(low_conf, np.nan, x), max_gap=params.max_gap_frames)
+            y = _interp_short_gaps_1d(np.where(low_conf, np.nan, y), max_gap=params.max_gap_frames)
 
     # Step 3: Temporal smoothing
     if params.apply_smoothing and params.smoothing_window >= 3:
@@ -111,27 +105,27 @@ def process_xy_trace(
 
     xy_out = np.stack([x, y], axis=1).astype(float)
     valid_out = np.isfinite(xy_out[:, 0]) & np.isfinite(xy_out[:, 1])
-    
+
     return xy_out, valid_out
 
 
 def _interp_short_gaps_1d(values: np.ndarray, max_gap: int) -> np.ndarray:
     """
     Linear-interpolate NaN runs of length <= max_gap when bounded by finite endpoints.
-    
+
     Args:
         values: 1D array with potential NaN gaps
         max_gap: Maximum gap length to interpolate
-        
+
     Returns:
         Array with short gaps filled via linear interpolation
     """
     v = np.asarray(values, dtype=float).copy()
     n = len(v)
-    
+
     if n == 0:
         return v
-    
+
     nan_mask = ~np.isfinite(v)
     if not np.any(nan_mask):
         return v
@@ -144,7 +138,7 @@ def _interp_short_gaps_1d(values: np.ndarray, max_gap: int) -> np.ndarray:
     # Group consecutive NaN indices into gaps
     gaps = []
     current_gap = [int(nan_idxs[0])]
-    
+
     for i in range(1, len(nan_idxs)):
         if nan_idxs[i] == nan_idxs[i - 1] + 1:
             current_gap.append(int(nan_idxs[i]))
@@ -152,7 +146,7 @@ def _interp_short_gaps_1d(values: np.ndarray, max_gap: int) -> np.ndarray:
             if len(current_gap) <= max_gap:
                 gaps.append(current_gap)
             current_gap = [int(nan_idxs[i])]
-    
+
     # Don't forget the last gap
     if len(current_gap) <= max_gap:
         gaps.append(current_gap)
@@ -161,40 +155,40 @@ def _interp_short_gaps_1d(values: np.ndarray, max_gap: int) -> np.ndarray:
     for gap in gaps:
         start_idx = gap[0] - 1
         end_idx = gap[-1] + 1
-        
+
         # Need valid endpoints on both sides
         if start_idx < 0 or end_idx >= n:
             continue
-        
+
         a = v[start_idx]
         b = v[end_idx]
-        
+
         if not (np.isfinite(a) and np.isfinite(b)):
             continue
-        
+
         # Linear interpolation
         gap_len = len(gap)
         for j, gi in enumerate(gap):
             alpha = (j + 1) / (gap_len + 1)
             v[gi] = a * (1.0 - alpha) + b * alpha
-    
+
     return v
 
 
 def _nan_safe_moving_average_1d(values: np.ndarray, window: int) -> np.ndarray:
     """
     Moving average that ignores NaNs in the computation.
-    
+
     Args:
         values: Input array
         window: Smoothing window size
-        
+
     Returns:
         Smoothed array
     """
     v = np.asarray(values, dtype=float)
     n = len(v)
-    
+
     if n == 0 or window <= 1:
         return v.copy()
 
@@ -206,12 +200,12 @@ def _nan_safe_moving_average_1d(values: np.ndarray, window: int) -> np.ndarray:
     # Create mask for finite values
     mask = np.isfinite(v).astype(float)
     v_filled = np.where(np.isfinite(v), v, 0.0)
-    
+
     # Convolution for moving average
     kernel = np.ones(window, dtype=float)
     numerator = np.convolve(v_filled, kernel, mode="same")
     denominator = np.convolve(mask, kernel, mode="same")
-    
+
     # out must match numerator shape (convolve "same" can exceed n when n >= window in edge cases; typically equals n)
     out_len = len(numerator)
     out = np.full(out_len, np.nan, dtype=float)
@@ -222,8 +216,8 @@ def _nan_safe_moving_average_1d(values: np.ndarray, window: int) -> np.ndarray:
     edge = window // 2
     if edge > 0 and n >= window:
         out[:edge] = v[:edge]
-        out[n - edge:] = v[n - edge:]
-    
+        out[n - edge :] = v[n - edge :]
+
     return out
 
 
@@ -237,12 +231,12 @@ def filter_frames_no_animal(
 ) -> np.ndarray:
     """
     Identify frames where no animal is present (or confidence too low).
-    
+
     Uses:
     1. Minimum number of confident nodes per frame (individual nodes, not average).
     2. Optional: reject frame if mean(all node confidences) < min_mean_confidence.
     3. Temporal consistency - reject isolated valid frames.
-    
+
     Args:
         traces: Dictionary of node traces from TraceData.traces
         n_frames: Total number of frames
@@ -250,13 +244,13 @@ def filter_frames_no_animal(
         min_confidence: Confidence threshold
         min_valid_run_length: Minimum consecutive valid frames
         min_mean_confidence: If set, also require mean(node scores) >= this per frame
-    
+
     Returns:
         Boolean array - True for frames to keep, False to discard
     """
     if n_frames == 0:
         return np.array([], dtype=bool)
-    
+
     # Count confident nodes per frame; optionally compute mean confidence per frame
     # Include STANDARD_NODE_NAMES and in-range (controller/legacy fallback) when present
     confident_nodes_per_frame = np.zeros(n_frames, dtype=int)
@@ -290,12 +284,16 @@ def filter_frames_no_animal(
         effective_min = 1
     # Criterion 1: Frames with enough confident nodes
     frames_with_enough_nodes = confident_nodes_per_frame >= effective_min
-    
+
     # Criterion 1b: Optional mean confidence per frame (for noisier / OOD model data)
-    if min_mean_confidence is not None and min_mean_confidence > 0 and np.any(n_nodes_with_score > 0):
+    if (
+        min_mean_confidence is not None
+        and min_mean_confidence > 0
+        and np.any(n_nodes_with_score > 0)
+    ):
         mean_conf = np.where(n_nodes_with_score > 0, sum_score_per_frame / n_nodes_with_score, 0.0)
         frames_with_enough_nodes = frames_with_enough_nodes & (mean_conf >= min_mean_confidence)
-    
+
     # Criterion 2: Temporal consistency - remove isolated valid frames
     if min_valid_run_length > 1:
         valid_runs = _find_valid_runs(frames_with_enough_nodes, min_valid_run_length)
@@ -304,27 +302,24 @@ def filter_frames_no_animal(
             valid_frames[start:end] = True
     else:
         valid_frames = frames_with_enough_nodes
-    
+
     return valid_frames
 
 
-def _find_valid_runs(
-    valid_mask: np.ndarray,
-    min_length: int
-) -> list[tuple[int, int]]:
+def _find_valid_runs(valid_mask: np.ndarray, min_length: int) -> list[tuple[int, int]]:
     """
     Find runs of consecutive True values >= min_length.
-    
+
     Returns:
         List of (start, end) tuples (end is exclusive)
     """
     if not np.any(valid_mask):
         return []
-    
+
     runs = []
     in_run = False
     run_start = 0
-    
+
     for i in range(len(valid_mask)):
         if valid_mask[i]:
             if not in_run:
@@ -336,13 +331,13 @@ def _find_valid_runs(
                 if run_end - run_start >= min_length:
                     runs.append((run_start, run_end))
                 in_run = False
-    
+
     # Handle run at end of array
     if in_run:
         run_end = len(valid_mask)
         if run_end - run_start >= min_length:
             runs.append((run_start, run_end))
-    
+
     return runs
 
 
@@ -353,43 +348,41 @@ def process_trace_data(
 ) -> dict[str, dict[str, np.ndarray]]:
     """
     Process all traces in a TraceData-like dictionary.
-    
+
     Args:
         traces: Dictionary mapping node names to trace data
         node_names: List of node names to process
         params: Processing parameters
-        
+
     Returns:
         Processed traces dictionary
     """
     if params is None:
         params = TraceProcessingParams()
-    
+
     processed = {}
-    
+
     for node_name in node_names:
         if node_name not in traces:
             continue
-        
+
         node = traces[node_name]
-        x = node['x']
-        y = node['y']
-        score = node.get('score')
-        visible = node.get('visible', np.ones(len(x), dtype=bool))
-        
+        x = node["x"]
+        y = node["y"]
+        score = node.get("score")
+        visible = node.get("visible", np.ones(len(x), dtype=bool))
+
         # Create XY array
         xy = np.column_stack([x, y])
-        
+
         # Process
-        xy_processed, valid_processed = process_xy_trace(
-            xy, visible, score, params
-        )
-        
+        xy_processed, valid_processed = process_xy_trace(xy, visible, score, params)
+
         processed[node_name] = {
-            'x': xy_processed[:, 0].astype(np.float32),
-            'y': xy_processed[:, 1].astype(np.float32),
-            'score': score if score is not None else np.ones(len(x), dtype=np.float32),
-            'visible': valid_processed,
+            "x": xy_processed[:, 0].astype(np.float32),
+            "y": xy_processed[:, 1].astype(np.float32),
+            "score": score if score is not None else np.ones(len(x), dtype=np.float32),
+            "visible": valid_processed,
         }
-    
+
     return processed

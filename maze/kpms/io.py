@@ -30,4 +30,3 @@ def write_selected_manifest(path: Path, manifests: list[TrialManifest]) -> None:
         writer.writerow(list(MANIFEST_CSV_FIELDNAMES))
         for m in manifests:
             writer.writerow(trial_manifest_csv_row_values(m))
-

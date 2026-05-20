@@ -81,8 +81,7 @@ def load_ram_region_polygons_px(
     )
 
     rotation_deg = _as_float(
-        trial_attrs.get("template_rotation_deg")
-        or calibration.get("template_rotation_deg"),
+        trial_attrs.get("template_rotation_deg") or calibration.get("template_rotation_deg"),
         0.0,
     )
 

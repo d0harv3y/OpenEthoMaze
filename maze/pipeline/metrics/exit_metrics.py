@@ -30,33 +30,33 @@ from ..defaults import (
 @dataclass
 class ExitMetrics:
     """Container for exit-related metrics."""
-    
+
     # Latency (in seconds) to first reach exit zone
     # NaN if exit zone was never reached
     latency_to_exit_s: float = np.nan
-    
+
     # Total time spent in exit zone (seconds)
     time_in_exit_zone_s: float = 0.0
-    
+
     # Fraction of trial spent in exit zone
     time_in_exit_zone_fraction: float = 0.0
-    
+
     # Mean distance to exit (cm) across all valid frames
     mean_distance_to_exit_cm: float = np.nan
-    
+
     # Minimum distance to exit (cm) achieved
     min_distance_to_exit_cm: float = np.nan
-    
+
     # Path efficiency: straight-line distance / actual path distance
     # 1.0 = perfect efficiency, < 1.0 = inefficient path
     path_efficiency: float = np.nan
-    
+
     # Number of times entered the exit zone
     n_exit_zone_entries: int = 0
-    
+
     # Per-frame distance to exit (for detailed analysis)
     distance_to_exit_per_frame: Optional[np.ndarray] = None
-    
+
     # Per-frame boolean: in exit zone
     in_exit_zone_per_frame: Optional[np.ndarray] = None
 
@@ -71,7 +71,7 @@ def calculate_exit_metrics(
 ) -> ExitMetrics:
     """
     Calculate exit-related metrics from position data.
-    
+
     Args:
         xy: Position array (n_frames, 2) in pixels
         valid: Boolean array indicating valid frames
@@ -79,35 +79,35 @@ def calculate_exit_metrics(
         px_per_cm: Calibration factor (pixels per cm)
         fps: Video frame rate
         exit_zone_radius_cm: Radius of exit zone in cm
-        
+
     Returns:
         ExitMetrics object with calculated metrics
     """
     xy = np.asarray(xy, dtype=float)
     valid = np.asarray(valid, dtype=bool)
     exit_x, exit_y = exit_pos
-    
+
     n_frames = len(xy)
     if n_frames == 0:
         return ExitMetrics()
-    
+
     # Convert exit zone radius to pixels
     exit_zone_radius_px = exit_zone_radius_cm * px_per_cm
-    
+
     # Calculate distance to exit for each frame (in pixels)
     dx = xy[:, 0] - exit_x
     dy = xy[:, 1] - exit_y
     distance_to_exit_px = np.sqrt(dx**2 + dy**2)
-    
+
     # Convert to cm
     distance_to_exit_cm = distance_to_exit_px / px_per_cm
-    
+
     # Determine which frames are in the exit zone
     in_exit_zone = distance_to_exit_px <= exit_zone_radius_px
-    
+
     # Only consider valid frames
     valid_in_exit = in_exit_zone & valid
-    
+
     # Calculate latency to first reach exit zone
     exit_frames = np.where(valid_in_exit)[0]
     if len(exit_frames) > 0:
@@ -116,18 +116,18 @@ def calculate_exit_metrics(
     else:
         latency_to_exit_s = np.nan
         first_exit_frame = None
-    
+
     # Calculate time in exit zone
     n_frames_in_exit = np.sum(valid_in_exit)
     time_in_exit_zone_s = n_frames_in_exit / fps
-    
+
     # Calculate fraction of valid time in exit zone
     n_valid_frames = np.sum(valid)
     if n_valid_frames > 0:
         time_in_exit_zone_fraction = n_frames_in_exit / n_valid_frames
     else:
         time_in_exit_zone_fraction = 0.0
-    
+
     # Calculate mean and min distance (over valid frames)
     valid_distances = distance_to_exit_cm[valid]
     if len(valid_distances) > 0:
@@ -136,15 +136,13 @@ def calculate_exit_metrics(
     else:
         mean_distance_to_exit_cm = np.nan
         min_distance_to_exit_cm = np.nan
-    
+
     # Calculate path efficiency
-    path_efficiency = _calculate_path_efficiency(
-        xy, valid, exit_pos, px_per_cm
-    )
-    
+    path_efficiency = _calculate_path_efficiency(xy, valid, exit_pos, px_per_cm)
+
     # Count exit zone entries
     n_exit_zone_entries = _count_zone_entries(in_exit_zone, valid)
-    
+
     return ExitMetrics(
         latency_to_exit_s=latency_to_exit_s,
         time_in_exit_zone_s=time_in_exit_zone_s,
@@ -166,53 +164,52 @@ def _calculate_path_efficiency(
 ) -> float:
     """
     Calculate path efficiency (straight-line / actual path).
-    
+
     Path efficiency measures how directly the animal moved toward the exit.
     A value of 1.0 means the animal took the most direct path.
-    
+
     Args:
         xy: Position array (n_frames, 2) in pixels
         valid: Boolean validity array
         exit_pos: Exit position in pixels
         px_per_cm: Calibration factor
-        
+
     Returns:
         Path efficiency ratio (0.0 to 1.0, or NaN if insufficient data)
     """
     n_frames = len(xy)
     if n_frames < 2:
         return np.nan
-    
+
     # Find first and last valid frames
     valid_indices = np.where(valid)[0]
     if len(valid_indices) < 2:
         return np.nan
-    
+
     first_valid = valid_indices[0]
     # Get start and end positions
     start_pos = xy[first_valid]
     # Calculate straight-line distance from start to exit
     straight_line_to_exit = np.sqrt(
-        (exit_pos[0] - start_pos[0])**2 + 
-        (exit_pos[1] - start_pos[1])**2
+        (exit_pos[0] - start_pos[0]) ** 2 + (exit_pos[1] - start_pos[1]) ** 2
     )
-    
+
     # Calculate actual path distance
     dx = np.diff(xy[:, 0])
     dy = np.diff(xy[:, 1])
     step_distances = np.sqrt(dx**2 + dy**2)
-    
+
     # Only count valid transitions
     valid_transitions = valid[:-1] & valid[1:]
     step_distances = np.where(valid_transitions, step_distances, 0.0)
     actual_path = np.sum(step_distances)
-    
+
     # Calculate efficiency
     if actual_path > 0 and np.isfinite(straight_line_to_exit):
         # Cap at 1.0 (can't be more efficient than straight line)
         efficiency = min(1.0, straight_line_to_exit / actual_path)
         return float(efficiency)
-    
+
     return np.nan
 
 
@@ -239,9 +236,7 @@ def _count_zone_entries(
         return 0
 
     # Find transitions from outside (False) to inside (True)
-    entries = np.sum(
-        (~valid_in_zone[:-1]) & valid_in_zone[1:]
-    )
+    entries = np.sum((~valid_in_zone[:-1]) & valid_in_zone[1:])
 
     # Also count if starting in zone (first valid frame is in zone)
     valid_indices = np.where(valid)[0]
@@ -346,9 +341,7 @@ def calculate_center_metrics(
     time_in_center_s = n_in / fps if fps > 0 else 0.0
     n_valid = np.sum(valid)
     time_in_center_fraction = (n_in / n_valid) if n_valid > 0 else 0.0
-    n_center_entries = _count_zone_entries_with_debounce(
-        in_center, valid, fps, entry_debounce_s
-    )
+    n_center_entries = _count_zone_entries_with_debounce(in_center, valid, fps, entry_debounce_s)
     return CenterMetrics(
         time_in_center_s=time_in_center_s,
         time_in_center_fraction=time_in_center_fraction,
@@ -412,9 +405,9 @@ def build_xy_table_with_exit(
     else:
         table["frame_index"] = np.arange(n_frames, dtype=np.uint32)
     table["t_s"] = np.arange(n_frames, dtype=np.float64) / fps
-    table['x'] = xy[:, 0].astype(np.float32)
-    table['y'] = xy[:, 1].astype(np.float32)
-    table['dist_to_exit_px'] = distance_to_exit_px.astype(np.float32)
+    table["x"] = xy[:, 0].astype(np.float32)
+    table["y"] = xy[:, 1].astype(np.float32)
+    table["dist_to_exit_px"] = distance_to_exit_px.astype(np.float32)
     if region_codes is not None and len(region_codes) == n_frames:
         for i in range(n_frames):
             table["region_code"][i] = encode_region_code_bytes(region_codes[i])
@@ -422,9 +415,9 @@ def build_xy_table_with_exit(
         z = encode_region_code_bytes(REGION_OOB)
         for i in range(n_frames):
             table["region_code"][i] = z
-    table['valid'] = valid.astype(np.uint8)
+    table["valid"] = valid.astype(np.uint8)
     if is_moving is not None:
-        table['is_moving'] = is_moving.astype(np.uint8)
+        table["is_moving"] = is_moving.astype(np.uint8)
 
     seek_row = int(np.clip(seek_row, 0, n_frames))
     run_row = int(np.clip(run_row, seek_row, n_frames))

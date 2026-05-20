@@ -105,7 +105,11 @@ TASK_SPECS: dict[AcquisitionMode, AcquisitionTaskSpec] = {
         set_mode_value=_set_run_mode,
         get_num_exits=lambda config: max(1, int(config.exit_angles.n_angles)),
         get_default_exit_index=lambda config: max(
-            0, min(max(1, int(config.exit_angles.n_angles)) - 1, int(config.exit_angles.default_manual_exit_index))
+            0,
+            min(
+                max(1, int(config.exit_angles.n_angles)) - 1,
+                int(config.exit_angles.default_manual_exit_index),
+            ),
         ),
     ),
     "ram": AcquisitionTaskSpec(

@@ -15,7 +15,6 @@ from .radial_arm.legacy_template import apply_legacy_template_config
 from ...pipeline.db import TrialKey, read_radial_arm_trial_settings, read_trial_settings
 from ...pipeline.sources.legacy_ehram import find_trial_ns_row, normalize_legacy_ram_session
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_TRIAL_NS_PATH = PROJECT_ROOT / "inputs" / "trial_ns.csv"
 
@@ -121,7 +120,10 @@ def _hydrate_from_modern_db(
                 ram = config.radial_arm
                 if template_params:
                     ram.template.center_midedge_to_midedge_cm = float(
-                        template_params.get("center_midedge_to_midedge_cm", ram.template.center_midedge_to_midedge_cm)
+                        template_params.get(
+                            "center_midedge_to_midedge_cm",
+                            ram.template.center_midedge_to_midedge_cm,
+                        )
                     )
                     ram.template.arm_length_cm = float(
                         template_params.get("arm_length_cm", ram.template.arm_length_cm)
@@ -165,9 +167,7 @@ def _hydrate_from_modern_db(
                     else:
                         ap_cm = ram_apothem_cm_from_template(ram.template)
                         ppc = float(calibration.get("px_per_cm", ram.calibration.px_per_cm))
-                        ram.calibration.apothem_px = (
-                            ppc * ap_cm if ap_cm > 0 and ppc > 0 else 0.0
-                        )
+                        ram.calibration.apothem_px = ppc * ap_cm if ap_cm > 0 and ppc > 0 else 0.0
                     ram.calibration.tracking_mask_margin_px = float(
                         calibration.get(
                             "tracking_mask_margin_px",
@@ -182,7 +182,10 @@ def _hydrate_from_modern_db(
                     )
                 sync_ram_px_per_cm(ram)
                 ram.exit_arm_index = int(
-                    task_attrs.get("exit_arm_index", payload["trial_attrs"].get("exit_arm_index", ram.exit_arm_index))
+                    task_attrs.get(
+                        "exit_arm_index",
+                        payload["trial_attrs"].get("exit_arm_index", ram.exit_arm_index),
+                    )
                 )
             _apply_loaded_identity(config, animal_id=animal_id, num_trials=trial_idx + 1)
             return PlaybackHydration(
@@ -213,7 +216,9 @@ def _hydrate_ram_from_sidecar(
     apply_legacy_template_config(config)
     escape_idx = _one_based_or_zero_based_exit_to_zero_based(row.escape_arm)
     config.radial_arm.exit_arm_index = escape_idx
-    _apply_loaded_identity(config, animal_id=row.animal_id, num_trials=max(1, _parse_trial_index(row.trial_key) + 1))
+    _apply_loaded_identity(
+        config, animal_id=row.animal_id, num_trials=max(1, _parse_trial_index(row.trial_key) + 1)
+    )
     if row.tx:
         config.session.animals[0].tx = row.tx
     if row.sex:

@@ -19,9 +19,7 @@ def upsert_trial_manifest_row(db_path: Optional[Path], manifest: "TrialManifest"
 
     vals = trial_manifest_csv_row_values(manifest)
     row_key = (str(manifest.animal_id), str(manifest.session), str(manifest.trial))
-    dt = np.dtype(
-        [(name, h5py.string_dtype(encoding="utf-8")) for name in MANIFEST_CSV_FIELDNAMES]
-    )
+    dt = np.dtype([(name, h5py.string_dtype(encoding="utf-8")) for name in MANIFEST_CSV_FIELDNAMES])
 
     def decode_cell(x: Any) -> str:
         if isinstance(x, bytes):
@@ -66,9 +64,7 @@ def write_trial_manifest_rows(
     """Rewrite ``metadata/trial_manifest`` once from a list of manifests."""
     from ..io.file_discovery import MANIFEST_CSV_FIELDNAMES, trial_manifest_csv_row_values
 
-    dt = np.dtype(
-        [(name, h5py.string_dtype(encoding="utf-8")) for name in MANIFEST_CSV_FIELDNAMES]
-    )
+    dt = np.dtype([(name, h5py.string_dtype(encoding="utf-8")) for name in MANIFEST_CSV_FIELDNAMES])
     rows = [tuple(str(v) for v in trial_manifest_csv_row_values(m)) for m in manifests]
     arr = np.array(rows, dtype=dt)
     with open_db(db_path, "a") as h5:

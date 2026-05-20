@@ -5,14 +5,10 @@ def build_main_window_menus(window, *, reload_last_profile_checked: bool) -> Non
     """Build the main window menus while keeping ``MainWindow`` as composition root."""
     menubar = window.menuBar()
     file_menu = menubar.addMenu("&File")
-    window._reload_last_profile_action = file_menu.addAction(
-        "Reload last profile(s) on startup"
-    )
+    window._reload_last_profile_action = file_menu.addAction("Reload last profile(s) on startup")
     window._reload_last_profile_action.setCheckable(True)
     window._reload_last_profile_action.setChecked(reload_last_profile_checked)
-    window._reload_last_profile_action.triggered.connect(
-        window._on_toggle_reload_last_profile
-    )
+    window._reload_last_profile_action.triggered.connect(window._on_toggle_reload_last_profile)
     file_menu.addSeparator()
     file_menu.addAction("Load acquisition profile…", window._on_load_profile)
     file_menu.addAction("Save acquisition profile", window._on_save_profile)
@@ -32,7 +28,9 @@ def build_main_window_menus(window, *, reload_last_profile_checked: bool) -> Non
     pipeline_menu = menubar.addMenu("&Pipeline")
     discovery_action = pipeline_menu.addAction("Discovery…", window._on_pipeline_discovery)
     discovery_action.setEnabled(False)
-    inference_action = pipeline_menu.addAction("Virtual acquisition…", window._on_pipeline_inference)
+    inference_action = pipeline_menu.addAction(
+        "Virtual acquisition…", window._on_pipeline_inference
+    )
     inference_action.setEnabled(False)
     pipeline_menu.addAction("Analyze…", window._on_pipeline_analyze)
     pipeline_menu.addAction("Export…", window._on_run_exports)

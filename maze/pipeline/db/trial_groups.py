@@ -33,9 +33,7 @@ def ensure_trial_group(
             video_path=safe_str(video_path) if video_path is not None else None,
             sleap_path=safe_str(sleap_path) if sleap_path is not None else None,
             attrs={
-                "input_h5_path": (
-                    safe_str(input_h5_path) if input_h5_path is not None else None
-                ),
+                "input_h5_path": (safe_str(input_h5_path) if input_h5_path is not None else None),
                 "sleap_model_path": (
                     safe_str(sleap_model_path) if sleap_model_path is not None else None
                 ),
@@ -116,7 +114,5 @@ def list_trials(db_path: Optional[Path] = None) -> list[TrialKey]:
                 for trial in g_session.keys():
                     g_trial = g_session[trial]
                     if isinstance(g_trial, h5py.Group):
-                        trials.append(
-                            TrialKey(animal_id=animal_id, session=session, trial=trial)
-                        )
+                        trials.append(TrialKey(animal_id=animal_id, session=session, trial=trial))
     return sorted(trials, key=lambda t: (t.animal_id, t.session, t.trial))

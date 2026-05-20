@@ -30,30 +30,30 @@ from ..defaults import DEFAULT_PX_PER_CM
 @dataclass
 class TrialData:
     """Container for trial tracking data from input H5 file."""
-    
+
     # Time arrays
     timer0: np.ndarray  # Primary timer
     timer1: np.ndarray  # Secondary timer
-    
+
     # Trial structure
     subtrial: np.ndarray
     iti: np.ndarray  # Inter-trial interval flag
-    
+
     # Legacy tracking (before SLEAP)
     x: np.ndarray
     y: np.ndarray
-    
+
     # Performance
     correct: np.ndarray
     incorrect: np.ndarray
-    
+
     # Motor outputs (vibration intensity)
     r: np.ndarray  # Red motor
     g: np.ndarray  # Green motor
     b: np.ndarray  # Blue motor
     w: np.ndarray  # White motor
     m: np.ndarray  # Master/main motor
-    
+
     @property
     def n_frames(self) -> int:
         """Number of frames in the trial."""
@@ -88,30 +88,25 @@ class TrialData:
 def parse_roi_string(roi_str: str) -> dict[str, float]:
     """
     Parse ROI attribute string into components.
-    
+
     Args:
         roi_str: String like "X=187,Y=149,R=147,pxcm=2.422145"
-        
+
     Returns:
         Dictionary with keys: x, y, r, pxcm
     """
     result = {}
-    
+
     # Parse each key=value pair
     for match in re.finditer(r"(\w+)=([\d.]+)", roi_str):
         key = match.group(1).lower()
         value = float(match.group(2))
         result[key] = value
-    
+
     return result
 
 
-def load_trial_settings(
-    h5_path: Path,
-    animal_id: str,
-    session: str,
-    trial: str
-) -> TrialSettings:
+def load_trial_settings(h5_path: Path, animal_id: str, session: str, trial: str) -> TrialSettings:
     """
     Load trial settings from an input H5 file.
 
@@ -211,42 +206,37 @@ def load_trial_settings(
         )
 
 
-def load_trial_data(
-    h5_path: Path,
-    animal_id: str,
-    session: str,
-    trial: str
-) -> TrialData:
+def load_trial_data(h5_path: Path, animal_id: str, session: str, trial: str) -> TrialData:
     """
     Load trial tracking data from an input H5 file.
-    
+
     Args:
         h5_path: Path to input H5 file
         animal_id: Animal ID (top-level group)
         session: Session key (e.g., "S01")
         trial: Trial key (e.g., "T01")
-        
+
     Returns:
         TrialData object with tracking arrays
-        
+
     Raises:
         KeyError: If trial path doesn't exist in H5 file
         ValueError: If required data is missing
     """
     with h5py.File(h5_path, "r") as f:
         trial_path = f"{animal_id}/{session}/{trial}"
-        
+
         if trial_path not in f:
             raise KeyError(f"Trial path not found in H5: {trial_path}")
-        
+
         trial_group = f[trial_path]
-        
+
         # Get data dataset
         if "data" not in trial_group:
             raise ValueError(f"No 'data' dataset in trial: {trial_path}")
-        
+
         data = trial_group["data"][:]
-        
+
         # Extract fields from structured array (H5 columns X,Y -> TrialData.x = horizontal, .y = vertical)
         # print("hi")
         return TrialData(
@@ -267,20 +257,17 @@ def load_trial_data(
 
 
 def load_trial(
-    h5_path: Path,
-    animal_id: str,
-    session: str,
-    trial: str
+    h5_path: Path, animal_id: str, session: str, trial: str
 ) -> tuple[TrialSettings, TrialData]:
     """
     Load both settings and data for a trial.
-    
+
     Args:
         h5_path: Path to input H5 file
         animal_id: Animal ID
         session: Session key
         trial: Trial key
-        
+
     Returns:
         Tuple of (TrialSettings, TrialData)
     """
@@ -292,52 +279,54 @@ def load_trial(
 def get_trial_list(h5_path: Path) -> list[tuple[str, str, str]]:
     """
     Get list of all trials in an H5 file.
-    
+
     Args:
         h5_path: Path to input H5 file
-        
+
     Returns:
         List of (animal_id, session, trial) tuples
     """
     trials = []
-    
+
     with h5py.File(h5_path, "r") as f:
         for animal_id in f.keys():
             animal_group = f[animal_id]
             if not isinstance(animal_group, h5py.Group):
                 continue
-            
+
             for session in animal_group.keys():
                 session_group = animal_group[session]
                 if not isinstance(session_group, h5py.Group):
                     continue
-                
+
                 for trial in session_group.keys():
                     trial_group = session_group[trial]
                     if isinstance(trial_group, h5py.Group):
                         if "data" in trial_group or "settings" in trial_group:
                             trials.append((animal_id, session, trial))
-    
+
     return sorted(trials)
 
 
 if __name__ == "__main__":
     # Test loading
     from ..paths import DATA_DIR
-    
+
     test_h5 = DATA_DIR / "Kevan Lim" / "VASTcontKL_AZ_male_S1-10.hdf5"
-    
+
     if test_h5.exists():
         trials = get_trial_list(test_h5)
         print(f"Found {len(trials)} trials")
-        
+
         if trials:
             animal_id, session, trial = trials[0]
             settings, data = load_trial(test_h5, animal_id, session, trial)
-            
+
             print(f"\nTrial: {animal_id}/{session}/{trial}")
             print(f"  Exit: ({settings.exit_x_px:.1f}, {settings.exit_y_px:.1f}) px")
-            print(f"  Arena radius: {settings.arena_radius_px:.1f} px ({settings.arena_radius_cm:.1f} cm)")
+            print(
+                f"  Arena radius: {settings.arena_radius_px:.1f} px ({settings.arena_radius_cm:.1f} cm)"
+            )
             print(f"  px/cm: {settings.px_per_cm:.3f}")
             print(f"  Stage: {settings.stage}")
             print(f"  Timestamp: {settings.timestamp}")

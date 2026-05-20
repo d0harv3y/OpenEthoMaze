@@ -25,7 +25,7 @@ from .sleap_loader import (
 __all__ = [
     # Input H5 loader
     "load_trial_settings",
-    "load_trial_data", 
+    "load_trial_data",
     "load_trial",
     "TrialSettings",
     "TrialData",

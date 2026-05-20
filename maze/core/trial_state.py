@@ -27,4 +27,3 @@ def trial_state_band(state: str | None) -> str:
     if s == "run":
         return "run"
     return "other"
-

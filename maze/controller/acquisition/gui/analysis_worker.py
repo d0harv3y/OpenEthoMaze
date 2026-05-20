@@ -12,6 +12,7 @@ except ImportError:
 
 
 if HAS_QT:
+
     class AnalysisWorker(QThread):
         """Run the offline pipeline for one recorded trial in the background."""
 
@@ -49,5 +50,6 @@ if HAS_QT:
                 analysis_profile=self._analysis_profile,
             )
             self.finished.emit(success, message)
+
 else:
     AnalysisWorker = None  # type: ignore[misc, assignment]
