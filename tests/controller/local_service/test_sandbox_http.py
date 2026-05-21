@@ -7,10 +7,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-pytest_plugins = ["controller.local_service.fixtures"]
-
 
 def test_post_discover_keyword_never_returns_outside_data_root(local_app) -> None:
     client = local_app.test_client()

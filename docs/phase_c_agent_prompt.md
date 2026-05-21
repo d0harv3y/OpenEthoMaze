@@ -128,7 +128,7 @@ uv sync --extra dev && uv run pytest tests/ -q
 
 
 
-- Phase D: main_window split, AGENTS.md — docs/rescue_plan.md
+- Phase D: [phase_d_agent_prompt.md](phase_d_agent_prompt.md) — main_window split, AGENTS.md
 
 - Phase E: ethogram — docs/ethogram_scope.md
 

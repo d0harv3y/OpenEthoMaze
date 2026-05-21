@@ -62,6 +62,8 @@ kpms = [
     "pyyaml>=6.0",
 ]
 
+lab = ["maze[gui,sleap,local-service,kpms,dev]"]
+
 [project.scripts]
 maze-daq = "maze.controller.acquisition.__main__:main"
 vast-daq = "maze.controller.acquisition.__main__:main"
@@ -120,8 +122,8 @@ min_confidence = 80
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# "tests" dir on path for controller.local_service fixtures; "." for maze imports.
-# Do not use pytest_plugins = "tests.*" — site-packages may ship a conflicting "tests" package.
+# "tests" on path so pytest_plugins can load controller.local_service.fixtures (see root conftest.py).
+# Do not use tests.* — a dependency installs a top-level "tests" package in site-packages.
 pythonpath = ["tests", "."]
 markers = [
     "llm_integration: optional discover test requiring MAZE_LLM_GGUF and local-service extra",

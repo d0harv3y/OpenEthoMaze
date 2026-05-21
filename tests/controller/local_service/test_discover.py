@@ -11,8 +11,6 @@ from pathlib import Path
 
 import pytest
 
-pytest_plugins = ["controller.local_service.fixtures"]
-
 from maze.controller.local_service.config import build_config
 from maze.controller.local_service.discover import (
     DiscoverParseError,

@@ -1,0 +1,14 @@
+---
+description: main_window.py extraction (Phase D4)
+globs:
+  - maze/controller/acquisition/gui/**
+---
+
+# GUI split (Phase D4)
+
+- `MainWindow` in `main_window.py` stays the composition root (menus, config, trial_controller). Target ~500–800 lines.
+- New helpers under `maze/controller/acquisition/gui/` take `window: MainWindow`; move code only — no behavior or signature changes.
+- Order: `legacy_exit_seed` → `preview_events` → profile/pipeline menu actions → `status_and_config_sync` → `window_layout` → `camera_loop` (last large chunk) → `trial_run_actions`.
+- Imports at top of file; no speculative abstractions.
+- After each slice: `uv run pytest tests/ -q`. Smoke GUI if you touched `camera_loop` or trial run paths.
+- Pipeline UI stays in `pipeline_dialogs.py`, `kpms_*_dialog.py`, `qc_summary_dialog.py`, `overlay_dialog.py` unless a slice explicitly moves menu handlers.

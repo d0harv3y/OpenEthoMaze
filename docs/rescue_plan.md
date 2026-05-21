@@ -209,6 +209,8 @@ See Phase C subagent report §3 (Discovery sync, inference skip-existing, analyz
 
 **Objective:** Maintainability without big-bang rewrite — split `main_window.py` (~2627 lines), quarantine IMPRESS paths, agent docs.
 
+**Agent prompt:** copy-paste from [phase_d_agent_prompt.md](phase_d_agent_prompt.md) when starting Phase D work in a new chat.
+
 ### Prerequisites
 
 - Phase A tests green **before each** extraction PR

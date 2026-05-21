@@ -1,0 +1,15 @@
+---
+description: CLI entry points and scripts/ layout
+globs:
+  - scripts/**
+  - maze/cli/**
+  - pyproject.toml
+---
+
+# Scripts & CLI
+
+- Implement behavior in `maze/cli/<module>.py`; register in `[project.scripts]` in `pyproject.toml`.
+- `scripts/*.py` at repo root are thin shims to `maze.cli` — prefer `uv run maze-<name>`.
+- Do not add features under `scripts/archive/` (frozen; ruff/black excluded).
+- `langfuse_demo` is a demo — archive under `scripts/demos/` in D3, not production paths.
+- See `scripts/README.md` for maintained / promoted / archive table.

@@ -1,0 +1,14 @@
+---
+description: OpenEthoMaze portable paths and lab overrides
+globs:
+  - maze/pipeline/paths*.py
+  - maze/kpms/**
+  - maze/cli/legacy_db.py
+---
+
+# Paths
+
+- Defaults live in `maze/pipeline/paths.py` (repo-relative). Per-machine overrides: `maze/pipeline/paths_local.py` from `paths_local.example.py` (gitignored).
+- Do not add lab drive letters (`E:\`, IMPRESS, etc.) as library defaults in `maze/`. Use `paths_local`, env vars, or CLI args.
+- Extend `tests/test_paths_portable.py` when moving or gating path constants.
+- GUI and CLI should resolve data roots through `paths` / profile output_dir, not hard-coded cohort paths.

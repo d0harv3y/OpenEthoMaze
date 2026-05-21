@@ -1,0 +1,15 @@
+---
+description: Pipeline prefilter_mode (controller vs legacy)
+globs:
+  - maze/pipeline/trial_filters.py
+  - maze/pipeline/run_pipeline.py
+  - maze/controller/acquisition/gui/pipeline_dialogs.py
+  - maze/cli/legacy_db.py
+---
+
+# Prefilter modes
+
+- GUI **Analyze…** must use `GUI_DEFAULT_PREFILTER_MODE` (`controller`) from `maze/pipeline/trial_filters.py`.
+- `maze-legacy-db run` uses `prefilter_mode=legacy` (frame-diff + mistrial gates).
+- `auto` infers per trial from manifest (`input_h5_path` empty ⇒ controller-style).
+- Do not silently change which trials are skipped when touching GUI or batch paths — keep mode explicit in logs/dialogs (`prefilter_mode_summary`).

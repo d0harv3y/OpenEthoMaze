@@ -1,11 +1,11 @@
 """Shared pytest fixtures for ``tests/controller/local_service/``.
 
-Loaded via ``pytest_plugins = ["controller.local_service.fixtures"]`` (see
-``pyproject.toml`` ``pythonpath``). Do not use ``tests.controller.*`` — a
-dependency may install a top-level ``tests`` package in site-packages.
-
-Do not add ``conftest.py`` here: a nested ``conftest`` shadows ``tests/conftest.py``
-and breaks ``from conftest import make_manifest`` in top-level tests.
+Loaded via repo-root ``conftest.py`` →
+``pytest_plugins = ["controller.local_service.fixtures"]`` (requires
+``pythonpath = ["tests", "."]`` in ``pyproject.toml``). Do not use
+``tests.controller.*`` — site-packages may ship a conflicting ``tests`` package.
+Do not add nested ``conftest.py`` here (pytest 9+ and ``from conftest import …``
+in top-level tests).
 
 Dependency groups (GitHub CI: ``uv sync --extra dev``):
 - Fixtures here: **core + dev** (``h5grove[flask]``, ``opencv-python``; no

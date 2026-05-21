@@ -9,8 +9,6 @@ from pathlib import Path
 
 import pytest
 
-pytest_plugins = ["controller.local_service.fixtures"]
-
 from maze.controller.local_service import __main__ as cli
 from maze.controller.local_service.app import create_local_app
 from maze.controller.local_service.config import build_config

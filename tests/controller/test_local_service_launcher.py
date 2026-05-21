@@ -17,7 +17,7 @@ from maze.controller.local_service_launcher import (
     suggested_data_root,
     waitress_unavailable_message,
 )
-from maze.controller.local_service.config import DEFAULT_HOST, DEFAULT_PORT
+from maze.controller.local_service.config import DEFAULT_HOST
 
 
 @pytest.fixture(autouse=True)

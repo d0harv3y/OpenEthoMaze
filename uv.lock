@@ -1893,6 +1893,33 @@ kpms = [
     { name = "keypoint-moseq" },
     { name = "pyyaml" },
 ]
+lab = [
+    { name = "black" },
+    { name = "graphviz" },
+    { name = "httpx" },
+    { name = "jax" },
+    { name = "jaxlib" },
+    { name = "keypoint-moseq" },
+    { name = "llama-cpp-python" },
+    { name = "mypy" },
+    { name = "pydeps" },
+    { name = "pyside6" },
+    { name = "pytest" },
+    { name = "pytest-xdist" },
+    { name = "pyyaml" },
+    { name = "rich" },
+    { name = "ruff" },
+    { name = "sleap-io" },
+    { name = "sleap-nn" },
+    { name = "sleap-nn", extra = ["torch-cuda130"], marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "torch", version = "2.10.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "torch", version = "2.10.0+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "torchvision", version = "0.25.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "torchvision", version = "0.25.0+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "ultralytics" },
+    { name = "vulture" },
+    { name = "waitress" },
+]
 local-service = [
     { name = "llama-cpp-python" },
     { name = "ultralytics" },
@@ -1920,6 +1947,7 @@ requires-dist = [
     { name = "keypoint-moseq", marker = "extra == 'kpms'", specifier = "==0.6.3" },
     { name = "llama-cpp-python", marker = "extra == 'local-service'" },
     { name = "matplotlib", specifier = ">=3.4.0" },
+    { name = "maze", extras = ["gui", "sleap", "local-service", "kpms", "dev"], marker = "extra == 'lab'" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "numpy", specifier = ">=1.21.0" },
     { name = "opencv-python", specifier = ">=4.5.0" },
@@ -1946,7 +1974,7 @@ requires-dist = [
     { name = "vulture", marker = "extra == 'dev'" },
     { name = "waitress", marker = "extra == 'local-service'" },
 ]
-provides-extras = ["gui", "sleap", "local-service", "dev", "kpms"]
+provides-extras = ["gui", "sleap", "local-service", "dev", "kpms", "lab"]
 
 [[package]]
 name = "mdit-py-plugins"

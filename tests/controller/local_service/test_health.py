@@ -5,10 +5,6 @@ Requires: core + dev (see ``fixtures.py``).
 
 from __future__ import annotations
 
-import pytest
-
-pytest_plugins = ["controller.local_service.fixtures"]
-
 from maze.controller.local_service.routes.health import get_maze_version
 
 HEALTH_JSON_KEYS = frozenset(
