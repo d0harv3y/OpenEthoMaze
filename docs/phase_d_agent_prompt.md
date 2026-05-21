@@ -123,6 +123,34 @@ uv sync --extra dev; uv run pytest tests/ -q
 
 ---
 
+## Prompt — next PR (D3 script hygiene)
+
+**Use after D2 is merged; one PR for D3 (D5 can follow in same PR if small).**
+
+```
+Implement Phase D slice D3 from docs/rescue_plan.md (script hygiene). Phase D only — no Phase E, no main_window split.
+
+## Objective
+
+- Docstrings on promoted CLIs under maze/cli/ (match module __doc__ style in legacy_db.py / generate_selected_trials).
+- Move langfuse demo: scripts/langfuse_demo.py → scripts/demos/langfuse_demo.py (or scripts/archive/); keep maze-langfuse-demo entry pointing at maze.cli.langfuse_demo.
+- Do not add features under scripts/archive/** (ruff-excluded).
+
+## Optional same PR (D5)
+
+Promote thin scripts to [project.scripts] only when maze.cli entry exists and root shim is redundant; document in scripts/README.md.
+
+## Verify
+
+uv sync --extra dev
+uv run ruff check maze tests
+uv run pytest tests/ -q
+
+Report: files moved, README updates, test result.
+```
+
+---
+
 ## Prompt — single slice only (D4 example)
 
 **Use when the user wants exactly one extraction PR.**

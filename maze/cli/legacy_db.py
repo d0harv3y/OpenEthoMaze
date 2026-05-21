@@ -2,14 +2,13 @@
 Legacy VAST database manager: init/sync DB and manifest from file discovery and
 treatment_labels.csv; run inference, pipeline, and exports on selected trials.
 
-All outputs go to VAST/outputs/legacy/:
+All outputs go to ``<repo>/outputs/legacy/`` (override with ``--db-path``):
   - vast_results_legacy.h5   (database)
   - trial_manifest_legacy.csv (manifest; columns from maze.pipeline.io.file_discovery.MANIFEST_CSV_FIELDNAMES)
   - exports/                 (CSV exports from run-exports)
 
-Uses VAST/inputs/treatment_labels.csv for labels. Discovery uses the same
-DATA_DIRS as the main pipeline path settings (`maze.pipeline.paths`) through
-the legacy VAST source adapter.
+Discovery uses ``maze.pipeline.paths`` ``DATA_DIRS`` (or ``--data-dir``); per-machine roots belong in
+``paths_local.py``. Cohort labels live beside discovery roots as ``treatment_labels.csv`` (legacy VAST adapter).
 
 Usage:
   uv run maze-legacy-db init

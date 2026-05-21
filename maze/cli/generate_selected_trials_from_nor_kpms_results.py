@@ -15,8 +15,9 @@ Rows set ``kpms_recording_key`` to the full group name so ORM kpMS code matches 
 Example::
 
     uv run maze-generate-selected-trials-nor-kpms ^
-      --results-h5 "D:/work sack/.../paramscan_.../results.h5" ^
-      --output "D:/work sack/.../paramscan_.../selected_trials.csv"
+      --results-h5 /path/to/paramscan/results.h5 ^
+      --base-dir /path/to/NOR/video/root ^
+      --output /path/to/selected_trials.csv
 """
 
 from __future__ import annotations
@@ -44,8 +45,8 @@ def main() -> int:
     ap.add_argument(
         "--base-dir",
         type=Path,
-        default=Path(r"D:\work sack\impress data\NOR video"),
-        help="Filesystem root for decoded paths (after D:-nor vids- prefix)",
+        required=True,
+        help="Filesystem root for decoded paths (after D:-nor vids- prefix); set per machine (see paths_local.example.py)",
     )
     ap.add_argument(
         "--prefix-encoded",

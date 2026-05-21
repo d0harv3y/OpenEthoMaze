@@ -496,7 +496,7 @@ def main() -> int:
     )
     ap.add_argument(
         "--root",
-        default=r"E:\videos\ehram\EHRAM_KesnerLab_Vids_for_DOH",
+        required=True,
         help="Root directory containing videos and basename-matched .slp files.",
     )
     ap.add_argument(

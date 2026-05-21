@@ -83,7 +83,7 @@ Run `uv run pytest tests/ -q` **before and after** each Phase D4 `main_window` e
 ## Phase status (short)
 
 - **A–C:** Shipped (tests, paths, CI, `maze-local-service`, pipeline menus, kpMS/QC/overlay).
-- **D (in progress):** D1 docs/rules → D2 paths → D3 scripts → D4a–g `main_window` slices → D5 CLI promotion.
+- **D (in progress):** D1 docs/rules ✓ → D2 paths ✓ → D3 scripts → D4a–g `main_window` slices → D5 CLI promotion.
 - **E:** Ethogram materialize/fit — library path can start without GUI.
 
 Commit only when the user asks.

@@ -200,13 +200,13 @@ def main() -> None:
     parser.add_argument(
         "--model",
         type=str,
-        default=r"D:\work sack\vibration maze\models\260212_085317.single_instance.n=1375",
+        required=True,
         help="Path to sleap-nn model directory (best.ckpt, training_config.yaml)",
     )
     parser.add_argument(
         "--video-dir",
         type=str,
-        default=r"D:\work sack\vibration maze\Kevan Lim",
+        required=True,
         help="Directory containing videos to process (searched recursively for .mp4 or .avi)",
     )
     parser.add_argument(

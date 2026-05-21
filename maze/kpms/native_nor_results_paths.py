@@ -8,8 +8,8 @@ from pathlib import Path
 def nor_native_group_to_h5_and_sleap(
     group_name: str,
     *,
+    base_dir: Path | str,
     prefix_encoded: str = "D:-nor vids-",
-    base_dir: Path | str = Path(r"D:\work sack\impress data\NOR video"),
     path_hyphens: int = 3,
 ) -> tuple[Path, Path]:
     """
