@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-pytest_plugins = ["tests.controller.local_service.fixtures"]
+pytest_plugins = ["controller.local_service.fixtures"]
 
 from maze.controller.local_service.config import (
     DEFAULT_HOST,

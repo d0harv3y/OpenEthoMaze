@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest_plugins = ["tests.controller.local_service.fixtures"]
+pytest_plugins = ["controller.local_service.fixtures"]
 
 from maze.controller.local_service.routes.health import get_maze_version
 

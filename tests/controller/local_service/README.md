@@ -4,7 +4,7 @@ Phase B HTTP service tests. CI installs **core + dev** only (`uv sync --extra de
 
 | File | Requires | Notes |
 |------|----------|--------|
-| `fixtures.py` | core + dev | Shared fixtures via `pytest_plugins` (no nested `conftest.py`) |
+| `fixtures.py` | core + dev | Shared fixtures via `pytest_plugins = ["controller.local_service.fixtures"]` (no nested `conftest.py`) |
 | `test_sandbox.py` | core + dev | Direct `PathSandbox` / `glob_safe` unit tests |
 | `test_sandbox_http.py` | core + dev | Sandbox edges via Flask client (`/orm/discover`, `/orm/detect`) |
 | `test_discover.py` | core + dev | Discover parsing + keyword mode (no GGUF) |

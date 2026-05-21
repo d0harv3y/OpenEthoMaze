@@ -120,7 +120,9 @@ min_confidence = 80
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+# "tests" dir on path for controller.local_service fixtures; "." for maze imports.
+# Do not use pytest_plugins = "tests.*" — site-packages may ship a conflicting "tests" package.
+pythonpath = ["tests", "."]
 markers = [
     "llm_integration: optional discover test requiring MAZE_LLM_GGUF and local-service extra",
     "yolo_integration: optional detect test requiring MAZE_YOLO_WEIGHTS and local-service extra",

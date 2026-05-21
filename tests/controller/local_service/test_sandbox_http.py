@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-pytest_plugins = ["tests.controller.local_service.fixtures"]
+pytest_plugins = ["controller.local_service.fixtures"]
 
 
 def test_post_discover_keyword_never_returns_outside_data_root(local_app) -> None:
