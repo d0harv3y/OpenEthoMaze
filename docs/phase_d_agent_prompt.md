@@ -123,30 +123,98 @@ uv sync --extra dev; uv run pytest tests/ -q
 
 ---
 
-## Prompt — next PR (D3 script hygiene)
+## Prompt — D5 script hygiene (shipped)
 
-**Use after D2 is merged; one PR for D3 (D5 can follow in same PR if small).**
+**Completed:** `maze-kpms-fit` / `maze-kpms-apply` in `[project.scripts]`; shims `scripts/kpms_fit.py`, `scripts/kpms_apply.py`; extended `scripts/README.md`; `tests/test_project_scripts.py`; Langfuse demo under `scripts/demos/` only.
+
+---
+
+## Prompt — next PR (D5 script hygiene + optional D follow-ups)
+
+**Use after D4g is merged; main_window companions complete (~805 lines).**
 
 ```
-Implement Phase D slice D3 from docs/rescue_plan.md (script hygiene). Phase D only — no Phase E, no main_window split.
+Implement Phase D slice D5 only: script / CLI hygiene per docs/rescue_plan.md § Scripts classification.
 
-## Objective
+Rules:
+- One PR focused on D5: promote or document thin scripts where maze.cli entry already exists;
+  archive langfuse demo if still at scripts/ root; extend scripts/README.md maintained/promoted/archive table.
+- Do not edit scripts/archive/** for new behavior (frozen).
+- Do not reopen main_window splits unless fixing a regression from D4f/D4g.
+- uv run pytest tests/ -q must pass before PR is done.
 
-- Docstrings on promoted CLIs under maze/cli/ (match module __doc__ style in legacy_db.py / generate_selected_trials).
-- Move langfuse demo: scripts/langfuse_demo.py → scripts/demos/langfuse_demo.py (or scripts/archive/); keep maze-langfuse-demo entry pointing at maze.cli.langfuse_demo.
-- Do not add features under scripts/archive/** (ruff-excluded).
+Out of scope for this PR (separate tickets — see my_todo.txt):
+- Settings dialog Apply/dirty-state UX (modeless dialog; users forget Apply).
+- treatment_labels.csv eager load on maze-daq startup (defer; controller H5 should not need repo inputs/ reload).
 
-## Optional same PR (D5)
+Report: scripts reclassified, new/retired entry points, test result.
+```
 
-Promote thin scripts to [project.scripts] only when maze.cli entry exists and root shim is redundant; document in scripts/README.md.
+---
 
-## Verify
+## Prompt — follow-up (treatment labels — not D5)
 
-uv sync --extra dev
-uv run ruff check maze tests
-uv run pytest tests/ -q
+**Use when maze-daq must stop loading repo inputs/treatment_labels.csv on every launch.**
 
-Report: files moved, README updates, test result.
+```
+Fix treatment_labels loading for controller acquisition (Phase D follow-up, not ethogram).
+
+Problem: maze-daq prints "Loaded N treatment labels from …/inputs/treatment_labels.csv" at startup.
+Controller sessions use <output_dir>/trials.h5; cohort labels should come from <output_dir>/treatment_labels.csv
+only when Discovery sync or kpMS enrich runs — not on every GUI launch.
+
+Rules:
+- Trace call sites (load_treatment_labels, enrich_manifests_from_treatment_labels, manifest_subset.load_manifests,
+  process_trial._animal_notes_from_treatment_csv); defer or gate loads.
+- Prefer default_treatment_labels_path(config) over repo inputs/ when output_dir is set.
+- Keep mtime cache; demote stdout print to logging.debug (or print once per process at INFO).
+- No behavior change for legacy_db / explicit Discovery sync paths.
+- uv run pytest tests/ -q; extend tests/test_treatment_labels_csv.py or test_controller_discovery.py if paths change.
+
+Report: call graph before/after, when labels load now, test result.
+```
+
+---
+
+## Prompt — D4g trial_run_actions (shipped)
+
+**Completed:** `maze/controller/acquisition/gui/trial_run_actions.py`; main_window ~805 lines.
+
+```
+Implement Phase D slice D4g only: trial_run_actions.py from main_window.py (~400–500 lines).
+
+Rules:
+- Move trial run / session control only: run timer tick, start/stop run, trial state change,
+  trial recorder stop/flush, start/previous/next trial, session controls, virtual trial clock helpers.
+- Keep in main_window.py: composition root, menus, settings/analysis dialogs, camera hooks (delegate to camera_loop),
+  closeEvent, MC connect, file/H5 actions.
+- Helpers take window: MainWindow; no behavior changes; no unrelated refactors.
+- Do not move camera_loop or pipeline menu code in this PR.
+- uv run pytest tests/ -q must pass before PR is done.
+- Read docs/rescue_plan.md § main_window split — D4f (camera_loop) must already be shipped.
+
+Smoke (manual): output_dir must exist (no missing drive); virtual video → scrub → Start trial → Stop;
+confirm recording only when output path is writable.
+
+Report: lines removed from main_window.py, new module path, test result.
+```
+
+---
+
+## Prompt — D4f camera_loop (shipped)
+
+**Completed:** `maze/controller/acquisition/gui/camera_loop.py`; main_window ~1095 lines (was ~1950).
+
+```
+Implement Phase D slice D4f only: camera_loop.py from main_window.py (~750 lines).
+
+Rules:
+- Move camera/preview loop code only; MainWindow keeps public hooks used by menus and trial_controller.
+- Helpers take window: MainWindow; no behavior changes; no unrelated refactors.
+- uv run pytest tests/ -q must pass before PR is done.
+- Read docs/rescue_plan.md § main_window split — do not skip slice order.
+
+Report: lines removed from main_window.py, new module path, test result.
 ```
 
 ---

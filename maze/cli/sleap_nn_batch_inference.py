@@ -1,15 +1,16 @@
-#!/usr/bin/env python3
 """
-SLEAP-NN Batch Inference Script
+SLEAP-NN batch inference: run ``sleap_nn.predict.run_inference`` on videos under ``--video-dir``.
 
-Runs sleap-nn inference on all videos in a directory and saves results as
-.predictions.slp files (native SLP format). Uses sleap_nn.predict.run_inference
-directly instead of the legacy sleap-track CLI.
+Writes ``.predictions.slp`` beside each video (or under ``--output-dir``). Supports resume via
+``--start-substring`` and ``--dry-run`` listing.
 
-Usage (from OpenEthoMaze repo root, requires ``--extra sleap``)::
+Example (requires ``uv sync --extra sleap``)::
 
-    uv run maze-sleap-nn-batch-inference --model <model_dir> --video-dir <dir> [options]
+    uv run maze-sleap-nn-batch-inference --model /path/to/model_dir --video-dir /path/to/videos
+    uv run maze-sleap-nn-batch-inference --model /path/to/model --video-dir /path/to/videos --dry-run
 """
+
+from __future__ import annotations
 
 import sys
 import time

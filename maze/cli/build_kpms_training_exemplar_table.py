@@ -9,7 +9,7 @@ dropped frames and stay aligned with ORM-trained models only).
 Example (NOR native param-scan)::
 
     uv run maze-kpms-build-training-exemplar-table ^
-      --model-dir "D:/work sack/impress data/NOR video/moseq_project/moseq_251017/paramscan_s1-1e6_s2-1e4_ss-50" ^
+      --model-dir /path/to/moseq_project/model_run ^
       --retain-all-sleap-frames
 
 Writes ``training_exemplar_table.h5`` in ``--model-dir`` by default. Use it with::

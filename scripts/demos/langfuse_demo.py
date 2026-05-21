@@ -1,4 +1,4 @@
-﻿"""Backward-compatible launcher. Prefer `uv run` console script (see readme.md)."""
+"""Demo launcher. Prefer ``uv run maze-langfuse-demo`` (see scripts/demos/README.md)."""
 from maze.cli.langfuse_demo import main
 
 if __name__ == "__main__":

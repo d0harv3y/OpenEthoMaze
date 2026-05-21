@@ -10,7 +10,7 @@ Example::
       --pipeline-h5 outputs/legacy/vast_results_legacy.h5 ^
       --animal-id 1 --session S01 --trial T01 ^
       --out outputs/overlays ^
-      --kpms-h5 "D:/work sack/.../results_apply.h5"
+      --kpms-h5 /path/to/results_apply.h5
 
 Requires ``uv sync --extra kpms`` for the hypnogram and exemplar tray.
 """

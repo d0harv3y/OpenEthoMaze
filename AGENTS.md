@@ -30,6 +30,13 @@ Entry: `uv run maze-daq` (needs `--extra gui`). Composition root: [maze/controll
 | Area | Module |
 |------|--------|
 | Menus / actions wiring | [menus.py](maze/controller/acquisition/gui/menus.py) |
+| Legacy virtual exit seed (H5 heuristics) | [legacy_exit_seed.py](maze/controller/acquisition/gui/legacy_exit_seed.py) |
+| Camera preview event filter | [preview_events.py](maze/controller/acquisition/gui/preview_events.py) |
+| Profile / pipeline menu handlers | [profile_menu_actions.py](maze/controller/acquisition/gui/profile_menu_actions.py), [pipeline_menu_actions.py](maze/controller/acquisition/gui/pipeline_menu_actions.py) |
+| Status + config↔UI sync | [status_and_config_sync.py](maze/controller/acquisition/gui/status_and_config_sync.py) |
+| Main window layout | [window_layout.py](maze/controller/acquisition/gui/window_layout.py) |
+| Camera preview loop | [camera_loop.py](maze/controller/acquisition/gui/camera_loop.py) |
+| Trial run / session | [trial_run_actions.py](maze/controller/acquisition/gui/trial_run_actions.py) |
 | Pipeline dialogs (discovery, virtual acq, analyze) | [pipeline_dialogs.py](maze/controller/acquisition/gui/pipeline_dialogs.py) |
 | kpMS fit / apply | [kpms_fit_dialog.py](maze/controller/acquisition/gui/kpms_fit_dialog.py), [kpms_apply_dialog.py](maze/controller/acquisition/gui/kpms_apply_dialog.py) |
 | QC summary, overlay render | [qc_summary_dialog.py](maze/controller/acquisition/gui/qc_summary_dialog.py), [overlay_dialog.py](maze/controller/acquisition/gui/overlay_dialog.py) |
@@ -83,7 +90,8 @@ Run `uv run pytest tests/ -q` **before and after** each Phase D4 `main_window` e
 ## Phase status (short)
 
 - **A–C:** Shipped (tests, paths, CI, `maze-local-service`, pipeline menus, kpMS/QC/overlay).
-- **D (in progress):** D1 docs/rules ✓ → D2 paths ✓ → D3 scripts → D4a–g `main_window` slices → D5 CLI promotion.
+- **D (in progress):** D1–D5 ✓ (scripts/CLI hygiene, `main_window` split) → optional shim retirement; Phase D complete prompt when regressions clear.
+- **D follow-up (UX):** Settings dialog Apply/dirty-state — see `my_todo.txt` § Settings Apply.
 - **E:** Ethogram materialize/fit — library path can start without GUI.
 
 Commit only when the user asks.

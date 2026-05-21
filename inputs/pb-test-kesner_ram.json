@@ -16,12 +16,14 @@
           "strain": null,
           "sex": null,
           "drug": null,
+          "experiment": null,
+          "researcher": null,
           "notes": null
         }
       ],
       "exit_schedule_indices": [
         4,
-        1,
+        4,
         1,
         1,
         1,
@@ -31,7 +33,7 @@
         1
       ]
     },
-    "output_dir": "E:/scratch",
+    "output_dir": "D:/scratch",
     "h5_filename": "trials.h5",
     "arena_type": "radial_arm",
     "run_mode": "continuous",
@@ -60,14 +62,38 @@
     "sleap_exit_min_keypoints": 2,
     "fallback_exit_blob_overlap_pct": 10.0,
     "track_exit_either_success": false,
-    "sleap_model_path": "E:/sleap/models/260421_204020.single_instance.n=52",
+    "sleap_model_path": "C:/Users/admin/code/OpenEthoMaze/inputs/models/forKesnerDemo",
     "track_show": true,
     "track_async": false,
     "track_enable_backup": true,
     "track_enable_sleap": true,
     "overlay_opacity_pct": 70,
     "arduino_port": "— Select port —",
-    "preview_set_center_from_next_click": false
+    "preview_set_center_from_next_click": false,
+    "analysis_trajectory": {
+      "movement_start_threshold_m_per_frame": 0.009428090415820635,
+      "movement_stop_threshold_m_per_frame": 0.0047140452079103175,
+      "movement_speed_median_window_frames": 3,
+      "movement_entry_debounce_frames": 3,
+      "movement_exit_debounce_frames": 3,
+      "min_movement_bout_duration_frames": 4,
+      "movement_inter_bout_interval_frames": 4,
+      "max_movement_per_frame_cm": 15.0,
+      "jump_filter_lookahead_frames": 3
+    },
+    "analysis_trace_quality": {
+      "filter_frames_no_animal": true,
+      "min_confident_nodes_per_frame": 3,
+      "min_node_confidence_threshold": 0.55,
+      "min_valid_frame_run_length": 5,
+      "min_mean_confidence_per_frame": null,
+      "trace_interpolate_nans": true,
+      "trace_max_gap_frames": 15,
+      "trace_interpolate_low_conf": true,
+      "trace_confidence_threshold": 0.55,
+      "trace_apply_smoothing": true,
+      "trace_smoothing_window": 3
+    }
   },
   "radial_arm": {
     "template": {
@@ -94,14 +120,14 @@
     "stimulus_enabled": false
   },
   "last_session_id": "test1",
-  "last_trial_idx": 0,
-  "last_slot_idx": 0,
+  "last_trial_idx": 1,
+  "last_slot_idx": 1,
   "gui": {
     "track_show": true,
     "track_async": false,
     "track_enable_backup": true,
     "track_enable_sleap": true,
-    "track_sleap_path": "E:/sleap/models/260421_204020.single_instance.n=52",
+    "track_sleap_path": "C:/Users/admin/code/OpenEthoMaze/inputs/models/forKesnerDemo",
     "track_confidence": 10,
     "track_sleap_every_n": 1,
     "track_opacity": 70,

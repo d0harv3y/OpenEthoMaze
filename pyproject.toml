@@ -82,6 +82,8 @@ maze-overlay-slp-bout = "maze.cli.overlay_slp_bout_pipeline:main"
 maze-export-ram-trial-manifest = "maze.cli.export_ram_trial_manifest_csv:main"
 maze-fix-ele-h5-session-animal-ids = "maze.cli.fix_ele_h5_session_animal_ids:main"
 maze-sleap-nn-batch-inference = "maze.cli.sleap_nn_batch_inference:main"
+maze-kpms-fit = "maze.kpms.fit:main"
+maze-kpms-apply = "maze.kpms.apply:main"
 maze-langfuse-demo = "maze.cli.langfuse_demo:main"
 maze-local-service = "maze.controller.local_service.__main__:main"
 

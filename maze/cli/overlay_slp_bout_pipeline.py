@@ -1,3 +1,18 @@
+"""
+Batch-render centroid-trail overlays from basename-matched video/.slp pairs.
+
+Scans ``--root`` for paired ``.mp4``/``.avi`` and ``.slp`` files, writes per-video overlay
+MP4s under ``--out-dir`` (default ``<root>/overlay_outputs``), and exports a combined bout
+summary CSV using ORM movement thresholds (metrics remain in pixels unless calibrated).
+
+Example::
+
+    uv run maze-overlay-slp-bout --root /path/to/cohort --dry-run
+    uv run maze-overlay-slp-bout --root /path/to/cohort --out-dir /path/to/overlays
+
+Requires OpenCV (``opencv-python`` in core dependencies).
+"""
+
 from __future__ import annotations
 
 import argparse
