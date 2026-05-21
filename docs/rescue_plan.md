@@ -11,7 +11,7 @@
 | Phase | Goal | Duration (rough) | Blocks |
 |-------|------|------------------|--------|
 | **A** | Stop the bleeding: tests, CI, deps, paths | 1–2 weeks | — |
-| **B** | Unified localhost HTTP (`/orm/*` + h5web) | 1–2 weeks | A (tests + `local-service` extra) |
+| **B** | Unified localhost HTTP (`/orm/*` + h5web) | **Done** | A (tests + `local-service` extra) |
 | **C** | Product narrative: re-enable pipeline GUI, kpMS fit | 2–4 weeks | A; B optional |
 | **D** | Structural paydown: GUI split, AGENTS, scripts | Ongoing after A | A tests green per PR |
 | **E** | Ethogram: materialize, apply batch, fit ops, exports | After A; overlaps C | See [ethogram_scope.md](ethogram_scope.md) |
@@ -95,30 +95,38 @@ Use `resume` with agent IDs to continue implementation in focused threads.
 
 ## Phase B — Unified local HTTP service
 
+**Status:** **Complete (B0–B8, May 2026).** v1 HTTP stack is feature-complete; v1.1 polish tracked below.
+
 **Objective:** One long-lived Flask process: h5web + h5grove + `/orm/*` (discover, detect, health). See `.cursor/plans/unified_local_http_service_57353264.plan.md`.
 
-**Current gap:** No `maze/controller/local_service/`; `waitress`/`llama-cpp-python`/`ultralytics` still in **main** deps (plan wants `local-service` extra).
+**Shipped layout:**
 
-### Tasks (ordered)
+- **Core:** `h5grove[flask]` (h5web routes + CI tests without GUI).
+- **`local-service` extra:** `waitress`, `llama-cpp-python`, `ultralytics`; script `maze-local-service`.
+- **Package:** `maze/controller/local_service/` (sandbox, discover, detect, health).
+- **GUI:** `maze/controller/local_service_launcher.py` + **File → Start local ORM service…** (subprocess; no LLM/YOLO in Qt).
+- **Ephemeral h5web** (GUI **Open H5 in h5web**) still uses in-thread Flask on port 0 until v1.1 (see decisions).
+
+### Tasks (ordered) — all done
 
 | ID | Task | Files |
 |----|------|-------|
-| B0 | Move heavy deps to `[optional-dependencies] local-service`; add `maze-local-service` script | `pyproject.toml` |
+| B0 | `local-service` extra + `maze-local-service` script | `pyproject.toml` |
 | B1 | `register_h5web_routes(app, ...)`; thin `create_app` | `h5web_server.py` |
-| B2 | Path sandbox: `sandbox.py`, `glob_safe.py`, `config.py` | `local_service/` |
-| B3 | `create_local_app`, waitress `__main__`, env/CLI | `local_service/app.py`, `__main__.py` |
+| B2 | Path sandbox | `local_service/sandbox.py`, `glob_safe.py`, `config.py` |
+| B3 | `create_local_app`, waitress `__main__` | `local_service/app.py`, `__main__.py` |
 | B4 | `GET /orm/health` | `routes/health.py` |
-| B5 | `POST /orm/discover` (LLM JSON + sandbox; CI keyword fallback) | `llm.py`, `discover.py`, `routes/discover.py` |
-| B6 | `POST /orm/detect` (optional YOLO) | `yolo.py`, `routes/detect.py` |
-| B7 | Tests: sandbox + Flask client (no GGUF) | `tests/controller/local_service/` |
-| B8 | GUI menu: subprocess launcher (optional v1) | `menus.py`, `local_service_launcher.py` |
+| B5 | `POST /orm/discover` | `llm.py`, `discover.py`, `routes/discover.py` |
+| B6 | `POST /orm/detect` | `yolo.py`, `routes/detect.py` |
+| B7 | Tests (sandbox + Flask client; no GGUF in CI) | `tests/controller/local_service/` |
+| B8 | GUI subprocess launcher | `menus.py`, `local_service_launcher.py` |
 
 ### API summary
 
 - `GET /orm/health` — version, roots, llm/yolo loaded flags
 - `POST /orm/discover` — `{"query","limit"}` → globs + matches under data root
 - `POST /orm/detect` — multipart image or JSON video path + frame index
-- h5web unchanged: `/`, `/api/*`, `?file=<relative-to-H5_BASE_DIR>`
+- h5web: `/`, `/api/*`, `?file=<relative-to-data-root>`
 
 ### Security (v1)
 
@@ -127,18 +135,30 @@ Use `resume` with agent IDs to continue implementation in focused threads.
 - LLM output: JSON only; capped globs/time/matches
 - No auth v1 (localhost threat model)
 
-### Phase gate
+### Phase gate — passed
 
-- Sandbox tests green in CI
+- Sandbox tests green in CI (`uv sync --extra dev`)
 - `uv sync --extra local-service` documented; CI does **not** require GGUF
 - GUI ephemeral h5web still works (B1 backward compat)
+- Launcher does not require GGUF
 
-### Open decisions (pick before B5)
+### Locked decisions (Phase B + product direction, May 2026)
 
-1. Discover: strict LLM-only vs keyword fallback for CI
-2. Symlink policy on Windows lab drives
-3. GUI launcher default data root (dialog vs last output dir)
-4. Port 8765 collision: fail vs auto-increment
+| # | Topic | Decision |
+|---|--------|----------|
+| 1 | **Discover / LLM** | **No GGUF configured** → keyword/glob fallback (`mode: "keyword"`); CI uses this. **GGUF configured** → LLM path only; load/parse/inference failures return **loud HTTP errors** and health flags — **no** silent keyword downgrade. **Not in Phase B:** bundled GGUF in repo, preset/advanced discover UI, or manifest/label editing — those are Phase C / pipeline GUI (`treatment_labels`, `trial_manifest.csv`). `/orm/discover` today is **file path discovery only**, not cohort manifest assignment. |
+| 2 | **Symlinks** | Reject symlinks whose resolved target escapes the containing allowed root (`sandbox.py`). Lab is **not** using junctions today; policy **does not forbid** links that stay under root. **No** junction-specific tests until lab hardware needs them. |
+| 3 | **GUI launcher data root** | Folder dialog default: **session last-used** → else acquisition **output_dir** → user picks. Documented in `local_service_launcher.py`. **v1.1:** persist last successful root in `QSettings` (same pattern as `profile_settings.py`). |
+| 4 | **Port 8765** | Fixed default; bind failure surfaces at CLI/GUI spawn. Launcher blocks a second menu spawn while tracked child is alive. **v1.1:** preflight (`GET /orm/health` or socket probe) with clear “port in use” message. |
+| 5 | **h5web entry** | **Target:** GUI h5web actions use **long-lived service only** (no second ephemeral Flask). **v1.1 / early C:** change `launch_h5web_for_path` to open `http://127.0.0.1:<port>/?file=<relative>` when health OK; else prompt to start service. |
+
+### v1.1 follow-ups (post–Phase B, not blocking Phase C)
+
+- `QSettings` for `last_orm_data_root`
+- Port/health preflight before spawn; surface child stderr on failed start
+- Route GUI **Open H5 in h5web** through long-lived service
+- Remove dead `except LlmNotConfiguredError: pass` branch in `plan_discover` (control-flow clarity)
+- Optional: `skipped_paths` count in discover response for sandbox-filtered globs (observability)
 
 ---
 
@@ -146,10 +166,12 @@ Use `resume` with agent IDs to continue implementation in focused threads.
 
 **Objective:** Roadmap “single story” — pose → (fit) → apply → overlay → export — with gated features re-enabled safely.
 
+**Agent prompt:** copy-paste from [phase_c_agent_prompt.md](phase_c_agent_prompt.md) when starting Phase C work in a new chat.
+
 ### Prerequisites
 
 - Phase A complete (tests, paths, extras)
-- Phase B optional (h5web QA, future NL discovery assist)
+- Phase B complete (localhost service + launcher); optional v1.1 h5web unification can land in C
 
 ### Tasks (ordered)
 
@@ -157,13 +179,13 @@ Use `resume` with agent IDs to continue implementation in focused threads.
 |----|---------|-----------|---------|
 | C7 | Observability skeleton | **new** `run_provenance.py`; hooks in sync/workers/fit | JSON logs + git hash |
 | C1 | Re-enable Discovery | `menus.py`, `pipeline_dialogs.py` | Remove `setEnabled(False)` on discovery |
-| C2 | Virtual acquisition + backend combo | `pipeline_dialogs.py`, `inference_backend.py` | Enable inference; `get_backend(kind)` |
-| C3 | Analyze prefilter UX | `pipeline_dialogs.py`, `run_pipeline.py` | Document `controller` mode |
-| C6 | Treatment labels editor | `pipeline_dialogs.py`, optional editor module | Enable “Create new…” |
-| C4 | kpMS fit GUI worker | **new** `kpms_fit_dialog.py`; extract `run_kpms_fit` from `fit.py` | New menu action |
-| C5 | kpMS apply GUI worker | **new** `kpms_apply_dialog.py` | New menu action |
-| C8 | QC at scale (stretch) | exports + new summary dialog | Post-C1–C3 |
-| C9 | Overlay menu (optional) | `unified_overlay.py`, scripts | Doc + optional menu |
+| C2 | Virtual acquisition + backend combo | `pipeline_dialogs.py`, `inference_backend.py` | **Done** — menu + `get_backend(kind)` + skip-existing docs |
+| C3 | Analyze prefilter UX | `pipeline_dialogs.py`, `trial_filters.py`, `readme.md` | **Done** — `GUI_DEFAULT_PREFILTER_MODE`, dialog + docs |
+| C6 | Treatment labels editor | `treatment_labels_csv.py`, `pipeline_dialogs.py` | **Done** — create template + open in OS editor + header validation on sync |
+| C4 | kpMS fit GUI worker | `kpms_fit_dialog.py`, `run_kpms_fit` in `fit.py` | **Done** — menu + QThread worker |
+| C5 | kpMS apply GUI worker | `kpms_apply_dialog.py`, `run_kpms_apply` in `apply.py` | **Done** — menu + QThread worker |
+| C8 | QC at scale (stretch) | `qc_summary.py`, `qc_summary_dialog.py` | **Done** — Pipeline → QC summary… |
+| C9 | Overlay menu (optional) | `overlay_dialog.py`, `overlay_run_config.py`, `run_unified_overlay` | **Done** — Pipeline → Render unified overlay… |
 
 ### Stays disabled (until preview parity)
 
@@ -177,9 +199,9 @@ Use `resume` with agent IDs to continue implementation in focused threads.
 
 See Phase C subagent report §3 (Discovery sync, inference skip-existing, analyze prefilter, kpMS fit/apply artifacts, treatment CSV, provenance JSON).
 
-### Open question
+### Workflow (decided May 2026)
 
-**Controller-first vs legacy-first workflow?** Affects Discovery defaults and docs (controller H5 vs `legacy_db.py`).
+**Controller-first** for GUI pipeline Discovery: defaults use acquisition `output_dir`, `trials.h5`, and `{animal}_{session}_{trial}.mp4` scan with video-based manifest fallback. Legacy multi-root scans remain available by editing data directories in the dialog; `scripts/legacy_db.py` stays CLI-only.
 
 ---
 
@@ -240,7 +262,8 @@ Add `scripts/README.md` (maintained / promoted / archive).
 | `local-service` extra | A4 / B0 |
 | Path sandbox tests | A1 + B7 |
 | Safe menu re-enable | A1, A2 |
-| GUI subprocess for HTTP | B8 (after B3); prefer after D4 camera_loop stable |
+| GUI subprocess for HTTP | B8 **done**; h5web-via-long-lived → v1.1 / C |
+| Long-lived h5web URL | B3 + v1.1 `launch_h5web_for_path` refactor |
 | `register_h5web_routes` test | B1 + A1 |
 | No IMPRESS in defaults | A2, A3, D2 |
 
@@ -252,7 +275,7 @@ Add `scripts/README.md` (maintained / promoted / archive).
 |------|-------|---------|
 | 1 | Phase A PR-A1, PR-A2 | Tests exist; paths portable |
 | 2 | Phase A PR-A3; start B0–B2 | CI green; sandbox module |
-| 3 | Phase B B3–B7 | `maze-local-service` runnable |
+| 3 | Phase B B0–B8 | **Done** — `maze-local-service` + GUI launcher |
 | 4 | Phase C C7, C1, C2 | Discovery + inference on |
 | 5+ | Phase C C4–C5; Phase D slices | kpMS GUI; smaller main_window |
 
@@ -269,10 +292,10 @@ Add `scripts/README.md` (maintained / promoted / archive).
 
 ## Next actions (for Agent mode)
 
-1. Execute **PR-A1** (un-ignore tests, paths, apply/legacy defaults).
-2. Resume subagent `6e35dbe4-743d-4847-94ac-c43a723ed4b6` for implementation if splitting work across chats.
-3. Answer open question: **controller-first vs legacy-first** lab workflow (affects C1 defaults).
-4. Ethogram: see [ethogram_scope.md](ethogram_scope.md) — start **E0** (bout CSV materialize) after Phase A gate; fit stays offline (E2).
+1. **Phase C:** use [phase_c_agent_prompt.md](phase_c_agent_prompt.md); resume subagent `dd7ff43b-174c-4ce8-895a-af19af6dc384` if splitting work.
+2. Answer open question: **controller-first vs legacy-first** lab workflow (affects C1 Discovery defaults).
+3. Optional **Phase B v1.1** slice: unified h5web via long-lived service (decision #5 above).
+4. Ethogram: see [ethogram_scope.md](ethogram_scope.md) — **E0** library path can parallel C; **C4/C5** are the GUI face of fit/apply.
 
 ---
 

@@ -61,7 +61,7 @@ uv run maze-local-service --data-root /path/to/cohort/root
 
 Open h5web at `http://127.0.0.1:8765/?file=<path-relative-to-data-root>` (override host/port with `--host` / `--port`).
 
-From the acquisition GUI (with `--extra gui` and `--extra local-service`): **File → Start local ORM service…** spawns the same process in a subprocess using the output folder (or last-used directory) as `--data-root`. Ephemeral **Open H5 in h5web** in the GUI still uses the in-process viewer.
+From the acquisition GUI (with `--extra gui` and `--extra local-service`): **File → Start local ORM service…** spawns the same process in a subprocess using the output folder (or last-used directory) as `--data-root`. Ephemeral **Open H5 in h5web** still uses a short-lived in-process server; the plan is to route h5web through the long-lived service only (see `docs/rescue_plan.md` Phase B decisions). Phase C work: `docs/phase_c_agent_prompt.md`.
 
 **Development** (pytest, ruff, black, mypy, etc.):
 
@@ -97,6 +97,41 @@ uv run maze-ram-daq
 ```
 
 Requires `--extra gui` (and usually `--extra sleap` for inference menus).
+
+### Pipeline menu (GUI)
+
+After `uv sync --extra gui --extra sleap`:
+
+| Menu item | Purpose |
+|-----------|---------|
+| **Discovery…** | Scan acquisition **Output folder** for `{animal}_{session}_{trial}.mp4` and pose sidecars; sync paths into `trials.h5`. **Create new…** / **Open in editor…** for `treatment_labels.csv` (manual cohort labels; not HTTP discover). |
+| **Virtual acquisition…** | Batch **SLEAP-NN** on trials with `video_path` in the results H5. Defaults: results H5 = `<output_dir>/trials.h5`, predictions under **Output folder**. |
+| **Analyze…** | Run ambulation/QC on trials in `<output_dir>/trials.h5` with **`prefilter_mode=controller`** (GUI default). |
+| **kpMS fit…** | Fit keypoint-MoSeq from a trial manifest CSV (`--extra kpms`; long-running QThread worker). Default project dir `<output_dir>/kpms`. |
+| **kpMS apply…** | Apply a trained checkpoint to manifest trials (`--extra kpms`). Writes `results_apply.h5` and `apply_summary.json`. |
+| **QC summary…** | Mistrial counts by reason, analyze/QC-image coverage, export `mistrial_summary.csv` with action hints. |
+| **Render unified overlay…** | One-trial MP4 (video + pipeline H5 + optional kpMS). Requires OpenCV; CLI: `maze-render-trial-overlay`. |
+
+#### Analyze prefilter modes (`run_pipeline` / `trial_filters`)
+
+The GUI **Analyze** dialog always passes `controller`. CLI legacy batch uses `legacy`. Modes:
+
+| Mode | Frame-diff filter | Mistrial preflight |
+|------|-------------------|-------------------|
+| **`controller`** | Off (all trials kept) | Off — allows x/y-only trials from acquisition H5 |
+| **`legacy`** | On (task rules, e.g. VAST Δframes = −1) | On — skips missing video/SLEAP/H5 inputs |
+| **`auto`** | Off for controller manifests* | Off for controller manifests* |
+
+\*Controller manifests are detected when `input_h5_path` is empty in the trial manifest.
+
+```bash
+# Legacy cohort batch (strict preflight; hard-coded in maze-legacy-db run)
+uv run maze-legacy-db run
+```
+
+**Skip existing (Virtual acquisition):** When enabled (default), a trial is not re-inferred if a pose file already exists at any of: the `sleap_path` stored in the H5, the planned `<output_dir>/<video_stem>.predictions.slp`, or `.predictions.slp` / `.slp` beside the video. The H5 `sleap_path` and model path are still updated from the file found; optional headless XY materialization runs if checked.
+
+DeepLabCut and LLM/YOLO are not loaded in the Qt process (local ORM service uses a subprocess).
 
 ## Batch tools (CLI)
 

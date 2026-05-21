@@ -18,7 +18,9 @@ import numpy as np
 import pandas as pd
 
 from ..pipeline.io.file_discovery import TrialManifest
+from ..pipeline.run_provenance import provenance_envelope, provenance_run, sha256_file
 from .io import ensure_dir, write_json
+from .apply_run_config import KpmsApplyRunConfig
 from .manifest_subset import SubsetConfig, filter_manifests, load_manifests
 from .preprocess import KpmsPreprocessConfig, build_kpms_inputs
 
@@ -179,6 +181,8 @@ def apply_kpms_checkpoint_from_manifests(
     cfg: KpmsApplyConfig | None = None,
     preprocess_config: KpmsPreprocessConfig | None = None,
     results_path: Path | str | None = None,
+    *,
+    manifest_csv: Path | str | None = None,
 ) -> dict[str, Any]:
     """
     Preprocess all selected trials like ``fit.py``, then run a single ``apply_model`` call.
@@ -255,6 +259,16 @@ def apply_kpms_checkpoint_from_manifests(
         overwrite=cfg.overwrite_results,
     )
 
+    manifest_csv_path = Path(manifest_csv) if manifest_csv else None
+    prov_inputs: dict[str, Any] = {
+        "project_dir": str(project_dir),
+        "model_name": model_name,
+        "manifest_csv": str(manifest_csv_path) if manifest_csv_path else None,
+        "n_manifest_rows": len(manifests),
+    }
+    if manifest_csv_path is not None and manifest_csv_path.is_file():
+        prov_inputs["manifest_csv_sha256"] = sha256_file(manifest_csv_path)
+
     summary = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "project_dir": str(project_dir),
@@ -267,10 +281,120 @@ def apply_kpms_checkpoint_from_manifests(
         "skipped_preprocess_examples": skipped[:50],
         "apply_config": asdict(cfg),
         "preprocess_config": asdict(pre_cfg),
+        "run_provenance": provenance_envelope(
+            operation="kpms_apply",
+            inputs=prov_inputs,
+            outputs={
+                "n_manifest_rows": len(manifests),
+                "n_recordings_after_preprocess": len(coordinates),
+                "results_path": str(results_path),
+            },
+        ),
     }
     write_json(project_dir / model_name / "apply_summary.json", summary)
     if cfg.verbose:
         print(f"Wrote {results_path}")
+    return summary
+
+
+def _filter_tuple_to_list(ids: Optional[tuple[str, ...]]) -> Optional[list[str]]:
+    return list(ids) if ids else None
+
+
+def apply_run_config_from_args(args: argparse.Namespace) -> KpmsApplyRunConfig:
+    """Map :func:`parse_args` namespace to :class:`KpmsApplyRunConfig`."""
+    aids = expand_filter_arg(args.animal_id)
+    sess = expand_filter_arg(args.session)
+    tr = expand_filter_arg(args.trial)
+    return KpmsApplyRunConfig(
+        project_dir=Path(args.project_dir),
+        model_name=args.model_name,
+        manifest_csv=Path(args.manifest_csv),
+        results_path=Path(args.results_path) if args.results_path else None,
+        animal_ids=tuple(aids) if aids else None,
+        sessions=tuple(sess) if sess else None,
+        trials=tuple(tr) if tr else None,
+        include_habituation=args.include_habituation,
+        exclude_experimental=args.exclude_experimental,
+        enrich_from_treatment_labels=not args.no_enrich_labels,
+        num_iters=args.num_iters,
+        reindex_syllables_before_load=not args.no_reindex,
+        verbose=not args.quiet,
+        overwrite_results=not args.no_overwrite_results,
+    )
+
+
+def run_kpms_apply(cfg: KpmsApplyRunConfig) -> dict[str, Any]:
+    """
+    Apply a keypoint-MoSeq checkpoint to trials from a manifest CSV.
+
+    Writes ``<project_dir>/<model_name>/results_apply.h5`` (unless overridden),
+    ``apply_summary.json``, and a provenance sidecar under ``<project_dir>/provenance/``.
+
+    Returns:
+        Summary dict (same shape as :func:`apply_kpms_checkpoint_from_manifests`).
+
+    Raises:
+        FileNotFoundError: Manifest CSV missing.
+        RuntimeError: No trials match filters or no usable trajectories after preprocess.
+    """
+    manifest_csv = Path(cfg.manifest_csv)
+    if not manifest_csv.is_file():
+        raise FileNotFoundError(f"Manifest CSV not found: {manifest_csv}")
+
+    animal_ids = _filter_tuple_to_list(cfg.animal_ids)
+    sessions = _filter_tuple_to_list(cfg.sessions)
+    trials = _filter_tuple_to_list(cfg.trials)
+    manifests, stats = load_manifests_for_apply(
+        manifest_csv,
+        include_habituation=cfg.include_habituation,
+        include_experimental=not cfg.exclude_experimental,
+        enrich_from_treatment_labels=cfg.enrich_from_treatment_labels,
+        animal_ids=animal_ids,
+        sessions=sessions,
+        trials=trials,
+    )
+    if not manifests:
+        raise RuntimeError(
+            "No trials match filters. "
+            f"manifest={manifest_csv} "
+            f"(rows={stats.n_csv_rows}, after sleap+phase={stats.n_after_sleap_and_phase}, "
+            f"after id/session/trial={stats.n_after_animal_session_trial}). "
+            "Apply requires non-empty sleap_path and (by default) experimental phase. "
+            f"Filters: animal_id={animal_ids!r} session={sessions!r} trial={trials!r}. "
+            "Use --manifest-csv pointing at a CSV that lists your trials; "
+            "animal_id/session/trial must match those columns exactly (including spacing/case)."
+        )
+
+    apply_cfg = KpmsApplyConfig(
+        num_iters=cfg.num_iters,
+        reindex_syllables_before_load=cfg.reindex_syllables_before_load,
+        verbose=cfg.verbose,
+        overwrite_results=cfg.overwrite_results,
+    )
+    project_dir = Path(cfg.project_dir)
+    prov_inputs = {
+        "project_dir": str(project_dir),
+        "model_name": cfg.model_name,
+        "manifest_csv": str(manifest_csv),
+        "manifest_csv_sha256": sha256_file(manifest_csv),
+        "load_stats": asdict(stats),
+    }
+    with provenance_run("kpms_apply", project_dir, prov_inputs) as prov:
+        summary = apply_kpms_checkpoint_from_manifests(
+            project_dir,
+            cfg.model_name,
+            manifests,
+            cfg=apply_cfg,
+            results_path=cfg.results_path,
+            manifest_csv=manifest_csv,
+        )
+        prov["outputs"] = {
+            "n_manifest_rows": summary.get("n_manifest_rows"),
+            "n_recordings_after_preprocess": summary.get("n_recordings_after_preprocess"),
+            "results_path": summary.get("results_path"),
+            "apply_summary": str(project_dir / cfg.model_name / "apply_summary.json"),
+        }
     return summary
 
 
@@ -315,48 +439,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    args = parse_args()
-    manifest_csv = Path(args.manifest_csv)
-    if not manifest_csv.is_file():
-        raise FileNotFoundError(f"Manifest CSV not found: {manifest_csv}")
-
-    manifests, stats = load_manifests_for_apply(
-        manifest_csv,
-        include_habituation=args.include_habituation,
-        include_experimental=not args.exclude_experimental,
-        enrich_from_treatment_labels=not args.no_enrich_labels,
-        animal_ids=expand_filter_arg(args.animal_id),
-        sessions=expand_filter_arg(args.session),
-        trials=expand_filter_arg(args.trial),
-    )
-    if not manifests:
-        aid = expand_filter_arg(args.animal_id)
-        sess = expand_filter_arg(args.session)
-        tr = expand_filter_arg(args.trial)
-        raise RuntimeError(
-            "No trials match filters. "
-            f"manifest={manifest_csv} "
-            f"(rows={stats.n_csv_rows}, after sleap+phase={stats.n_after_sleap_and_phase}, "
-            f"after id/session/trial={stats.n_after_animal_session_trial}). "
-            "Apply requires non-empty sleap_path and (by default) experimental phase. "
-            f"Filters: animal_id={aid!r} session={sess!r} trial={tr!r}. "
-            "Use --manifest-csv pointing at a CSV that lists your trials; "
-            "animal_id/session/trial must match those columns exactly (including spacing/case)."
-        )
-
-    cfg = KpmsApplyConfig(
-        num_iters=args.num_iters,
-        reindex_syllables_before_load=not args.no_reindex,
-        verbose=not args.quiet,
-        overwrite_results=not args.no_overwrite_results,
-    )
-    apply_kpms_checkpoint_from_manifests(
-        args.project_dir,
-        args.model_name,
-        manifests,
-        cfg=cfg,
-        results_path=args.results_path,
-    )
+    run_kpms_apply(apply_run_config_from_args(parse_args()))
 
 
 if __name__ == "__main__":

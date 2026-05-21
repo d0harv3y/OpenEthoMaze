@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from maze.core.tasks import ARENA_TYPE_CIRCULAR, ARENA_TYPE_RADIAL_ARM
-from maze.pipeline.trial_filters import trial_matches_frame_policy
+from maze.pipeline.trial_filters import (
+    GUI_DEFAULT_PREFILTER_MODE,
+    detect_task_mistrial,
+    prefilter_mode_summary,
+    trial_matches_frame_policy,
+)
 
 from conftest import make_manifest
 
@@ -30,3 +35,20 @@ def test_trial_matches_frame_policy_controller_mode_always_passes() -> None:
 def test_trial_matches_frame_policy_auto_skips_controller_manifest() -> None:
     m = make_manifest(h5_n_frames=1, video_n_frames=99, input_h5_path="None")
     assert trial_matches_frame_policy(m, ARENA_TYPE_CIRCULAR, mode="auto") is True
+
+
+def test_detect_task_mistrial_controller_mode_skips_legacy_checks() -> None:
+    m = make_manifest(
+        h5_n_frames=None,
+        video_n_frames=None,
+        video_path=None,
+        sleap_path=None,
+    )
+    assert detect_task_mistrial(m, ARENA_TYPE_CIRCULAR, mode="controller") is None
+
+
+def test_gui_default_prefilter_mode_is_controller() -> None:
+    assert GUI_DEFAULT_PREFILTER_MODE == "controller"
+    assert "legacy" in prefilter_mode_summary("legacy").lower() or "frame" in prefilter_mode_summary(
+        "legacy"
+    ).lower()

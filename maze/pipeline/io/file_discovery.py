@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
 
 import h5py
 
@@ -207,7 +207,16 @@ class DiscoveryResult:
 
 # Regex patterns for parsing filenames
 VIDEO_PATTERN = re.compile(r"(\d+)_S(\d+)T(\d+)\.avi$", re.IGNORECASE)
+# Controller acquisition: ``{animal_id}_{session}_{trial}.mp4`` (e.g. ``42_S01_T01.mp4``)
+CONTROLLER_VIDEO_PATTERN = re.compile(
+    r"^([\w.-]+)_(S\d+)_(T\d+)\.(?:mp4|avi)$",
+    re.IGNORECASE,
+)
 SLEAP_PATTERN = re.compile(r"(\d+)_S(\d+)T(\d+).*\.(h5\.slp|slp|analysis\.h5)$", re.IGNORECASE)
+CONTROLLER_SLEAP_PATTERN = re.compile(
+    r"^([\w.-]+)_(S\d+)_(T\d+)(?:\.predictions)?\.(?:slp|h5\.slp)$",
+    re.IGNORECASE,
+)
 
 
 def _parse_session_range(h5_path: Path) -> tuple[bool, Optional[int], Optional[int]]:
@@ -344,22 +353,33 @@ def _infer_researcher_from_path(file_path: Path) -> Optional[str]:
     return None
 
 
-def discover_input_h5_files(data_dir: Path = DATA_DIR) -> list[Path]:
+def discover_input_h5_files(
+    data_dir: Path = DATA_DIR,
+    *,
+    exclude_resolved: Optional[set[Path]] = None,
+) -> list[Path]:
     """
     Recursively find all input HDF5 files in the data directory.
 
     Args:
         data_dir: Root directory to search
+        exclude_resolved: Resolved paths to omit (e.g. target ``trials.h5`` results DB)
 
     Returns:
         List of paths to .hdf5 files
     """
     h5_files = []
+    skip = exclude_resolved or set()
 
     for ext in ("*.hdf5", "*.h5"):
         # Exclude SLEAP files (.h5.slp, .analysis.h5)
         for path in data_dir.rglob(ext):
             if not path.name.endswith((".h5.slp", ".analysis.h5", ".slp")):
+                try:
+                    if path.resolve() in skip:
+                        continue
+                except OSError:
+                    pass
                 h5_files.append(path)
 
     return sorted(h5_files)
@@ -375,8 +395,10 @@ def discover_video_files(data_dir: Path = DATA_DIR) -> list[Path]:
     Returns:
         List of paths to .avi files
     """
-    video_files = list(data_dir.rglob("*.avi"))
-    return sorted(video_files)
+    video_files: list[Path] = []
+    for ext in ("*.avi", "*.mp4"):
+        video_files.extend(data_dir.rglob(ext))
+    return sorted(set(video_files))
 
 
 def discover_sleap_files(data_dir: Path = DATA_DIR) -> list[Path]:
@@ -408,12 +430,17 @@ def parse_video_filename(video_path: Path) -> Optional[tuple[str, str, str]]:
         Tuple of (animal_id, session, trial) or None if parsing fails
         Session/trial are formatted as "S01", "T01" etc.
     """
-    match = VIDEO_PATTERN.search(video_path.name)
+    name = video_path.name
+    match = VIDEO_PATTERN.search(name)
     if match:
         animal_id = match.group(1)
         session = f"S{match.group(2).zfill(2)}"
         trial = f"T{match.group(3).zfill(2)}"
         return (animal_id, session, trial)
+
+    ctrl = CONTROLLER_VIDEO_PATTERN.match(name)
+    if ctrl:
+        return (ctrl.group(1), ctrl.group(2).upper(), ctrl.group(3).upper())
 
     return None
 
@@ -428,12 +455,17 @@ def parse_sleap_filename(sleap_path: Path) -> Optional[tuple[str, str, str]]:
     Returns:
         Tuple of (animal_id, session, trial) or None if parsing fails
     """
-    match = SLEAP_PATTERN.search(sleap_path.name)
+    name = sleap_path.name
+    match = SLEAP_PATTERN.search(name)
     if match:
         animal_id = match.group(1)
         session = f"S{match.group(2).zfill(2)}"
         trial = f"T{match.group(3).zfill(2)}"
         return (animal_id, session, trial)
+
+    ctrl = CONTROLLER_SLEAP_PATTERN.match(name)
+    if ctrl:
+        return (ctrl.group(1), ctrl.group(2).upper(), ctrl.group(3).upper())
 
     return None
 
@@ -476,8 +508,76 @@ def extract_trials_from_h5(h5_path: Path) -> list[tuple[str, str, str]]:
     return trials
 
 
+def _resolved_exclude_set(paths: Optional[Sequence[Path]]) -> set[Path]:
+    out: set[Path] = set()
+    if not paths:
+        return out
+    for p in paths:
+        try:
+            out.add(Path(p).resolve())
+        except OSError:
+            continue
+    return out
+
+
+def _discover_controller_video_trials(
+    result: DiscoveryResult,
+    *,
+    controller_db: Path,
+) -> None:
+    """
+    Build trial manifests from videos under scanned dirs (controller acquisition layout).
+
+    Used when no legacy input-H5 trials were found. ``input_h5_path`` is set to the
+    results database path for manifest bookkeeping.
+    """
+    sleap_lookup: dict[tuple[str, str, str], Path] = {}
+    for sleap_path in result.sleap_files:
+        parsed = parse_sleap_filename(sleap_path)
+        if not parsed:
+            continue
+        key = parsed
+        existing = sleap_lookup.get(key)
+        if existing is None or sleap_path.name.endswith(".h5.slp"):
+            sleap_lookup[key] = sleap_path
+
+    trial_dict: dict[tuple[str, str, str, str], TrialManifest] = {}
+    for video_path in result.video_files:
+        parsed = parse_video_filename(video_path)
+        if not parsed:
+            continue
+        animal_id, session, trial = parsed
+        phase = "habituation" if session.upper().startswith("H") else "experimental"
+        key = (animal_id, phase, session, trial)
+        if key in trial_dict:
+            continue
+        sleap_path = sleap_lookup.get((animal_id, session, trial))
+        trial_dict[key] = TrialManifest(
+            animal_id=animal_id,
+            session=session,
+            trial=trial,
+            input_h5_path=controller_db,
+            video_path=video_path,
+            sleap_path=sleap_path,
+            is_habituation=phase == "habituation",
+        )
+
+    result.trials = []
+    result.n_matched_videos = 0
+    result.n_matched_sleap = 0
+    for manifest in trial_dict.values():
+        result.trials.append(manifest)
+        if manifest.video_path:
+            result.n_matched_videos += 1
+        if manifest.sleap_path:
+            result.n_matched_sleap += 1
+
+
 def discover_trials(
     data_dir: Union[Path, list[Path], None] = None,
+    *,
+    exclude_h5_paths: Optional[Sequence[Path]] = None,
+    controller_results_h5: Optional[Path] = None,
 ) -> DiscoveryResult:
     """
     Discover all trials by scanning input H5 files and matching to videos/SLEAP files.
@@ -490,6 +590,9 @@ def discover_trials(
 
     Args:
         data_dir: Root directory or list of root directories to search. If None, uses DATA_DIRS from config.
+        exclude_h5_paths: HDF5 paths to omit from the input-H5 scan (e.g. target ``trials.h5``).
+        controller_results_h5: When set and no legacy input-H5 trials match, build manifests
+            from ``{animal}_{session}_{trial}.mp4`` videos in the scan roots.
 
     Returns:
         DiscoveryResult containing all discovered trials and file mappings
@@ -501,12 +604,18 @@ def discover_trials(
     else:
         dirs = list(data_dir)
 
+    exclude_resolved = _resolved_exclude_set(exclude_h5_paths)
+    if controller_results_h5 is not None:
+        exclude_resolved |= _resolved_exclude_set([controller_results_h5])
+
     result = DiscoveryResult()
     for d in dirs:
         if not d.exists():
             print(f"Warning: Data directory does not exist: {d}")
             continue
-        result.input_h5_files.extend(discover_input_h5_files(d))
+        result.input_h5_files.extend(
+            discover_input_h5_files(d, exclude_resolved=exclude_resolved)
+        )
         result.video_files.extend(discover_video_files(d))
         result.sleap_files.extend(discover_sleap_files(d))
 
@@ -639,6 +748,13 @@ def discover_trials(
             result.n_matched_videos += 1
         if manifest.sleap_path:
             result.n_matched_sleap += 1
+
+    if not result.trials and controller_results_h5 is not None:
+        print(
+            "  No legacy input-H5 trials; using controller video filenames "
+            f"with results DB {controller_results_h5}"
+        )
+        _discover_controller_video_trials(result, controller_db=Path(controller_results_h5))
 
     # Count unmatched videos (keys in either phase lookup that no manifest used)
     all_video_keys = set(video_lookup_hab.keys()) | set(video_lookup_exp.keys())

@@ -11,6 +11,29 @@ from .trial_quality import detect_trial_data_quality
 
 PrefilterMode = Literal["auto", "controller", "legacy"]
 
+# GUI Pipeline → Analyze uses this mode (controller-first lab workflow).
+GUI_DEFAULT_PREFILTER_MODE: PrefilterMode = "controller"
+
+PREFILTER_MODE_DESCRIPTIONS: dict[PrefilterMode, str] = {
+    "controller": (
+        "Do not apply legacy frame-diff or missing-file mistrial gates. Use for trials "
+        "recorded in the acquisition GUI (xy tables in results H5; x/y-only analysis allowed)."
+    ),
+    "legacy": (
+        "Enforce task frame-diff rules (e.g. VAST: video_frames − h5_frames must be −1) and "
+        "detect_task_mistrial quality checks before processing."
+    ),
+    "auto": (
+        "Infer per trial: controller-origin manifests (empty input_h5_path) skip legacy gates; "
+        "others use legacy rules."
+    ),
+}
+
+
+def prefilter_mode_summary(mode: PrefilterMode) -> str:
+    """One-line label for dialogs and logs."""
+    return PREFILTER_MODE_DESCRIPTIONS.get(mode, str(mode))
+
 
 def _is_controller_manifest(manifest: TrialManifest) -> bool:
     """Best-effort check for controller-origin trials stored directly in results H5."""

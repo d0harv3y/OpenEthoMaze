@@ -13,6 +13,7 @@ try:
     from PySide6.QtCore import QThread, Signal
     from PySide6.QtWidgets import (
         QCheckBox,
+        QComboBox,
         QDialog,
         QDialogButtonBox,
         QFileDialog,
@@ -28,6 +29,28 @@ try:
         QWidget,
     )
 
+    from maze.pipeline.inference_backend import (
+        BACKEND_CHOICES,
+        BACKEND_KIND_DEEPLABCUT_STUB,
+        BACKEND_KIND_SLEAP_NN,
+        find_existing_pose_output,
+        get_backend,
+        is_sleap_nn_available,
+        planned_slp_output_path,
+    )
+    from maze.pipeline.io.file_discovery import TREATMENT_LABELS_HEADER
+    from maze.pipeline.treatment_labels_csv import (
+        TreatmentLabelsCsvError,
+        create_treatment_labels_csv,
+        open_treatment_labels_in_system_editor,
+        validate_treatment_labels_csv,
+    )
+    from maze.pipeline.trial_filters import (
+        GUI_DEFAULT_PREFILTER_MODE,
+        PREFILTER_MODE_DESCRIPTIONS,
+        prefilter_mode_summary,
+    )
+
     HAS_QT = True
 except ImportError:
     HAS_QT = False
@@ -35,11 +58,25 @@ except ImportError:
 
 
 def _default_h5_path(config: "AcquisitionConfig") -> Path:
-    out = config.output_dir or ""
-    name = (config.h5_filename or "trials.h5").strip() or "trials.h5"
-    if Path(name).name != name:
-        name = Path(name).name
-    return Path(out) / name if out else Path(name)
+    from maze.pipeline.controller_discovery import default_results_h5_path
+
+    return default_results_h5_path(config)
+
+
+def _default_discovery_dirs_text(config: "AcquisitionConfig") -> str:
+    from maze.pipeline.controller_discovery import default_discovery_data_dirs
+    from maze.pipeline.paths import DATA_DIRS
+
+    dirs = default_discovery_data_dirs(config)
+    if dirs:
+        return "; ".join(str(p) for p in dirs)
+    return "; ".join(str(p) for p in DATA_DIRS)
+
+
+def _default_treatment_labels_path(config: "AcquisitionConfig") -> Path:
+    from maze.pipeline.controller_discovery import default_treatment_labels_path
+
+    return default_treatment_labels_path(config)
 
 
 def _parse_filter_list(raw: str) -> Optional[list[str]]:
@@ -63,38 +100,6 @@ def _parse_data_dirs_text(raw: str) -> Optional[list[Path]]:
 
 if HAS_QT:
 
-    def _inference_planned_slp(video_path: Path, output_dir: Optional[Path]) -> Path:
-        name = video_path.with_suffix(".predictions.slp").name
-        return (output_dir / name) if output_dir else video_path.with_suffix(".predictions.slp")
-
-    def _find_existing_pose_file(
-        *,
-        video_path: Path,
-        manifest_sleap: Optional[Path],
-        planned_out: Path,
-    ) -> Optional[Path]:
-        """Return first existing pose file among DB path, planned output, and video-sidecar names."""
-        candidates: list[Optional[Path]] = [
-            manifest_sleap,
-            planned_out,
-            video_path.with_suffix(".predictions.slp"),
-            video_path.with_suffix(".slp"),
-        ]
-        seen: set[str] = set()
-        for p in candidates:
-            if p is None:
-                continue
-            try:
-                key = str(p.resolve())
-            except OSError:
-                continue
-            if key in seen:
-                continue
-            seen.add(key)
-            if p.exists():
-                return p
-        return None
-
     class _InferenceWorker(QThread):
         log_line = Signal(str)
         finished_ok = Signal(bool, str)
@@ -110,6 +115,7 @@ if HAS_QT:
             skip_existing: bool,
             materialize_xy: bool,
             output_dir: Optional[Path],
+            backend_kind: str,
             animal_ids: Optional[list[str]],
             sessions: Optional[list[str]],
             trials: Optional[list[str]],
@@ -123,6 +129,7 @@ if HAS_QT:
             self._skip_existing = skip_existing
             self._materialize_xy = materialize_xy
             self._output_dir = output_dir
+            self._backend_kind = backend_kind
             self._animal_ids = animal_ids
             self._sessions = sessions
             self._trials = trials
@@ -130,11 +137,12 @@ if HAS_QT:
         def run(self) -> None:
             from maze.pipeline.db import TrialKey, write_sleap_model_path, write_sleap_path
             from maze.pipeline.headless_encode import materialize_xy_tables_from_video
-            from maze.pipeline.inference_backend import get_backend
             from maze.pipeline.run_pipeline import load_trial_manifests_from_db
+            from maze.pipeline.run_provenance import record_provenance, utc_now_iso
 
+            started_at = utc_now_iso()
             try:
-                backend = get_backend("sleap_nn")
+                backend = get_backend(self._backend_kind)
                 manifests = load_trial_manifests_from_db(self._db_path)
                 if self._animal_ids:
                     manifests = [m for m in manifests if m.animal_id in self._animal_ids]
@@ -150,8 +158,8 @@ if HAS_QT:
                 for i, m in enumerate(with_video, 1):
                     vp = m.video_path
                     assert vp is not None
-                    out_path = _inference_planned_slp(vp, self._output_dir)
-                    existing = _find_existing_pose_file(
+                    out_path = planned_slp_output_path(vp, self._output_dir)
+                    existing = find_existing_pose_output(
                         video_path=vp,
                         manifest_sleap=m.sleap_path,
                         planned_out=out_path,
@@ -196,12 +204,40 @@ if HAS_QT:
                             model_dir=str(self._model_path),
                         )
                     n_ok += 1
+                record_provenance(
+                    anchor=self._db_path,
+                    operation="virtual_acquisition",
+                    inputs={
+                        "db_path": str(self._db_path),
+                        "model_path": str(self._model_path),
+                        "device": self._device,
+                        "batch_size": self._batch_size,
+                        "skip_existing": self._skip_existing,
+                        "materialize_xy": self._materialize_xy,
+                        "output_dir": str(self._output_dir) if self._output_dir else None,
+                        "backend_kind": self._backend_kind,
+                        "n_trials_with_video": len(with_video),
+                    },
+                    outputs={"n_ok": n_ok, "n_trials_with_video": len(with_video)},
+                    started_at=started_at,
+                )
                 self.finished_ok.emit(
                     True,
                     f"Virtual acquisition finished ({n_ok}/{len(with_video)} trials processed).",
                 )
             except Exception as e:
                 self.log_line.emit(traceback.format_exc())
+                record_provenance(
+                    anchor=self._db_path,
+                    operation="virtual_acquisition",
+                    inputs={
+                        "db_path": str(self._db_path),
+                        "model_path": str(self._model_path),
+                    },
+                    status="failed",
+                    error=f"{type(e).__name__}: {e}",
+                    started_at=started_at,
+                )
                 self.finished_ok.emit(False, f"{type(e).__name__}: {e}")
 
     class _AnalyzeWorker(QThread):
@@ -249,7 +285,7 @@ if HAS_QT:
                         max_workers=self._max_workers,
                         parallel=False,
                         analysis_profile=self._analysis_profile,
-                        prefilter_mode="controller",
+                        prefilter_mode=GUI_DEFAULT_PREFILTER_MODE,
                     )
                 self.log_line.emit(buf.getvalue())
                 failed = int(stats.get("failed", 0) or 0)
@@ -266,34 +302,47 @@ if HAS_QT:
         dlg = QDialog(parent)
         dlg.setWindowTitle("Pipeline — Discovery")
         v = QVBoxLayout(dlg)
+        hint = QLabel(
+            "Controller-first: scans the acquisition output folder for "
+            "{animal}_{session}_{trial}.mp4 videos and pose sidecars, then syncs paths "
+            "into the results H5 (default trials.h5). Set Output folder in Settings if empty."
+        )
+        hint.setWordWrap(True)
+        v.addWidget(hint)
         form = QFormLayout()
         h5_edit = QLineEdit(str(_default_h5_path(config)))
-        lbl_edit = QLineEdit()
-        from maze.pipeline.io.file_discovery import TREATMENT_LABELS_HEADER
-        from maze.pipeline.paths import DATA_DIRS
+        lbl_edit = QLineEdit(str(_default_treatment_labels_path(config)))
 
-        _orm_root = Path(__file__).resolve().parents[4]
-        default_lbl = _orm_root / "inputs" / "treatment_labels.csv"
-        lbl_edit.setText(str(default_lbl))
-        dirs_edit = QLineEdit("; ".join(str(p) for p in DATA_DIRS))
+        dirs_edit = QLineEdit(_default_discovery_dirs_text(config))
         dirs_edit.setPlaceholderText(
-            "One path per line, or separate with ; (empty = use paths.py defaults)"
+            "Acquisition output folder (or ; / newline separated roots). "
+            "Empty = paths.py DATA_DIRS"
         )
+        out_hint = (config.output_dir or "").strip()
+        if not out_hint:
+            h5_edit.setToolTip("Set Output folder in Settings → acquisition for a default path.")
+            dirs_edit.setToolTip("Set Output folder in Settings → acquisition to scan recorded trials.")
 
         def browse_h5() -> None:
-            p, _ = QFileDialog.getOpenFileName(
-                dlg, "Results H5", str(Path(h5_edit.text()).parent), "H5 (*.h5)"
-            )
+            start = str(Path(h5_edit.text()).parent)
+            if not start or start == ".":
+                start = out_hint or ""
+            p, _ = QFileDialog.getOpenFileName(dlg, "Results H5", start, "H5 (*.h5)")
             if p:
                 h5_edit.setText(p)
 
         def browse_lbl() -> None:
-            p, _ = QFileDialog.getOpenFileName(dlg, "Treatment labels", "", "CSV (*.csv)")
+            start = str(Path(lbl_edit.text()).parent)
+            p, _ = QFileDialog.getOpenFileName(dlg, "Treatment labels", start, "CSV (*.csv)")
             if p:
                 lbl_edit.setText(p)
 
         def browse_data_dir() -> None:
-            d = QFileDialog.getExistingDirectory(dlg, "Add data root for discovery scan", "")
+            d = QFileDialog.getExistingDirectory(
+                dlg,
+                "Data root for discovery scan",
+                out_hint or "",
+            )
             if not d:
                 return
             cur = dirs_edit.text().strip()
@@ -311,10 +360,55 @@ if HAS_QT:
         lbl_h.setContentsMargins(0, 0, 0, 0)
         lbl_h.addWidget(lbl_edit)
         lbl_h.addWidget(QPushButton("Browse…", clicked=browse_lbl))
-        create_lbl_btn = QPushButton("Create new…")
-        create_lbl_btn.setEnabled(False)
-        create_lbl_btn.setToolTip("Treatment table editor (placeholder).")
+        def _labels_path_from_field() -> Path:
+            raw = lbl_edit.text().strip()
+            return Path(raw) if raw else _default_treatment_labels_path(config)
+
+        def on_create_labels() -> None:
+            path = _labels_path_from_field()
+            if path.exists():
+                ans = QMessageBox.question(
+                    dlg,
+                    "Treatment labels",
+                    f"{path} already exists. Overwrite with an empty template?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if ans != QMessageBox.StandardButton.Yes:
+                    return
+                overwrite = True
+            else:
+                overwrite = False
+            try:
+                create_treatment_labels_csv(path, overwrite=overwrite)
+                lbl_edit.setText(str(path))
+                log.appendPlainText(f"Created treatment labels template → {path}\n")
+                log.appendPlainText(f"Header: {','.join(TREATMENT_LABELS_HEADER)}\n")
+                QMessageBox.information(
+                    dlg,
+                    "Treatment labels",
+                    f"Created {path}. Use “Open in editor…” to fill rows, then Sync.",
+                )
+            except TreatmentLabelsCsvError as e:
+                QMessageBox.warning(dlg, "Treatment labels", str(e))
+
+        def on_open_labels() -> None:
+            path = _labels_path_from_field()
+            try:
+                open_treatment_labels_in_system_editor(path)
+                log.appendPlainText(f"Opened in system editor: {path}\n")
+            except TreatmentLabelsCsvError as e:
+                QMessageBox.warning(dlg, "Treatment labels", str(e))
+
+        create_lbl_btn = QPushButton("Create new…", clicked=on_create_labels)
+        create_lbl_btn.setToolTip(
+            "Create an empty treatment_labels.csv with the canonical header. "
+            "Does not call /orm/discover — edit rows manually or use merge on Sync."
+        )
+        open_lbl_btn = QPushButton("Open in editor…", clicked=on_open_labels)
+        open_lbl_btn.setToolTip("Open the CSV in your default spreadsheet/editor (validates header first).")
         lbl_h.addWidget(create_lbl_btn)
+        lbl_h.addWidget(open_lbl_btn)
         form.addRow("Treatment labels CSV:", lbl_row)
 
         dirs_row = QWidget()
@@ -333,11 +427,17 @@ if HAS_QT:
         v.addWidget(merge_cb)
 
         def do_discover() -> None:
-            from maze.pipeline.sources.legacy_vast import check_duplicates, discover_trials
+            from maze.pipeline.io.file_discovery import discover_trials
+            from maze.pipeline.sources.legacy_vast import check_duplicates
 
             try:
+                dbp = Path(h5_edit.text().strip())
                 dd = _parse_data_dirs_text(dirs_edit.text())
-                r = discover_trials(dd)
+                r = discover_trials(
+                    dd,
+                    exclude_h5_paths=[dbp] if dbp else None,
+                    controller_results_h5=dbp if dbp else None,
+                )
                 dups = check_duplicates(r)
                 log.appendPlainText(
                     f"Trials: {len(r.trials)}, videos matched: {r.n_matched_videos}, "
@@ -360,6 +460,8 @@ if HAS_QT:
             try:
                 dbp = Path(h5_edit.text().strip())
                 lp = Path(lbl_edit.text().strip()) if lbl_edit.text().strip() else None
+                if lp is not None:
+                    validate_treatment_labels_csv(lp)
                 dd = _parse_data_dirs_text(dirs_edit.text())
                 _, dups = sync_discovery_into_h5(
                     dbp,
@@ -371,6 +473,8 @@ if HAS_QT:
                 if dups:
                     log.appendPlainText(f"Note: {len(dups)} duplicate keys in discovery.\n")
                 QMessageBox.information(dlg, "Discovery", "Sync completed.")
+            except TreatmentLabelsCsvError as e:
+                QMessageBox.warning(dlg, "Discovery", str(e))
             except Exception as e:
                 log.appendPlainText(traceback.format_exc())
                 QMessageBox.warning(dlg, "Discovery", str(e))
@@ -389,33 +493,74 @@ if HAS_QT:
         dlg = QDialog(parent)
         dlg.setWindowTitle("Pipeline — Virtual acquisition")
         lay = QVBoxLayout(dlg)
+        hint = QLabel(
+            "Runs batch SLEAP-NN on trials with video paths in the results H5. "
+            "Default pose files: <output_dir>/<video_stem>.predictions.slp when Output folder is set, "
+            "else beside the video. With skip-existing enabled, trials are not re-inferred when a pose "
+            "file is already listed in the H5, planned at the output path, or present as "
+            ".predictions.slp / .slp next to the video; sleap_path in the H5 is updated anyway."
+        )
+        hint.setWordWrap(True)
+        lay.addWidget(hint)
         form = QFormLayout()
         h5_edit = QLineEdit(str(_default_h5_path(config)))
         model_edit = QLineEdit((config.sleap_model_path or "").strip())
-        out_edit = QLineEdit("")
+        out_default = (config.output_dir or "").strip()
+        out_edit = QLineEdit(out_default)
+        backend_combo = QComboBox()
+        for label, kind in BACKEND_CHOICES:
+            backend_combo.addItem(label, kind)
+        backend_combo.setCurrentIndex(0)
+        for i in range(backend_combo.count()):
+            if backend_combo.itemData(i) == BACKEND_KIND_DEEPLABCUT_STUB:
+                model = backend_combo.model()
+                if model is not None:
+                    item = model.item(i)
+                    if item is not None:
+                        item.setEnabled(False)
         dev_edit = QLineEdit("auto")
         batch = QSpinBox()
         batch.setRange(1, 128)
         batch.setValue(4)
-        skip_cb = QCheckBox(
-            "Skip if pose output already exists (DB path, planned output, or video .slp / .predictions.slp)"
-        )
+        skip_cb = QCheckBox("Skip existing pose outputs (see note above)")
         skip_cb.setChecked(True)
+        skip_cb.setToolTip(
+            "Checked: reuse existing .slp / .predictions.slp and refresh H5 paths without calling SLEAP-NN. "
+            "Unchecked: always run inference (overwrites planned output path)."
+        )
         mat_cb = QCheckBox("Materialize spot / in-range / centroid tables (headless encode)")
         mat_cb.setChecked(True)
         fa = QLineEdit("")
         fs = QLineEdit("")
         ft = QLineEdit("")
+        if not is_sleap_nn_available():
+            backend_combo.setToolTip("Install sleap-nn: uv sync --extra sleap")
 
         def browse_h5() -> None:
-            p, _ = QFileDialog.getOpenFileName(dlg, "H5", "", "H5 (*.h5)")
+            start = str(Path(h5_edit.text()).parent)
+            if not start or start == ".":
+                start = out_default or ""
+            p, _ = QFileDialog.getOpenFileName(dlg, "Results H5", start, "H5 (*.h5)")
             if p:
                 h5_edit.setText(p)
 
         def browse_model() -> None:
-            p = QFileDialog.getExistingDirectory(dlg, "SLEAP model directory")
+            p = QFileDialog.getExistingDirectory(
+                dlg,
+                "SLEAP model directory",
+                model_edit.text().strip() or out_default or "",
+            )
             if p:
                 model_edit.setText(p)
+
+        def browse_out() -> None:
+            d = QFileDialog.getExistingDirectory(
+                dlg,
+                "Prediction output directory",
+                out_edit.text().strip() or out_default or "",
+            )
+            if d:
+                out_edit.setText(d)
 
         h5_row = QWidget()
         h5_h = QHBoxLayout(h5_row)
@@ -430,7 +575,13 @@ if HAS_QT:
         model_h.addWidget(model_edit)
         model_h.addWidget(QPushButton("Browse…", clicked=browse_model))
         form.addRow("Model directory (best.ckpt):", model_row)
-        form.addRow("Prediction output dir (optional):", out_edit)
+        out_row = QWidget()
+        out_h = QHBoxLayout(out_row)
+        out_h.setContentsMargins(0, 0, 0, 0)
+        out_h.addWidget(out_edit)
+        out_h.addWidget(QPushButton("Browse…", clicked=browse_out))
+        form.addRow("Prediction output dir:", out_row)
+        form.addRow("Pose backend:", backend_combo)
         form.addRow("Device:", dev_edit)
         form.addRow("Batch size:", batch)
         lay.addLayout(form)
@@ -459,6 +610,21 @@ if HAS_QT:
 
         def run_inf() -> None:
             nonlocal worker
+            kind = str(backend_combo.currentData() or BACKEND_KIND_SLEAP_NN)
+            if kind == BACKEND_KIND_DEEPLABCUT_STUB:
+                QMessageBox.warning(
+                    dlg,
+                    "Virtual acquisition",
+                    "DeepLabCut backend is not available in this build.",
+                )
+                return
+            if not is_sleap_nn_available():
+                QMessageBox.warning(
+                    dlg,
+                    "Virtual acquisition",
+                    "sleap-nn is not installed. Run: uv sync --extra sleap",
+                )
+                return
             mp = Path(model_edit.text().strip())
             if not mp.is_dir() or not (mp / "best.ckpt").exists():
                 QMessageBox.warning(
@@ -479,6 +645,7 @@ if HAS_QT:
                 skip_existing=skip_cb.isChecked(),
                 materialize_xy=mat_cb.isChecked(),
                 output_dir=Path(odir) if odir else None,
+                backend_kind=kind,
                 animal_ids=_parse_filter_list(fa.text()),
                 sessions=_parse_filter_list(fs.text()),
                 trials=_parse_filter_list(ft.text()),
@@ -498,8 +665,22 @@ if HAS_QT:
         dlg = QDialog(parent)
         dlg.setWindowTitle("Pipeline — Analyze")
         lay = QVBoxLayout(dlg)
+        out_hint = (config.output_dir or "").strip()
+        hint = QLabel(
+            "Runs the ambulation/QC pipeline on trials listed in the results H5. "
+            "Controller-first: prefilter mode is fixed to "
+            f"“{GUI_DEFAULT_PREFILTER_MODE}” — "
+            f"{prefilter_mode_summary(GUI_DEFAULT_PREFILTER_MODE)} "
+            "Legacy batch CLI uses prefilter_mode=legacy (see readme.md)."
+        )
+        hint.setWordWrap(True)
+        lay.addWidget(hint)
         form = QFormLayout()
         h5_edit = QLineEdit(str(_default_h5_path(config)))
+        prefilter_label = QLabel(
+            f"{GUI_DEFAULT_PREFILTER_MODE} — {PREFILTER_MODE_DESCRIPTIONS[GUI_DEFAULT_PREFILTER_MODE]}"
+        )
+        prefilter_label.setWordWrap(True)
         workers = QSpinBox()
         workers.setRange(1, 32)
         workers.setValue(1)
@@ -507,14 +688,24 @@ if HAS_QT:
         qc_cb.setChecked(True)
         skip_cb = QCheckBox("Skip mistrials (write mistrial_reason for bad inputs)")
         skip_cb.setChecked(True)
+        skip_cb.setToolTip(
+            "With controller prefilter, mistrials are not auto-detected from missing "
+            "legacy inputs; failed trials are usually processing errors. Uncheck to keep "
+            "trials that would be marked mistrial under legacy rules."
+        )
         prof_cb = QCheckBox("Apply current analysis profile (trajectory + trace quality)")
         prof_cb.setChecked(False)
         fa = QLineEdit("")
         fs = QLineEdit("")
         ft = QLineEdit("")
+        if not out_hint:
+            h5_edit.setToolTip("Set Output folder in Settings → acquisition for default trials.h5 path.")
 
         def browse_h5() -> None:
-            p, _ = QFileDialog.getOpenFileName(dlg, "H5", "", "H5 (*.h5)")
+            start = str(Path(h5_edit.text()).parent)
+            if not start or start == ".":
+                start = out_hint or ""
+            p, _ = QFileDialog.getOpenFileName(dlg, "Results H5", start, "H5 (*.h5)")
             if p:
                 h5_edit.setText(p)
 
@@ -524,6 +715,7 @@ if HAS_QT:
         h5_h.addWidget(h5_edit)
         h5_h.addWidget(QPushButton("Browse…", clicked=browse_h5))
         form.addRow("Target H5:", h5_row)
+        form.addRow("Input prefilter:", prefilter_label)
         form.addRow("Max workers:", workers)
         lay.addLayout(form)
         lay.addWidget(qc_cb)

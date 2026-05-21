@@ -10,7 +10,9 @@ import keypoint_moseq as kpms
 import numpy as np
 from jax_moseq.utils.debugging import convert_data_precision
 
+from ..pipeline.run_provenance import provenance_envelope, provenance_run, sha256_file
 from .io import ensure_dir, write_json, write_selected_manifest
+from .fit_config import KpmsFitRunConfig, subset_config_from_fit_run
 from .manifest_subset import (
     SubsetConfig,
     filter_manifests,
@@ -103,24 +105,79 @@ def _prepare_checkpoint_path(checkpoint_path: Path, data: dict, *, force_new: bo
         )
 
 
-def main() -> None:
-    args = parse_args()
-    project_dir = Path(args.project_dir)
-    ensure_dir(project_dir)
+def run_kpms_fit(cfg: KpmsFitRunConfig) -> Path:
+    """
+    Fit a keypoint-MoSeq model from a manifest subset.
 
+    Writes ``<project_dir>/<model_name>/`` (checkpoint, results, fit_summary.json)
+    and a provenance sidecar under ``<project_dir>/provenance/``.
+
+    Returns:
+        Path to the model output directory.
+
+    Raises:
+        RuntimeError: No trials selected or no usable trajectories after preprocess.
+    """
+    project_dir = Path(cfg.project_dir)
+    ensure_dir(project_dir)
+    subset_cfg = subset_config_from_fit_run(cfg)
+    prov_inputs = {
+        "project_dir": str(project_dir),
+        "model_name": cfg.model_name,
+        "manifest_csv": str(cfg.manifest_csv) if cfg.manifest_csv else None,
+        "force_new": bool(cfg.force_new),
+        "subset_config": asdict(subset_cfg),
+    }
+    if subset_cfg.manifest_csv and Path(subset_cfg.manifest_csv).is_file():
+        prov_inputs["manifest_csv_sha256"] = sha256_file(subset_cfg.manifest_csv)
+
+    pre_cfg = KpmsPreprocessConfig()
+    fit_cfg = FitConfig(seed=cfg.random_seed)
+
+    with provenance_run("kpms_fit", project_dir, prov_inputs) as prov:
+        _run_fit_body(
+            project_dir=project_dir,
+            model_name=cfg.model_name,
+            force_new=cfg.force_new,
+            subset_cfg=subset_cfg,
+            pre_cfg=pre_cfg,
+            fit_cfg=fit_cfg,
+            prov=prov,
+        )
+    return project_dir / cfg.model_name
+
+
+def fit_run_config_from_args(args: argparse.Namespace) -> KpmsFitRunConfig:
+    """Map :func:`parse_args` namespace to :class:`KpmsFitRunConfig`."""
     balance_cols = tuple(c.strip() for c in str(args.balance_by).split(",") if c.strip())
-    subset_cfg = SubsetConfig(
+    return KpmsFitRunConfig(
+        project_dir=Path(args.project_dir),
+        model_name=args.model_name,
         manifest_csv=Path(args.manifest_csv) if args.manifest_csv else None,
-        include_habituation=args.include_habituation,
-        include_experimental=not args.exclude_experimental,
         max_trials=args.max_trials,
         random_seed=args.random_seed,
+        include_habituation=args.include_habituation,
+        exclude_experimental=args.exclude_experimental,
         balance_columns=balance_cols,
         enrich_from_treatment_labels=not args.no_enrich_labels,
+        force_new=bool(args.force_new),
     )
-    pre_cfg = KpmsPreprocessConfig()
-    fit_cfg = FitConfig(seed=args.random_seed)
 
+
+def main() -> None:
+    run_kpms_fit(fit_run_config_from_args(parse_args()))
+
+
+def _run_fit_body(
+    *,
+    project_dir: Path,
+    model_name: str,
+    force_new: bool,
+    subset_cfg: SubsetConfig,
+    pre_cfg: KpmsPreprocessConfig,
+    fit_cfg: FitConfig,
+    prov: dict,
+) -> None:
     manifests = load_manifests(subset_cfg)
     manifests = filter_manifests(manifests, subset_cfg)
     manifests = sample_representative_subset(
@@ -132,7 +189,7 @@ def main() -> None:
     if not manifests:
         raise RuntimeError("No trials selected for kpMS fitting.")
 
-    model_out = project_dir / args.model_name
+    model_out = project_dir / model_name
     ensure_dir(model_out)
     write_selected_manifest(model_out / "selected_trials.csv", manifests)
 
@@ -147,7 +204,7 @@ def main() -> None:
     )
     data = convert_data_precision(data, x64=True)
 
-    _prepare_checkpoint_path(model_out / "checkpoint.h5", data, force_new=bool(args.force_new))
+    _prepare_checkpoint_path(model_out / "checkpoint.h5", data, force_new=force_new)
 
     def _idx(name: str, fallback: int) -> list[int]:
         try:
@@ -195,7 +252,7 @@ def main() -> None:
         data,
         metadata,
         project_dir=str(project_dir),
-        model_name=args.model_name,
+        model_name=model_name,
         num_iters=fit_cfg.stage1_ar_only_iters,
         start_iter=0,
         verbose=True,
@@ -206,7 +263,7 @@ def main() -> None:
     )
 
     model = kpms.update_hypparams(model, kappa=float(fit_cfg.stage2_kappa))
-    model, model_name = kpms.fit_model(
+    model, fitted_name = kpms.fit_model(
         model,
         data,
         metadata,
@@ -222,15 +279,15 @@ def main() -> None:
     )
 
     if fit_cfg.reindex_syllables:
-        kpms.reindex_syllables_in_checkpoint(str(project_dir), model_name)
-        model, data, metadata, _ = kpms.load_checkpoint(str(project_dir), model_name)
+        kpms.reindex_syllables_in_checkpoint(str(project_dir), fitted_name)
+        model, data, metadata, _ = kpms.load_checkpoint(str(project_dir), fitted_name)
 
-    kpms.extract_results(model, metadata, str(project_dir), model_name)
+    kpms.extract_results(model, metadata, str(project_dir), fitted_name)
 
     summary = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "project_dir": str(project_dir),
-        "model_name": model_name,
+        "model_name": fitted_name,
         "n_selected_trials": len(manifests),
         "n_used_recordings": len(coordinates),
         "n_skipped_recordings": len(skipped),
@@ -238,11 +295,28 @@ def main() -> None:
         "subset_config": asdict(subset_cfg),
         "preprocess_config": asdict(pre_cfg),
         "fit_config": asdict(fit_cfg),
-        "checkpoint_path": str(project_dir / model_name / "checkpoint.h5"),
-        "results_path": str(project_dir / model_name / "results.h5"),
+        "checkpoint_path": str(project_dir / fitted_name / "checkpoint.h5"),
+        "results_path": str(project_dir / fitted_name / "results.h5"),
+        "run_provenance": provenance_envelope(
+            operation="kpms_fit",
+            inputs=prov.get("inputs", {}),
+            outputs={
+                "n_selected_trials": len(manifests),
+                "n_used_recordings": len(coordinates),
+                "model_name": fitted_name,
+            },
+            started_at=prov.get("started_at"),
+            finished_at=prov.get("finished_at"),
+        ),
     }
-    write_json(project_dir / model_name / "fit_summary.json", summary)
-    print(f"Done. Model: {model_name}")
+    prov["outputs"] = {
+        "n_selected_trials": len(manifests),
+        "n_used_recordings": len(coordinates),
+        "model_name": fitted_name,
+        "fit_summary": str(project_dir / fitted_name / "fit_summary.json"),
+    }
+    write_json(project_dir / fitted_name / "fit_summary.json", summary)
+    print(f"Done. Model: {fitted_name}")
 
 
 if __name__ == "__main__":

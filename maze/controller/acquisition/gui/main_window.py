@@ -146,6 +146,30 @@ except ImportError:
     HAS_ANALYSIS_SETTINGS_DIALOG = False
 
 try:
+    from .kpms_fit_dialog import HAS_KPMS_FIT_DIALOG, open_kpms_fit_dialog
+except ImportError:
+    HAS_KPMS_FIT_DIALOG = False
+    open_kpms_fit_dialog = None  # type: ignore[misc, assignment]
+
+try:
+    from .kpms_apply_dialog import HAS_KPMS_APPLY_DIALOG, open_kpms_apply_dialog
+except ImportError:
+    HAS_KPMS_APPLY_DIALOG = False
+    open_kpms_apply_dialog = None  # type: ignore[misc, assignment]
+
+try:
+    from .qc_summary_dialog import HAS_QC_SUMMARY_DIALOG, open_qc_summary_dialog
+except ImportError:
+    HAS_QC_SUMMARY_DIALOG = False
+    open_qc_summary_dialog = None  # type: ignore[misc, assignment]
+
+try:
+    from .overlay_dialog import HAS_OVERLAY_DIALOG, open_overlay_dialog
+except ImportError:
+    HAS_OVERLAY_DIALOG = False
+    open_overlay_dialog = None  # type: ignore[misc, assignment]
+
+try:
     from .pipeline_dialogs import (
         open_analyze_dialog,
         open_discovery_dialog,
@@ -599,6 +623,11 @@ class MainWindow(QMainWindow):
         build_main_window_menus(
             self,
             reload_last_profile_checked=read_reload_last_profile(),
+            pipeline_dialogs_available=HAS_PIPELINE_DIALOGS,
+            kpms_fit_dialog_available=HAS_KPMS_FIT_DIALOG,
+            kpms_apply_dialog_available=HAS_KPMS_APPLY_DIALOG,
+            qc_summary_dialog_available=HAS_QC_SUMMARY_DIALOG,
+            overlay_dialog_available=HAS_OVERLAY_DIALOG,
         )
 
     def _on_save_profile_as(self) -> None:
@@ -755,6 +784,26 @@ class MainWindow(QMainWindow):
         if not HAS_QT or not HAS_PIPELINE_DIALOGS or open_analyze_dialog is None:
             return
         open_analyze_dialog(self, self._config)
+
+    def _on_pipeline_kpms_fit(self) -> None:
+        if not HAS_QT or not HAS_KPMS_FIT_DIALOG or open_kpms_fit_dialog is None:
+            return
+        open_kpms_fit_dialog(self, self._config)
+
+    def _on_pipeline_kpms_apply(self) -> None:
+        if not HAS_QT or not HAS_KPMS_APPLY_DIALOG or open_kpms_apply_dialog is None:
+            return
+        open_kpms_apply_dialog(self, self._config)
+
+    def _on_pipeline_qc_summary(self) -> None:
+        if not HAS_QT or not HAS_QC_SUMMARY_DIALOG or open_qc_summary_dialog is None:
+            return
+        open_qc_summary_dialog(self, self._config)
+
+    def _on_pipeline_render_overlay(self) -> None:
+        if not HAS_QT or not HAS_OVERLAY_DIALOG or open_overlay_dialog is None:
+            return
+        open_overlay_dialog(self, self._config)
 
     def _on_open_settings_to_tab(self, tab_name: str | int) -> None:
         if not HAS_SETTINGS_DIALOG or SettingsDialog is None:

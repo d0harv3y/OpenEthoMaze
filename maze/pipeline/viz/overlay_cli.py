@@ -18,11 +18,71 @@ from maze.kpms.preprocess import KpmsPreprocessConfig
 from maze.pipeline.db.trial_key import TrialKey
 from maze.pipeline.io.file_discovery import load_manifest_csv
 
+from .overlay_run_config import UnifiedOverlayRunConfig
 from .unified_overlay import (
     UnifiedOverlayConfig,
     render_unified_overlay_video,
     resolve_unique_manifest,
 )
+
+
+def is_unified_overlay_available() -> bool:
+    """True when OpenCV is installed (required to encode overlay MP4)."""
+    try:
+        import cv2  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def overlay_run_config_to_namespace(cfg: UnifiedOverlayRunConfig) -> argparse.Namespace:
+    """Build an argparse namespace with CLI defaults for :func:`run_unified_overlay_from_args`."""
+    return argparse.Namespace(
+        manifest_csv=cfg.manifest_csv,
+        pipeline_h5=cfg.pipeline_h5,
+        animal_id=cfg.animal_id,
+        session=cfg.session,
+        trial=cfg.trial,
+        out=cfg.out,
+        kpms_h5=cfg.kpms_h5,
+        kpms_training_exemplars=cfg.kpms_training_exemplars,
+        max_seconds=None,
+        contrast=2.0,
+        brightness=5.0,
+        kpms_px_per_cm=None,
+        analysis_only=False,
+        history_frames=None,
+        no_history_fade=False,
+        history_fade_floor=None,
+        history_fade_gamma=None,
+        no_hypnogram=cfg.no_hypnogram,
+        no_syllable_tray=cfg.no_syllable_tray,
+        tray_width=None,
+        vertical_exemplar_heading=False,
+        bout_center_exemplar_tray=False,
+        tray_projection=None,
+        exemplar_min_frequency=None,
+        exemplar_min_duration=None,
+        exemplar_neighbors=None,
+        exemplar_density_sample=False,
+        exemplar_timesteps=None,
+        exemplar_arena_coords=False,
+        opacity_trajectory=None,
+        opacity_trail=None,
+        opacity_skeleton=None,
+        opacity_arena=None,
+        opacity_hypnogram=None,
+        opacity_tray=None,
+        no_skeleton=cfg.no_skeleton,
+        no_hud=False,
+        no_circular_motor_hud=False,
+    )
+
+
+def run_unified_overlay(cfg: UnifiedOverlayRunConfig) -> Path:
+    """Render one unified overlay MP4 from :class:`UnifiedOverlayRunConfig`."""
+    return run_unified_overlay_from_args(overlay_run_config_to_namespace(cfg))
 
 
 def _float_or_none(s: str | None) -> float | None:

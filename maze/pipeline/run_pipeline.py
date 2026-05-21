@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
 from tqdm import tqdm
 
@@ -24,13 +24,14 @@ from .db import (
     write_mistrial_reason,
 )
 from .trial_filters import (
+    GUI_DEFAULT_PREFILTER_MODE,
+    PrefilterMode,
     detect_task_mistrial,
     expected_frame_diff,
     trial_matches_frame_policy,
 )
 from .process_trial import process_trial
-
-PrefilterMode = Literal["auto", "controller", "legacy"]
+from .run_provenance import provenance_run
 
 
 def _attr_str(attrs, key: str) -> str:
@@ -96,7 +97,7 @@ def run_pipeline(
     generate_qc: bool = True,
     skip_mistrials: bool = True,
     analysis_profile: Optional[tuple[Any, Any]] = None,
-    prefilter_mode: PrefilterMode = "auto",
+    prefilter_mode: PrefilterMode = GUI_DEFAULT_PREFILTER_MODE,
 ) -> dict[str, int]:
     """
     Run the pipeline on all discovered trials.
@@ -121,107 +122,138 @@ def run_pipeline(
         Dictionary with processing statistics
     """
     db_path = db_path or OUTPUT_H5
+    db_path = Path(db_path)
 
-    print("Initializing database...")
-    init_database(db_path)
-    arena_type = read_arena_type(db_path)
-
-    print("Loading trial list from database...")
-    trials = load_trial_manifests_from_db(db_path)
-    if not trials:
-        print("No trials in database. Run init_db first to populate from input H5 and videos.")
-        return {"total": 0, "success": 0, "failed": 0, "skipped": 0}
-
-    if animal_ids is not None:
-        trials = [t for t in trials if t.animal_id in animal_ids]
-
-    if phase is not None:
-        trials = [t for t in trials if t.phase == phase]
-
-    if sessions is not None and len(sessions) > 0:
-        trials = [t for t in trials if t.session in sessions]
-
-    if trial_names is not None and len(trial_names) > 0:
-        trials = [t for t in trials if t.trial in trial_names]
-
-    n_before_frame_filter = len(trials)
-    trials = [
-        t
-        for t in trials
-        if trial_matches_frame_policy(
-            t,
-            arena_type,
-            mode=prefilter_mode,
-        )
-    ]
-    n_excluded_frame_diff = n_before_frame_filter - len(trials)
-    if n_excluded_frame_diff > 0:
-        expected_diff = expected_frame_diff(arena_type)
-        if expected_diff is None:
-            print(f"Excluded {n_excluded_frame_diff} trial(s) by task-specific frame policy.")
-        else:
-            print(
-                f"Excluded {n_excluded_frame_diff} trial(s) where frame_diff "
-                f"(video - h5) != {expected_diff}."
-            )
-
-    if not trials:
-        print("No trials match the given filters after task-specific frame filtering.")
-        return {"total": 0, "success": 0, "failed": 0, "skipped": 0}
-
-    mistrial_trials: list[tuple[TrialManifest, str]] = []
-    processable: list[TrialManifest] = []
-    for trial in trials:
-        reason = detect_task_mistrial(
-            trial,
-            arena_type,
-            mode=prefilter_mode,
-        )
-        if reason is not None:
-            mistrial_trials.append((trial, reason))
-        else:
-            processable.append(trial)
-
-    if skip_mistrials and mistrial_trials:
-        for trial, reason in mistrial_trials:
-            key = TrialKey.from_manifest(trial)
-            write_mistrial_reason(db_path, key, reason)
-        reason_counts: dict[str, int] = {}
-        for _, reason in mistrial_trials:
-            reason_counts[reason] = reason_counts.get(reason, 0) + 1
-        print(
-            f"Skipping {len(mistrial_trials)} trial(s) with missing data (mistrial): "
-            + ", ".join(f"{reason}: {count}" for reason, count in sorted(reason_counts.items()))
-        )
-        trials = processable
-
-    n_skipped_mistrial = len(mistrial_trials) if skip_mistrials else 0
-
-    if not trials:
-        print("No trials left after mistrial filter.")
-        return {"total": 0, "success": 0, "failed": 0, "skipped": n_skipped_mistrial}
-
-    print(f"Processing {len(trials)} trials...")
-
-    stats = {
-        "total": len(trials),
-        "success": 0,
-        "failed": 0,
-        "skipped": n_skipped_mistrial,
+    prov_inputs = {
+        "db_path": str(db_path),
+        "animal_ids": animal_ids,
+        "phase": phase,
+        "sessions": sessions,
+        "trial_names": trial_names,
+        "parallel": parallel,
+        "max_workers": max_workers,
+        "generate_qc": generate_qc,
+        "skip_mistrials": skip_mistrials,
+        "prefilter_mode": prefilter_mode,
+        "has_analysis_profile": analysis_profile is not None,
     }
 
-    if parallel and max_workers > 1:
-        stats = _run_parallel(trials, db_path, max_workers, generate_qc, stats, analysis_profile)
-    else:
-        stats = _run_sequential(trials, db_path, generate_qc, stats, analysis_profile)
+    with provenance_run("run_pipeline", db_path, prov_inputs) as prov:
+        print("Initializing database...")
+        init_database(db_path)
+        arena_type = read_arena_type(db_path)
 
-    print("\nPipeline complete:")
-    print(f"  Total: {stats['total']}")
-    print(f"  Success: {stats['success']}")
-    print(f"  Failed: {stats['failed']}")
-    print(f"  Skipped: {stats['skipped']}")
+        print("Loading trial list from database...")
+        trials = load_trial_manifests_from_db(db_path)
+        if not trials:
+            print("No trials in database. Run init_db first to populate from input H5 and videos.")
+            stats = {"total": 0, "success": 0, "failed": 0, "skipped": 0}
+            prov["outputs"] = stats
+            return stats
 
-    return stats
+        if animal_ids is not None:
+            trials = [t for t in trials if t.animal_id in animal_ids]
+
+        if phase is not None:
+            trials = [t for t in trials if t.phase == phase]
+
+        if sessions is not None and len(sessions) > 0:
+            trials = [t for t in trials if t.session in sessions]
+
+        if trial_names is not None and len(trial_names) > 0:
+            trials = [t for t in trials if t.trial in trial_names]
+
+        n_before_frame_filter = len(trials)
+        trials = [
+            t
+            for t in trials
+            if trial_matches_frame_policy(
+                t,
+                arena_type,
+                mode=prefilter_mode,
+            )
+        ]
+        n_excluded_frame_diff = n_before_frame_filter - len(trials)
+        if n_excluded_frame_diff > 0:
+            expected_diff = expected_frame_diff(arena_type)
+            if expected_diff is None:
+                print(f"Excluded {n_excluded_frame_diff} trial(s) by task-specific frame policy.")
+            else:
+                print(
+                    f"Excluded {n_excluded_frame_diff} trial(s) where frame_diff "
+                    f"(video - h5) != {expected_diff}."
+                )
+
+        if not trials:
+            print("No trials match the given filters after task-specific frame filtering.")
+            stats = {"total": 0, "success": 0, "failed": 0, "skipped": 0}
+            prov["outputs"] = {**stats, "n_excluded_frame_diff": n_excluded_frame_diff}
+            return stats
+
+        mistrial_trials: list[tuple[TrialManifest, str]] = []
+        processable: list[TrialManifest] = []
+        for trial in trials:
+            reason = detect_task_mistrial(
+                trial,
+                arena_type,
+                mode=prefilter_mode,
+            )
+            if reason is not None:
+                mistrial_trials.append((trial, reason))
+            else:
+                processable.append(trial)
+
+        if skip_mistrials and mistrial_trials:
+            for trial, reason in mistrial_trials:
+                key = TrialKey.from_manifest(trial)
+                write_mistrial_reason(db_path, key, reason)
+            reason_counts: dict[str, int] = {}
+            for _, reason in mistrial_trials:
+                reason_counts[reason] = reason_counts.get(reason, 0) + 1
+            print(
+                f"Skipping {len(mistrial_trials)} trial(s) with missing data (mistrial): "
+                + ", ".join(
+                    f"{reason}: {count}" for reason, count in sorted(reason_counts.items())
+                )
+            )
+            trials = processable
+
+        n_skipped_mistrial = len(mistrial_trials) if skip_mistrials else 0
+
+        if not trials:
+            print("No trials left after mistrial filter.")
+            stats = {"total": 0, "success": 0, "failed": 0, "skipped": n_skipped_mistrial}
+            prov["outputs"] = stats
+            return stats
+
+        print(f"Processing {len(trials)} trials...")
+
+        stats = {
+            "total": len(trials),
+            "success": 0,
+            "failed": 0,
+            "skipped": n_skipped_mistrial,
+        }
+
+        if parallel and max_workers > 1:
+            stats = _run_parallel(
+                trials, db_path, max_workers, generate_qc, stats, analysis_profile
+            )
+        else:
+            stats = _run_sequential(trials, db_path, generate_qc, stats, analysis_profile)
+
+        print("\nPipeline complete:")
+        print(f"  Total: {stats['total']}")
+        print(f"  Success: {stats['success']}")
+        print(f"  Failed: {stats['failed']}")
+        print(f"  Skipped: {stats['skipped']}")
+
+        prov["outputs"] = {
+            **stats,
+            "n_excluded_frame_diff": n_excluded_frame_diff,
+            "arena_type": arena_type,
+        }
+        return stats
 
 
 class _TqdmHandler(logging.Handler):
