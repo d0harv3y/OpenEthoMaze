@@ -180,6 +180,24 @@ Runs **after Phase A** (tests, paths). Overlaps **Phase C** (GUI) for workers; d
 | E5.2 | Open overlay with kpMS layer from manifest pointers |
 | E5.3 | Phase B `/orm/discover` — find `results_apply.h5` under data root (optional) |
 
+### E6 — Multi-stream kpMS (experimental; after E0–E1)
+
+**Goal:** Optional **additional** ethogram streams beyond SLEAP/DLC pose—not a replacement. Syllable IDs are **not comparable** across streams; each stream has its own checkpoint, `results_*.h5`, and bout CSV (provenance required).
+
+| Stream | Pose source | Fit/apply | Caveats |
+|--------|-------------|-----------|---------|
+| **A — anatomical** | SLEAP (or DLC) → `STANDARD_NODE_NAMES` | Existing E1/E2 path | Needs well-trained CNN; `require_sleap=True` today |
+| **B — blob poly** | Backup tracker contour → fixed-order pseudo-keypoints | Separate `blob_*` project dir + model | High subject/background contrast; orientation mostly **motion** (velocity sign on major axis); tail rarely reliable after morphology |
+| **C — combined** | Concatenate A + B keypoints in one `bodyparts` list | Third checkpoint on fused coordinates | May stabilize when A and B fail on different frames; risk that model ignores B when A is strong—evaluate with ablation |
+
+**Orientation (stream B):** Do not map blob nodes to `nose`/`tail`. Use a dedicated schema (e.g. `blob_c`, `blob_p0`…`blob_pN-1` on simplified contour, plus `blob_front`/`blob_back` from centroid ± k·velocitŷ with temporal unwrap and low-confidence when speed ≈ 0).
+
+**H5 contract (prerequisite):** Persist full pose and blob polys in trial HDF5 so kpMS does not depend on `.slp` sidecars for controller-first data. See **`docs/h5_tracking_contract.md`** (`tracking/anatomical`, `tracking/blob`, schema `v2`). E6 apply reads H5 first; `sleap_path` remains provenance / legacy import only.
+
+**Ops cost:** Three slow paths ⇒ three rare fits and three apply/materialize passes per cohort (unless lab defers B/C). Treat as research track until a spike shows combined bout stability beats A alone on held-out trials.
+
+**Spike acceptance (before full E6):** On a small manifest subset, offline blob poly → `build_kpms_inputs`-style tensor → fit/apply B; compare bout duration distributions and overlay QC vs stream A only; only then fit stream C on concatenated coordinates.
+
 ---
 
 ## Recommended order vs rescue plan
@@ -190,7 +208,7 @@ Runs **after Phase A** (tests, paths). Overlaps **Phase C** (GUI) for workers; d
 | **B** | Optional discover of kpMS artifacts |
 | **C** | C4/C5 kpMS fit/apply GUI = **E2/E1** UI |
 | **D** | Promote materialize CLI; AGENTS.md ethogram SOP |
-| **E** | **E0 → E1 → E2 → E3 → E4 → E5** as above |
+| **E** | **E0 → E1 → E2 → E3 → E4 → E5**; optional **E6** spike after E1 gate |
 
 **Start ethogram coding at E0** in parallel with **PR-A3** only if tests infra exists; otherwise **E0 immediately after Phase A gate**.
 
@@ -203,6 +221,8 @@ Runs **after Phase A** (tests, paths). Overlaps **Phase C** (GUI) for workers; d
 3. **Refit policy:** refit never / refit quarterly / refit when N new trials > threshold?
 4. **Task scope:** one kpMS model per task (VAST vs RAM vs NOR) or one merged model?
 5. **Controller-first:** ethogram only on experimental trials with SLEAP, or include habituation?
+6. **E6 multi-stream:** pursue blob + combined streams after E1, or defer until anatomical ethogram is routine?
+7. ~~**H5 tracking v2**~~ — See `docs/h5_tracking_contract.md`: canonical file = acquisition `trials.h5` when controller-first; no default mirror; pose default `keep_live` with explicit overwrite UI; blob `N=8` in `maze.core.anatomy`.
 
 ---
 

@@ -28,4 +28,9 @@ Per-trial provenance is the attr set written by ``persist_effective_analysis_par
 **Export**
 Long-format CSV (``csv_trials``) is VAST-first; RAM-shaped trials in the same H5
 may need schema review before enabling combined export.
+
+**Tracking (planned v2)**
+Controller-first kpMS and E6 multi-stream ethograms need dense pose and blob
+polygons in-trial, not only ``sleap_path`` sidecars. Target layout:
+``docs/h5_tracking_contract.md`` (``tracking/anatomical``, ``tracking/blob``).
 """

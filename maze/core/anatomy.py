@@ -11,6 +11,10 @@ STANDARD_NODE_NAMES: tuple[str, ...] = (
     "spine",
 )
 
+# Backup blob polygon (H5 tracking/blob, E6 stream B). Fixed at 8 to match len(STANDARD_NODE_NAMES).
+BLOB_VERTEX_COUNT: int = len(STANDARD_NODE_NAMES)
+BLOB_NODE_NAMES: tuple[str, ...] = tuple(f"blob_p{i}" for i in range(BLOB_VERTEX_COUNT))
+
 FALLBACK_NODE_INDEX: dict[str, int] = {
     node_name: index for index, node_name in enumerate(STANDARD_NODE_NAMES)
 }
