@@ -20,7 +20,7 @@ from ..pipeline.tracking.trace_processing import (
     process_trace_data,
 )
 from .apply import filter_low_confidence_fragments, interpolate_nans_in_coordinates
-from .preprocess import KpmsPreprocessConfig, _stack_nodes
+from .preprocess import KpmsPreprocessConfig, _stack_anatomical_nodes
 
 
 def kpms_recording_key(manifest: TrialManifest) -> str:
@@ -61,7 +61,7 @@ def kpms_aligned_coordinates_and_indices(
         TraceProcessingParams(),
     )
     valid_frames = filter_frames_no_animal(trace.traces, trace.n_frames)
-    arr_xy, arr_conf = _stack_nodes(processed, trace.n_frames)
+    arr_xy, arr_conf = _stack_anatomical_nodes(processed, trace.n_frames)
     keep = valid_frames & np.isfinite(arr_xy).all(axis=(1, 2))
     if int(keep.sum()) < pre_cfg.min_fragment_frames:
         return None
