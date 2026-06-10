@@ -185,6 +185,13 @@ def _resolve_data_dirs(data_dirs: Optional[Sequence[Path]]) -> Optional[list[Pat
     return out or None
 
 
+def _resolve_treatment_labels_path(labels_path: Optional[Path]) -> Path:
+    """CLI override or repo default ``inputs/treatment_labels.csv``."""
+    if labels_path is not None and str(labels_path).strip():
+        return Path(labels_path).expanduser().resolve()
+    return LABELS_PATH
+
+
 def _normalize_session(s: str) -> str:
     if s and s[0].upper() in ("S", "H"):
         return s
@@ -200,13 +207,18 @@ def _normalize_trial(s: str) -> str:
 # -----------------------------------------------------------------------------
 # Subcommand: init
 # -----------------------------------------------------------------------------
-def cmd_init(*, data_dirs: Optional[Sequence[Path]] = None) -> None:
+def cmd_init(
+    *,
+    data_dirs: Optional[Sequence[Path]] = None,
+    treatment_labels_path: Optional[Path] = None,
+) -> None:
     """Initialize legacy DB and manifest from discovery + treatment_labels.csv."""
     _ensure_legacy_dir()
+    labels_path = _resolve_treatment_labels_path(treatment_labels_path)
     print(f"Initializing legacy database: {LEGACY_DB}")
     resolved_data_dirs = _resolve_data_dirs(data_dirs)
     print(f"Data directories: {resolved_data_dirs or DATA_DIRS}")
-    print(f"Treatment labels: {LABELS_PATH}")
+    print(f"Treatment labels: {labels_path}")
     print()
 
     init_database(LEGACY_DB)
@@ -224,7 +236,7 @@ def cmd_init(*, data_dirs: Optional[Sequence[Path]] = None) -> None:
             print(f"  {key}: {[t.input_h5_path for t in trials]}")
 
     print("\nLoading treatment labels...")
-    labels = load_treatment_labels(LABELS_PATH)
+    labels = load_treatment_labels(labels_path)
     apply_treatment_labels(result, labels)
     n_strain = sum(1 for t in result.trials if t.strain)
     n_experiment = sum(1 for t in result.trials if t.experiment)
@@ -357,9 +369,12 @@ def cmd_sync(
     prune_unlabeled: bool,
     *,
     data_dirs: Optional[Sequence[Path]] = None,
+    treatment_labels_path: Optional[Path] = None,
 ) -> None:
     """Sync legacy DB and manifest with discovery; optionally prune and update labels."""
     from tqdm import tqdm
+
+    labels_path = _resolve_treatment_labels_path(treatment_labels_path)
 
     if dry_run:
         print("Dry run: no backup or DB writes.")
@@ -383,11 +398,11 @@ def cmd_sync(
     print(f"  Trials: {len(result.trials)}\n")
 
     if update_labels and not dry_run:
-        update_treatment_labels_from_discovery(result, LABELS_PATH)
+        update_treatment_labels_from_discovery(result, labels_path)
         print()
 
     print("Loading and applying treatment labels...")
-    labels = load_treatment_labels(LABELS_PATH)
+    labels = load_treatment_labels(labels_path)
     apply_treatment_labels(result, labels)
     labeled_animal_ids = {
         key for key, label in labels.items() if getattr(label, "type", "animal_id") == "animal_id"
@@ -732,6 +747,7 @@ def cmd_build_kpms_h5(
     overwrite_pose: bool = False,
     overwrite_blob: bool = False,
     profile_path: Path | None = None,
+    treatment_labels_path: Path | None = None,
 ) -> None:
     """
     Discover trials and write a kpMS-ready H5 with tracking/anatomical + tracking/blob.
@@ -742,11 +758,13 @@ def cmd_build_kpms_h5(
         print("Note: cv2 not available; blob materialization requires opencv-python.")
 
     resolved_data_dirs = _resolve_data_dirs(data_dirs)
+    labels_path = _resolve_treatment_labels_path(treatment_labels_path)
     print(f"Discovering trials in: {resolved_data_dirs or DATA_DIRS}")
     result = discover_trials(resolved_data_dirs)
     print(f"  Trials discovered: {len(result.trials)}")
+    print(f"Treatment labels: {labels_path}")
 
-    labels = load_treatment_labels(LABELS_PATH)
+    labels = load_treatment_labels(labels_path)
     apply_treatment_labels(result, labels)
     _apply_inferred_ids_from_csv(result)
 
@@ -827,6 +845,15 @@ def main() -> int:
         type=Path,
         default=None,
         help="Path to legacy H5 database (default: <repo>/outputs/legacy/vast_results_legacy.h5)",
+    )
+    parser.add_argument(
+        "--treatment-labels",
+        type=Path,
+        default=None,
+        help=(
+            "Path to treatment_labels.csv for init/sync/build-kpms-h5 "
+            f"(default: {LABELS_PATH})"
+        ),
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -940,7 +967,7 @@ def main() -> int:
     _set_legacy_paths(args.db_path if args.command != "build-kpms-h5" else None)
 
     if args.command == "init":
-        cmd_init(data_dirs=args.data_dirs)
+        cmd_init(data_dirs=args.data_dirs, treatment_labels_path=args.treatment_labels)
         return 0
 
     if args.command == "sync":
@@ -950,6 +977,7 @@ def main() -> int:
             dry_run=args.dry_run,
             prune_unlabeled=args.prune_unlabeled,
             data_dirs=args.data_dirs,
+            treatment_labels_path=args.treatment_labels,
         )
         return 0
 
@@ -999,6 +1027,7 @@ def main() -> int:
             overwrite_pose=args.overwrite_pose,
             overwrite_blob=args.overwrite_blob,
             profile_path=args.profile,
+            treatment_labels_path=args.treatment_labels,
         )
         return 0
 
