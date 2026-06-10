@@ -79,6 +79,7 @@ def sync_discovery_into_h5(
                 video_path=str(trial.video_path) if trial.video_path else None,
                 sleap_path=str(trial.sleap_path) if trial.sleap_path else None,
                 input_h5_path=ih5,
+                has_tracking_pose=trial.has_tracking_pose,
             )
 
         unique_animals: set[str] = set()

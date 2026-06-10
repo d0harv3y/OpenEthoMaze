@@ -54,4 +54,5 @@ def test_trial_manifest_csv_row_values_matches_fieldnames() -> None:
     assert row[15] == "99"
     assert row[16] == "-1"
     assert row[17].endswith("in.h5")
-    assert row[20] == "556-S02-T03"
+    assert row[20] == "0"
+    assert row[21] == "556-S02-T03"

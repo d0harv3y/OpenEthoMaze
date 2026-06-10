@@ -45,6 +45,7 @@ MANIFEST_CSV_FIELDNAMES: tuple[str, ...] = (
     "input_h5_path",
     "video_path",
     "sleap_path",
+    "has_tracking_pose",
     "kpms_recording_key",
 )
 
@@ -79,6 +80,7 @@ def trial_manifest_csv_row_values(t: "TrialManifest") -> list[str]:
         str(t.input_h5_path),
         str(t.video_path) if t.video_path else "",
         str(t.sleap_path) if t.sleap_path else "",
+        "1" if t.has_tracking_pose else "0",
         t.kpms_recording_key or "",
     ]
 
@@ -153,6 +155,9 @@ class TrialManifest:
     #: When set, used as kpMS HDF5 / coordinates dict key (native path-style names).
     kpms_recording_key: Optional[str] = None
 
+    #: True when ``tracking/anatomical`` is present in canonical trial H5 (v2 tracking).
+    has_tracking_pose: bool = False
+
     @property
     def h5_session(self) -> str:
         """Session key to use when loading from H5 (original if renumbered)."""
@@ -179,6 +184,31 @@ class TrialManifest:
     def effective_animal_id(self) -> str:
         """Return inferred_id if available, otherwise animal_id."""
         return self.inferred_id if self.inferred_id else self.animal_id
+
+
+def _parse_manifest_bool(value: str | None) -> bool:
+    if value is None:
+        return False
+    txt = str(value).strip().lower()
+    return txt in ("1", "true", "yes", "y")
+
+
+def enrich_manifests_has_tracking_pose(
+    manifests: list[TrialManifest],
+    *,
+    db_path: Path | None = None,
+) -> None:
+    """
+    Set :attr:`TrialManifest.has_tracking_pose` by probing canonical trial H5.
+
+    Uses :func:`maze.kpms.h5_pose.resolve_canonical_trial_h5` (``input_h5_path`` first,
+    then ``db_path``). Mutates manifests in place.
+    """
+    from maze.kpms.h5_pose import resolve_canonical_trial_h5
+
+    db = Path(db_path) if db_path is not None else Path("")
+    for manifest in manifests:
+        manifest.has_tracking_pose = resolve_canonical_trial_h5(manifest, db) is not None
 
 
 @dataclass
@@ -768,6 +798,11 @@ def discover_trials(
     print(f"  Created {len(result.trials)} trial manifests")
     print(f"  Matched {result.n_matched_videos} videos, {result.n_matched_sleap} SLEAP files")
 
+    enrich_manifests_has_tracking_pose(
+        result.trials,
+        db_path=Path(controller_results_h5) if controller_results_h5 is not None else None,
+    )
+
     return result
 
 
@@ -1228,6 +1263,7 @@ def load_manifest_csv(
                     drug=_cell(row, "drug"),
                     inferred_id=_cell(row, "inferred_id"),
                     kpms_recording_key=_cell(row, "kpms_recording_key"),
+                    has_tracking_pose=_parse_manifest_bool(row.get("has_tracking_pose")),
                 )
             )
     return manifests

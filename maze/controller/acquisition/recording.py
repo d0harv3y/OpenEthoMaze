@@ -8,14 +8,17 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, List, Literal, Optional, Tuple, Union
+from typing import Callable, List, Literal, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
+from maze.core.anatomy import BLOB_VERTEX_COUNT
 from maze.core.schema import FEEDBACK_ROW_DTYPE, XY_ROW_DTYPE
 from maze.core.h5_layout import open_db, write_feedback_table, write_xy_table
+from maze.pipeline.blob_orient import BlobOrientTracker, DEFAULT_SPEED_EPSILON_PX
+from maze.pipeline.tracking_io import AnatomicalTrackingBuffer, BlobTrackingBuffer
 
-from .shared_config import AcquisitionConfig
+from .shared_config import AcquisitionConfig, FallbackTrackingConfig
 from .radial_arm.config import RadialArmControllerConfig
 from .region_code import encode_region_code_bytes
 from .h5_writer import (
@@ -104,6 +107,122 @@ class TrialRecorder:
             else None
         )
         self._recording_ram_exit_arm_index: Optional[int] = recording_ram_exit_arm_index
+        self._anatomical_buffer: Optional[AnatomicalTrackingBuffer] = None
+        self._blob_tracker: Optional[BlobOrientTracker] = None
+        self._blob_buffer: Optional[BlobTrackingBuffer] = None
+
+    @staticmethod
+    def backup_params_json_from_config(config: AcquisitionConfig) -> dict[str, object]:
+        """Snapshot fallback-tracker settings for ``tracking/blob`` provenance."""
+        ft: FallbackTrackingConfig = config.fallback_tracking
+        return {
+            "range_low": int(ft.range_low),
+            "range_high": int(ft.range_high),
+            "min_area": int(ft.min_area),
+            "max_area": int(ft.max_area),
+            "morph_kernel_size": int(ft.morph_kernel_size),
+            "max_jump_px": float(ft.max_jump_px),
+            "selection_mode": str(ft.selection_mode),
+            "min_circularity": float(ft.min_circularity),
+            "max_contours": int(ft.max_contours),
+        }
+
+    def _init_blob_capture(self) -> None:
+        ft = self.config.fallback_tracking
+        speed_eps = float(ft.max_jump_px) if ft.max_jump_px > 0 else DEFAULT_SPEED_EPSILON_PX
+        self._blob_tracker = BlobOrientTracker(
+            min_area_px=float(max(ft.min_area, 1)),
+            speed_epsilon_px=speed_eps,
+        )
+        self._blob_buffer = BlobTrackingBuffer(
+            backup_params_json=self.backup_params_json_from_config(self.config),
+            blob_source="backup_live",
+        )
+
+    def _append_anatomical_pose(
+        self,
+        frame_index: int,
+        pose_xy: np.ndarray,
+        pose_scores: Optional[np.ndarray],
+        pose_node_valid: Optional[np.ndarray],
+        pose_node_names: Sequence[str],
+    ) -> None:
+        """Buffer one SLEAP pose row (jump-filtered validity from the display path)."""
+        xy = np.asarray(pose_xy, dtype=np.float32)
+        if xy.ndim != 2 or xy.shape[1] != 2:
+            return
+        n_nodes = xy.shape[0]
+        if n_nodes <= 0 or len(pose_node_names) < n_nodes:
+            return
+
+        node_names = tuple(str(pose_node_names[j]) for j in range(n_nodes))
+        if self._anatomical_buffer is None:
+            self._anatomical_buffer = AnatomicalTrackingBuffer(
+                node_names=node_names,
+                pose_source="sleap_live",
+                fps=self._fps,
+                pose_model_path=str(getattr(self.config, "sleap_model_path", "") or "").strip(),
+            )
+        elif self._anatomical_buffer.node_names != node_names:
+            return
+
+        if pose_scores is not None and np.asarray(pose_scores).shape[0] == n_nodes:
+            score = np.asarray(pose_scores, dtype=np.float32).reshape(n_nodes)
+        else:
+            score = np.zeros(n_nodes, dtype=np.float32)
+
+        if pose_node_valid is not None and np.asarray(pose_node_valid).shape[0] == n_nodes:
+            valid = np.asarray(pose_node_valid, dtype=np.uint8).reshape(n_nodes)
+        else:
+            valid = np.isfinite(xy).all(axis=1).astype(np.uint8)
+
+        self._anatomical_buffer.append_frame(
+            frame_index,
+            xy[:, 0],
+            xy[:, 1],
+            score,
+            valid,
+        )
+
+    def _append_blob_frame(
+        self,
+        frame_index: int,
+        blob_mask: Optional[np.ndarray],
+        blob_crop_rect: Optional[Tuple[int, int, int, int]],
+        pose_xy: Optional[np.ndarray],
+        pose_node_names: Optional[Sequence[str]],
+    ) -> None:
+        """Buffer one backup-tracker blob polygon (full-image coordinates)."""
+        if self._blob_tracker is None or self._blob_buffer is None:
+            return
+
+        if blob_mask is None:
+            self._blob_buffer.append_frame(
+                frame_index,
+                np.full((BLOB_VERTEX_COUNT, 2), np.nan, dtype=np.float32),
+                valid=False,
+                heading_rad=float("nan"),
+                score=0.0,
+            )
+            return
+
+        frame = self._blob_tracker.process_mask(
+            blob_mask,
+            anatomical_pose_xy=pose_xy,
+            anatomical_node_names=list(pose_node_names) if pose_node_names is not None else None,
+        )
+        xy = np.asarray(frame.xy, dtype=np.float32)
+        if frame.valid and blob_crop_rect is not None:
+            x0, y0, _, _ = blob_crop_rect
+            xy = xy + np.array([x0, y0], dtype=np.float32)
+
+        self._blob_buffer.append_frame(
+            frame_index,
+            xy,
+            valid=frame.valid,
+            heading_rad=frame.heading_rad,
+            score=frame.score,
+        )
 
     def start(self, frame_shape: tuple, fps: float = 30.0) -> Optional[Path]:
         """Start recording; return final video path. Writes to a temp file until stop() to avoid duplicate/partial-file issues (e.g. preview).
@@ -111,6 +230,11 @@ class TrialRecorder:
         """
         self._fps = fps
         self._start_time = time.monotonic()
+        if self.config.track_enable_backup:
+            self._init_blob_capture()
+        else:
+            self._blob_tracker = None
+            self._blob_buffer = None
         self.output_dir.mkdir(parents=True, exist_ok=True)
         base = f"{self.animal_id}_{self.session_id}_{self.trial}"
         if self._virtual_source_video_path is not None:
@@ -169,6 +293,12 @@ class TrialRecorder:
         spot_xy: Optional[Tuple[float, float]] = None,
         in_range_xy: Optional[Tuple[float, float]] = None,
         centroid_xy: Optional[Tuple[float, float]] = None,
+        pose_xy: Optional[np.ndarray] = None,
+        pose_scores: Optional[np.ndarray] = None,
+        pose_node_valid: Optional[np.ndarray] = None,
+        pose_node_names: Optional[Sequence[str]] = None,
+        blob_mask: Optional[np.ndarray] = None,
+        blob_crop_rect: Optional[Tuple[int, int, int, int]] = None,
     ) -> None:
         if self._video_writer is not None:
             if image.ndim == 2:
@@ -197,6 +327,22 @@ class TrialRecorder:
         )
         self._duty_w.append(duty_pct)
         self._duty_m.append(duty_pct)
+        if pose_xy is not None and pose_node_names is not None:
+            self._append_anatomical_pose(
+                frame_index,
+                pose_xy,
+                pose_scores,
+                pose_node_valid,
+                pose_node_names,
+            )
+        if self._blob_buffer is not None:
+            self._append_blob_frame(
+                frame_index,
+                blob_mask,
+                blob_crop_rect,
+                pose_xy,
+                pose_node_names,
+            )
 
     def cancel(self, delete_video: bool = True) -> None:
         """Release video writer and discard in-memory data without writing H5. Optionally delete the partial video file."""
@@ -213,6 +359,9 @@ class TrialRecorder:
         self._xy_rows = []
         self._duty_w = []
         self._duty_m = []
+        self._anatomical_buffer = None
+        self._blob_tracker = None
+        self._blob_buffer = None
 
     def stop(
         self,
@@ -387,3 +536,7 @@ class TrialRecorder:
                 # If no frames were recorded, ensure any previous feedback data is cleared.
                 if "feedback" in g:
                     del g["feedback"]
+            if self._anatomical_buffer is not None:
+                self._anatomical_buffer.flush(g, h5=h5)
+            if self._blob_buffer is not None:
+                self._blob_buffer.flush(g, h5=h5)

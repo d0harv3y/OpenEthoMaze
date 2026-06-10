@@ -137,6 +137,7 @@ if HAS_QT:
         def run(self) -> None:
             from maze.pipeline.db import TrialKey, write_sleap_model_path, write_sleap_path
             from maze.pipeline.headless_encode import materialize_xy_tables_from_video
+            from maze.pipeline.persist_pose import persist_pose_from_sidecar
             from maze.pipeline.run_pipeline import load_trial_manifests_from_db
             from maze.pipeline.run_provenance import record_provenance, utc_now_iso
 
@@ -171,6 +172,12 @@ if HAS_QT:
                         key = TrialKey.from_manifest(m)
                         write_sleap_path(self._db_path, key, str(existing.resolve()))
                         write_sleap_model_path(self._db_path, key, str(self._model_path.resolve()))
+                        persist_pose_from_sidecar(
+                            self._db_path,
+                            key,
+                            existing,
+                            overwrite_pose=False,
+                        )
                         if self._materialize_xy and vp.exists():
                             materialize_xy_tables_from_video(
                                 db_path=self._db_path,
@@ -195,6 +202,12 @@ if HAS_QT:
                     key = TrialKey.from_manifest(m)
                     write_sleap_path(self._db_path, key, str(pred.resolve()))
                     write_sleap_model_path(self._db_path, key, str(self._model_path.resolve()))
+                    persist_pose_from_sidecar(
+                        self._db_path,
+                        key,
+                        pred,
+                        overwrite_pose=False,
+                    )
                     if self._materialize_xy:
                         materialize_xy_tables_from_video(
                             db_path=self._db_path,

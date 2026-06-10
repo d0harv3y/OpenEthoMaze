@@ -84,6 +84,7 @@ from .db import (
     TrialTiming,
 )
 from .db.trial_settings_io import radial_arm_exit_hole_from_geometry_payload
+from .persist_pose import persist_pose_from_sidecar
 
 if TYPE_CHECKING:
     from maze.controller.acquisition.shared_config import (
@@ -244,6 +245,15 @@ def process_trial(
         if h5_fps is None:
             h5_fps = DEFAULT_FPS
         timing = complete_trial_timing(db_path, key, timing)
+
+        if manifest.sleap_path and manifest.sleap_path.exists():
+            persist_pose_from_sidecar(
+                db_path,
+                key,
+                manifest.sleap_path,
+                overwrite_pose=False,
+                fps=h5_fps,
+            )
 
         # Step 2: Load tracking data (SLEAP + in-range when available; merge into one TraceData)
         trace_data_sleap = None

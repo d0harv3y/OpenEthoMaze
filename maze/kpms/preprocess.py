@@ -6,13 +6,15 @@ from pathlib import Path
 import numpy as np
 
 from ..core.anatomy import STANDARD_NODE_NAMES
+from ..pipeline.db.trial_key import TrialKey
 from ..pipeline.io.file_discovery import TrialManifest
-from ..pipeline.io.sleap_loader import apply_jump_filter, load_sleap_file
+from ..pipeline.io.sleap_loader import TraceData, apply_jump_filter, load_sleap_file
 from ..pipeline.tracking.trace_processing import (
     TraceProcessingParams,
     filter_frames_no_animal,
     process_trace_data,
 )
+from .h5_pose import AnatomicalPoseLoad, load_anatomical_from_h5, resolve_canonical_trial_h5
 
 
 @dataclass(frozen=True)
@@ -26,6 +28,12 @@ class KpmsPreprocessConfig:
     #: If True, keep every video frame in coordinates (NaN where invalid) so time axes
     #: match full-length kpMS ``results.h5`` / native fits. Default False matches ORM fit/apply.
     retain_all_frames: bool = False
+    #: Results / cohort HDF5 passed to apply or fit; used when ``input_h5_path`` is empty.
+    db_path: Path | None = None
+
+
+def _effective_db_path(cfg: KpmsPreprocessConfig) -> Path:
+    return Path(cfg.db_path) if cfg.db_path is not None else Path("")
 
 
 def build_kpms_inputs(
@@ -35,57 +43,127 @@ def build_kpms_inputs(
     """
     Convert trial manifests into kpMS-ready coordinates/confidences.
 
+    Pose read order per trial: ``tracking/anatomical`` in canonical trial H5, then
+    ``sleap_path`` sidecar, else skip with ``missing_pose``.
+
     Returns:
       (coordinates, confidences, bodyparts, skipped_trial_keys)
     """
     coordinates: dict[str, np.ndarray] = {}
     confidences: dict[str, np.ndarray] = {}
     skipped: list[str] = []
+    db_path = _effective_db_path(cfg)
 
     for m in manifests:
         trial_key = m.kpms_results_dict_key
-        if m.sleap_path is None:
-            skipped.append(f"{trial_key}:missing_sleap")
-            continue
-        sleap_path = Path(m.sleap_path)
-        trace = load_sleap_file(sleap_path)
-        if trace is None:
-            skipped.append(f"{trial_key}:failed_load")
+        loaded = _load_pose_for_manifest(m, db_path, cfg)
+        if isinstance(loaded, str):
+            skipped.append(f"{trial_key}:{loaded}")
             continue
 
+        arr_xy, arr_conf, keep = loaded
+        if int(keep.sum()) < cfg.min_fragment_frames:
+            skipped.append(f"{trial_key}:too_short_after_filter")
+            continue
+
+        if cfg.retain_all_frames:
+            coordinates[trial_key] = arr_xy
+            confidences[trial_key] = arr_conf
+        else:
+            coordinates[trial_key] = arr_xy[keep]
+            confidences[trial_key] = arr_conf[keep]
+
+    return coordinates, confidences, list(STANDARD_NODE_NAMES), skipped
+
+
+def _load_pose_for_manifest(
+    manifest: TrialManifest,
+    db_path: Path,
+    cfg: KpmsPreprocessConfig,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | str:
+    """Return ``(xy, conf, keep)`` or a skip reason string."""
+    canonical = resolve_canonical_trial_h5(manifest, db_path)
+    if canonical is not None:
+        key = TrialKey(
+            animal_id=str(manifest.animal_id),
+            session=str(manifest.h5_session),
+            trial=str(manifest.trial),
+        )
+        pose = load_anatomical_from_h5(canonical, key)
+        if pose is not None:
+            return _preprocess_h5_pose(pose, cfg)
+
+    if manifest.sleap_path is None:
+        return "missing_pose"
+
+    trace = load_sleap_file(Path(manifest.sleap_path))
+    if trace is None:
+        return "failed_load"
+
+    return _preprocess_sleap_trace(trace, cfg)
+
+
+def _preprocess_sleap_trace(
+    trace: TraceData,
+    cfg: KpmsPreprocessConfig,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    trace = apply_jump_filter(
+        trace,
+        max_jump_cm=cfg.jump_filter_cm,
+        px_per_cm=cfg.px_per_cm,
+        lookahead_frames=cfg.jump_filter_lookahead_frames,
+    )
+    processed = process_trace_data(
+        trace.traces,
+        trace.node_names,
+        TraceProcessingParams(),
+    )
+    arr_xy, arr_conf = _stack_nodes(processed, trace.n_frames)
+    valid_frames = filter_frames_no_animal(trace.traces, trace.n_frames)
+    keep = valid_frames & np.isfinite(arr_xy).all(axis=(1, 2))
+    return arr_xy, arr_conf, keep
+
+
+def _preprocess_h5_pose(
+    pose: AnatomicalPoseLoad,
+    cfg: KpmsPreprocessConfig,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    traces, node_names, n_frames = _anatomical_pose_to_traces(pose)
+    if pose.pose_source != "sleap_live":
+        trace = TraceData(traces=traces, node_names=node_names, n_frames=n_frames)
         trace = apply_jump_filter(
             trace,
             max_jump_cm=cfg.jump_filter_cm,
             px_per_cm=cfg.px_per_cm,
             lookahead_frames=cfg.jump_filter_lookahead_frames,
         )
+        traces = trace.traces
+        node_names = trace.node_names
+        n_frames = trace.n_frames
 
-        processed = process_trace_data(
-            trace.traces,
-            trace.node_names,
-            TraceProcessingParams(),
-        )
-        valid_frames = filter_frames_no_animal(trace.traces, trace.n_frames)
+    processed = process_trace_data(traces, node_names, TraceProcessingParams())
+    arr_xy, arr_conf = _stack_nodes(processed, n_frames)
+    valid_frames = filter_frames_no_animal(traces, n_frames)
+    keep = valid_frames & np.isfinite(arr_xy).all(axis=(1, 2))
+    return arr_xy, arr_conf, keep
 
-        arr_xy, arr_conf = _stack_nodes(processed, trace.n_frames)
-        keep = valid_frames & np.isfinite(arr_xy).all(axis=(1, 2))
 
-        if cfg.retain_all_frames:
-            n_good = int(keep.sum())
-            if n_good < cfg.min_fragment_frames:
-                skipped.append(f"{trial_key}:too_short_after_filter")
-                continue
-            coordinates[trial_key] = arr_xy
-            confidences[trial_key] = arr_conf
-        else:
-            if int(keep.sum()) < cfg.min_fragment_frames:
-                skipped.append(f"{trial_key}:too_short_after_filter")
-                continue
-
-            coordinates[trial_key] = arr_xy[keep]
-            confidences[trial_key] = arr_conf[keep]
-
-    return coordinates, confidences, list(STANDARD_NODE_NAMES), skipped
+def _anatomical_pose_to_traces(
+    pose: AnatomicalPoseLoad,
+) -> tuple[dict[str, dict[str, np.ndarray]], list[str], int]:
+    n_frames = int(pose.frame_index.shape[0])
+    traces: dict[str, dict[str, np.ndarray]] = {}
+    for j, name in enumerate(pose.node_names):
+        visible = np.isfinite(pose.coordinates[:, j, :]).all(axis=1)
+        if pose.valid is not None:
+            visible = visible & (pose.valid[:, j] > 0)
+        traces[str(name)] = {
+            "x": np.asarray(pose.coordinates[:, j, 0], dtype=np.float32),
+            "y": np.asarray(pose.coordinates[:, j, 1], dtype=np.float32),
+            "score": np.asarray(pose.confidences[:, j], dtype=np.float32),
+            "visible": visible.astype(bool),
+        }
+    return traces, [str(n) for n in pose.node_names], n_frames
 
 
 def _stack_nodes(

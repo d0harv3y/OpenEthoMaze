@@ -33,7 +33,7 @@
         1
       ]
     },
-    "output_dir": "D:/scratch",
+    "output_dir": "C:/Users/admin/Documents/work/sack",
     "h5_filename": "trials.h5",
     "arena_type": "radial_arm",
     "run_mode": "continuous",
@@ -54,7 +54,7 @@
       "node_max_jump_px": 0.0,
       "node_jump_confirm_frames": 2,
       "min_sleap_nodes": 2,
-      "show_blob_overlay": false,
+      "show_blob_overlay": true,
       "max_contours": 0
     },
     "sleap_confidence_pct": 10,
@@ -120,8 +120,8 @@
     "stimulus_enabled": false
   },
   "last_session_id": "test1",
-  "last_trial_idx": 1,
-  "last_slot_idx": 1,
+  "last_trial_idx": 0,
+  "last_slot_idx": 0,
   "gui": {
     "track_show": true,
     "track_async": false,

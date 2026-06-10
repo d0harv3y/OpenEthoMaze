@@ -48,6 +48,7 @@ def make_manifest(
         researcher=extra.pop("researcher", None),
         original_session=extra.pop("original_session", None),
         kpms_recording_key=extra.pop("kpms_recording_key", None),
+        has_tracking_pose=bool(extra.pop("has_tracking_pose", False)),
         **extra,
     )
 

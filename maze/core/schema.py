@@ -87,3 +87,23 @@ AMBULATION_GROUP = "ambulation_metrics"
 AMBULATION_GROUP_LEGACY = "ambulation metrics"
 XY_DATASET_NAME = "xy"
 TASK_DATA_GROUP = "task_data"
+
+# ---------------------------------------------------------------------------
+# Tracking v2 (see docs/h5_tracking_contract.md)
+# ---------------------------------------------------------------------------
+
+TRACKING_GROUP = "tracking"
+TRACKING_ANATOMICAL_GROUP = "anatomical"
+TRACKING_BLOB_GROUP = "blob"
+
+TRACKING_FRAME_INDEX_DATASET = "frame_index"
+TRACKING_X_DATASET = "x"
+TRACKING_Y_DATASET = "y"
+TRACKING_SCORE_DATASET = "score"
+TRACKING_VALID_DATASET = "valid"
+
+TRACKING_BLOB_XY_DATASET = "xy"
+TRACKING_BLOB_HEADING_DATASET = "heading_rad"
+
+CONTROLLER_SCHEMA_VERSION_V1 = "v1"
+CONTROLLER_SCHEMA_VERSION_V2 = "v2"

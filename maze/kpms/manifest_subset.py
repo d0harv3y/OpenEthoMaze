@@ -12,6 +12,7 @@ from ..pipeline.io.file_discovery import (
     load_manifest_csv,
     load_treatment_labels,
 )
+from .h5_pose import resolve_canonical_trial_h5
 
 # TrialManifest fields allowed for stratified balancing (subset sampling only).
 BALANCE_COLUMN_CHOICES: frozenset[str] = frozenset(
@@ -46,6 +47,20 @@ class SubsetConfig:
     balance_columns: tuple[str, ...] = ("sex", "tx", "phase", "strain")
     # When loading from CSV, fill blank sex/tx/strain/... from inputs/treatment_labels.csv
     enrich_from_treatment_labels: bool = True
+    #: Cohort / results HDF5 for ``has_tracking_pose`` when ``input_h5_path`` is empty.
+    db_path: Path | None = None
+
+
+def _effective_db_path(cfg: SubsetConfig) -> Path:
+    return Path(cfg.db_path) if cfg.db_path is not None else Path("")
+
+
+def has_tracking_pose(manifest: TrialManifest, db_path: Path | None = None) -> bool:
+    """Return True when the manifest row resolves to ``tracking/anatomical`` in trial H5."""
+    if manifest.has_tracking_pose:
+        return True
+    db = Path(db_path) if db_path is not None else Path("")
+    return resolve_canonical_trial_h5(manifest, db) is not None
 
 
 def load_manifests(cfg: SubsetConfig) -> list[TrialManifest]:
@@ -64,9 +79,10 @@ def load_manifests(cfg: SubsetConfig) -> list[TrialManifest]:
 
 def filter_manifests(manifests: list[TrialManifest], cfg: SubsetConfig) -> list[TrialManifest]:
     """Apply baseline trial filters for kpMS fitting."""
+    db_path = _effective_db_path(cfg)
     out: list[TrialManifest] = []
     for m in manifests:
-        if cfg.require_sleap and m.sleap_path is None:
+        if cfg.require_sleap and m.sleap_path is None and not has_tracking_pose(m, db_path):
             continue
         if not cfg.include_habituation and m.phase == "habituation":
             continue

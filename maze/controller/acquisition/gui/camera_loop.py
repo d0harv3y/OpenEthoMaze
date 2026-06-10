@@ -638,6 +638,26 @@ def on_camera_tick(window: MainWindow) -> None:
                     else:
                         rec_fi = int(window._record_frame_index)
                         window._record_frame_index += 1
+                    anatomical_kwargs: dict = {}
+                    if (
+                        pose_xy is not None
+                        and pose_node_names is not None
+                        and pose_xy.ndim == 2
+                        and pose_xy.shape[1] == 2
+                        and len(pose_node_names) >= pose_xy.shape[0]
+                    ):
+                        anatomical_kwargs = {
+                            "pose_xy": pose_xy,
+                            "pose_scores": pose_scores,
+                            "pose_node_valid": pose_node_valid,
+                            "pose_node_names": list(pose_node_names),
+                        }
+                    blob_kwargs: dict = {}
+                    if window._config.track_enable_backup:
+                        blob_kwargs = {
+                            "blob_mask": blob_mask,
+                            "blob_crop_rect": blob_crop_rect,
+                        }
                     window._trial_recorder.write_frame(
                         image=img_raw,
                         frame_index=rec_fi,
@@ -651,6 +671,8 @@ def on_camera_tick(window: MainWindow) -> None:
                         spot_xy=spot_xy_for_record,
                         in_range_xy=in_range_xy_for_record,
                         centroid_xy=centroid_xy_for_record,
+                        **anatomical_kwargs,
+                        **blob_kwargs,
                     )
                 except Exception:
                     pass

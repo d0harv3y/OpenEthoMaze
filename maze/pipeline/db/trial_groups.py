@@ -22,8 +22,15 @@ def ensure_trial_group(
     sleap_path: Optional[str] = None,
     input_h5_path: Optional[str] = None,
     sleap_model_path: Optional[str] = None,
+    has_tracking_pose: Optional[bool] = None,
 ) -> None:
     """Ensure the trial group exists and set base path attrs."""
+    attrs: dict[str, str | int | None] = {
+        "input_h5_path": (safe_str(input_h5_path) if input_h5_path is not None else None),
+        "sleap_model_path": (safe_str(sleap_model_path) if sleap_model_path is not None else None),
+    }
+    if has_tracking_pose is not None:
+        attrs["has_tracking_pose"] = 1 if has_tracking_pose else 0
     with open_db(db_path, "a") as h5:
         core_ensure_trial_group(
             h5,
@@ -32,12 +39,7 @@ def ensure_trial_group(
             key.trial,
             video_path=safe_str(video_path) if video_path is not None else None,
             sleap_path=safe_str(sleap_path) if sleap_path is not None else None,
-            attrs={
-                "input_h5_path": (safe_str(input_h5_path) if input_h5_path is not None else None),
-                "sleap_model_path": (
-                    safe_str(sleap_model_path) if sleap_model_path is not None else None
-                ),
-            },
+            attrs=attrs,
         )
 
 
