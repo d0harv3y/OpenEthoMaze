@@ -16,6 +16,7 @@ Usage:
   uv run maze-legacy-db run-inference --model PATH [--animal-id ID ...] [--session S01] [--trial T01]
   uv run maze-legacy-db run-pipeline [--animal-id ID ...] [--session S01] [--trial T01] [--no-qc]
   uv run maze-legacy-db run-exports [--animal-id ID ...] [--session S01] [--trial T01] [--include-mistrials]
+  uv run maze-legacy-db build-kpms-h5 [--data-dir PATH] [--db-path PATH] [--animal-id ID ...]
 """
 
 from __future__ import annotations
@@ -67,11 +68,17 @@ from maze.pipeline.run_pipeline import (
     run_single_trial,
 )
 from maze.pipeline.exports import export_all
+from maze.pipeline.build_tracking_h5 import (
+    build_tracking_h5,
+    default_kpms_tracking_db,
+    manifest_path_for_db,
+)
 from maze.repo_paths import REPO_ROOT
 
 LEGACY_DIR = REPO_ROOT / "outputs" / "legacy"
 LEGACY_DB = LEGACY_DIR / "vast_results_legacy.h5"
 LEGACY_MANIFEST = LEGACY_DIR / "trial_manifest_legacy.csv"
+DEFAULT_KPMS_TRACKING_DB = default_kpms_tracking_db(REPO_ROOT)
 LABELS_PATH = REPO_ROOT / "inputs" / "treatment_labels.csv"
 INFERRED_ID_MAPPINGS_PATH = REPO_ROOT / "inputs" / "inferred_id_mappings.csv"
 
@@ -709,6 +716,90 @@ def cmd_run_exports(
 
 
 # -----------------------------------------------------------------------------
+# Subcommand: build-kpms-h5
+# -----------------------------------------------------------------------------
+def cmd_build_kpms_h5(
+    *,
+    db_path: Path,
+    data_dirs: Optional[Sequence[Path]] = None,
+    animal_ids: Optional[list[str]] = None,
+    sessions: Optional[list[str]] = None,
+    trials: Optional[list[str]] = None,
+    skip_anatomical: bool = False,
+    skip_blob: bool = False,
+    overwrite_pose: bool = False,
+    overwrite_blob: bool = False,
+) -> None:
+    """
+    Discover trials and write a kpMS-ready H5 with tracking/anatomical + tracking/blob.
+
+    No legacy exit/center settings or ambulation pipeline — paths, labels, and tracking only.
+    """
+    if skip_blob and not HAS_CV2:
+        print("Note: cv2 not available; blob materialization requires opencv-python.")
+
+    resolved_data_dirs = _resolve_data_dirs(data_dirs)
+    print(f"Discovering trials in: {resolved_data_dirs or DATA_DIRS}")
+    result = discover_trials(resolved_data_dirs)
+    print(f"  Trials discovered: {len(result.trials)}")
+
+    labels = load_treatment_labels(LABELS_PATH)
+    apply_treatment_labels(result, labels)
+    _apply_inferred_ids_from_csv(result)
+
+    manifests = _filter_manifests(result.trials, animal_ids, sessions, trials)
+    if not manifests:
+        print("No trials matched filters.")
+        return
+
+    if not HAS_CV2 and not skip_blob:
+        print("Warning: cv2 not available — skipping blob materialization (use --skip-blob to silence).")
+        skip_blob = True
+
+    for trial in manifests:
+        if trial.video_path and trial.video_path.exists():
+            n_frames = _get_video_frame_count(trial.video_path)
+            if n_frames is not None:
+                trial.video_n_frames = n_frames
+
+    db_path = Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"\nBuilding tracking H5: {db_path}")
+    print(f"  Trials to process: {len(manifests)}")
+    print(f"  Anatomical: {'off' if skip_anatomical else 'from sleap sidecar'}")
+    print(f"  Blob: {'off' if skip_blob else 'offline re-track from video'}")
+
+    def _log(msg: str) -> None:
+        print(f"  {msg}")
+
+    stats = build_tracking_h5(
+        db_path,
+        manifests,
+        skip_anatomical=skip_anatomical,
+        skip_blob=skip_blob,
+        overwrite_pose=overwrite_pose,
+        overwrite_blob=overwrite_blob,
+        log=_log,
+    )
+
+    manifest_path = manifest_path_for_db(db_path)
+    print("\nDone.")
+    print(f"  Database: {db_path}")
+    print(f"  Manifest: {manifest_path}")
+    print(
+        "  Anatomical: "
+        f"written={stats.anatomical_written}, skipped={stats.anatomical_skipped}, failed={stats.anatomical_failed}"
+    )
+    print(
+        f"  Blob: written={stats.blob_written}, skipped={stats.blob_skipped}, failed={stats.blob_failed}"
+    )
+    if stats.errors:
+        print(f"  Errors ({len(stats.errors)}); first 5:")
+        for err in stats.errors[:5]:
+            print(f"    {err}")
+
+
+# -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
 def main() -> int:
@@ -783,8 +874,46 @@ def main() -> int:
     p_exp.add_argument("--trial", type=str, nargs="*", default=None)
     p_exp.add_argument("--include-mistrials", action="store_true", help="Include mistrials in trial summary CSV")
 
+    # build-kpms-h5
+    p_kpms = sub.add_parser(
+        "build-kpms-h5",
+        help=(
+            "Build kpMS-ready H5 with tracking/anatomical (SLEAP sidecar) and "
+            "tracking/blob (offline video re-track); no legacy exit/center pipeline"
+        ),
+    )
+    p_kpms.add_argument(
+        "--data-dir",
+        dest="data_dirs",
+        action="append",
+        type=Path,
+        default=None,
+        help="Override discovery root (repeat for multiple roots).",
+    )
+    p_kpms.add_argument(
+        "--db-path",
+        type=Path,
+        default=DEFAULT_KPMS_TRACKING_DB,
+        help=f"Output H5 path (default: {DEFAULT_KPMS_TRACKING_DB})",
+    )
+    p_kpms.add_argument("--animal-id", type=str, nargs="*", default=None, help="Animal ID(s)")
+    p_kpms.add_argument("--session", type=str, nargs="*", default=None, help="Session(s), e.g. S01")
+    p_kpms.add_argument("--trial", type=str, nargs="*", default=None, help="Trial(s), e.g. T01")
+    p_kpms.add_argument("--skip-anatomical", action="store_true", help="Do not write tracking/anatomical")
+    p_kpms.add_argument("--skip-blob", action="store_true", help="Do not write tracking/blob")
+    p_kpms.add_argument(
+        "--overwrite-pose",
+        action="store_true",
+        help="Replace existing tracking/anatomical (default: keep_live policy)",
+    )
+    p_kpms.add_argument(
+        "--overwrite-blob",
+        action="store_true",
+        help="Replace existing tracking/blob",
+    )
+
     args = parser.parse_args()
-    _set_legacy_paths(args.db_path)
+    _set_legacy_paths(args.db_path if args.command != "build-kpms-h5" else None)
 
     if args.command == "init":
         cmd_init(data_dirs=args.data_dirs)
@@ -831,6 +960,20 @@ def main() -> int:
             sessions=_expand_filter_arg(args.session),
             trials=_expand_filter_arg(args.trial),
             include_mistrials=args.include_mistrials,
+        )
+        return 0
+
+    if args.command == "build-kpms-h5":
+        cmd_build_kpms_h5(
+            db_path=args.db_path,
+            data_dirs=args.data_dirs,
+            animal_ids=_expand_filter_arg(args.animal_id),
+            sessions=_expand_filter_arg(args.session),
+            trials=_expand_filter_arg(args.trial),
+            skip_anatomical=args.skip_anatomical,
+            skip_blob=args.skip_blob,
+            overwrite_pose=args.overwrite_pose,
+            overwrite_blob=args.overwrite_blob,
         )
         return 0
 
