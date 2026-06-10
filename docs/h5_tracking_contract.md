@@ -100,13 +100,16 @@ One trial may hold multiple ethogram groups, e.g. `ethogram/anatomical/`, `ethog
 
 ## Implementation phases (suggested)
 
+**Agent-assignable slices:** [tracking_kpms_master_plan.md](tracking_kpms_master_plan.md) and [phase_t_agent_prompt.md](phase_t_agent_prompt.md) (one PR per slice).
+
 | Phase | Scope |
 |-------|--------|
 | **T0** | This doc + schema constants in `maze/core/schema.py`; contract tests (round-trip write/read) |
 | **T1** | Acquisition: `TrialRecorder` buffers + flush `tracking/anatomical` + `tracking/blob` at `stop()` |
 | **T2** | `maze/kpms/preprocess.py`: `load_pose_from_trial_h5()`; manifest `require_sleap` relaxed when H5 pose present |
-| **T3** | `process_trial`: backfill anatomical from sidecar when H5 pose missing; optional never overwrite live pose |
-| **T4** | E6 spike on blob + fused streams using H5-only inputs |
+| **T3** | `process_trial`: backfill anatomical from sidecar when H5 pose missing; `keep_live` overwrite UX |
+| **T4** | Multi-stream kpMS: blob (B) + fused (C) + `--pose-stream` CLI |
+| **T5** | E6 spike: bout stability A vs B vs C on held-out subset |
 
 ## Backward compatibility
 

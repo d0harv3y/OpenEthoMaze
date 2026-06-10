@@ -212,6 +212,8 @@ Runs **after Phase A** (tests, paths). Overlaps **Phase C** (GUI) for workers; d
 
 **Start ethogram coding at E0** in parallel with **PR-A3** only if tests infra exists; otherwise **E0 immediately after Phase A gate**.
 
+**Execution plan (tracking + WSL + agents):** [tracking_kpms_master_plan.md](tracking_kpms_master_plan.md) — H5 tracking T0–T3 before E6; GPU fit via [wsl_kpms_setup.md](wsl_kpms_setup.md).
+
 ---
 
 ## Open decisions (need lab input)

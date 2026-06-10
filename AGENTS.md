@@ -1,6 +1,6 @@
 # Agent guide — OpenEthoMaze
 
-Concise map for Cursor agents working on this repo. Master plan: [docs/rescue_plan.md](docs/rescue_plan.md). Phase prompts: [docs/phase_c_agent_prompt.md](docs/phase_c_agent_prompt.md), [docs/phase_d_agent_prompt.md](docs/phase_d_agent_prompt.md).
+Concise map for Cursor agents working on this repo. Master plan: [docs/rescue_plan.md](docs/rescue_plan.md). Phase prompts: [docs/phase_c_agent_prompt.md](docs/phase_c_agent_prompt.md), [docs/phase_d_agent_prompt.md](docs/phase_d_agent_prompt.md). **Tracking v2 + multi-stream kpMS:** [docs/tracking_kpms_master_plan.md](docs/tracking_kpms_master_plan.md), [docs/phase_t_agent_prompt.md](docs/phase_t_agent_prompt.md), [docs/phase_wsl_agent_prompt.md](docs/phase_wsl_agent_prompt.md).
 
 ## Install (uv)
 
@@ -86,6 +86,8 @@ Run `uv run pytest tests/ -q` **before and after** each Phase D4 `main_window` e
 | `scripts/archive/**` | Frozen legacy; ruff/black excluded — no new features |
 | `maze/pipeline/paths_local.py` | Gitignored per-machine; use example + env/CLI |
 | Phase E ethogram GUI | [docs/ethogram_scope.md](docs/ethogram_scope.md) — parallel track |
+| Tracking v2 + H5 pose/blob | [docs/h5_tracking_contract.md](docs/h5_tracking_contract.md) — agent slices T0–T5 in [docs/phase_t_agent_prompt.md](docs/phase_t_agent_prompt.md) |
+| WSL2 GPU kpMS fit | [docs/wsl_kpms_setup.md](docs/wsl_kpms_setup.md) — Windows DAQ + WSL fit; see [docs/phase_wsl_agent_prompt.md](docs/phase_wsl_agent_prompt.md) |
 
 ## Phase status (short)
 
