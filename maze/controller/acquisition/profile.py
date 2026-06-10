@@ -823,3 +823,24 @@ def load_analysis_profile(
         else AnalysisTraceQualityConfig()
     )
     return traj, trace_q
+
+
+def load_fallback_tracking_from_profile(path: Path) -> FallbackTrackingConfig:
+    """
+    Load backup / in-range blob tracker settings from a controller acquisition profile.
+
+    Reads ``common.fallback_tracking`` (schema v3) or top-level ``fallback_tracking``
+    (legacy flat profiles).
+    """
+    path = Path(path)
+    with open(path, "r", encoding="utf-8") as file:
+        data = json.load(file)
+    if not isinstance(data, dict):
+        raise ValueError(f"Invalid profile JSON: {path}")
+    common = data.get("common", data)
+    if not isinstance(common, dict):
+        raise ValueError(f"Profile missing common section: {path}")
+    raw = common.get("fallback_tracking", {})
+    if not isinstance(raw, dict):
+        raise ValueError(f"Profile fallback_tracking is not an object: {path}")
+    return _fallback_tracking_from_dict(raw)

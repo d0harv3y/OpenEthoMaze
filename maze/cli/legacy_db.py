@@ -16,7 +16,7 @@ Usage:
   uv run maze-legacy-db run-inference --model PATH [--animal-id ID ...] [--session S01] [--trial T01]
   uv run maze-legacy-db run-pipeline [--animal-id ID ...] [--session S01] [--trial T01] [--no-qc]
   uv run maze-legacy-db run-exports [--animal-id ID ...] [--session S01] [--trial T01] [--include-mistrials]
-  uv run maze-legacy-db build-kpms-h5 [--data-dir PATH] [--db-path PATH] [--animal-id ID ...]
+  uv run maze-legacy-db build-kpms-h5 [--data-dir PATH] [--db-path PATH] [--profile PATH] [--animal-id ID ...]
 """
 
 from __future__ import annotations
@@ -73,6 +73,8 @@ from maze.pipeline.build_tracking_h5 import (
     default_kpms_tracking_db,
     manifest_path_for_db,
 )
+from maze.pipeline.offline_tracking import offline_blob_params_from_fallback
+from maze.controller.acquisition.profile import load_fallback_tracking_from_profile
 from maze.repo_paths import REPO_ROOT
 
 LEGACY_DIR = REPO_ROOT / "outputs" / "legacy"
@@ -729,6 +731,7 @@ def cmd_build_kpms_h5(
     skip_blob: bool = False,
     overwrite_pose: bool = False,
     overwrite_blob: bool = False,
+    profile_path: Path | None = None,
 ) -> None:
     """
     Discover trials and write a kpMS-ready H5 with tracking/anatomical + tracking/blob.
@@ -764,6 +767,17 @@ def cmd_build_kpms_h5(
 
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    blob_params = None
+    if profile_path is not None:
+        ft = load_fallback_tracking_from_profile(profile_path)
+        blob_params = offline_blob_params_from_fallback(ft)
+        print(f"Blob tracker from profile: {profile_path.resolve()}")
+        print(
+            f"  range [{blob_params.range_low}, {blob_params.range_high}], "
+            f"min_area={blob_params.min_area}, min_circularity={blob_params.min_circularity}"
+        )
+
     print(f"\nBuilding tracking H5: {db_path}")
     print(f"  Trials to process: {len(manifests)}")
     print(f"  Anatomical: {'off' if skip_anatomical else 'from sleap sidecar'}")
@@ -779,6 +793,7 @@ def cmd_build_kpms_h5(
         skip_blob=skip_blob,
         overwrite_pose=overwrite_pose,
         overwrite_blob=overwrite_blob,
+        blob_params=blob_params,
         log=_log,
     )
 
@@ -911,6 +926,15 @@ def main() -> int:
         action="store_true",
         help="Replace existing tracking/blob",
     )
+    p_kpms.add_argument(
+        "--profile",
+        type=Path,
+        default=None,
+        help=(
+            "Controller acquisition profile JSON; uses common.fallback_tracking "
+            "for offline blob re-track (range_low/high, min_area, etc.)"
+        ),
+    )
 
     args = parser.parse_args()
     _set_legacy_paths(args.db_path if args.command != "build-kpms-h5" else None)
@@ -974,6 +998,7 @@ def main() -> int:
             skip_blob=args.skip_blob,
             overwrite_pose=args.overwrite_pose,
             overwrite_blob=args.overwrite_blob,
+            profile_path=args.profile,
         )
         return 0
 

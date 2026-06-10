@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
+from maze.controller.acquisition.shared_config import FallbackTrackingConfig
 from maze.core.anatomy import BLOB_VERTEX_COUNT
 from maze.pipeline.blob_orient import BlobOrientTracker, DEFAULT_SPEED_EPSILON_PX
 from maze.pipeline.defaults import DEFAULT_FPS
@@ -35,6 +36,23 @@ class OfflineBlobParams:
     min_circularity: float = 0.0
     max_contours: int = 0
     speed_epsilon_px: float = DEFAULT_SPEED_EPSILON_PX
+
+
+def offline_blob_params_from_fallback(ft: FallbackTrackingConfig) -> OfflineBlobParams:
+    """Map controller :class:`FallbackTrackingConfig` to offline re-track params."""
+    speed_eps = float(ft.max_jump_px) if ft.max_jump_px > 0 else DEFAULT_SPEED_EPSILON_PX
+    return OfflineBlobParams(
+        range_low=int(ft.range_low),
+        range_high=int(ft.range_high),
+        min_area=int(ft.min_area),
+        max_area=int(ft.max_area),
+        morph_kernel_size=int(ft.morph_kernel_size),
+        max_jump_px=float(ft.max_jump_px),
+        selection_mode=str(ft.selection_mode),
+        min_circularity=float(ft.min_circularity),
+        max_contours=int(ft.max_contours),
+        speed_epsilon_px=speed_eps,
+    )
 
 
 def offline_blob_params_to_backup_json(params: OfflineBlobParams) -> dict[str, object]:

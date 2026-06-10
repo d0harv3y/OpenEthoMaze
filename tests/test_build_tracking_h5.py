@@ -10,10 +10,17 @@ import numpy as np
 import pytest
 
 from maze.core.anatomy import BLOB_VERTEX_COUNT, STANDARD_NODE_NAMES
+from maze.controller.acquisition.profile import load_fallback_tracking_from_profile
 from maze.pipeline.build_tracking_h5 import build_tracking_h5, manifest_path_for_db
 from maze.pipeline.io.file_discovery import TrialManifest
-from maze.pipeline.offline_tracking import materialize_blob_buffer_from_video
+from maze.pipeline.offline_tracking import (
+    materialize_blob_buffer_from_video,
+    offline_blob_params_from_fallback,
+)
 from maze.pipeline.tracking_io import has_anatomical_tracking, has_blob_tracking, write_anatomical_tracking
+from maze.repo_paths import REPO_ROOT
+
+PB_TESTS_VAST_PROFILE = REPO_ROOT / "inputs" / "pb-tests_vast.json"
 
 cv2 = pytest.importorskip("cv2")
 
@@ -53,6 +60,19 @@ def test_materialize_blob_buffer_from_video(tmp_path: Path) -> None:
     assert buffer.blob_source == "offline_retrack"
     valid_rows = sum(1 for v in buffer._valid_rows if v)
     assert valid_rows >= 4
+
+
+def test_offline_blob_params_from_controller_profile() -> None:
+    if not PB_TESTS_VAST_PROFILE.is_file():
+        pytest.skip(f"missing {PB_TESTS_VAST_PROFILE}")
+
+    ft = load_fallback_tracking_from_profile(PB_TESTS_VAST_PROFILE)
+    params = offline_blob_params_from_fallback(ft)
+
+    assert params.range_low == 21
+    assert params.range_high == 41
+    assert params.min_circularity == 0.4
+    assert params.min_area == 80
 
 
 def test_build_tracking_h5_writes_blob_and_manifest(tmp_path: Path) -> None:
