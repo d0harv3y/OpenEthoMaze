@@ -15,6 +15,7 @@ try:
     from PySide6.QtCore import QThread, Signal
     from PySide6.QtWidgets import (
         QCheckBox,
+        QComboBox,
         QDialog,
         QDialogButtonBox,
         QFileDialog,
@@ -34,6 +35,7 @@ try:
     from maze.kpms.availability import is_kpms_available
     from maze.kpms.fit import run_kpms_fit
     from maze.kpms.fit_config import KpmsFitRunConfig
+    from maze.kpms.project_paths import POSE_STREAM_CHOICES, default_kpms_root
 
     HAS_KPMS_FIT_DIALOG = True
 except ImportError:
@@ -45,9 +47,9 @@ except ImportError:
     QThread = object  # type: ignore[misc, assignment]
 
 
-def _default_kpms_project_dir(config: "AcquisitionConfig") -> Path:
+def _default_kpms_root_dir(config: "AcquisitionConfig") -> Path:
     out = (config.output_dir or "").strip()
-    return Path(out) / "kpms" if out else Path("kpms")
+    return default_kpms_root(out) if out else default_kpms_root(".")
 
 
 def _default_manifest_csv_text(config: "AcquisitionConfig") -> str:
@@ -91,16 +93,19 @@ if HAS_KPMS_FIT_DIALOG:
 
         hint = QLabel(
             "Slow job (minutes–hours): fits a keypoint-MoSeq model from a trial manifest CSV. "
-            "Requires sleap pose paths in the manifest and uv sync --extra kpms. "
-            "Writes checkpoint/results under the project directory and provenance JSON. "
-            "Use --force-new when reusing a model name after changing the manifest subset."
+            "Pose stream selects anatomical (SLEAP/H5), blob (backup tracker), or fused (both). "
+            "Outputs go to <project-dir>/<stream>/<model-name>/ (e.g. kpms/anatomical/orm_kpms_fit). "
+            "Requires uv sync --extra kpms. Use Force new when reusing a model name after subset changes."
         )
         hint.setWordWrap(True)
         lay.addWidget(hint)
 
         form = QFormLayout()
         manifest_edit = QLineEdit(_default_manifest_csv_text(config))
-        project_edit = QLineEdit(str(_default_kpms_project_dir(config)))
+        project_edit = QLineEdit(str(_default_kpms_root_dir(config)))
+        stream_combo = QComboBox()
+        for stream in POSE_STREAM_CHOICES:
+            stream_combo.addItem(stream, stream)
         model_edit = QLineEdit("orm_kpms_fit")
         max_trials = QSpinBox()
         max_trials.setRange(1, 10_000)
@@ -139,7 +144,8 @@ if HAS_KPMS_FIT_DIALOG:
         proj_h.setContentsMargins(0, 0, 0, 0)
         proj_h.addWidget(project_edit)
         proj_h.addWidget(QPushButton("Browse…", clicked=browse_project))
-        form.addRow("Project directory:", proj_row)
+        form.addRow("Project directory (kpMS root):", proj_row)
+        form.addRow("Pose stream:", stream_combo)
         form.addRow("Model name:", model_edit)
         form.addRow("Max trials:", max_trials)
         form.addRow("Random seed:", seed_spin)
@@ -192,9 +198,13 @@ if HAS_KPMS_FIT_DIALOG:
             )
             if worker is not None:
                 return
+            pose_stream = stream_combo.currentData()
+            if not isinstance(pose_stream, str):
+                pose_stream = "anatomical"
             cfg = KpmsFitRunConfig(
                 project_dir=pdir,
                 model_name=model_edit.text().strip() or "orm_kpms_fit",
+                pose_stream=pose_stream,  # type: ignore[arg-type]
                 manifest_csv=mpath,
                 max_trials=int(max_trials.value()),
                 random_seed=int(seed_spin.value()),

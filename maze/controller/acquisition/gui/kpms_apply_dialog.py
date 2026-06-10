@@ -15,6 +15,7 @@ try:
     from PySide6.QtCore import QThread, Signal
     from PySide6.QtWidgets import (
         QCheckBox,
+        QComboBox,
         QDialog,
         QDialogButtonBox,
         QFileDialog,
@@ -33,6 +34,7 @@ try:
     from maze.kpms.apply import DEFAULT_MANIFEST_CSV, run_kpms_apply
     from maze.kpms.apply_run_config import KpmsApplyRunConfig
     from maze.kpms.availability import is_kpms_available
+    from maze.kpms.project_paths import POSE_STREAM_CHOICES, default_kpms_root
 
     HAS_KPMS_APPLY_DIALOG = True
 except ImportError:
@@ -44,9 +46,9 @@ except ImportError:
     QThread = object  # type: ignore[misc, assignment]
 
 
-def _default_kpms_project_dir(config: "AcquisitionConfig") -> Path:
+def _default_kpms_root_dir(config: "AcquisitionConfig") -> Path:
     out = (config.output_dir or "").strip()
-    return Path(out) / "kpms" if out else Path("kpms")
+    return default_kpms_root(out) if out else default_kpms_root(".")
 
 
 def _default_manifest_csv_text(config: "AcquisitionConfig") -> str:
@@ -99,15 +101,19 @@ if HAS_KPMS_APPLY_DIALOG:
 
         hint = QLabel(
             "Apply a trained keypoint-MoSeq checkpoint to trials listed in a manifest CSV. "
-            "Requires a prior fit (checkpoint under project directory / model name) and "
-            "uv sync --extra kpms. Writes results_apply.h5 and apply_summary.json with provenance."
+            "Pose stream must match the fit (anatomical, blob, or fused). "
+            "Checkpoint path: <project-dir>/<stream>/<model-name>/checkpoint.h5. "
+            "Requires uv sync --extra kpms. Writes results_apply.h5 and apply_summary.json."
         )
         hint.setWordWrap(True)
         lay.addWidget(hint)
 
         form = QFormLayout()
         manifest_edit = QLineEdit(_default_manifest_csv_text(config))
-        project_edit = QLineEdit(str(_default_kpms_project_dir(config)))
+        project_edit = QLineEdit(str(_default_kpms_root_dir(config)))
+        stream_combo = QComboBox()
+        for stream in POSE_STREAM_CHOICES:
+            stream_combo.addItem(stream, stream)
         model_edit = QLineEdit("orm_kpms_fit")
         results_edit = QLineEdit()
         results_edit.setPlaceholderText("Default: <project>/<model>/results_apply.h5")
@@ -150,7 +156,8 @@ if HAS_KPMS_APPLY_DIALOG:
         proj_h.setContentsMargins(0, 0, 0, 0)
         proj_h.addWidget(project_edit)
         proj_h.addWidget(QPushButton("Browse…", clicked=browse_project))
-        form.addRow("Project directory:", proj_row)
+        form.addRow("Project directory (kpMS root):", proj_row)
+        form.addRow("Pose stream:", stream_combo)
         form.addRow("Model name:", model_edit)
         form.addRow("Results HDF5 (optional):", results_edit)
         form.addRow("Animal ID filter:", animal_edit)
@@ -211,10 +218,14 @@ if HAS_KPMS_APPLY_DIALOG:
             results_path = Path(rtext) if rtext else None
             if worker is not None:
                 return
+            pose_stream = stream_combo.currentData()
+            if not isinstance(pose_stream, str):
+                pose_stream = "anatomical"
             cfg = KpmsApplyRunConfig(
                 project_dir=pdir,
                 model_name=model,
                 manifest_csv=mpath,
+                pose_stream=pose_stream,  # type: ignore[arg-type]
                 results_path=results_path,
                 animal_ids=_parse_optional_filter(animal_edit.text()),
                 sessions=_parse_optional_filter(session_edit.text()),

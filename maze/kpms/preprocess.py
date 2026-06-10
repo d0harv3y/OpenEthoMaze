@@ -37,7 +37,7 @@ class KpmsPreprocessConfig:
     retain_all_frames: bool = False
     #: Results / cohort HDF5 passed to apply or fit; used when ``input_h5_path`` is empty.
     db_path: Path | None = None
-    #: Pose stream: anatomical (A), blob (B). Fused (C) is T4b.
+    #: Pose stream: anatomical (A), blob (B), fused (C = A∥B).
     pose_stream: PoseStream = "anatomical"
 
 
@@ -49,8 +49,11 @@ def _bodyparts_for_stream(pose_stream: PoseStream) -> tuple[str, ...]:
     if pose_stream == "blob":
         return BLOB_NODE_NAMES
     if pose_stream == "fused":
-        raise NotImplementedError("pose_stream='fused' is T4b")
+        return STANDARD_NODE_NAMES + BLOB_NODE_NAMES
     return STANDARD_NODE_NAMES
+
+
+_FusedStreamTensors = tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
 
 
 def build_kpms_inputs(
@@ -66,6 +69,9 @@ def build_kpms_inputs(
 
     Stream B (``pose_stream='blob'``): ``tracking/blob`` in canonical trial H5 only;
     no sleap fallback.
+
+    Stream C (``pose_stream='fused'``): concatenate anatomical + blob per ``frame_index``.
+    Missing stream halves are ``NaN`` coordinates with zero confidence.
 
     Returns:
       (coordinates, confidences, bodyparts, skipped_trial_keys)
@@ -104,9 +110,139 @@ def _load_pose_for_manifest(
     cfg: KpmsPreprocessConfig,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | str:
     """Return ``(xy, conf, keep)`` or a skip reason string."""
+    if cfg.pose_stream == "fused":
+        return _load_fused_for_manifest(manifest, db_path, cfg)
     if cfg.pose_stream == "blob":
         return _load_blob_for_manifest(manifest, db_path, cfg)
     return _load_anatomical_for_manifest(manifest, db_path, cfg)
+
+
+def _load_fused_for_manifest(
+    manifest: TrialManifest,
+    db_path: Path,
+    cfg: KpmsPreprocessConfig,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | str:
+    anat = _try_load_anatomical_tensors(manifest, db_path, cfg)
+    blob = _try_load_blob_tensors(manifest, db_path, cfg)
+    if anat is None and blob is None:
+        return "missing_pose"
+    return _fuse_anatomical_blob_tensors(anat, blob)
+
+
+def _try_load_anatomical_tensors(
+    manifest: TrialManifest,
+    db_path: Path,
+    cfg: KpmsPreprocessConfig,
+) -> _FusedStreamTensors | None:
+    """Return ``(frame_index, xy, conf, row_keep)`` for stream A, or ``None``."""
+    canonical = resolve_canonical_trial_h5(manifest, db_path, pose_stream="anatomical")
+    if canonical is not None:
+        key = TrialKey(
+            animal_id=str(manifest.animal_id),
+            session=str(manifest.h5_session),
+            trial=str(manifest.trial),
+        )
+        pose = load_anatomical_from_h5(canonical, key)
+        if pose is not None:
+            arr_xy, arr_conf, keep = _preprocess_h5_pose(pose, cfg)
+            return (
+                np.asarray(pose.frame_index, dtype=np.uint32),
+                arr_xy,
+                arr_conf,
+                keep,
+            )
+
+    if manifest.sleap_path is None:
+        return None
+
+    trace = load_sleap_file(Path(manifest.sleap_path))
+    if trace is None:
+        return None
+
+    arr_xy, arr_conf, keep = _preprocess_sleap_trace(trace, cfg)
+    frame_index = np.arange(arr_xy.shape[0], dtype=np.uint32)
+    return frame_index, arr_xy, arr_conf, keep
+
+
+def _try_load_blob_tensors(
+    manifest: TrialManifest,
+    db_path: Path,
+    cfg: KpmsPreprocessConfig,
+) -> _FusedStreamTensors | None:
+    """Return ``(frame_index, xy, conf, row_keep)`` for stream B, or ``None``."""
+    canonical = resolve_canonical_trial_h5(manifest, db_path, pose_stream="blob")
+    if canonical is None:
+        return None
+
+    key = TrialKey(
+        animal_id=str(manifest.animal_id),
+        session=str(manifest.h5_session),
+        trial=str(manifest.trial),
+    )
+    pose = load_blob_from_h5(canonical, key)
+    if pose is None:
+        return None
+
+    arr_xy, arr_conf, keep = _preprocess_h5_blob(pose, cfg)
+    return (
+        np.asarray(pose.frame_index, dtype=np.uint32),
+        arr_xy,
+        arr_conf,
+        keep,
+    )
+
+
+def _fuse_anatomical_blob_tensors(
+    anat: _FusedStreamTensors | None,
+    blob: _FusedStreamTensors | None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Align streams on sorted union of ``frame_index``; concatenate A∥B (K=16).
+
+    Missing stream rows at a shared frame index leave that half as NaN / conf 0.
+    """
+    k_anat = len(STANDARD_NODE_NAMES)
+    k_blob = len(BLOB_NODE_NAMES)
+    k_total = k_anat + k_blob
+
+    frame_parts: list[np.ndarray] = []
+    if anat is not None:
+        frame_parts.append(np.asarray(anat[0], dtype=np.uint32).reshape(-1))
+    if blob is not None:
+        frame_parts.append(np.asarray(blob[0], dtype=np.uint32).reshape(-1))
+    union_fi = np.unique(np.concatenate(frame_parts))
+    union_fi.sort()
+    t = int(union_fi.shape[0])
+
+    fused_xy = np.full((t, k_total, 2), np.nan, dtype=np.float32)
+    fused_conf = np.zeros((t, k_total), dtype=np.float32)
+    fused_keep = np.zeros(t, dtype=bool)
+
+    if anat is not None:
+        a_fi, a_xy, a_conf, a_keep = anat
+        src_map = {int(f): i for i, f in enumerate(np.asarray(a_fi, dtype=np.uint32).reshape(-1))}
+        for out_i, fi in enumerate(union_fi):
+            src_i = src_map.get(int(fi))
+            if src_i is None:
+                continue
+            fused_xy[out_i, :k_anat] = a_xy[src_i]
+            fused_conf[out_i, :k_anat] = a_conf[src_i]
+            if a_keep[src_i]:
+                fused_keep[out_i] = True
+
+    if blob is not None:
+        b_fi, b_xy, b_conf, b_keep = blob
+        src_map = {int(f): i for i, f in enumerate(np.asarray(b_fi, dtype=np.uint32).reshape(-1))}
+        for out_i, fi in enumerate(union_fi):
+            src_i = src_map.get(int(fi))
+            if src_i is None:
+                continue
+            fused_xy[out_i, k_anat:] = b_xy[src_i]
+            fused_conf[out_i, k_anat:] = b_conf[src_i]
+            if b_keep[src_i]:
+                fused_keep[out_i] = True
+
+    return fused_xy, fused_conf, fused_keep
 
 
 def _load_blob_for_manifest(
@@ -211,7 +347,9 @@ def _preprocess_h5_blob(
     frame_score = np.asarray(pose.confidences, dtype=np.float32).reshape(-1)
     arr_conf = np.broadcast_to(frame_score[:, None], (n_frames, k)).copy()
     valid = np.asarray(pose.valid, dtype=np.uint8).reshape(-1)
-    arr_conf[valid == 0] = 0.0
+    invalid_frame = valid == 0
+    arr_xy[invalid_frame] = np.nan
+    arr_conf[invalid_frame] = 0.0
     invalid_xy = ~np.isfinite(arr_xy).all(axis=(1, 2))
     arr_conf[invalid_xy] = 0.0
     keep = (valid > 0) & np.isfinite(arr_xy).all(axis=(1, 2))

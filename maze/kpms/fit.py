@@ -21,6 +21,7 @@ from .manifest_subset import (
 )
 from .heading_idxs import anterior_posterior_idxs
 from .preprocess import KpmsPreprocessConfig, build_kpms_inputs
+from .project_paths import POSE_STREAM_CHOICES, resolve_kpms_project_dir
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,17 @@ def parse_args() -> argparse.Namespace:
             "Use when reusing --model-name after changing the manifest or subset."
         ),
     )
+    parser.add_argument(
+        "--pose-stream",
+        type=str,
+        choices=POSE_STREAM_CHOICES,
+        default="anatomical",
+        help=(
+            "Pose stream for fit/apply preprocessing: anatomical (SLEAP/H5), "
+            "blob (backup tracker polygon), or fused (concatenated A+B). "
+            "Project outputs default to <project-dir>/<stream>/<model-name>/."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -119,11 +131,13 @@ def run_kpms_fit(cfg: KpmsFitRunConfig) -> Path:
     Raises:
         RuntimeError: No trials selected or no usable trajectories after preprocess.
     """
-    project_dir = Path(cfg.project_dir)
+    project_dir = resolve_kpms_project_dir(cfg.project_dir, cfg.pose_stream)
     ensure_dir(project_dir)
     subset_cfg = subset_config_from_fit_run(cfg)
     prov_inputs = {
         "project_dir": str(project_dir),
+        "kpms_root": str(cfg.project_dir),
+        "pose_stream": cfg.pose_stream,
         "model_name": cfg.model_name,
         "manifest_csv": str(cfg.manifest_csv) if cfg.manifest_csv else None,
         "force_new": bool(cfg.force_new),
@@ -154,6 +168,7 @@ def fit_run_config_from_args(args: argparse.Namespace) -> KpmsFitRunConfig:
     return KpmsFitRunConfig(
         project_dir=Path(args.project_dir),
         model_name=args.model_name,
+        pose_stream=args.pose_stream,
         manifest_csv=Path(args.manifest_csv) if args.manifest_csv else None,
         max_trials=args.max_trials,
         random_seed=args.random_seed,
@@ -281,6 +296,7 @@ def _run_fit_body(
     summary = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "project_dir": str(project_dir),
+        "pose_stream": pre_cfg.pose_stream,
         "model_name": fitted_name,
         "n_selected_trials": len(manifests),
         "n_used_recordings": len(coordinates),

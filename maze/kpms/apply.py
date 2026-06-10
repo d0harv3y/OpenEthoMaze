@@ -24,6 +24,7 @@ from .apply_run_config import KpmsApplyRunConfig
 from .manifest_subset import SubsetConfig, filter_manifests, load_manifests
 from .heading_idxs import anterior_posterior_idxs
 from .preprocess import KpmsPreprocessConfig, build_kpms_inputs
+from .project_paths import POSE_STREAM_CHOICES, resolve_kpms_project_dir
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 # Default manifest path (legacy_db sync output under repo outputs/legacy/).
@@ -312,6 +313,7 @@ def apply_run_config_from_args(args: argparse.Namespace) -> KpmsApplyRunConfig:
         reindex_syllables_before_load=not args.no_reindex,
         verbose=not args.quiet,
         overwrite_results=not args.no_overwrite_results,
+        pose_stream=args.pose_stream,
     )
 
 
@@ -364,9 +366,11 @@ def run_kpms_apply(cfg: KpmsApplyRunConfig) -> dict[str, Any]:
         overwrite_results=cfg.overwrite_results,
     )
     pre_cfg = KpmsPreprocessConfig(pose_stream=cfg.pose_stream)
-    project_dir = Path(cfg.project_dir)
+    project_dir = resolve_kpms_project_dir(cfg.project_dir, cfg.pose_stream)
     prov_inputs = {
         "project_dir": str(project_dir),
+        "kpms_root": str(cfg.project_dir),
+        "pose_stream": cfg.pose_stream,
         "model_name": cfg.model_name,
         "manifest_csv": str(manifest_csv),
         "manifest_csv_sha256": sha256_file(manifest_csv),
@@ -428,6 +432,16 @@ def parse_args() -> argparse.Namespace:
         help="Pass overwrite=False to apply_model (fails if results file already has these keys)",
     )
     p.add_argument("--quiet", action="store_true")
+    p.add_argument(
+        "--pose-stream",
+        type=str,
+        choices=POSE_STREAM_CHOICES,
+        default="anatomical",
+        help=(
+            "Pose stream for preprocessing (must match the fitted checkpoint stream): "
+            "anatomical, blob, or fused. Resolves project dir to <project-dir>/<stream>/."
+        ),
+    )
     return p.parse_args()
 
 
