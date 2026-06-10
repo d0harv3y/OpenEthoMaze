@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Optional
+
+from maze.pipeline.db.trial_key import TrialKey
+from maze.pipeline.pose_status import read_pose_status_label
 
 from .identity import sanitize_session_id
 
@@ -54,7 +58,43 @@ def apply_status_and_buttons(window: MainWindow) -> None:
     window._end_trial_btn.setEnabled(bs["end_trial"] and run_ok)
     window._stop_btn.setEnabled(bs["stop"] and run_ok)
     window._camera_flip.setEnabled(not window._trial_controller.run_active)
+    sync_pose_status_label(window)
     sync_settings_apply_enabled(window)
+
+
+def sync_pose_status_label(window: MainWindow) -> None:
+    """Update Pose status from the current trial group in the results H5."""
+    label = getattr(window, "_status_pose", None)
+    if label is None:
+        return
+    # Post-trial ``process_trial`` opens the same H5 for append on a worker thread; a
+    # concurrent read-only open from the GUI camera loop fails on Windows HDF5.
+    if getattr(window, "_analysis_worker", None) is not None:
+        return
+
+    output_dir = (window._config.output_dir or "").strip()
+    if not output_dir:
+        label.setText("—")
+        return
+
+    h5_name = (window._config.h5_filename or "trials.h5").strip() or "trials.h5"
+    db_path = Path(output_dir) / h5_name
+    if not db_path.is_file():
+        label.setText("—")
+        return
+
+    x, y = window._last_track_xy if window._last_track_xy else (0.0, 0.0)
+    status = window._trial_controller.get_status_dict(x, y)
+    animal_id = str(status.get("animal_id", "")).strip()
+    session_id = str(status.get("session_id", "")).strip()
+    trial = str(status.get("trial", "")).strip()
+    if not animal_id or animal_id == "—" or not session_id or not trial or trial == "—":
+        label.setText("—")
+        return
+
+    key = TrialKey(animal_id=animal_id, session=session_id, trial=trial)
+    text = read_pose_status_label(db_path, key)
+    label.setText(text.removeprefix("Pose: ").strip() or "—")
 
 
 def sync_settings_apply_enabled(window: MainWindow) -> None:

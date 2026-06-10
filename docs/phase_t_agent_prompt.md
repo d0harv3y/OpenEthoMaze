@@ -72,16 +72,16 @@ Acceptance: uv run pytest tests/ -q; optional manual note in PR that smoke maze-
 ## Prompt — T1c blob orientation + 8-gon
 
 ```
-Scope: T1c only. Prerequisite: T0.
+Scope: T1c only. Prerequisite: T0. **Shipped.**
 
-Pure library: contour/mask → 8 vertices in motion-consistent order.
+Pure library: contour (or mask) → 8 vertices in motion-consistent order.
 
 Deliverables:
-- maze/pipeline/blob_orient.py (or maze/controller/acquisition/blob_orient.py): resample to BLOB_VERTEX_COUNT, heading from centroid velocity, temporal unwrap, confidence when speed < epsilon
+- maze/pipeline/blob_orient.py: resample to BLOB_VERTEX_COUNT, heading from centroid velocity, temporal unwrap, confidence when speed < epsilon
 - Optional: use neck→nose from anatomical frame as heading hint when both valid (document in docstring)
 - tests/test_blob_orient.py: synthetic ellipse + known velocity → stable vertex order
 
-Out of scope: H5 write, kpMS, GUI wiring.
+Out of scope: H5 write, kpMS. Live acquisition wiring is T1d (`TrackingController.orient_blob`).
 
 Acceptance: pytest on synthetic cases; no cv2 import in kpms/.
 ```
@@ -91,18 +91,19 @@ Acceptance: pytest on synthetic cases; no cv2 import in kpms/.
 ## Prompt — T1d acquisition blob flush
 
 ```
-Scope: T1d only. Prerequisites: T0, T1c.
+Scope: T1d only. Prerequisites: T0, T1c. **Shipped** (polygon-first, Jun 2026).
 
-Persist tracking/blob at trial stop from backup tracker blob_mask.
+Persist tracking/blob at trial stop from oriented backup polygon (no mask round-trip).
 
-Touch:
-- TrialRecorder: buffer blob xy (T,8,2), valid, heading_rad, score; backup_params_json attr from tracker settings
-- camera_loop: pass blob_mask or precomputed vertices from TrackingResult
-- blob_source=backup_live
+Touch (as implemented):
+- maze/controller/acquisition/tracking.py: fallback returns blob_contour; TrackingController.orient_blob() owns BlobOrientTracker state
+- maze/controller/acquisition/gui/camera_loop.py: crop offset → full-image xy; same polygon for overlay (fillPoly) and recorder
+- maze/controller/acquisition/recording.py: BlobTrackingBuffer from precomputed blob_xy, valid, heading_rad, score
+- blob_source=backup_live; backup_params_json from fallback settings
 
-Out of scope: kpMS stream B, offline re-track.
+Out of scope: kpMS stream B (T4a), offline re-track, virtual acq blob materialization.
 
-Acceptance: pytest green; tracking/blob round-trip via test_tracking_io or new integration test.
+Acceptance: tests/controller/test_recording_blob.py, test_tracking_blob_fallback.py, test_blob_polygon_overlay.py; tracking/blob round-trip via test_tracking_io.
 ```
 
 ---
@@ -286,7 +287,7 @@ Do not commit scratch/; summarize conclusions in PR or docs/tracking_kpms_master
 Phase T (Tracking v2 + multi-stream kpMS paths) for OpenEthoMaze is complete through T4c and E0. Fix regressions only.
 
 Checklist:
-- tracking/anatomical + tracking/blob written at acquisition
+- tracking/anatomical + tracking/blob written at live acquisition (blob requires track_enable_backup; not virtual acq)
 - build_kpms_inputs reads H5 first; three pose streams fit/apply independently
 - keep_live overwrite UX shipped
 - WSL GPU fit documented (phase_wsl_agent_prompt.md)

@@ -155,6 +155,16 @@ class BlobOrientTracker:
         )
 
 
+def cv_contour_to_xy(contour: object) -> np.ndarray | None:
+    """Convert an OpenCV contour ``(N, 1, 2)`` or ``(N, 2)`` to ``(N, 2)`` float xy."""
+    if contour is None:
+        return None
+    pts = np.asarray(contour, dtype=np.float64).reshape(-1, 2)
+    if pts.shape[0] < 3:
+        return None
+    return pts
+
+
 def contour_from_mask(mask: np.ndarray) -> np.ndarray | None:
     """
     Return boundary pixels of the foreground region as a closed contour ``(M, 2)`` xy.
@@ -315,6 +325,20 @@ def temporal_unwrap(current: np.ndarray, previous: np.ndarray) -> np.ndarray:
             best_dist = dist
             best = rolled
     return best
+
+
+def blob_anterior_posterior_idxs(
+    n_vertices: int = BLOB_VERTEX_COUNT,
+) -> tuple[list[int], list[int]]:
+    """
+    kpMS heading indices for stream B (motion-oriented blob polygon).
+
+    ``blob_p0`` is the front vertex (closest to motion heading); the opposite
+    vertex on the evenly resampled polygon is posterior.
+    """
+    if n_vertices < 2:
+        return [0], [0]
+    return [0], [n_vertices // 2]
 
 
 def frame_quality_score(

@@ -6,13 +6,13 @@ from pathlib import Path
 
 import h5py
 import numpy as np
-import pytest
 
-from maze.core.anatomy import STANDARD_NODE_NAMES
+from maze.core.anatomy import BLOB_NODE_NAMES, BLOB_VERTEX_COUNT, STANDARD_NODE_NAMES
+from maze.kpms.heading_idxs import anterior_posterior_idxs
 from maze.kpms.preprocess import KpmsPreprocessConfig, build_kpms_inputs
 from maze.pipeline.db.trial_key import TrialKey
 from maze.pipeline.io.file_discovery import TrialManifest
-from maze.pipeline.tracking_io import write_anatomical_tracking
+from maze.pipeline.tracking_io import write_anatomical_tracking, write_blob_tracking
 
 
 def _write_h5_pose(db: Path, key: TrialKey, *, t: int = 6) -> None:
@@ -80,3 +80,82 @@ def test_build_kpms_inputs_skips_without_pose_or_sleap(tmp_path: Path) -> None:
         KpmsPreprocessConfig(db_path=db),
     )
     assert skipped == ["1-S01-T01:missing_pose"]
+
+
+def _write_h5_blob(db: Path, key: TrialKey, *, t: int = 8) -> None:
+    rng = np.random.default_rng(3)
+    frame_index = np.arange(t, dtype=np.uint32)
+    xy = rng.random((t, BLOB_VERTEX_COUNT, 2), dtype=np.float32) * 200.0 + 50.0
+    valid = np.ones(t, dtype=np.uint8)
+    heading_rad = np.linspace(-0.5, 0.5, t, dtype=np.float32)
+    score = np.full(t, 0.85, dtype=np.float32)
+    with h5py.File(db, "a") as h5:
+        g = h5.require_group(key.path().lstrip("/"))
+        write_blob_tracking(
+            g,
+            frame_index=frame_index,
+            xy=xy,
+            valid=valid,
+            heading_rad=heading_rad,
+            score=score,
+            blob_source="backup_live",
+            h5=h5,
+        )
+
+
+def test_build_kpms_inputs_blob_h5_only(tmp_path: Path) -> None:
+    db = tmp_path / "trials.h5"
+    key = TrialKey("7", "S01", "T02")
+    _write_h5_blob(db, key, t=8)
+
+    manifest = TrialManifest(
+        animal_id="7",
+        session="S01",
+        trial="T02",
+        input_h5_path=db,
+        sleap_path=None,
+        kpms_recording_key="7-S01-T02",
+    )
+    cfg = KpmsPreprocessConfig(
+        min_fragment_frames=4,
+        db_path=db,
+        pose_stream="blob",
+    )
+
+    coordinates, confidences, bodyparts, skipped = build_kpms_inputs([manifest], cfg)
+
+    assert skipped == []
+    assert bodyparts == list(BLOB_NODE_NAMES)
+    assert "7-S01-T02" in coordinates
+    xy = coordinates["7-S01-T02"]
+    assert xy.ndim == 3
+    assert xy.shape[1] == len(BLOB_NODE_NAMES)
+    assert xy.shape[2] == 2
+    assert xy.shape[0] >= 4
+    assert "7-S01-T02" in confidences
+    assert confidences["7-S01-T02"].shape == (xy.shape[0], len(BLOB_NODE_NAMES))
+
+
+def test_build_kpms_inputs_blob_skips_without_tracking(tmp_path: Path) -> None:
+    db = tmp_path / "empty.h5"
+    with h5py.File(db, "w") as h5:
+        h5.create_group("1/S01/T01")
+
+    manifest = TrialManifest(
+        animal_id="1",
+        session="S01",
+        trial="T01",
+        input_h5_path=db,
+        sleap_path=None,
+    )
+    _, _, _, skipped = build_kpms_inputs(
+        [manifest],
+        KpmsPreprocessConfig(db_path=db, pose_stream="blob"),
+    )
+    assert skipped == ["1-S01-T01:missing_pose"]
+
+
+def test_blob_anterior_posterior_idxs_from_motion_heading() -> None:
+    anterior, posterior = anterior_posterior_idxs(list(BLOB_NODE_NAMES), pose_stream="blob")
+    assert anterior == [0]
+    assert posterior == [4]

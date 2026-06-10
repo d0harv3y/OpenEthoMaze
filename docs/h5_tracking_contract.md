@@ -10,7 +10,7 @@ Today:
 |------|----------------|-----|
 | Spot / in-range / centroid | `ambulation_metrics/<point>/xy` (per-frame `XY_ROW_DTYPE`) | Written at acquisition; enough for ambulation, not full pose |
 | SLEAP/DLC full skeleton | External `.slp` / `.h5.slp` via `trial.attrs["sleap_path"]` | kpMS `build_kpms_inputs` **requires** sidecar; controller-first trials may have live pose never persisted |
-| Blob silhouette | Ephemeral `blob_mask` in GUI only | Not in H5; E6 blob stream has no canonical source |
+| Backup blob 8-gon | `tracking/blob` at live acquisition when backup enabled | Virtual acq does not materialize blob; `offline_retrack` not yet implemented for legacy/empty trials |
 
 **Goal:** One trial HDF5 is the **authoritative timeline** for downstream kpMS (streams A/B/C), overlay, and audits. Sidecar prediction files remain optional imports or backups, not the only source of truth.
 
@@ -43,7 +43,7 @@ Dense per-frame pose aligned to the **acquisition video timeline** (same `frame_
 | Dataset / attr | Shape / type | Notes |
 |----------------|--------------|-------|
 | `frame_index` | `(T,) uint32` | Index into source video; monotonic within trial |
-| `x`, `y` | `(T, K) float32` | `NaN` where missing |
+| `xy` | `(T, K, 2) float32` | Vertex coordinates; `NaN` where missing (mirrors `tracking/blob/xy`) |
 | `score` | `(T, K) float32` | Confidence; 0 where absent |
 | `valid` | `(T, K) uint8` | Optional explicit mask (else derive from finite xy + score threshold) |
 | Attr `node_names` | JSON list[str] | Order matches K; prefer `STANDARD_NODE_NAMES` subset/order when possible |
@@ -85,8 +85,8 @@ Backup-tracker polygon for E6 stream B. **Fixed `N = 8`** (`maze.core.anatomy.BL
 
 **Write paths**
 
-1. **Acquisition:** when backup tracker valid, simplify `blob_mask` contour → `N` vertices; compute heading from centroid velocity.
-2. **Offline:** re-run `AdaptiveThresholdTracker` on stored video using `backup_params_json` when live recording absent (legacy trials).
+1. **Acquisition (live):** backup `findContours` → `BlobOrientTracker` in `TrackingController` (`orient_blob`, once per frame; crop offset applied in `camera_loop` for full-image px). Preview and H5 use the same oriented `(N, 2)` polygon (`fillPoly` overlay; no full-frame mask in the hot path). `TrialRecorder` buffers `xy` / `valid` / `heading_rad` / `score` at `stop()` when `track_enable_backup`. Attr `blob_source=backup_live`.
+2. **Offline (planned):** re-run `AdaptiveThresholdTracker` on stored video using `backup_params_json` when live blob absent (legacy trials, virtual-acq-only rows). Attr `blob_source=offline_retrack`.
 
 ---
 
@@ -114,8 +114,9 @@ One trial may hold multiple ethogram groups, e.g. `ethogram/anatomical/`, `ethog
 ## Backward compatibility
 
 - **v1 trials:** unchanged; kpMS and pipeline keep using `sleap_path`.
+- **Legacy anatomical layout:** readers accept early v2 files with separate `x` and `y` `(T, K)` datasets; new writes use unified `xy` `(T, K, 2)`.
 - **Discovery:** `sleap_path` column optional when `has_tracking_pose` attr or manifest flag set.
-- **File size:** `(T, K)` float32 ≈ 8×T×K bytes per trial; acceptable vs duplicating video; use gzip on datasets.
+- **File size:** `xy` `(T, K, 2)` float32; acceptable vs duplicating video; use gzip on datasets.
 
 ## Resolved decisions (lab, May 2026)
 
@@ -131,7 +132,7 @@ The repo already supports **one file** or **two files** per cohort. Tracking v2 
 
 **Rules (target implementation):**
 
-1. **Write at source:** `tracking/anatomical` and `tracking/blob` are written where acquisition (or virtual acq) already writes the trial group — normally `default_results_h5_path(config)` (`maze/pipeline/controller_discovery.py`).
+1. **Write at source:** `tracking/anatomical` and `tracking/blob` are written where acquisition already writes the trial group — normally `default_results_h5_path(config)` (`maze/pipeline/controller_discovery.py`). Virtual acq promotes **anatomical** (+ `sleap_path`); it does **not** write `tracking/blob` today (live backup only).
 2. **Read for kpMS / overlay:** Resolve canonical path per manifest row: `TrialManifest.input_h5_path` if it exists and contains `tracking/anatomical`; else the results `db_path` passed to apply/materialize; else `sleap_path` sidecar.
 3. **No automatic full-file mirror** on Analyze: `process_trial` **updates the same trial group in the `db_path` it was given** (adds ambulation metrics, QC, optional backfill). It does not copy whole trials into a second H5 unless the user runs an explicit export/sync tool (future: optional “copy tracking into cohort DB” batch — out of v2 default).
 4. **Discovery sync** continues to set `video_path`, `sleap_path`, `input_h5_path` attrs on the target DB; when controller-first, `input_h5_path` should reference the acquisition file if trials are analyzed from a different results file, so kpMS can find pose without rescanning disks.

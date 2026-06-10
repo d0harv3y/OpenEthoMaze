@@ -22,6 +22,7 @@ from ..pipeline.run_provenance import provenance_envelope, provenance_run, sha25
 from .io import ensure_dir, write_json
 from .apply_run_config import KpmsApplyRunConfig
 from .manifest_subset import SubsetConfig, filter_manifests, load_manifests
+from .heading_idxs import anterior_posterior_idxs
 from .preprocess import KpmsPreprocessConfig, build_kpms_inputs
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -161,19 +162,6 @@ class KpmsApplyConfig:
     overwrite_results: bool = True
 
 
-def _anterior_posterior_idxs(bodyparts: list) -> tuple[list[int], list[int]]:
-    bp = list(bodyparts)
-    try:
-        anterior = [bp.index("nose")]
-    except ValueError:
-        anterior = [0]
-    try:
-        posterior = [bp.index("tail")]
-    except ValueError:
-        posterior = [1] if len(bp) > 1 else [0]
-    return anterior, posterior
-
-
 def apply_kpms_checkpoint_from_manifests(
     project_dir: Path | str,
     model_name: str,
@@ -240,7 +228,10 @@ def apply_kpms_checkpoint_from_manifests(
     results_path = Path(results_path)
     ensure_dir(results_path.parent)
 
-    anterior_idxs, posterior_idxs = _anterior_posterior_idxs(bodyparts_list)
+    anterior_idxs, posterior_idxs = anterior_posterior_idxs(
+        bodyparts_list,
+        pre_cfg.pose_stream,
+    )
 
     kpms.apply_model(
         model,
@@ -372,6 +363,7 @@ def run_kpms_apply(cfg: KpmsApplyRunConfig) -> dict[str, Any]:
         verbose=cfg.verbose,
         overwrite_results=cfg.overwrite_results,
     )
+    pre_cfg = KpmsPreprocessConfig(pose_stream=cfg.pose_stream)
     project_dir = Path(cfg.project_dir)
     prov_inputs = {
         "project_dir": str(project_dir),
@@ -386,6 +378,7 @@ def run_kpms_apply(cfg: KpmsApplyRunConfig) -> dict[str, Any]:
             cfg.model_name,
             manifests,
             cfg=apply_cfg,
+            preprocess_config=pre_cfg,
             results_path=cfg.results_path,
             manifest_csv=manifest_csv,
         )

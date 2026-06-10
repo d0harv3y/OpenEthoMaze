@@ -165,6 +165,8 @@ class AcquisitionConfig:
     overlay_opacity_pct: int = 70
     arduino_port: Optional[str] = None
     run_analysis_after_trial: bool = False
+    #: ``keep_live`` preserves acquisition ``sleap_live`` pose on analyze/import; ``prefer_import`` replaces.
+    pose_overwrite_policy: str = "keep_live"
     # Optional per-profile override for virtual source timing.
     # When set (>0), virtual playback uses constant effective_fps = segment_frames / duration_override_s,
     # where segment_frames = total_frames − anchor_frame (anchor = 0 on open, or last seek index).

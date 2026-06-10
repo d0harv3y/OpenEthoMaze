@@ -27,6 +27,7 @@ if HAS_QT:
             video_path: Optional[Path],
             run_phase: str,
             analysis_profile: Optional[tuple[Any, Any]] = None,
+            overwrite_pose: bool = False,
         ) -> None:
             super().__init__()
             self._db_path = db_path
@@ -36,6 +37,7 @@ if HAS_QT:
             self._video_path = video_path
             self._run_phase = run_phase
             self._analysis_profile = analysis_profile
+            self._overwrite_pose = overwrite_pose
 
         def run(self) -> None:
             from ..post_trial_analysis import run_analysis_for_trial
@@ -48,6 +50,7 @@ if HAS_QT:
                 video_path=self._video_path,
                 run_phase=self._run_phase,
                 analysis_profile=self._analysis_profile,
+                overwrite_pose=self._overwrite_pose,
             )
             self.finished.emit(success, message)
 

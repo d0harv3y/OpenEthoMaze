@@ -48,9 +48,26 @@ def reset_sleap_node_jump_state(window: MainWindow) -> None:
     """Clear GUI-side SLEAP node max-jump memory (``_last_pose_xy`` and per-node streaks)."""
     window._pose_jump_state.reset()
 
+
+def _blob_contour_in_crop_space(
+    blob_contour: Optional[np.ndarray],
+    *,
+    crop_w: int,
+    crop_h: int,
+) -> bool:
+    if blob_contour is None or blob_contour.size == 0:
+        return False
+    pts = np.asarray(blob_contour, dtype=np.float64)
+    return (
+        float(np.nanmax(pts[:, 0])) <= float(crop_w) + 0.5
+        and float(np.nanmax(pts[:, 1])) <= float(crop_h) + 0.5
+    )
+
+
 def invalidate_tracker_cache(window: MainWindow) -> None:
     reset_sleap_node_jump_state(window)
     if window._tracking_controller is not None:
+        window._tracking_controller.reset_blob_orient()
         path = window._config.sleap_model_path or ""
         window._tracking_controller.set_tracker_sources(
             path.strip(),
@@ -228,8 +245,10 @@ def on_camera_tick(window: MainWindow) -> None:
         pose_node_valid_from_res = (
             None  # per-node confidence validity from tracker (SLEAP only)
         )
-        blob_mask = None
-        blob_crop_rect = None
+        blob_xy_full: Optional[np.ndarray] = None
+        blob_valid = False
+        blob_heading_rad = float("nan")
+        blob_score = 0.0
         in_range_xy_res = None
         ram_polys_preview = None
         ram_exit_preview = None
@@ -263,6 +282,7 @@ def on_camera_tick(window: MainWindow) -> None:
             )
             did_crop = False
             crop_x0, crop_y0 = 0, 0  # offset to add to tracker coords when we crop
+            crop_x1, crop_y1 = w, h
             ram_mask_result = None
             # Only build masked/cropped fallback input when backup tracker is enabled.
             if (
@@ -281,7 +301,7 @@ def on_camera_tick(window: MainWindow) -> None:
                 to_track = _cv2.bitwise_and(to_track, to_track, mask=mask_crop)
             elif enable_backup and _cv2 is not None and track_r > 0:
                 # Crop to rectangle around circle so tracker runs on fewer pixels (better FPS).
-                # Display still shows full image; we add crop offset to track_xy/pose_xy and embed blob_mask.
+                # Display still shows full image; we add crop offset to track_xy/pose_xy and blob polygon.
                 crop_x0 = max(0, int(roi_cx - track_r) - 1)
                 crop_y0 = max(0, int(roi_cy - track_r) - 1)
                 crop_x1 = min(w, int(roi_cx + track_r) + 2)
@@ -323,10 +343,9 @@ def on_camera_tick(window: MainWindow) -> None:
             pose_edge_inds = overlay_state["pose_edge_inds"]
             pose_node_names = overlay_state["pose_node_names"]
             pose_node_valid_from_res = overlay_state["pose_node_valid"]
-            blob_mask_res = overlay_state["blob_mask"]
+            tracking_result = overlay_state.get("tracking_result")
+            blob_contour = overlay_state.get("blob_contour")
             in_range_xy_res = overlay_state.get("in_range_xy")
-            # If we cropped, convert from crop coords to full-image coords.
-            # Pass small blob_mask + crop rect so overlay blends only in that slice (no full-frame alloc).
             if did_crop:
                 if track_source != "sleap" and track_xy_res is not None:
                     track_xy_res = (track_xy_res[0] + crop_x0, track_xy_res[1] + crop_y0)
@@ -339,13 +358,33 @@ def on_camera_tick(window: MainWindow) -> None:
                         in_range_xy_res[0] + crop_x0,
                         in_range_xy_res[1] + crop_y0,
                     )
-                blob_mask = blob_mask_res
-                blob_crop_rect = (
-                    (crop_x0, crop_y0, crop_x1, crop_y1) if blob_mask_res is not None else None
+            pose_offset = (0.0, 0.0)
+            blob_coord_offset = (0.0, 0.0)
+            if did_crop and blob_contour is not None:
+                crop_w = int(crop_x1 - crop_x0)
+                crop_h = int(crop_y1 - crop_y0)
+                if _blob_contour_in_crop_space(blob_contour, crop_w=crop_w, crop_h=crop_h):
+                    pose_offset = (float(crop_x0), float(crop_y0))
+                    blob_coord_offset = pose_offset
+            if (
+                enable_backup
+                and tracking_result is not None
+                and window._tracking_controller is not None
+            ):
+                live_blob = window._tracking_controller.orient_blob(
+                    tracking_result,
+                    anatomical_pose_xy=pose_xy,
+                    anatomical_node_names=pose_node_names,
+                    pose_offset=pose_offset,
                 )
-            else:
-                blob_mask = blob_mask_res
-                blob_crop_rect = None
+                if live_blob.valid:
+                    blob_xy_full = np.asarray(live_blob.xy, dtype=np.float32).copy()
+                    if blob_coord_offset != (0.0, 0.0):
+                        blob_xy_full[:, 0] += float(blob_coord_offset[0])
+                        blob_xy_full[:, 1] += float(blob_coord_offset[1])
+                    blob_valid = True
+                    blob_heading_rad = float(live_blob.heading_rad)
+                    blob_score = float(live_blob.score)
             if track_xy_res is not None:
                 track_xy = track_xy_res
                 track_valid = track_valid_res
@@ -404,6 +443,9 @@ def on_camera_tick(window: MainWindow) -> None:
                 and pose_node_valid.shape == pose_node_valid_from_res.shape
             ):
                 pose_node_valid = pose_node_valid & pose_node_valid_from_res
+            ft = window._config.fallback_tracking
+            show_blob_overlay = bool(getattr(ft, "show_blob_overlay", True))
+            blob_xy_overlay = blob_xy_full if show_blob_overlay and blob_valid else None
             img_display = draw_roi_and_tracking_overlay(
                 img_display,
                 roi_center,
@@ -418,8 +460,7 @@ def on_camera_tick(window: MainWindow) -> None:
                 pose_edge_inds=pose_edge_inds,
                 pose_node_names=pose_node_names,
                 pose_node_valid=pose_node_valid,
-                blob_mask=blob_mask,
-                blob_crop_rect=blob_crop_rect,
+                blob_xy=blob_xy_overlay,
                 ram_polys=ram_polys_preview,
                 ram_exit_xyr=ram_exit_preview,
                 ram_all_holes_xyr=ram_all_holes_preview,
@@ -453,8 +494,7 @@ def on_camera_tick(window: MainWindow) -> None:
                 pose_xy=pose_xy,
                 pose_node_valid=pose_node_valid,
                 pose_node_names=pose_node_names,
-                blob_mask=blob_mask,
-                blob_crop_rect=blob_crop_rect,
+                blob_xy=blob_xy_full if blob_valid else None,
                 track_xy=track_xy,
                 track_source=track_source,
                 exit_x_px=exit_x_px,
@@ -528,6 +568,8 @@ def on_camera_tick(window: MainWindow) -> None:
                     sm_rec = window._trial_controller.get_state_machine()
                     if sm_rec is not None:
                         recording_ram_exit_arm_index = int(sm_rec.exit_arm_index)
+                if window._tracking_controller is not None:
+                    window._tracking_controller.reset_blob_orient()
                 window._trial_recorder = TrialRecorder(
                     output_dir=video_dir,
                     db_path=db_path,
@@ -654,9 +696,33 @@ def on_camera_tick(window: MainWindow) -> None:
                         }
                     blob_kwargs: dict = {}
                     if window._config.track_enable_backup:
+                        record_blob = (
+                            blob_xy_full if blob_valid else None,
+                            blob_valid,
+                            blob_heading_rad,
+                            blob_score,
+                        )
+                        if (
+                            not blob_valid
+                            and window._tracking_controller is not None
+                        ):
+                            fb_blob = window._tracking_controller.capture_live_blob_on_image(
+                                img_raw,
+                                anatomical_pose_xy=pose_xy,
+                                anatomical_node_names=pose_node_names,
+                            )
+                            if fb_blob.valid:
+                                record_blob = (
+                                    np.asarray(fb_blob.xy, dtype=np.float32),
+                                    True,
+                                    float(fb_blob.heading_rad),
+                                    float(fb_blob.score),
+                                )
                         blob_kwargs = {
-                            "blob_mask": blob_mask,
-                            "blob_crop_rect": blob_crop_rect,
+                            "blob_xy": record_blob[0],
+                            "blob_valid": record_blob[1],
+                            "blob_heading_rad": record_blob[2],
+                            "blob_score": record_blob[3],
                         }
                     window._trial_recorder.write_frame(
                         image=img_raw,

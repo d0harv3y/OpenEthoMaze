@@ -98,6 +98,7 @@ def run_pipeline(
     skip_mistrials: bool = True,
     analysis_profile: Optional[tuple[Any, Any]] = None,
     prefilter_mode: PrefilterMode = GUI_DEFAULT_PREFILTER_MODE,
+    overwrite_pose: bool = False,
 ) -> dict[str, int]:
     """
     Run the pipeline on all discovered trials.
@@ -136,6 +137,7 @@ def run_pipeline(
         "skip_mistrials": skip_mistrials,
         "prefilter_mode": prefilter_mode,
         "has_analysis_profile": analysis_profile is not None,
+        "overwrite_pose": overwrite_pose,
     }
 
     with provenance_run("run_pipeline", db_path, prov_inputs) as prov:
@@ -237,10 +239,18 @@ def run_pipeline(
 
         if parallel and max_workers > 1:
             stats = _run_parallel(
-                trials, db_path, max_workers, generate_qc, stats, analysis_profile
+                trials,
+                db_path,
+                max_workers,
+                generate_qc,
+                stats,
+                analysis_profile,
+                overwrite_pose,
             )
         else:
-            stats = _run_sequential(trials, db_path, generate_qc, stats, analysis_profile)
+            stats = _run_sequential(
+                trials, db_path, generate_qc, stats, analysis_profile, overwrite_pose
+            )
 
         print("\nPipeline complete:")
         print(f"  Total: {stats['total']}")
@@ -273,6 +283,7 @@ def _run_sequential(
     generate_qc: bool,
     stats: dict[str, int],
     analysis_profile: Optional[tuple[Any, Any]] = None,
+    overwrite_pose: bool = False,
 ) -> dict[str, int]:
     """Run trials sequentially with clean progress display."""
     pipeline_logger = logging.getLogger("maze_pipeline")
@@ -280,7 +291,9 @@ def _run_sequential(
     tqdm_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
     pipeline_logger.addHandler(tqdm_handler)
     try:
-        return _run_sequential_impl(trials, db_path, generate_qc, stats, analysis_profile)
+        return _run_sequential_impl(
+            trials, db_path, generate_qc, stats, analysis_profile, overwrite_pose
+        )
     finally:
         pipeline_logger.removeHandler(tqdm_handler)
 
@@ -291,6 +304,7 @@ def _run_sequential_impl(
     generate_qc: bool,
     stats: dict[str, int],
     analysis_profile: Optional[tuple[Any, Any]] = None,
+    overwrite_pose: bool = False,
 ) -> dict[str, int]:
     """Inner loop for sequential processing."""
     pbar = tqdm(trials, desc="Processing", unit="trial")
@@ -306,6 +320,7 @@ def _run_sequential_impl(
                 generate_qc=generate_qc,
                 quiet=True,
                 analysis_profile=analysis_profile,
+                overwrite_pose=overwrite_pose,
             )
             if success:
                 stats["success"] += 1
@@ -325,11 +340,12 @@ def _run_parallel(
     generate_qc: bool,
     stats: dict[str, int],
     analysis_profile: Optional[tuple[Any, Any]] = None,
+    overwrite_pose: bool = False,
 ) -> dict[str, int]:
     """Run trials in parallel."""
     del max_workers
     print("Warning: Parallel mode uses sequential HDF5 writes")
-    return _run_sequential(trials, db_path, generate_qc, stats, analysis_profile)
+    return _run_sequential(trials, db_path, generate_qc, stats, analysis_profile, overwrite_pose)
 
 
 def run_single_trial(

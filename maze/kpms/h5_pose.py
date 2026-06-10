@@ -18,9 +18,17 @@ from pathlib import Path
 import h5py
 import numpy as np
 
+from maze.kpms.heading_idxs import PoseStream
 from maze.pipeline.db.trial_key import TrialKey, resolve_trial_key_for_hdf5
 from maze.pipeline.io.file_discovery import TrialManifest
-from maze.pipeline.tracking_io import AnatomicalTrackingData, has_anatomical_tracking, read_anatomical_tracking
+from maze.pipeline.tracking_io import (
+    AnatomicalTrackingData,
+    BlobTrackingData,
+    has_anatomical_tracking,
+    has_blob_tracking,
+    read_anatomical_tracking,
+    read_blob_tracking,
+)
 
 
 @dataclass(frozen=True)
@@ -35,6 +43,19 @@ class AnatomicalPoseLoad:
     fps: float
     pose_model_path: str = ""
     valid: np.ndarray | None = None
+
+
+@dataclass(frozen=True)
+class BlobPoseLoad:
+    """Blob polygon tensors and attrs ready for kpMS preprocess (stream B)."""
+
+    frame_index: np.ndarray
+    coordinates: np.ndarray
+    confidences: np.ndarray
+    node_names: tuple[str, ...]
+    blob_source: str
+    valid: np.ndarray
+    heading_rad: np.ndarray
 
 
 def _trial_key_from_manifest(manifest: TrialManifest) -> TrialKey:
@@ -63,6 +84,19 @@ def _normalized_input_h5_path(manifest: TrialManifest) -> Path | None:
 
 def h5_has_anatomical_tracking(h5_path: Path | str, trial_key: TrialKey) -> bool:
     """Return True when ``h5_path`` contains ``tracking/anatomical`` for ``trial_key``."""
+    return _h5_has_pose_stream(h5_path, trial_key, "anatomical")
+
+
+def h5_has_blob_tracking(h5_path: Path | str, trial_key: TrialKey) -> bool:
+    """Return True when ``h5_path`` contains ``tracking/blob`` for ``trial_key``."""
+    return _h5_has_pose_stream(h5_path, trial_key, "blob")
+
+
+def _h5_has_pose_stream(
+    h5_path: Path | str,
+    trial_key: TrialKey,
+    pose_stream: PoseStream,
+) -> bool:
     path = Path(h5_path)
     if not path.is_file():
         return False
@@ -72,7 +106,12 @@ def h5_has_anatomical_tracking(h5_path: Path | str, trial_key: TrialKey) -> bool
             group_path = resolved.path().lstrip("/")
             if group_path not in h5:
                 return False
-            return has_anatomical_tracking(h5[group_path])
+            g_trial = h5[group_path]
+            if pose_stream == "anatomical":
+                return has_anatomical_tracking(g_trial)
+            if pose_stream == "blob":
+                return has_blob_tracking(g_trial)
+            raise NotImplementedError(f"pose_stream={pose_stream!r} is not supported for H5 resolution")
     except OSError:
         return False
 
@@ -80,9 +119,14 @@ def h5_has_anatomical_tracking(h5_path: Path | str, trial_key: TrialKey) -> bool
 def resolve_canonical_trial_h5(
     manifest: TrialManifest,
     db_path: Path | str,
+    *,
+    pose_stream: PoseStream = "anatomical",
 ) -> Path | None:
     """
-    Resolve the HDF5 file that holds ``tracking/anatomical`` for a manifest row.
+    Resolve the HDF5 file that holds tracking pose for a manifest row.
+
+    For ``pose_stream='anatomical'``, checks ``tracking/anatomical``.
+    For ``pose_stream='blob'``, checks ``tracking/blob``.
 
     Returns ``None`` when neither ``input_h5_path`` nor ``db_path`` contains pose.
     """
@@ -97,7 +141,7 @@ def resolve_canonical_trial_h5(
 
     for candidate in candidates:
         for key in keys:
-            if h5_has_anatomical_tracking(candidate, key):
+            if _h5_has_pose_stream(candidate, key, pose_stream):
                 return candidate.resolve()
     return None
 
@@ -157,5 +201,51 @@ def load_anatomical_from_h5(
             if data is None:
                 return None
             return _anatomical_to_pose_load(data)
+    except OSError:
+        return None
+
+
+def _blob_to_pose_load(data: BlobTrackingData) -> BlobPoseLoad:
+    t = int(data.frame_index.shape[0])
+    coordinates = np.asarray(data.xy, dtype=np.float32)
+    if coordinates.shape != (t, len(data.node_names), 2):
+        coordinates = np.full((t, len(data.node_names), 2), np.nan, dtype=np.float32)
+        coordinates[:, :, :] = np.asarray(data.xy, dtype=np.float32)
+    confidences = np.asarray(data.score, dtype=np.float32)
+    return BlobPoseLoad(
+        frame_index=np.asarray(data.frame_index, dtype=np.uint32),
+        coordinates=coordinates,
+        confidences=confidences,
+        node_names=data.node_names,
+        blob_source=data.blob_source,
+        valid=np.asarray(data.valid, dtype=np.uint8),
+        heading_rad=np.asarray(data.heading_rad, dtype=np.float32),
+    )
+
+
+def load_blob_from_h5(
+    path: Path | str,
+    trial_key: TrialKey | str,
+) -> BlobPoseLoad | None:
+    """
+    Load ``tracking/blob`` from ``path`` for ``trial_key``.
+
+    Returns ``None`` when the trial group or blob datasets are absent (v1 files).
+    """
+    h5_path = Path(path)
+    if not h5_path.is_file():
+        return None
+
+    key = _parse_trial_key(trial_key)
+    try:
+        with h5py.File(h5_path, "r") as h5:
+            resolved = resolve_trial_key_for_hdf5(h5, key)
+            group_path = resolved.path().lstrip("/")
+            if group_path not in h5:
+                return None
+            data = read_blob_tracking(h5[group_path])
+            if data is None:
+                return None
+            return _blob_to_pose_load(data)
     except OSError:
         return None

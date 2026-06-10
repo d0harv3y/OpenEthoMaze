@@ -15,7 +15,6 @@ import numpy as np
 from maze.core.anatomy import BLOB_VERTEX_COUNT
 from maze.core.schema import FEEDBACK_ROW_DTYPE, XY_ROW_DTYPE
 from maze.core.h5_layout import open_db, write_feedback_table, write_xy_table
-from maze.pipeline.blob_orient import BlobOrientTracker, DEFAULT_SPEED_EPSILON_PX
 from maze.pipeline.tracking_io import AnatomicalTrackingBuffer, BlobTrackingBuffer
 
 from .shared_config import AcquisitionConfig, FallbackTrackingConfig
@@ -108,7 +107,6 @@ class TrialRecorder:
         )
         self._recording_ram_exit_arm_index: Optional[int] = recording_ram_exit_arm_index
         self._anatomical_buffer: Optional[AnatomicalTrackingBuffer] = None
-        self._blob_tracker: Optional[BlobOrientTracker] = None
         self._blob_buffer: Optional[BlobTrackingBuffer] = None
 
     @staticmethod
@@ -128,12 +126,6 @@ class TrialRecorder:
         }
 
     def _init_blob_capture(self) -> None:
-        ft = self.config.fallback_tracking
-        speed_eps = float(ft.max_jump_px) if ft.max_jump_px > 0 else DEFAULT_SPEED_EPSILON_PX
-        self._blob_tracker = BlobOrientTracker(
-            min_area_px=float(max(ft.min_area, 1)),
-            speed_epsilon_px=speed_eps,
-        )
         self._blob_buffer = BlobTrackingBuffer(
             backup_params_json=self.backup_params_json_from_config(self.config),
             blob_source="backup_live",
@@ -187,16 +179,17 @@ class TrialRecorder:
     def _append_blob_frame(
         self,
         frame_index: int,
-        blob_mask: Optional[np.ndarray],
-        blob_crop_rect: Optional[Tuple[int, int, int, int]],
-        pose_xy: Optional[np.ndarray],
-        pose_node_names: Optional[Sequence[str]],
+        blob_xy: Optional[np.ndarray],
+        *,
+        valid: bool,
+        heading_rad: float,
+        score: float,
     ) -> None:
-        """Buffer one backup-tracker blob polygon (full-image coordinates)."""
-        if self._blob_tracker is None or self._blob_buffer is None:
+        """Buffer one oriented blob polygon (full-image coordinates)."""
+        if self._blob_buffer is None:
             return
 
-        if blob_mask is None:
+        if blob_xy is None or not valid:
             self._blob_buffer.append_frame(
                 frame_index,
                 np.full((BLOB_VERTEX_COUNT, 2), np.nan, dtype=np.float32),
@@ -206,22 +199,16 @@ class TrialRecorder:
             )
             return
 
-        frame = self._blob_tracker.process_mask(
-            blob_mask,
-            anatomical_pose_xy=pose_xy,
-            anatomical_node_names=list(pose_node_names) if pose_node_names is not None else None,
-        )
-        xy = np.asarray(frame.xy, dtype=np.float32)
-        if frame.valid and blob_crop_rect is not None:
-            x0, y0, _, _ = blob_crop_rect
-            xy = xy + np.array([x0, y0], dtype=np.float32)
+        xy = np.asarray(blob_xy, dtype=np.float32)
+        if xy.shape != (BLOB_VERTEX_COUNT, 2):
+            return
 
         self._blob_buffer.append_frame(
             frame_index,
             xy,
-            valid=frame.valid,
-            heading_rad=frame.heading_rad,
-            score=frame.score,
+            valid=True,
+            heading_rad=float(heading_rad),
+            score=float(score),
         )
 
     def start(self, frame_shape: tuple, fps: float = 30.0) -> Optional[Path]:
@@ -233,7 +220,6 @@ class TrialRecorder:
         if self.config.track_enable_backup:
             self._init_blob_capture()
         else:
-            self._blob_tracker = None
             self._blob_buffer = None
         self.output_dir.mkdir(parents=True, exist_ok=True)
         base = f"{self.animal_id}_{self.session_id}_{self.trial}"
@@ -297,8 +283,10 @@ class TrialRecorder:
         pose_scores: Optional[np.ndarray] = None,
         pose_node_valid: Optional[np.ndarray] = None,
         pose_node_names: Optional[Sequence[str]] = None,
-        blob_mask: Optional[np.ndarray] = None,
-        blob_crop_rect: Optional[Tuple[int, int, int, int]] = None,
+        blob_xy: Optional[np.ndarray] = None,
+        blob_valid: bool = False,
+        blob_heading_rad: float = float("nan"),
+        blob_score: float = 0.0,
     ) -> None:
         if self._video_writer is not None:
             if image.ndim == 2:
@@ -338,10 +326,10 @@ class TrialRecorder:
         if self._blob_buffer is not None:
             self._append_blob_frame(
                 frame_index,
-                blob_mask,
-                blob_crop_rect,
-                pose_xy,
-                pose_node_names,
+                blob_xy,
+                valid=blob_valid,
+                heading_rad=blob_heading_rad,
+                score=blob_score,
             )
 
     def cancel(self, delete_video: bool = True) -> None:
@@ -360,7 +348,6 @@ class TrialRecorder:
         self._duty_w = []
         self._duty_m = []
         self._anatomical_buffer = None
-        self._blob_tracker = None
         self._blob_buffer = None
 
     def stop(

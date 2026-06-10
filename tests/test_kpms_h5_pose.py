@@ -8,15 +8,17 @@ import h5py
 import numpy as np
 import pytest
 
-from maze.core.anatomy import STANDARD_NODE_NAMES
+from maze.core.anatomy import BLOB_NODE_NAMES, BLOB_VERTEX_COUNT, STANDARD_NODE_NAMES
 from maze.kpms.h5_pose import (
     AnatomicalPoseLoad,
+    BlobPoseLoad,
     load_anatomical_from_h5,
+    load_blob_from_h5,
     resolve_canonical_trial_h5,
 )
 from maze.pipeline.db.trial_key import TrialKey
 from maze.pipeline.io.file_discovery import TrialManifest
-from maze.pipeline.tracking_io import write_anatomical_tracking
+from maze.pipeline.tracking_io import write_anatomical_tracking, write_blob_tracking
 
 
 def _write_trial_pose(
@@ -130,3 +132,46 @@ def test_load_anatomical_returns_none_for_v1_trial(tmp_path: Path) -> None:
 
 def test_load_anatomical_missing_file_returns_none(tmp_path: Path) -> None:
     assert load_anatomical_from_h5(tmp_path / "missing.h5", "1/S01/T01") is None
+
+
+def _write_trial_blob(db: Path, key: TrialKey, *, frame_count: int = 3) -> None:
+    t = frame_count
+    with h5py.File(db, "a") as h5:
+        g = h5.require_group(key.path().lstrip("/"))
+        write_blob_tracking(
+            g,
+            frame_index=np.arange(t, dtype=np.uint32),
+            xy=np.ones((t, BLOB_VERTEX_COUNT, 2), dtype=np.float32) * 10.0,
+            valid=np.ones(t, dtype=np.uint8),
+            heading_rad=np.zeros(t, dtype=np.float32),
+            score=np.full(t, 0.8, dtype=np.float32),
+            blob_source="backup_live",
+            h5=h5,
+        )
+
+
+def test_resolve_blob_prefers_input_h5(tmp_path: Path) -> None:
+    acq = tmp_path / "acq.h5"
+    results = tmp_path / "results.h5"
+    key = TrialKey("1", "S01", "T01")
+    _write_trial_blob(acq, key)
+    results.touch()
+
+    manifest = _manifest(input_h5=acq, db=results)
+    resolved = resolve_canonical_trial_h5(manifest, results, pose_stream="blob")
+    assert resolved == acq.resolve()
+
+
+def test_load_blob_from_h5_round_trip(tmp_path: Path) -> None:
+    db = tmp_path / "trials.h5"
+    key = TrialKey("1", "S01", "T01")
+    _write_trial_blob(db, key, frame_count=4)
+
+    loaded = load_blob_from_h5(db, key)
+    assert loaded is not None
+    assert isinstance(loaded, BlobPoseLoad)
+    assert loaded.coordinates.shape == (4, len(BLOB_NODE_NAMES), 2)
+    assert loaded.confidences.shape == (4,)
+    assert loaded.node_names == BLOB_NODE_NAMES
+    assert loaded.blob_source == "backup_live"
+    np.testing.assert_array_equal(loaded.frame_index, np.arange(4, dtype=np.uint32))

@@ -38,6 +38,7 @@ def run_analysis_for_trial(
     video_path: Path | None,
     run_phase: str,
     analysis_profile: Optional[tuple[Any, Any]] = None,
+    overwrite_pose: bool = False,
 ) -> Tuple[bool, str]:
     """
     Run pipeline process_trial for the given controller-recorded trial.
@@ -58,27 +59,23 @@ def run_analysis_for_trial(
         (success, message) for status bar or logging.
     """
     try:
-        from maze.pipeline.io.file_discovery import TrialManifest
+        from maze.pipeline.db.trial_key import TrialKey
         from maze.pipeline.process_trial import process_trial
     except ImportError:
         return (False, "maze.pipeline not available")
 
-    is_habituation = is_habituation_run_phase(run_phase)
-    manifest = TrialManifest(
-        animal_id=animal_id,
-        session=session_id,
-        trial=trial,
-        input_h5_path=db_path,
-        video_path=video_path,
-        sleap_path=None,
-        is_habituation=is_habituation,
-    )
+    key = TrialKey(animal_id=animal_id, session=session_id, trial=trial)
+    manifest = manifest_from_controller_h5(db_path, key)
+    if video_path is not None:
+        manifest.video_path = video_path
+    manifest.is_habituation = is_habituation_run_phase(run_phase)
     ok = process_trial(
         manifest,
         db_path=db_path,
         generate_qc=True,
         quiet=True,
         analysis_profile=analysis_profile,
+        overwrite_pose=overwrite_pose,
     )
     if ok:
         return (True, "Analysis done")
@@ -110,6 +107,8 @@ def manifest_from_controller_h5(db_path: Path, key: TrialKey) -> TrialManifest:
         attrs = g_trial.attrs
         vp = _decode_h5_attr(attrs.get("video_path", ""))
         video_path = Path(vp) if vp else None
+        sp = _decode_h5_attr(attrs.get("sleap_path", ""))
+        sleap_path = Path(sp) if sp else None
         phase = _decode_h5_attr(attrs.get("phase", "")) or _decode_h5_attr(attrs.get("stage", ""))
         is_habituation = is_habituation_run_phase(phase)
 
@@ -119,7 +118,7 @@ def manifest_from_controller_h5(db_path: Path, key: TrialKey) -> TrialManifest:
         trial=key.trial,
         input_h5_path=db_path,
         video_path=video_path,
-        sleap_path=None,
+        sleap_path=sleap_path,
         is_habituation=is_habituation,
     )
 

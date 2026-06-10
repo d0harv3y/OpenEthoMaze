@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .heading_idxs import PoseStream
 from .manifest_subset import SubsetConfig
 
 
@@ -14,6 +15,7 @@ class KpmsFitRunConfig:
 
     project_dir: Path
     model_name: str = "orm_kpms_fit"
+    pose_stream: PoseStream = "anatomical"
     manifest_csv: Path | None = None
     max_trials: int = 300
     random_seed: int = 42

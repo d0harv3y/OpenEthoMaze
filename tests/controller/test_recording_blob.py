@@ -12,6 +12,7 @@ from maze.controller.acquisition.recording import TrialRecorder
 from maze.controller.acquisition.vast.config import VastControllerConfig
 from maze.core.anatomy import BLOB_NODE_NAMES, BLOB_VERTEX_COUNT
 from maze.core.schema import CONTROLLER_SCHEMA_VERSION_V2
+from maze.pipeline.blob_orient import BlobOrientTracker
 from maze.pipeline.tracking_io import read_blob_tracking
 
 
@@ -28,6 +29,19 @@ def _ellipse_mask(
     ys = np.clip(np.round(cy + b * np.sin(t)).astype(int), 0, shape[0] - 1)
     mask[ys, xs] = 255
     return mask
+
+
+def _polygon_from_mask(
+    mask: np.ndarray,
+    *,
+    offset: tuple[float, float] = (0.0, 0.0),
+) -> tuple[np.ndarray, bool, float, float]:
+    tracker = BlobOrientTracker(min_area_px=10.0)
+    frame = tracker.process_mask(mask)
+    xy = np.asarray(frame.xy, dtype=np.float32)
+    if offset != (0.0, 0.0):
+        xy = xy + np.array(offset, dtype=np.float32)
+    return xy, bool(frame.valid), float(frame.heading_rad), float(frame.score)
 
 
 def test_trial_recorder_flushes_blob_tracking(tmp_path: Path) -> None:
@@ -57,6 +71,7 @@ def test_trial_recorder_flushes_blob_tracking(tmp_path: Path) -> None:
     for i in range(4):
         cx = 60.0 + i * 4.0
         mask = _ellipse_mask((120, 120), cx, 60.0, 22.0, 14.0)
+        blob_xy, blob_valid, heading, score = _polygon_from_mask(mask)
         rec.write_frame(
             image=np.zeros((120, 120, 3), dtype=np.uint8),
             frame_index=200 + i,
@@ -67,7 +82,10 @@ def test_trial_recorder_flushes_blob_tracking(tmp_path: Path) -> None:
             region_code="center",
             valid=True,
             duty_pct=0.0,
-            blob_mask=mask,
+            blob_xy=blob_xy,
+            blob_valid=blob_valid,
+            blob_heading_rad=heading,
+            blob_score=score,
         )
 
     rec.stop(exit_x_px=60.0, exit_y_px=60.0)
@@ -91,7 +109,8 @@ def test_trial_recorder_flushes_blob_tracking(tmp_path: Path) -> None:
             assert np.isfinite(loaded.heading_rad[1]) or loaded.score[1] >= 0.0
 
 
-def test_blob_crop_offset_applied(tmp_path: Path) -> None:
+def test_recorder_stores_full_image_blob_polygon(tmp_path: Path) -> None:
+    """Polygons are written in full-image coordinates (offset applied before write_frame)."""
     config = VastControllerConfig(output_dir=str(tmp_path), track_enable_backup=True)
     config.fallback_tracking.min_area = 10
 
@@ -107,6 +126,7 @@ def test_blob_crop_offset_applied(tmp_path: Path) -> None:
     rec.start(frame_shape=(80, 80, 3), fps=30.0)
 
     crop_mask = _ellipse_mask((40, 40), 20.0, 20.0, 12.0, 8.0)
+    xy0, valid0, h0, s0 = _polygon_from_mask(crop_mask, offset=(20.0, 20.0))
     rec.write_frame(
         image=np.zeros((80, 80, 3), dtype=np.uint8),
         frame_index=0,
@@ -117,8 +137,14 @@ def test_blob_crop_offset_applied(tmp_path: Path) -> None:
         region_code="center",
         valid=True,
         duty_pct=0.0,
-        blob_mask=crop_mask,
-        blob_crop_rect=(20, 20, 60, 60),
+        blob_xy=xy0,
+        blob_valid=valid0,
+        blob_heading_rad=h0,
+        blob_score=s0,
+    )
+    xy1, valid1, h1, s1 = _polygon_from_mask(
+        _ellipse_mask((40, 40), 24.0, 20.0, 12.0, 8.0),
+        offset=(20.0, 20.0),
     )
     rec.write_frame(
         image=np.zeros((80, 80, 3), dtype=np.uint8),
@@ -130,8 +156,10 @@ def test_blob_crop_offset_applied(tmp_path: Path) -> None:
         region_code="center",
         valid=True,
         duty_pct=0.0,
-        blob_mask=_ellipse_mask((40, 40), 24.0, 20.0, 12.0, 8.0),
-        blob_crop_rect=(20, 20, 60, 60),
+        blob_xy=xy1,
+        blob_valid=valid1,
+        blob_heading_rad=h1,
+        blob_score=s1,
     )
     rec.stop(exit_x_px=40.0, exit_y_px=40.0)
 
@@ -154,6 +182,7 @@ def test_cancel_discards_blob_buffer(tmp_path: Path) -> None:
         virtual_source_video_path=tmp_path / "source.mp4",
     )
     rec.start(frame_shape=(64, 64, 3), fps=30.0)
+    xy, valid, heading, score = _polygon_from_mask(_ellipse_mask((64, 64), 32.0, 32.0, 10.0, 8.0))
     rec.write_frame(
         image=np.zeros((64, 64, 3), dtype=np.uint8),
         frame_index=0,
@@ -164,7 +193,10 @@ def test_cancel_discards_blob_buffer(tmp_path: Path) -> None:
         region_code="center",
         valid=True,
         duty_pct=0.0,
-        blob_mask=_ellipse_mask((64, 64), 32.0, 32.0, 10.0, 8.0),
+        blob_xy=xy,
+        blob_valid=valid,
+        blob_heading_rad=heading,
+        blob_score=score,
     )
     rec.cancel()
     assert rec._blob_buffer is None

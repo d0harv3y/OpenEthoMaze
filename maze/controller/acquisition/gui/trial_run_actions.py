@@ -12,6 +12,8 @@ from .analysis_worker import AnalysisWorker
 from .camera_loop import is_video_available
 from .file_actions import ask_trial_overwrite_merged, next_keep_both_suffix
 from .legacy_exit_seed import seed_legacy_exit_for_virtual_start
+from maze.pipeline.pose_status import policy_to_overwrite_pose
+
 from .status_and_config_sync import apply_status_and_buttons, apply_ui_to_config
 
 if TYPE_CHECKING:
@@ -218,6 +220,7 @@ def stop_trial_recorder_if_active(window: MainWindow) -> None:
                 window._config.analysis_trajectory,
                 window._config.analysis_trace_quality,
             ),
+            overwrite_pose=policy_to_overwrite_pose(window._config.pose_overwrite_policy),
         )
         window._analysis_worker.finished.connect(
             window._on_analysis_finished,

@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from .heading_idxs import PoseStream
+
 
 @dataclass(frozen=True)
 class KpmsApplyRunConfig:
@@ -14,6 +16,7 @@ class KpmsApplyRunConfig:
     project_dir: Path
     model_name: str
     manifest_csv: Path
+    pose_stream: PoseStream = "anatomical"
     results_path: Optional[Path] = None
     animal_ids: Optional[tuple[str, ...]] = None
     sessions: Optional[tuple[str, ...]] = None

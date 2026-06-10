@@ -55,31 +55,24 @@ def count_sleap_keypoints_in_exit(
 
 
 def blob_exit_overlap_fraction(
-    blob_mask: Optional[np.ndarray],
-    blob_crop_rect: Optional[Tuple[int, int, int, int]],
+    blob_xy: Optional[np.ndarray],
     exit_x_px: float,
     exit_y_px: float,
     exit_radius_px: float,
 ) -> float:
-    """Return overlap fraction: blob pixels inside exit circle / all blob pixels."""
-    if blob_mask is None or blob_mask.ndim != 2 or exit_radius_px <= 0:
+    """Return fraction of oriented blob vertices inside the exit circle."""
+    if blob_xy is None or exit_radius_px <= 0:
         return 0.0
-    blob_n = int(np.count_nonzero(blob_mask))
-    if blob_n <= 0:
+    pts = np.asarray(blob_xy, dtype=np.float64).reshape(-1, 2)
+    finite = np.isfinite(pts).all(axis=1)
+    pts = pts[finite]
+    if pts.shape[0] == 0:
         return 0.0
-    h, w = blob_mask.shape
-    if blob_crop_rect is not None:
-        x0, y0, _, _ = blob_crop_rect
-        cx = int(round(exit_x_px - x0))
-        cy = int(round(exit_y_px - y0))
-    else:
-        cx = int(round(exit_x_px))
-        cy = int(round(exit_y_px))
-    yy, xx = np.ogrid[:h, :w]
+    dx = pts[:, 0] - float(exit_x_px)
+    dy = pts[:, 1] - float(exit_y_px)
     rr2 = float(exit_radius_px * exit_radius_px)
-    exit_mask = ((xx - cx) ** 2 + (yy - cy) ** 2) <= rr2
-    overlap = np.count_nonzero((blob_mask > 0) & exit_mask)
-    return float(overlap) / float(blob_n)
+    inside = (dx * dx + dy * dy) <= rr2
+    return float(np.count_nonzero(inside)) / float(pts.shape[0])
 
 
 def resolve_exit_success_override(
@@ -87,8 +80,7 @@ def resolve_exit_success_override(
     pose_xy: Optional[np.ndarray],
     pose_node_valid: Optional[np.ndarray],
     pose_node_names: Optional[list],
-    blob_mask: Optional[np.ndarray],
-    blob_crop_rect: Optional[Tuple[int, int, int, int]],
+    blob_xy: Optional[np.ndarray],
     track_xy: Optional[Tuple[float, float]],
     track_source: str,
     exit_x_px: float,
@@ -114,10 +106,9 @@ def resolve_exit_success_override(
         return n_in_exit >= max(1, int(required_keypoints))
 
     def fallback_exit_success() -> bool:
-        if blob_mask is not None:
+        if blob_xy is not None:
             frac = blob_exit_overlap_fraction(
-                blob_mask=blob_mask,
-                blob_crop_rect=blob_crop_rect,
+                blob_xy=blob_xy,
                 exit_x_px=exit_x_px,
                 exit_y_px=exit_y_px,
                 exit_radius_px=exit_radius_px,
@@ -138,29 +129,24 @@ def resolve_exit_success_override(
     return None
 
 
-def blend_blob_mask_into_overlay(
+def draw_blob_polygon_on_overlay(
     overlay: np.ndarray,
-    blob_mask: Optional[np.ndarray],
-    blob_crop_rect: Optional[Tuple[int, int, int, int]],
+    blob_xy: Optional[np.ndarray],
+    *,
+    alpha: float = 0.35,
 ) -> None:
-    """Semi-transparent green tint where ``blob_mask`` is nonzero."""
-    if not HAS_CV2 or blob_mask is None or blob_mask.ndim != 2:
+    """Semi-transparent green fill for the oriented backup blob polygon."""
+    if not HAS_CV2 or blob_xy is None:
         return
-    blob_alpha = 0.35
-    green_bgr = (0, 255, 0)
-    if blob_crop_rect is not None:
-        x0, y0, x1, y1 = blob_crop_rect
-        if x1 > x0 and y1 > y0 and blob_mask.shape == (y1 - y0, x1 - x0):
-            overlay_slice = overlay[y0:y1, x0:x1]
-            green_slice = np.empty_like(overlay_slice)
-            green_slice[:] = green_bgr
-            blended = cv2.addWeighted(green_slice, blob_alpha, overlay_slice, 1.0 - blob_alpha, 0)
-            cv2.copyTo(blended, blob_mask, overlay_slice)
-    elif blob_mask.shape[:2] == overlay.shape[:2]:
-        green_layer = np.empty_like(overlay)
-        green_layer[:] = green_bgr
-        blended = cv2.addWeighted(green_layer, blob_alpha, overlay, 1.0 - blob_alpha, 0)
-        cv2.copyTo(blended, blob_mask, overlay)
+    pts = np.asarray(blob_xy, dtype=np.float64).reshape(-1, 2)
+    finite = np.isfinite(pts).all(axis=1)
+    pts = pts[finite]
+    if pts.shape[0] < 3:
+        return
+    poly = np.round(pts).astype(np.int32).reshape(-1, 1, 2)
+    tinted = overlay.copy()
+    cv2.fillPoly(tinted, [poly], (0, 255, 0))
+    cv2.addWeighted(tinted, alpha, overlay, 1.0 - alpha, 0, overlay)
 
 
 def draw_ram_template_polylines(
@@ -258,8 +244,7 @@ def draw_roi_and_tracking_overlay(
     pose_edge_inds: Optional[list] = None,
     pose_node_names: Optional[list] = None,
     pose_node_valid: Optional[np.ndarray] = None,
-    blob_mask: Optional[np.ndarray] = None,
-    blob_crop_rect: Optional[Tuple[int, int, int, int]] = None,
+    blob_xy: Optional[np.ndarray] = None,
     ram_polys: Optional[dict[str, Any]] = None,
     ram_exit_xyr: Optional[Tuple[float, float, float]] = None,
     ram_all_holes_xyr: Optional[list] = None,
@@ -303,7 +288,7 @@ def draw_roi_and_tracking_overlay(
             exit_r_px = int(arena.exit_radius_cm * arena.px_per_cm)
             if exit_r_px > 0:
                 cv2.circle(overlay, (ex_i, ey_i), exit_r_px, (255, 0, 255), 2)
-    blend_blob_mask_into_overlay(overlay, blob_mask, blob_crop_rect)
+    draw_blob_polygon_on_overlay(overlay, blob_xy)
     node_marker_r = 2
     nose_color = (255, 0, 255)
     non_nose_color = (0, 255, 255)

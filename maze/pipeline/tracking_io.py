@@ -9,7 +9,8 @@ See ``docs/h5_tracking_contract.md``.
 **Acquisition buffer (T1a)** — :class:`AnatomicalTrackingBuffer` accumulates per-camera-tick
 pose rows during a trial; :meth:`~AnatomicalTrackingBuffer.append_frame` stores
 ``frame_index``, per-node ``x`` / ``y`` / ``score`` / ``valid``; :meth:`~AnatomicalTrackingBuffer.flush`
-writes ``tracking/anatomical`` via :func:`write_anatomical_tracking` and bumps schema to v2.
+writes ``tracking/anatomical`` via :func:`write_anatomical_tracking` (HDF5 ``xy`` dataset, shape
+``(T, K, 2)``, same layout as blob) and bumps schema to v2.
 :class:`BlobTrackingBuffer` mirrors this for ``tracking/blob`` (T1d).
 Module-level :func:`append_anatomical_frame` and :func:`flush_anatomical_tracking_buffer`
 are thin wrappers for callers that prefer a functional style.
@@ -31,6 +32,7 @@ from maze.core.h5_layout import ensure_group, write_json_attr
 from maze.core.schema import (
     CONTROLLER_SCHEMA_VERSION_V2,
     TRACKING_ANATOMICAL_GROUP,
+    TRACKING_ANATOMICAL_XY_DATASET,
     TRACKING_BLOB_GROUP,
     TRACKING_BLOB_HEADING_DATASET,
     TRACKING_BLOB_XY_DATASET,
@@ -77,6 +79,24 @@ def has_tracking_group(g_trial: h5py.Group) -> bool:
     return TRACKING_GROUP in g_trial
 
 
+def _anatomical_has_pose_datasets(g_anat: h5py.Group) -> bool:
+    if TRACKING_ANATOMICAL_XY_DATASET in g_anat:
+        return True
+    return TRACKING_X_DATASET in g_anat and TRACKING_Y_DATASET in g_anat
+
+
+def _read_anatomical_xy(g_anat: h5py.Group) -> tuple[np.ndarray, np.ndarray]:
+    """Load anatomical ``x``/``y`` from unified ``xy`` or legacy split datasets."""
+    if TRACKING_ANATOMICAL_XY_DATASET in g_anat:
+        xy = g_anat[TRACKING_ANATOMICAL_XY_DATASET][:].astype(np.float32, copy=False)
+        if xy.ndim != 3 or xy.shape[-1] != 2:
+            raise ValueError(f"anatomical xy shape {xy.shape} != (T, K, 2)")
+        return xy[..., 0], xy[..., 1]
+    x = g_anat[TRACKING_X_DATASET][:].astype(np.float32, copy=False)
+    y = g_anat[TRACKING_Y_DATASET][:].astype(np.float32, copy=False)
+    return x, y
+
+
 def has_anatomical_tracking(g_trial: h5py.Group) -> bool:
     """Return True when ``tracking/anatomical`` exists with required datasets."""
     g_tracking = g_trial.get(TRACKING_GROUP)
@@ -85,9 +105,23 @@ def has_anatomical_tracking(g_trial: h5py.Group) -> bool:
     g_anat = g_tracking[TRACKING_ANATOMICAL_GROUP]
     return (
         TRACKING_FRAME_INDEX_DATASET in g_anat
-        and TRACKING_X_DATASET in g_anat
-        and TRACKING_Y_DATASET in g_anat
+        and _anatomical_has_pose_datasets(g_anat)
         and TRACKING_SCORE_DATASET in g_anat
+    )
+
+
+def has_blob_tracking(g_trial: h5py.Group) -> bool:
+    """Return True when ``tracking/blob`` exists with required datasets."""
+    g_tracking = g_trial.get(TRACKING_GROUP)
+    if g_tracking is None or TRACKING_BLOB_GROUP not in g_tracking:
+        return False
+    g_blob = g_tracking[TRACKING_BLOB_GROUP]
+    return (
+        TRACKING_FRAME_INDEX_DATASET in g_blob
+        and TRACKING_BLOB_XY_DATASET in g_blob
+        and TRACKING_VALID_DATASET in g_blob
+        and TRACKING_BLOB_HEADING_DATASET in g_blob
+        and TRACKING_SCORE_DATASET in g_blob
     )
 
 
@@ -349,9 +383,13 @@ def write_anatomical_tracking(
     g_tracking = g_trial.require_group(TRACKING_GROUP)
     g_anat = g_tracking.require_group(TRACKING_ANATOMICAL_GROUP)
 
+    xy_arr = np.stack([x_arr, y_arr], axis=-1)
+
     _write_dataset(g_anat, TRACKING_FRAME_INDEX_DATASET, frame_index_arr)
-    _write_dataset(g_anat, TRACKING_X_DATASET, x_arr)
-    _write_dataset(g_anat, TRACKING_Y_DATASET, y_arr)
+    _write_dataset(g_anat, TRACKING_ANATOMICAL_XY_DATASET, xy_arr)
+    for legacy_name in (TRACKING_X_DATASET, TRACKING_Y_DATASET):
+        if legacy_name in g_anat:
+            del g_anat[legacy_name]
     _write_dataset(g_anat, TRACKING_SCORE_DATASET, score_arr)
     if valid is not None:
         valid_arr = np.asarray(valid, dtype=np.uint8)
@@ -389,10 +427,11 @@ def read_anatomical_tracking(g_trial: h5py.Group) -> AnatomicalTrackingData | No
     if TRACKING_VALID_DATASET in g_anat:
         valid = g_anat[TRACKING_VALID_DATASET][:].astype(np.uint8, copy=False)
 
+    x_arr, y_arr = _read_anatomical_xy(g_anat)
     return AnatomicalTrackingData(
         frame_index=g_anat[TRACKING_FRAME_INDEX_DATASET][:].astype(np.uint32, copy=False),
-        x=g_anat[TRACKING_X_DATASET][:].astype(np.float32, copy=False),
-        y=g_anat[TRACKING_Y_DATASET][:].astype(np.float32, copy=False),
+        x=x_arr,
+        y=y_arr,
         score=g_anat[TRACKING_SCORE_DATASET][:].astype(np.float32, copy=False),
         valid=valid,
         node_names=tuple(str(n) for n in node_names_raw),

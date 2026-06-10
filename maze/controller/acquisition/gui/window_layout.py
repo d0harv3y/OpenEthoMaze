@@ -307,7 +307,14 @@ def build_main_window_layout(window: MainWindow) -> None:
     )
     status_row1.addWidget(window._status_duty)
     status_ly.addLayout(status_row1)
-    # status_ly.addLayout(status_row2)
+    status_row2 = QHBoxLayout()
+    status_row2.addWidget(QLabel("Pose:"))
+    window._status_pose = QLabel("—")
+    window._status_pose.setToolTip(
+        "Canonical tracking/anatomical pose for the current trial (live, imported, or none)."
+    )
+    status_row2.addWidget(window._status_pose, stretch=1)
+    status_ly.addLayout(status_row2)
     layout.addWidget(status_g)
 
     # Run

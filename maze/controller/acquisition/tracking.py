@@ -7,9 +7,9 @@ Streaming inference: single-frame SLEAP when a single-instance model path is pro
 This module also provides TrackingController for GUI orchestration (tracker cache,
 async worker, run-every-N).
 
-FPS note: When fallback finds in-range pixels, building a full-frame blob_mask (drawContours)
-and drawing it in the GUI (blend overlay) can drop display FPS. Use show_blob_overlay=False
-in FallbackTrackingConfig to skip blob mask build/draw and keep tracking position only.
+FPS note: Fallback returns a contour only (no full-frame mask). ``TrackingController``
+orients it to eight vertices once per frame for overlay and H5 ``tracking/blob``.
+Use ``show_blob_overlay=False`` in FallbackTrackingConfig to skip drawing the green tint.
 """
 
 from __future__ import annotations
@@ -24,6 +24,13 @@ from pathlib import Path
 from typing import Any, List, Literal, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
+
+from maze.core.anatomy import BLOB_VERTEX_COUNT
+from maze.pipeline.blob_orient import (
+    BlobOrientTracker,
+    DEFAULT_SPEED_EPSILON_PX,
+    cv_contour_to_xy,
+)
 
 from . import app_logging
 from .shared_config import AcquisitionConfig
@@ -44,6 +51,45 @@ except ImportError:
 SleapStatus = Literal["ok", "no_path", "not_single_instance", "load_failed"]
 
 
+def full_frame_fallback_blob_contour(
+    fallback: AdaptiveThresholdTracker,
+    crop_image: np.ndarray,
+    crop_result: TrackingResult,
+    full_image: np.ndarray | None,
+) -> np.ndarray | None:
+    """
+    When backup runs on a masked/cropped frame but SLEAP uses the full frame, retry contour
+    detection on ``full_image`` so ``tracking/blob`` is not all-invalid during live capture.
+    """
+    if crop_result.blob_contour is not None:
+        return crop_result.blob_contour
+    if full_image is None:
+        return None
+    if full_image.shape[:2] == crop_image.shape[:2]:
+        return None
+    full_res = fallback.track(full_image)
+    return full_res.blob_contour
+
+
+@dataclass(frozen=True)
+class LiveBlobPolygon:
+    """Oriented backup blob for overlay and H5 (``BLOB_VERTEX_COUNT`` vertices)."""
+
+    xy: np.ndarray
+    valid: bool
+    heading_rad: float
+    score: float
+
+
+def invalid_live_blob_polygon() -> LiveBlobPolygon:
+    return LiveBlobPolygon(
+        xy=np.full((BLOB_VERTEX_COUNT, 2), np.nan, dtype=np.float32),
+        valid=False,
+        heading_rad=float("nan"),
+        score=0.0,
+    )
+
+
 def scale_tracking_result_to_image_space(
     res: TrackingResult,
     inv_x: float,
@@ -53,7 +99,6 @@ def scale_tracking_result_to_image_space(
     """Map ``res`` from downscaled image coordinates back to full ``full_hw`` (H, W) space."""
     if inv_x == 1.0 and inv_y == 1.0:
         return res
-    fh, fw = int(full_hw[0]), int(full_hw[1])
     nx = float(res.x_px) * inv_x
     ny = float(res.y_px) * inv_y
     pose = getattr(res, "pose_xy", None)
@@ -66,14 +111,20 @@ def scale_tracking_result_to_image_space(
     in_new = None
     if in_r is not None and len(in_r) == 2:
         in_new = (float(in_r[0]) * inv_x, float(in_r[1]) * inv_y)
-    blob = getattr(res, "blob_mask", None)
-    blob_new = None
-    if blob is not None and HAS_CV2 and blob.ndim == 2:
-        if blob.shape[0] != fh or blob.shape[1] != fw:
-            blob_new = cv2.resize(blob, (fw, fh), interpolation=cv2.INTER_NEAREST)
-        else:
-            blob_new = blob
-    return replace(res, x_px=nx, y_px=ny, pose_xy=pose_new, in_range_xy=in_new, blob_mask=blob_new)
+    contour = getattr(res, "blob_contour", None)
+    contour_new = None
+    if contour is not None and contour.size > 0:
+        contour_new = np.asarray(contour, dtype=np.float64).copy()
+        contour_new[:, 0] *= inv_x
+        contour_new[:, 1] *= inv_y
+    return replace(
+        res,
+        x_px=nx,
+        y_px=ny,
+        pose_xy=pose_new,
+        in_range_xy=in_new,
+        blob_contour=contour_new,
+    )
 
 
 @dataclass
@@ -96,9 +147,9 @@ class TrackingResult:
     # Performance and fallback-reason indicators
     inference_time_s: float = 0.0  # time in SLEAP inference this frame; 0 for fallback
     sleap_confidence: Optional[float] = None  # raw SLEAP conf when fallback due to low conf
-    # Binary mask (H, W) of the selected blob for overlay when fallback builds it; also attached
-    # to SLEAP results when show_blob_overlay is enabled so the GUI can draw blob + skeleton.
-    blob_mask: Optional[np.ndarray] = None
+    # Raw backup contour ``(M, 2)`` in tracker/crop image coords; oriented to eight vertices
+    # in ``TrackingController.orient_blob`` for overlay and H5.
+    blob_contour: Optional[np.ndarray] = None
     # Independent fallback trajectory for "in-range" stream (when available).
     in_range_xy: Optional[Tuple[float, float]] = None
 
@@ -121,7 +172,7 @@ def _adaptive_threshold_com_impl(
     min_circularity: float = 0.0,
     range_low: int = 0,
     range_high: int = 255,
-    return_blob_mask: bool = True,
+    return_blob_contour: bool = True,
     max_contours: int = 0,
 ) -> Tuple[float, float, bool, Optional[np.ndarray]]:
     """
@@ -136,7 +187,7 @@ def _adaptive_threshold_com_impl(
        and (if min_circularity > 0) circularity >= min_circularity (4*pi*area/perimeter^2).
     5. Pick blob by selection_mode (see doc).
 
-    Returns (cx, cy, valid, blob_mask). blob_mask is (H,W) uint8, 255=blob, or None if no blob.
+    Returns (cx, cy, valid, blob_contour). ``blob_contour`` is ``(M, 2)`` float xy or None.
     """
     if not HAS_CV2:
         return (0.0, 0.0, False, None)
@@ -195,11 +246,10 @@ def _adaptive_threshold_com_impl(
     else:
         best = max(candidates, key=lambda t: t[2])
         best_cx, best_cy, _, best_contour = best
-    if not return_blob_mask:
+    if not return_blob_contour:
         return (best_cx, best_cy, True, None)
-    blob_mask = np.zeros(gray.shape, dtype=np.uint8)
-    cv2.drawContours(blob_mask, [best_contour], -1, 255, -1)
-    return (best_cx, best_cy, True, blob_mask)
+    contour_xy = cv_contour_to_xy(best_contour)
+    return (best_cx, best_cy, True, contour_xy)
 
 
 def adaptive_threshold_com(
@@ -235,7 +285,7 @@ def adaptive_threshold_com(
         # but darker-than-background blobs (rodent) are still detected.
         range_low=0,
         range_high=128,
-        return_blob_mask=False,
+        return_blob_contour=False,
         max_contours=0,
     )
     return cx, cy, valid
@@ -272,7 +322,7 @@ class AdaptiveThresholdTracker:
         self._last_xy: Optional[Tuple[float, float]] = None
 
     def track(self, image: np.ndarray) -> TrackingResult:
-        cx, cy, valid, blob_mask = _adaptive_threshold_com_impl(
+        cx, cy, valid, blob_contour = _adaptive_threshold_com_impl(
             image,
             morph_kernel_size=self.morph_kernel_size,
             min_area=self.min_area,
@@ -283,7 +333,7 @@ class AdaptiveThresholdTracker:
             min_circularity=self.min_circularity,
             range_low=self.range_low,
             range_high=self.range_high,
-            return_blob_mask=self._show_blob_overlay,
+            return_blob_contour=True,
             max_contours=self._max_contours,
         )
         if valid:
@@ -300,7 +350,7 @@ class AdaptiveThresholdTracker:
             valid=valid,
             source="fallback",
             confidence=0.9 if valid else 0.0,
-            blob_mask=blob_mask,
+            blob_contour=blob_contour,
             in_range_xy=(float(cx), float(cy)) if valid else None,
         )
 
@@ -646,6 +696,12 @@ class HybridTracker:
                 y = float(np.mean(pts_valid[:, 1]))
                 conf_valid = float(np.mean(pose_scores[pose_node_valid]))
                 edge_inds = self._get_skeleton_edge_inds()
+                blob_contour = full_frame_fallback_blob_contour(
+                    self._fallback,
+                    image,
+                    fallback_res,
+                    sleap_image,
+                )
                 return TrackingResult(
                     x_px=x,
                     y_px=y,
@@ -659,7 +715,7 @@ class HybridTracker:
                     pose_node_valid=pose_node_valid,
                     inference_time_s=inference_time_s,
                     in_range_xy=fallback_res.in_range_xy,
-                    blob_mask=fallback_res.blob_mask,
+                    blob_contour=blob_contour,
                 )
             _LOG.debug("SLEAP: _predict_frame_sleap returned None, using fallback")
         else:
@@ -715,7 +771,7 @@ class HybridTracker:
             pose_node_valid=pose_node_valid,
             inference_time_s=inference_time_s,
             in_range_xy=None,
-            blob_mask=None,
+            blob_contour=None,
         )
 
 
@@ -941,7 +997,24 @@ class TrackingController:
         self._enable_backup: bool = True
         self._enable_sleap: bool = True
 
+        ft = config.fallback_tracking
+        speed_eps = float(ft.max_jump_px) if ft.max_jump_px > 0 else DEFAULT_SPEED_EPSILON_PX
+        self._blob_orient = BlobOrientTracker(
+            min_area_px=float(max(ft.min_area, 1)),
+            speed_epsilon_px=speed_eps,
+        )
+        self._orient_blob_cache_id: int | None = None
+        self._orient_blob_cache: LiveBlobPolygon = invalid_live_blob_polygon()
+
     # Internal helpers -----------------------------------------------------------
+
+    def _fallback_tracker(self) -> AdaptiveThresholdTracker | None:
+        tracker = self._cached_tracker
+        if HybridTracker is not None and isinstance(tracker, HybridTracker):
+            return tracker._fallback
+        if isinstance(tracker, AdaptiveThresholdTracker):
+            return tracker
+        return None
 
     def _ensure_tracker(self) -> object:
         """Build or refresh the cached tracker and return it."""
@@ -960,6 +1033,7 @@ class TrackingController:
             self._cached_tracker = tracker
             self._track_frame_counter = 0
             self._last_tracking_result = None
+            self.reset_blob_orient()
         return tracker
 
     # Public API -----------------------------------------------------------------
@@ -1149,20 +1223,59 @@ class TrackingController:
             self._result_holder[0] = res
             self._result_time_holder[0] = now_s
 
+    def reset_blob_orient(self) -> None:
+        """Clear live blob orientation state (trial boundary, seek, tracker rebuild)."""
+        self._blob_orient.reset()
+        self._orient_blob_cache_id = None
+        self._orient_blob_cache = invalid_live_blob_polygon()
+
+    def orient_blob(
+        self,
+        res: TrackingResult | None,
+        *,
+        anatomical_pose_xy: Optional[np.ndarray] = None,
+        anatomical_node_names: Optional[list[str]] = None,
+        pose_offset: tuple[float, float] = (0.0, 0.0),
+    ) -> LiveBlobPolygon:
+        """
+        Orient ``res.blob_contour`` to eight vertices once per ``TrackingResult``.
+
+        ``pose_offset`` shifts anatomical pose into tracker/crop space for heading hints
+        when SLEAP runs on the full frame but backup contour is crop-local.
+        """
+        if res is None or res.blob_contour is None:
+            return invalid_live_blob_polygon()
+        rid = id(res)
+        if self._orient_blob_cache_id == rid:
+            return self._orient_blob_cache
+
+        pose_hint = anatomical_pose_xy
+        if pose_hint is not None and (pose_offset[0] != 0.0 or pose_offset[1] != 0.0):
+            pose_hint = np.asarray(pose_hint, dtype=np.float64).copy()
+            pose_hint[:, 0] -= float(pose_offset[0])
+            pose_hint[:, 1] -= float(pose_offset[1])
+
+        frame = self._blob_orient.process_contour(
+            res.blob_contour,
+            anatomical_pose_xy=pose_hint,
+            anatomical_node_names=anatomical_node_names,
+        )
+        out = LiveBlobPolygon(
+            xy=np.asarray(frame.xy, dtype=np.float32),
+            valid=bool(frame.valid),
+            heading_rad=float(frame.heading_rad),
+            score=float(frame.score),
+        )
+        self._orient_blob_cache_id = rid
+        self._orient_blob_cache = out
+        return out
+
     def get_overlay_state(self, now_s: Optional[float] = None) -> dict[str, Any]:
         """
         Convenience method: return a dict of fields used by the GUI overlay.
 
-        The dict is intended to contain:
-        - `track_xy`: Optional[Tuple[float, float]]
-        - `track_valid`: bool
-        - `track_source`: str
-        - `pose_xy`, `pose_scores`, `pose_edge_inds`, `pose_node_names`,
-          `pose_node_valid`, `blob_mask`
-        - `source_label`, `conf_label`, `inference_label`, `stale_label`
-
-        The exact contents and semantics are wired up in later refactor steps
-        when `MainWindow` is migrated to use `TrackingController`.
+        Includes ``tracking_result`` and raw ``blob_contour``; call :meth:`orient_blob`
+        once per frame for the oriented eight-gon used in overlay and H5.
         """
         if now_s is None:
             now_s = time.monotonic()
@@ -1188,7 +1301,8 @@ class TrackingController:
                 "pose_edge_inds": None,
                 "pose_node_names": None,
                 "pose_node_valid": None,
-                "blob_mask": None,
+                "tracking_result": None,
+                "blob_contour": None,
                 "in_range_xy": None,
                 "source_label": "—",
                 "conf_label": "—",
@@ -1221,13 +1335,34 @@ class TrackingController:
             "pose_edge_inds": getattr(res, "pose_edge_inds", None),
             "pose_node_names": getattr(res, "pose_node_names", None),
             "pose_node_valid": getattr(res, "pose_node_valid", None),
-            "blob_mask": getattr(res, "blob_mask", None),
+            "tracking_result": res,
+            "blob_contour": getattr(res, "blob_contour", None),
             "in_range_xy": getattr(res, "in_range_xy", None),
             "source_label": track_source,
             "conf_label": conf_label,
             "inference_label": inference_label,
             "stale_label": stale_label,
         }
+
+    def capture_live_blob_on_image(
+        self,
+        image: np.ndarray,
+        *,
+        anatomical_pose_xy: Optional[np.ndarray] = None,
+        anatomical_node_names: Optional[list[str]] = None,
+    ) -> LiveBlobPolygon:
+        """Run backup tracker on ``image`` and orient contour (full-image coordinates)."""
+        self._ensure_tracker()
+        fallback = self._fallback_tracker()
+        if fallback is None:
+            return invalid_live_blob_polygon()
+        res = fallback.track(np.asarray(image, dtype=np.uint8))
+        return self.orient_blob(
+            res,
+            anatomical_pose_xy=anatomical_pose_xy,
+            anatomical_node_names=anatomical_node_names,
+            pose_offset=(0.0, 0.0),
+        )
 
     def get_sleap_status_label(self) -> tuple[str, str]:
         """

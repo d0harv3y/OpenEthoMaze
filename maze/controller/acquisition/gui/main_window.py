@@ -471,6 +471,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             message if message else ("Analysis done" if success else "Analysis failed")
         )
+        self._apply_status_and_buttons()
 
     def _on_end_trial(self) -> None:
         msg = self._trial_controller.do_end_trial()

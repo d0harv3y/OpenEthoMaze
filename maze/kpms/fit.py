@@ -19,6 +19,7 @@ from .manifest_subset import (
     load_manifests,
     sample_representative_subset,
 )
+from .heading_idxs import anterior_posterior_idxs
 from .preprocess import KpmsPreprocessConfig, build_kpms_inputs
 
 
@@ -131,7 +132,7 @@ def run_kpms_fit(cfg: KpmsFitRunConfig) -> Path:
     if subset_cfg.manifest_csv and Path(subset_cfg.manifest_csv).is_file():
         prov_inputs["manifest_csv_sha256"] = sha256_file(subset_cfg.manifest_csv)
 
-    pre_cfg = KpmsPreprocessConfig()
+    pre_cfg = KpmsPreprocessConfig(pose_stream=cfg.pose_stream)
     fit_cfg = FitConfig(seed=cfg.random_seed)
 
     with provenance_run("kpms_fit", project_dir, prov_inputs) as prov:
@@ -206,14 +207,7 @@ def _run_fit_body(
 
     _prepare_checkpoint_path(model_out / "checkpoint.h5", data, force_new=force_new)
 
-    def _idx(name: str, fallback: int) -> list[int]:
-        try:
-            return [bodyparts.index(name)]
-        except ValueError:
-            return [fallback]
-
-    anterior_idxs = _idx("nose", 0)
-    posterior_idxs = _idx("tail", max(0, len(bodyparts) - 1))
+    anterior_idxs, posterior_idxs = anterior_posterior_idxs(bodyparts, pre_cfg.pose_stream)
 
     trans_hypparams = {
         "num_states": fit_cfg.num_states,

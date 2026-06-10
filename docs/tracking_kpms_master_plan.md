@@ -102,7 +102,7 @@ See [phase_wsl_agent_prompt.md](phase_wsl_agent_prompt.md) for full guidance.
 | T1a | `write/read anatomical` helpers only | Low | 2–3 |
 | T1b | `TrialRecorder` + `camera_loop` anatomical buffer | Medium | 3–4 |
 | T1c | `blob_orient.py` + contour→8-gon | Medium | 2–4 |
-| T1d | `TrialRecorder` blob flush + `backup_params_json` | Medium | 3–4 |
+| T1d | Polygon-first blob flush (`TrackingController.orient_blob` → `TrialRecorder` buffer) + `backup_params_json` | Medium | shipped |
 | T2a | `resolve_canonical_trial_h5` + `load_anatomical_from_h5` | Medium | 3–4 |
 | T2b | `build_kpms_inputs` H5-first; relax `require_sleap` | Medium | 2–3 |
 | T2c | Manifest/discovery `has_tracking_pose` flag | Low | 2–3 |

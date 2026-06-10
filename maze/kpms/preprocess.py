@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..core.anatomy import STANDARD_NODE_NAMES
+from ..core.anatomy import BLOB_NODE_NAMES, STANDARD_NODE_NAMES
 from ..pipeline.db.trial_key import TrialKey
 from ..pipeline.io.file_discovery import TrialManifest
 from ..pipeline.io.sleap_loader import TraceData, apply_jump_filter, load_sleap_file
@@ -14,7 +14,14 @@ from ..pipeline.tracking.trace_processing import (
     filter_frames_no_animal,
     process_trace_data,
 )
-from .h5_pose import AnatomicalPoseLoad, load_anatomical_from_h5, resolve_canonical_trial_h5
+from .h5_pose import (
+    AnatomicalPoseLoad,
+    BlobPoseLoad,
+    load_anatomical_from_h5,
+    load_blob_from_h5,
+    resolve_canonical_trial_h5,
+)
+from .heading_idxs import PoseStream
 
 
 @dataclass(frozen=True)
@@ -30,10 +37,20 @@ class KpmsPreprocessConfig:
     retain_all_frames: bool = False
     #: Results / cohort HDF5 passed to apply or fit; used when ``input_h5_path`` is empty.
     db_path: Path | None = None
+    #: Pose stream: anatomical (A), blob (B). Fused (C) is T4b.
+    pose_stream: PoseStream = "anatomical"
 
 
 def _effective_db_path(cfg: KpmsPreprocessConfig) -> Path:
     return Path(cfg.db_path) if cfg.db_path is not None else Path("")
+
+
+def _bodyparts_for_stream(pose_stream: PoseStream) -> tuple[str, ...]:
+    if pose_stream == "blob":
+        return BLOB_NODE_NAMES
+    if pose_stream == "fused":
+        raise NotImplementedError("pose_stream='fused' is T4b")
+    return STANDARD_NODE_NAMES
 
 
 def build_kpms_inputs(
@@ -43,8 +60,12 @@ def build_kpms_inputs(
     """
     Convert trial manifests into kpMS-ready coordinates/confidences.
 
-    Pose read order per trial: ``tracking/anatomical`` in canonical trial H5, then
-    ``sleap_path`` sidecar, else skip with ``missing_pose``.
+    Stream A (``pose_stream='anatomical'``): read order per trial is
+    ``tracking/anatomical`` in canonical trial H5, then ``sleap_path`` sidecar,
+    else skip with ``missing_pose``.
+
+    Stream B (``pose_stream='blob'``): ``tracking/blob`` in canonical trial H5 only;
+    no sleap fallback.
 
     Returns:
       (coordinates, confidences, bodyparts, skipped_trial_keys)
@@ -53,6 +74,7 @@ def build_kpms_inputs(
     confidences: dict[str, np.ndarray] = {}
     skipped: list[str] = []
     db_path = _effective_db_path(cfg)
+    bodyparts = list(_bodyparts_for_stream(cfg.pose_stream))
 
     for m in manifests:
         trial_key = m.kpms_results_dict_key
@@ -73,7 +95,7 @@ def build_kpms_inputs(
             coordinates[trial_key] = arr_xy[keep]
             confidences[trial_key] = arr_conf[keep]
 
-    return coordinates, confidences, list(STANDARD_NODE_NAMES), skipped
+    return coordinates, confidences, bodyparts, skipped
 
 
 def _load_pose_for_manifest(
@@ -82,7 +104,37 @@ def _load_pose_for_manifest(
     cfg: KpmsPreprocessConfig,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | str:
     """Return ``(xy, conf, keep)`` or a skip reason string."""
-    canonical = resolve_canonical_trial_h5(manifest, db_path)
+    if cfg.pose_stream == "blob":
+        return _load_blob_for_manifest(manifest, db_path, cfg)
+    return _load_anatomical_for_manifest(manifest, db_path, cfg)
+
+
+def _load_blob_for_manifest(
+    manifest: TrialManifest,
+    db_path: Path,
+    cfg: KpmsPreprocessConfig,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | str:
+    canonical = resolve_canonical_trial_h5(manifest, db_path, pose_stream="blob")
+    if canonical is None:
+        return "missing_pose"
+
+    key = TrialKey(
+        animal_id=str(manifest.animal_id),
+        session=str(manifest.h5_session),
+        trial=str(manifest.trial),
+    )
+    pose = load_blob_from_h5(canonical, key)
+    if pose is None:
+        return "missing_pose"
+    return _preprocess_h5_blob(pose, cfg)
+
+
+def _load_anatomical_for_manifest(
+    manifest: TrialManifest,
+    db_path: Path,
+    cfg: KpmsPreprocessConfig,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | str:
+    canonical = resolve_canonical_trial_h5(manifest, db_path, pose_stream="anatomical")
     if canonical is not None:
         key = TrialKey(
             animal_id=str(manifest.animal_id),
@@ -118,7 +170,7 @@ def _preprocess_sleap_trace(
         trace.node_names,
         TraceProcessingParams(),
     )
-    arr_xy, arr_conf = _stack_nodes(processed, trace.n_frames)
+    arr_xy, arr_conf = _stack_anatomical_nodes(processed, trace.n_frames)
     valid_frames = filter_frames_no_animal(trace.traces, trace.n_frames)
     keep = valid_frames & np.isfinite(arr_xy).all(axis=(1, 2))
     return arr_xy, arr_conf, keep
@@ -142,9 +194,27 @@ def _preprocess_h5_pose(
         n_frames = trace.n_frames
 
     processed = process_trace_data(traces, node_names, TraceProcessingParams())
-    arr_xy, arr_conf = _stack_nodes(processed, n_frames)
+    arr_xy, arr_conf = _stack_anatomical_nodes(processed, n_frames)
     valid_frames = filter_frames_no_animal(traces, n_frames)
     keep = valid_frames & np.isfinite(arr_xy).all(axis=(1, 2))
+    return arr_xy, arr_conf, keep
+
+
+def _preprocess_h5_blob(
+    pose: BlobPoseLoad,
+    cfg: KpmsPreprocessConfig,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    del cfg  # blob stream skips jump filter and trace processing
+    n_frames = int(pose.coordinates.shape[0])
+    k = len(BLOB_NODE_NAMES)
+    arr_xy = _stack_blob_nodes(pose.coordinates, pose.node_names, n_frames)
+    frame_score = np.asarray(pose.confidences, dtype=np.float32).reshape(-1)
+    arr_conf = np.broadcast_to(frame_score[:, None], (n_frames, k)).copy()
+    valid = np.asarray(pose.valid, dtype=np.uint8).reshape(-1)
+    arr_conf[valid == 0] = 0.0
+    invalid_xy = ~np.isfinite(arr_xy).all(axis=(1, 2))
+    arr_conf[invalid_xy] = 0.0
+    keep = (valid > 0) & np.isfinite(arr_xy).all(axis=(1, 2))
     return arr_xy, arr_conf, keep
 
 
@@ -166,11 +236,11 @@ def _anatomical_pose_to_traces(
     return traces, [str(n) for n in pose.node_names], n_frames
 
 
-def _stack_nodes(
+def _stack_anatomical_nodes(
     processed_traces: dict[str, dict[str, np.ndarray]],
     n_frames: int,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Stack pipeline traces into kpMS tensor shapes."""
+    """Stack pipeline traces into kpMS tensor shapes for stream A."""
     k = len(STANDARD_NODE_NAMES)
     xy = np.full((n_frames, k, 2), np.nan, dtype=np.float32)
     conf = np.zeros((n_frames, k), dtype=np.float32)
@@ -188,3 +258,23 @@ def _stack_nodes(
         xy[:, i, 1] = y
         conf[:, i] = score
     return xy, conf
+
+
+def _stack_blob_nodes(
+    coordinates: np.ndarray,
+    node_names: tuple[str, ...] | list[str],
+    n_frames: int,
+) -> np.ndarray:
+    """Align blob H5 coordinates to canonical ``BLOB_NODE_NAMES`` order."""
+    k = len(BLOB_NODE_NAMES)
+    xy = np.full((n_frames, k, 2), np.nan, dtype=np.float32)
+    name_to_src = {str(name): i for i, name in enumerate(node_names)}
+    for i, node_name in enumerate(BLOB_NODE_NAMES):
+        src = name_to_src.get(node_name)
+        if src is None:
+            continue
+        pts = np.asarray(coordinates[:, src, :], dtype=np.float32)
+        if pts.shape != (n_frames, 2):
+            continue
+        xy[:, i, :] = pts
+    return xy

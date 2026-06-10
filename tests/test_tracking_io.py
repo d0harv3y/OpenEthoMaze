@@ -9,7 +9,8 @@ import numpy as np
 import pytest
 
 from maze.core.anatomy import BLOB_NODE_NAMES, BLOB_VERTEX_COUNT, STANDARD_NODE_NAMES
-from maze.core.schema import CONTROLLER_SCHEMA_VERSION_V2
+from maze.core.h5_layout import write_json_attr
+from maze.core.schema import CONTROLLER_SCHEMA_VERSION_V2, TRACKING_ANATOMICAL_XY_DATASET
 from maze.pipeline.tracking_io import (
     AnatomicalTrackingBuffer,
     flush_anatomical_tracking_buffer,
@@ -121,6 +122,41 @@ def test_anatomical_round_trip(tmp_path: Path) -> None:
         assert loaded.pose_source == "sleap_live"
         assert loaded.fps == pytest.approx(30.0)
         assert loaded.pose_model_path == "/models/mouse_pose.slp"
+
+        g_anat = g_trial["tracking/anatomical"]
+        assert TRACKING_ANATOMICAL_XY_DATASET in g_anat
+        assert "x" not in g_anat
+        assert "y" not in g_anat
+        np.testing.assert_allclose(
+            g_anat[TRACKING_ANATOMICAL_XY_DATASET][:],
+            np.stack([x, y], axis=-1),
+        )
+
+
+def test_read_legacy_split_x_y_anatomical(tmp_path: Path) -> None:
+    """Early v2 files with separate x/y datasets remain readable."""
+    db = tmp_path / "legacy.h5"
+    t = 3
+    k = len(STANDARD_NODE_NAMES)
+    x = np.ones((t, k), dtype=np.float32)
+    y = np.full((t, k), 3.0, dtype=np.float32)
+    score = np.full((t, k), 0.5, dtype=np.float32)
+
+    with h5py.File(db, "w") as h5:
+        g_trial = _make_trial_group(h5)
+        g_anat = g_trial.require_group("tracking").require_group("anatomical")
+        g_anat.create_dataset("frame_index", data=np.arange(t, dtype=np.uint32))
+        g_anat.create_dataset("x", data=x)
+        g_anat.create_dataset("y", data=y)
+        g_anat.create_dataset("score", data=score)
+        write_json_attr(g_anat, "node_names", list(STANDARD_NODE_NAMES))
+        g_anat.attrs["pose_source"] = "sleap_live"
+        g_anat.attrs["fps"] = 30.0
+
+        loaded = read_anatomical_tracking(g_trial)
+        assert loaded is not None
+        np.testing.assert_allclose(loaded.x, x)
+        np.testing.assert_allclose(loaded.y, y)
 
 
 def test_blob_round_trip(tmp_path: Path) -> None:

@@ -707,6 +707,15 @@ class SettingsDialog(QDialog):
             "no matter which source is primary for the overlay."
         )
         options_ly.addWidget(self._track_exit_either_success_cb)
+        self._pose_prefer_import_cb = QCheckBox(
+            "Replace recorded live pose with file predictions (Analyze / virtual acq)"
+        )
+        self._pose_prefer_import_cb.setStyleSheet("color: #b91c1c;")
+        self._pose_prefer_import_cb.setToolTip(
+            "Default keep_live: acquisition sleap_live pose is preserved when sidecars exist. "
+            "Check to prefer_import and overwrite live pose with .slp predictions."
+        )
+        options_ly.addWidget(self._pose_prefer_import_cb)
         layout.addWidget(options_g)
 
         # Fallback section
@@ -1054,6 +1063,9 @@ class SettingsDialog(QDialog):
         self._track_exit_either_success_cb.setChecked(
             getattr(c, "track_exit_either_success", False)
         )
+        self._pose_prefer_import_cb.setChecked(
+            str(getattr(c, "pose_overwrite_policy", "keep_live")) == "prefer_import"
+        )
         self._sleap_model_path_edit.setText(getattr(c, "sleap_model_path", "") or "")
         # SLEAP
         self._sleap_confidence_pct.setValue(getattr(c, "sleap_confidence_pct", 50))
@@ -1239,6 +1251,9 @@ class SettingsDialog(QDialog):
             c.track_enable_backup = True
             adjusted = True
         c.track_exit_either_success = self._track_exit_either_success_cb.isChecked()
+        c.pose_overwrite_policy = (
+            "prefer_import" if self._pose_prefer_import_cb.isChecked() else "keep_live"
+        )
         c.sleap_model_path = path
         if adjusted:
             self._track_enable_backup_cb.setChecked(c.track_enable_backup)

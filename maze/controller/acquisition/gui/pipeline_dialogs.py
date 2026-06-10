@@ -52,8 +52,10 @@ try:
     )
 
     HAS_QT = True
+    HAS_PIPELINE_DIALOGS = True
 except ImportError:
     HAS_QT = False
+    HAS_PIPELINE_DIALOGS = False
     QThread = object  # type: ignore[misc, assignment]
 
 
@@ -138,6 +140,7 @@ if HAS_QT:
             from maze.pipeline.db import TrialKey, write_sleap_model_path, write_sleap_path
             from maze.pipeline.headless_encode import materialize_xy_tables_from_video
             from maze.pipeline.persist_pose import persist_pose_from_sidecar
+            from maze.pipeline.pose_status import policy_to_overwrite_pose
             from maze.pipeline.run_pipeline import load_trial_manifests_from_db
             from maze.pipeline.run_provenance import record_provenance, utc_now_iso
 
@@ -155,6 +158,7 @@ if HAS_QT:
                 if not with_video:
                     self.finished_ok.emit(False, "No trials with video.")
                     return
+                overwrite_pose = policy_to_overwrite_pose(self._config.pose_overwrite_policy)
                 n_ok = 0
                 for i, m in enumerate(with_video, 1):
                     vp = m.video_path
@@ -176,7 +180,7 @@ if HAS_QT:
                             self._db_path,
                             key,
                             existing,
-                            overwrite_pose=False,
+                            overwrite_pose=overwrite_pose,
                         )
                         if self._materialize_xy and vp.exists():
                             materialize_xy_tables_from_video(
@@ -206,7 +210,7 @@ if HAS_QT:
                         self._db_path,
                         key,
                         pred,
-                        overwrite_pose=False,
+                        overwrite_pose=overwrite_pose,
                     )
                     if self._materialize_xy:
                         materialize_xy_tables_from_video(
@@ -268,6 +272,7 @@ if HAS_QT:
             sessions: Optional[list[str]],
             trials: Optional[list[str]],
             analysis_profile: Optional[tuple] = None,
+            overwrite_pose: bool = False,
         ) -> None:
             super().__init__()
             self._db_path = db_path
@@ -278,6 +283,7 @@ if HAS_QT:
             self._sessions = sessions
             self._trials = trials
             self._analysis_profile = analysis_profile
+            self._overwrite_pose = overwrite_pose
 
         def run(self) -> None:
             import io
@@ -299,6 +305,7 @@ if HAS_QT:
                         parallel=False,
                         analysis_profile=self._analysis_profile,
                         prefilter_mode=GUI_DEFAULT_PREFILTER_MODE,
+                        overwrite_pose=self._overwrite_pose,
                     )
                 self.log_line.emit(buf.getvalue())
                 failed = int(stats.get("failed", 0) or 0)
@@ -708,6 +715,15 @@ if HAS_QT:
         )
         prof_cb = QCheckBox("Apply current analysis profile (trajectory + trace quality)")
         prof_cb.setChecked(False)
+        overwrite_pose_cb = QCheckBox("Replace recorded live pose with file predictions")
+        overwrite_pose_cb.setStyleSheet("color: #b91c1c;")
+        overwrite_pose_cb.setChecked(
+            str(getattr(config, "pose_overwrite_policy", "keep_live")) == "prefer_import"
+        )
+        overwrite_pose_cb.setToolTip(
+            "When a trial already has live acquisition pose (sleap_live), import sidecar "
+            "predictions only if checked. Default keeps live pose (keep_live policy)."
+        )
         fa = QLineEdit("")
         fs = QLineEdit("")
         ft = QLineEdit("")
@@ -734,6 +750,7 @@ if HAS_QT:
         lay.addWidget(qc_cb)
         lay.addWidget(skip_cb)
         lay.addWidget(prof_cb)
+        lay.addWidget(overwrite_pose_cb)
         flt = QFormLayout()
         flt.addRow("Filter animal IDs:", fa)
         flt.addRow("Filter sessions:", fs)
@@ -766,6 +783,7 @@ if HAS_QT:
                 sessions=_parse_filter_list(fs.text()),
                 trials=_parse_filter_list(ft.text()),
                 analysis_profile=profile,
+                overwrite_pose=overwrite_pose_cb.isChecked(),
             )
             worker.log_line.connect(log.appendPlainText)
             worker.finished_ok.connect(on_done)

@@ -97,12 +97,16 @@ TRACKING_ANATOMICAL_GROUP = "anatomical"
 TRACKING_BLOB_GROUP = "blob"
 
 TRACKING_FRAME_INDEX_DATASET = "frame_index"
-TRACKING_X_DATASET = "x"
-TRACKING_Y_DATASET = "y"
 TRACKING_SCORE_DATASET = "score"
 TRACKING_VALID_DATASET = "valid"
 
+# Anatomical + blob vertex coordinates: ``(T, K, 2)`` and ``(T, N, 2)`` respectively.
+TRACKING_ANATOMICAL_XY_DATASET = "xy"
 TRACKING_BLOB_XY_DATASET = "xy"
+
+# Legacy anatomical layout (v2 early writes); readers accept ``x`` + ``y`` when ``xy`` absent.
+TRACKING_X_DATASET = "x"
+TRACKING_Y_DATASET = "y"
 TRACKING_BLOB_HEADING_DATASET = "heading_rad"
 
 CONTROLLER_SCHEMA_VERSION_V1 = "v1"

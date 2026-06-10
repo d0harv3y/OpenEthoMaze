@@ -85,6 +85,12 @@ from .db import (
 )
 from .db.trial_settings_io import radial_arm_exit_hole_from_geometry_payload
 from .persist_pose import persist_pose_from_sidecar
+from .pose_status import (
+    overwrite_pose_to_policy,
+    read_anatomical_for_trial,
+    status_for_persist_result,
+    write_pose_status_attrs,
+)
 
 if TYPE_CHECKING:
     from maze.controller.acquisition.shared_config import (
@@ -202,6 +208,7 @@ def process_trial(
     analysis_profile: Optional[
         tuple["AnalysisTrajectoryConfig", "AnalysisTraceQualityConfig"]
     ] = None,
+    overwrite_pose: bool = False,
 ) -> bool:
     """
     Process a single trial through the complete pipeline.
@@ -247,13 +254,27 @@ def process_trial(
         timing = complete_trial_timing(db_path, key, timing)
 
         if manifest.sleap_path and manifest.sleap_path.exists():
-            persist_pose_from_sidecar(
+            persist_result = persist_pose_from_sidecar(
                 db_path,
                 key,
                 manifest.sleap_path,
-                overwrite_pose=False,
+                overwrite_pose=overwrite_pose,
                 fps=h5_fps,
             )
+            anatomical = read_anatomical_for_trial(db_path, key)
+            pose_status = status_for_persist_result(
+                persist_result,
+                anatomical,
+                sleap_path=manifest.sleap_path,
+                overwrite_pose=overwrite_pose,
+            )
+            write_pose_status_attrs(
+                db_path,
+                key,
+                status=pose_status,
+                policy=overwrite_pose_to_policy(overwrite_pose),
+            )
+            log.info("%s — %s", key.path(), pose_status)
 
         # Step 2: Load tracking data (SLEAP + in-range when available; merge into one TraceData)
         trace_data_sleap = None
