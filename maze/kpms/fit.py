@@ -17,9 +17,10 @@ from .manifest_subset import (
     SubsetConfig,
     filter_manifests,
     load_manifests,
+    resolve_cohort_db_path,
     sample_representative_subset,
 )
-from .heading_idxs import anterior_posterior_idxs
+from .heading_idxs import PoseStream, anterior_posterior_idxs
 from .preprocess import KpmsPreprocessConfig, build_kpms_inputs
 from .project_paths import POSE_STREAM_CHOICES, resolve_kpms_project_dir
 
@@ -146,7 +147,6 @@ def run_kpms_fit(cfg: KpmsFitRunConfig) -> Path:
     if subset_cfg.manifest_csv and Path(subset_cfg.manifest_csv).is_file():
         prov_inputs["manifest_csv_sha256"] = sha256_file(subset_cfg.manifest_csv)
 
-    pre_cfg = KpmsPreprocessConfig(pose_stream=cfg.pose_stream)
     fit_cfg = FitConfig(seed=cfg.random_seed)
 
     with provenance_run("kpms_fit", project_dir, prov_inputs) as prov:
@@ -155,7 +155,7 @@ def run_kpms_fit(cfg: KpmsFitRunConfig) -> Path:
             model_name=cfg.model_name,
             force_new=cfg.force_new,
             subset_cfg=subset_cfg,
-            pre_cfg=pre_cfg,
+            pose_stream=cfg.pose_stream,
             fit_cfg=fit_cfg,
             prov=prov,
         )
@@ -190,11 +190,13 @@ def _run_fit_body(
     model_name: str,
     force_new: bool,
     subset_cfg: SubsetConfig,
-    pre_cfg: KpmsPreprocessConfig,
+    pose_stream: PoseStream,
     fit_cfg: FitConfig,
     prov: dict,
 ) -> None:
     manifests = load_manifests(subset_cfg)
+    cohort_db = resolve_cohort_db_path(manifests)
+    pre_cfg = KpmsPreprocessConfig(pose_stream=pose_stream, db_path=cohort_db)
     manifests = filter_manifests(manifests, subset_cfg)
     manifests = sample_representative_subset(
         manifests,

@@ -15,30 +15,45 @@ from maze.pipeline.tracking_io import write_anatomical_tracking
 from conftest import make_manifest
 
 
-def _sample_manifests() -> list:
+def _sample_manifests(tmp_path: Path) -> list:
+    a_slp = tmp_path / "a.slp"
+    b_slp = tmp_path / "b.slp"
+    a_slp.touch()
+    b_slp.touch()
     return [
-        make_manifest(animal_id="1", sleap_path=Path("a.slp"), is_habituation=False),
+        make_manifest(animal_id="1", sleap_path=a_slp, is_habituation=False),
         make_manifest(animal_id="2", sleap_path=None, is_habituation=False),
-        make_manifest(animal_id="3", sleap_path=Path("b.slp"), is_habituation=True),
+        make_manifest(animal_id="3", sleap_path=b_slp, is_habituation=True),
     ]
 
 
-def test_filter_manifests_requires_sleap_by_default() -> None:
+def test_filter_manifests_requires_sleap_by_default(tmp_path: Path) -> None:
     cfg = SubsetConfig(include_habituation=True)
-    out = filter_manifests(_sample_manifests(), cfg)
+    out = filter_manifests(_sample_manifests(tmp_path), cfg)
     assert [m.animal_id for m in out] == ["1", "3"]
 
 
-def test_filter_manifests_excludes_habituation_when_disabled() -> None:
+def test_filter_manifests_excludes_habituation_when_disabled(tmp_path: Path) -> None:
     cfg = SubsetConfig(include_habituation=False)
-    out = filter_manifests(_sample_manifests(), cfg)
+    out = filter_manifests(_sample_manifests(tmp_path), cfg)
     assert [m.animal_id for m in out] == ["1"]
 
 
-def test_filter_manifests_excludes_experimental_when_disabled() -> None:
+def test_filter_manifests_excludes_experimental_when_disabled(tmp_path: Path) -> None:
     cfg = SubsetConfig(include_experimental=False, include_habituation=True)
-    out = filter_manifests(_sample_manifests(), cfg)
+    out = filter_manifests(_sample_manifests(tmp_path), cfg)
     assert [m.animal_id for m in out] == ["3"]
+
+
+def test_filter_manifests_excludes_missing_windows_sleap_path(tmp_path: Path) -> None:
+    manifest = make_manifest(
+        animal_id="9",
+        sleap_path=Path(r"E:\videos\missing.predictions.slp"),
+        input_h5_path=tmp_path / "cohort.h5",
+    )
+    cfg = SubsetConfig()
+    out = filter_manifests([manifest], cfg)
+    assert out == []
 
 
 def test_has_tracking_pose_and_filter_keeps_h5_only(tmp_path: Path) -> None:

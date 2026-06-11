@@ -10,10 +10,37 @@ from ..pipeline.io.file_discovery import (
     discover_trials,
     enrich_manifests_exit_number,
     enrich_manifests_from_treatment_labels,
+    enrich_manifests_has_tracking_pose,
     load_manifest_csv,
     load_treatment_labels,
 )
 from .h5_pose import resolve_canonical_trial_h5
+
+
+def resolve_cohort_db_path(manifests: list[TrialManifest]) -> Path | None:
+    """Return the sole existing ``input_h5_path`` across manifests, if unambiguous."""
+    paths: set[Path] = set()
+    for m in manifests:
+        raw = str(getattr(m, "input_h5_path", "") or "").strip()
+        if not raw:
+            continue
+        p = Path(raw).resolve()
+        if p.is_file():
+            paths.add(p)
+    if len(paths) == 1:
+        return next(iter(paths))
+    return None
+
+
+def _manifest_has_usable_pose(manifest: TrialManifest, db_path: Path) -> bool:
+    """True when anatomical pose is available in H5 or a local SLEAP sidecar exists."""
+    if has_tracking_pose(manifest, db_path):
+        return True
+    sleap = manifest.sleap_path
+    if sleap is not None and Path(sleap).is_file():
+        return True
+    return False
+
 
 # TrialManifest fields allowed for stratified balancing (subset sampling only).
 BALANCE_COLUMN_CHOICES: frozenset[str] = frozenset(
@@ -77,6 +104,15 @@ def load_manifests(cfg: SubsetConfig) -> list[TrialManifest]:
         apply_treatment_labels(result, labels)
         manifests = result.trials
     enrich_manifests_exit_number(manifests)
+    db_path = _effective_db_path(cfg)
+    if not db_path.is_file():
+        cohort_db = resolve_cohort_db_path(manifests)
+        if cohort_db is not None:
+            db_path = cohort_db
+    enrich_manifests_has_tracking_pose(
+        manifests,
+        db_path=db_path if db_path.is_file() else None,
+    )
     return manifests
 
 
@@ -85,7 +121,7 @@ def filter_manifests(manifests: list[TrialManifest], cfg: SubsetConfig) -> list[
     db_path = _effective_db_path(cfg)
     out: list[TrialManifest] = []
     for m in manifests:
-        if cfg.require_sleap and m.sleap_path is None and not has_tracking_pose(m, db_path):
+        if cfg.require_sleap and not _manifest_has_usable_pose(m, db_path):
             continue
         if not cfg.include_habituation and m.phase == "habituation":
             continue

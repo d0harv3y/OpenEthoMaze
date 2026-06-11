@@ -63,6 +63,25 @@ def test_build_kpms_inputs_h5_only_no_sleap(tmp_path: Path) -> None:
     assert confidences["7-S01-T02"].shape[0] == xy.shape[0]
 
 
+def test_build_kpms_inputs_skips_sleap_when_input_h5_set(tmp_path: Path) -> None:
+    db = tmp_path / "cohort.h5"
+    with h5py.File(db, "w") as h5:
+        h5.create_group("1/S01/T01")
+
+    manifest = TrialManifest(
+        animal_id="1",
+        session="S01",
+        trial="T01",
+        input_h5_path=db,
+        sleap_path=Path(r"E:\missing.predictions.slp"),
+    )
+    _, _, _, skipped = build_kpms_inputs(
+        [manifest],
+        KpmsPreprocessConfig(db_path=db),
+    )
+    assert skipped == ["1-S01-T01:missing_h5_pose"]
+
+
 def test_build_kpms_inputs_skips_without_pose_or_sleap(tmp_path: Path) -> None:
     db = tmp_path / "empty.h5"
     with h5py.File(db, "w") as h5:
@@ -79,7 +98,7 @@ def test_build_kpms_inputs_skips_without_pose_or_sleap(tmp_path: Path) -> None:
         [manifest],
         KpmsPreprocessConfig(db_path=db),
     )
-    assert skipped == ["1-S01-T01:missing_pose"]
+    assert skipped == ["1-S01-T01:missing_h5_pose"]
 
 
 def _write_h5_blob(db: Path, key: TrialKey, *, t: int = 8) -> None:

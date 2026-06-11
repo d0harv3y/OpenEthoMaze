@@ -24,6 +24,23 @@ from .h5_pose import (
 from .heading_idxs import PoseStream
 
 
+def _manifest_input_h5_path(manifest: TrialManifest) -> Path | None:
+    raw = str(getattr(manifest, "input_h5_path", "") or "").strip()
+    if not raw:
+        return None
+    return Path(raw)
+
+
+def _sleap_sidecar_path(manifest: TrialManifest) -> Path | None:
+    """Local SLEAP sidecar when the path exists; never probe missing cross-platform paths."""
+    if manifest.sleap_path is None:
+        return None
+    sleap = Path(manifest.sleap_path)
+    if not sleap.is_file():
+        return None
+    return sleap
+
+
 @dataclass(frozen=True)
 class KpmsPreprocessConfig:
     """Preprocessing settings before kpMS formatting."""
@@ -152,10 +169,11 @@ def _try_load_anatomical_tensors(
                 keep,
             )
 
-    if manifest.sleap_path is None:
+    sleap = _sleap_sidecar_path(manifest)
+    if sleap is None:
         return None
 
-    trace = load_sleap_file(Path(manifest.sleap_path))
+    trace = load_sleap_file(sleap)
     if trace is None:
         return None
 
@@ -280,11 +298,17 @@ def _load_anatomical_for_manifest(
         pose = load_anatomical_from_h5(canonical, key)
         if pose is not None:
             return _preprocess_h5_pose(pose, cfg)
+        if _manifest_input_h5_path(manifest) is not None:
+            return "missing_h5_pose"
 
-    if manifest.sleap_path is None:
+    if _manifest_input_h5_path(manifest) is not None:
+        return "missing_h5_pose"
+
+    sleap = _sleap_sidecar_path(manifest)
+    if sleap is None:
         return "missing_pose"
 
-    trace = load_sleap_file(Path(manifest.sleap_path))
+    trace = load_sleap_file(sleap)
     if trace is None:
         return "failed_load"
 
