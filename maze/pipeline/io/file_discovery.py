@@ -30,6 +30,7 @@ MANIFEST_CSV_FIELDNAMES: tuple[str, ...] = (
     "original_session",
     "trial",
     "phase",
+    "exit_number",
     "sex",
     "strain",
     "tx",
@@ -65,6 +66,7 @@ def trial_manifest_csv_row_values(t: "TrialManifest") -> list[str]:
         t.original_session or "",
         t.trial,
         t.phase,
+        "" if t.exit_number is None else str(int(t.exit_number)),
         t.sex or "",
         t.strain or "",
         t.tx or "",
@@ -158,6 +160,9 @@ class TrialManifest:
     #: True when ``tracking/anatomical`` is present in canonical trial H5 (v2 tracking).
     has_tracking_pose: bool = False
 
+    #: VAST assigned exit (1-based); from legacy input H5 settings or results H5 attrs.
+    exit_number: Optional[int] = None
+
     @property
     def h5_session(self) -> str:
         """Session key to use when loading from H5 (original if renumbered)."""
@@ -191,6 +196,60 @@ def _parse_manifest_bool(value: str | None) -> bool:
         return False
     txt = str(value).strip().lower()
     return txt in ("1", "true", "yes", "y")
+
+
+def _parse_manifest_int(raw: str | None) -> int | None:
+    if raw is None:
+        return None
+    txt = str(raw).strip()
+    if not txt:
+        return None
+    try:
+        return int(txt)
+    except ValueError:
+        return None
+
+
+def enrich_manifests_exit_number(manifests: list[TrialManifest]) -> None:
+    """
+    Fill :attr:`TrialManifest.exit_number` from legacy input H5 settings or trial attrs.
+
+    Skips rows that already have ``exit_number``. Uses ``input_h5_path`` (legacy
+    acquisition H5 or kpMS results H5 with ``exit_number`` attr).
+    """
+    from ..db import open_db
+    from ..db.trial_key import TrialKey
+    from .input_h5_loader import load_trial_settings
+
+    for manifest in manifests:
+        if manifest.exit_number is not None:
+            continue
+
+        src = Path(manifest.input_h5_path) if str(manifest.input_h5_path).strip() else None
+        if src is None or not src.is_file():
+            continue
+
+        try:
+            settings = load_trial_settings(
+                src,
+                manifest.animal_id,
+                manifest.h5_session,
+                manifest.trial,
+            )
+            if settings.exit_number is not None:
+                manifest.exit_number = int(settings.exit_number)
+                continue
+        except (OSError, KeyError, ValueError):
+            pass
+
+        try:
+            key = TrialKey.from_manifest(manifest)
+            with open_db(src, "r") as h5:
+                g_trial = h5[key.path()]
+                if "exit_number" in g_trial.attrs:
+                    manifest.exit_number = int(g_trial.attrs["exit_number"])
+        except (OSError, KeyError, TypeError, ValueError):
+            continue
 
 
 def enrich_manifests_has_tracking_pose(
@@ -1264,6 +1323,7 @@ def load_manifest_csv(
                     inferred_id=_cell(row, "inferred_id"),
                     kpms_recording_key=_cell(row, "kpms_recording_key"),
                     has_tracking_pose=_parse_manifest_bool(row.get("has_tracking_pose")),
+                    exit_number=_parse_manifest_int(row.get("exit_number")),
                 )
             )
     return manifests

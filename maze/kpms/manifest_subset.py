@@ -8,6 +8,7 @@ from ..pipeline.io.file_discovery import (
     TrialManifest,
     apply_treatment_labels,
     discover_trials,
+    enrich_manifests_exit_number,
     enrich_manifests_from_treatment_labels,
     load_manifest_csv,
     load_treatment_labels,
@@ -29,6 +30,7 @@ BALANCE_COLUMN_CHOICES: frozenset[str] = frozenset(
         "session",
         "trial",
         "is_habituation",
+        "exit_number",
     }
 )
 
@@ -74,6 +76,7 @@ def load_manifests(cfg: SubsetConfig) -> list[TrialManifest]:
         labels = load_treatment_labels()
         apply_treatment_labels(result, labels)
         manifests = result.trials
+    enrich_manifests_exit_number(manifests)
     return manifests
 
 

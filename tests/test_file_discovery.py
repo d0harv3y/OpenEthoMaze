@@ -49,10 +49,10 @@ def test_trial_manifest_csv_row_values_matches_fieldnames() -> None:
     assert row[0] == "556"
     assert row[1] == "S02"
     assert row[3] == "T03"
-    assert row[13] == ts.isoformat()
-    assert row[14] == "100"
-    assert row[15] == "99"
-    assert row[16] == "-1"
-    assert row[17].endswith("in.h5")
-    assert row[20] == "0"
-    assert row[21] == "556-S02-T03"
+    assert row[MANIFEST_CSV_FIELDNAMES.index("timestamp")] == ts.isoformat()
+    assert row[MANIFEST_CSV_FIELDNAMES.index("h5_n_frames")] == "100"
+    assert row[MANIFEST_CSV_FIELDNAMES.index("video_n_frames")] == "99"
+    assert row[MANIFEST_CSV_FIELDNAMES.index("frame_diff")] == "-1"
+    assert row[MANIFEST_CSV_FIELDNAMES.index("input_h5_path")].endswith("in.h5")
+    assert row[MANIFEST_CSV_FIELDNAMES.index("has_tracking_pose")] == "0"
+    assert row[MANIFEST_CSV_FIELDNAMES.index("kpms_recording_key")] == "556-S02-T03"

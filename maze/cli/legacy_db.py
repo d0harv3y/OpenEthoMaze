@@ -269,6 +269,8 @@ def cmd_init(
                 trial.trial,
             )
             trial.timestamp = settings.timestamp
+            if settings.exit_number is not None:
+                trial.exit_number = int(settings.exit_number)
             if settings.timestamp:
                 counts["timestamps"] += 1
             trial_start_frame = None
@@ -432,6 +434,8 @@ def cmd_sync(
                     trial.trial,
                 )
                 trial.timestamp = settings.timestamp
+                if settings.exit_number is not None:
+                    trial.exit_number = int(settings.exit_number)
                 h5_data = None
                 trial_start_frame = None
                 try:

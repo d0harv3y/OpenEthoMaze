@@ -70,6 +70,7 @@ def load_trial_manifests_from_db(db_path: Path) -> list[TrialManifest]:
             input_h5_str = _attr_str(attrs, "input_h5_path")
             h5_n_frames = _attr_int(attrs, "h5_n_frames")
             video_n_frames = _attr_int(attrs, "video_n_frames")
+            exit_number = _attr_int(attrs, "exit_number")
             manifests.append(
                 TrialManifest(
                     animal_id=key.animal_id,
@@ -81,6 +82,7 @@ def load_trial_manifests_from_db(db_path: Path) -> list[TrialManifest]:
                     is_habituation=(key.phase == "habituation"),
                     h5_n_frames=h5_n_frames,
                     video_n_frames=video_n_frames,
+                    exit_number=exit_number,
                 )
             )
     return manifests

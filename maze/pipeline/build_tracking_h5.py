@@ -22,6 +22,7 @@ from maze.pipeline.db import (
 from maze.pipeline.io.file_discovery import (
     DiscoveryResult,
     TrialManifest,
+    enrich_manifests_exit_number,
     enrich_manifests_has_tracking_pose,
     save_manifest_csv,
 )
@@ -85,7 +86,9 @@ def build_tracking_h5(
     if not db_path.exists() or db_path.stat().st_size == 0:
         init_database(db_path)
 
-    manifests = _prepare_manifests_for_db(list(trials), db_path)
+    trial_list = list(trials)
+    enrich_manifests_exit_number(trial_list)
+    manifests = _prepare_manifests_for_db(trial_list, db_path)
     stats = BuildTrackingH5Stats(trials_total=len(manifests))
 
     unique_animals: set[str] = set()
@@ -115,6 +118,11 @@ def build_tracking_h5(
             sleap_path=str(trial.sleap_path) if trial.sleap_path else None,
             input_h5_path=str(db_path.resolve()),
         )
+
+        if trial.exit_number is not None:
+            with h5py.File(db_path, "a") as h5:
+                g_trial = h5[key.path()]
+                g_trial.attrs["exit_number"] = int(trial.exit_number)
 
         if trial.h5_n_frames is not None and trial.video_n_frames is not None:
             try:
