@@ -88,7 +88,20 @@ uv run maze-kpms-fit \
   --max-trials 50
 ```
 
-Streams **blob** and **fused** use separate `--project-dir` subtrees after multi-stream slices ship.
+Streams **blob** and **fused** land under `<project-dir>/<pose_stream>/` (see `maze.kpms.project_paths`).
+
+### Multi-stream / multi-seed sweep (WSL GPU box)
+
+From repo root on a native WSL clone (e.g. MED-DavisData2 at `/home/code/OpenEthoMaze`):
+
+```bash
+cd /home/code/OpenEthoMaze
+bash scripts/wsl_kpms_multi_stream_fit_sweep.sh
+```
+
+Default: **anatomical**, **blob**, **fused** × seeds **5, 13, 42, 67, 111** →  
+`/home/data/test/<stream>/seed_<NNN>/` (80 trials, stratified balance, `--force-new`).  
+Logs: `/home/data/test/fit_logs/`. Override paths via `KPMS_PROJECT_DIR`, `KPMS_MANIFEST`, etc. (see script header).
 
 ---
 
