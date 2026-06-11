@@ -135,6 +135,20 @@ def _prepare_checkpoint_path(checkpoint_path: Path, data: dict, *, force_new: bo
         )
 
 
+def _prepare_results_path(results_path: Path, *, force_new: bool) -> None:
+    """Remove stale results.h5 before extract (kpms merges without overwrite by default)."""
+    if not results_path.is_file():
+        return
+    results_path.unlink()
+    if force_new:
+        print(f"Removed {results_path} (--force-new).")
+    else:
+        print(
+            f"Removed stale {results_path} before extracting fit results "
+            "(prior run left keys that block keypoint_moseq extract_results)."
+        )
+
+
 def run_kpms_fit(cfg: KpmsFitRunConfig) -> Path:
     """
     Fit a keypoint-MoSeq model from a manifest subset.
@@ -314,6 +328,8 @@ def _run_fit_body(
         kpms.reindex_syllables_in_checkpoint(str(project_dir), fitted_name)
         model, data, metadata, _ = kpms.load_checkpoint(str(project_dir), fitted_name)
 
+    results_path = project_dir / fitted_name / "results.h5"
+    _prepare_results_path(results_path, force_new=force_new)
     kpms.extract_results(model, metadata, str(project_dir), fitted_name)
 
     summary = {

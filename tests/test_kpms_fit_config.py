@@ -58,6 +58,16 @@ def test_fit_run_config_from_args() -> None:
     )
 
 
+def test_prepare_results_path_removes_stale_file(tmp_path: Path) -> None:
+    pytest.importorskip("keypoint_moseq")
+    from maze.kpms.fit import _prepare_results_path
+
+    results = tmp_path / "results.h5"
+    results.write_bytes(b"stale")
+    _prepare_results_path(results, force_new=False)
+    assert not results.is_file()
+
+
 def test_fit_cli_pose_stream_help() -> None:
     pytest.importorskip("keypoint_moseq")
     proc = subprocess.run(
