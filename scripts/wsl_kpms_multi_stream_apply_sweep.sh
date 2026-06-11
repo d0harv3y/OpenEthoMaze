@@ -19,6 +19,7 @@ REPO_ROOT="${OPENETHOMAZE_ROOT:-/home/code/OpenEthoMaze}"
 PROJECT_DIR="${KPMS_PROJECT_DIR:-/home/data/test}"
 MANIFEST="${KPMS_MANIFEST:-/home/data/test/trial_manifest_kpms_tracking_wsl.csv}"
 APPLY_ITERS="${KPMS_APPLY_ITERS:-100}"
+APPLY_CHUNK_SIZE="${KPMS_APPLY_CHUNK_SIZE:-30}"
 CONTINUE_ON_ERROR="${CONTINUE_ON_ERROR:-1}"
 DRY_RUN="${DRY_RUN:-0}"
 
@@ -37,6 +38,7 @@ echo "Repo:        ${REPO_ROOT}"
 echo "Project dir: ${PROJECT_DIR}"
 echo "Manifest:    ${MANIFEST}"
 echo "Apply iters: ${APPLY_ITERS}"
+echo "Chunk size:  ${APPLY_CHUNK_SIZE} manifest rows per GPU batch"
 echo "Logs:        ${LOG_DIR}"
 echo
 
@@ -66,6 +68,7 @@ for stream in "${STREAMS[@]}"; do
       --model-name "${model_name}"
       --pose-stream "${stream}"
       --num-iters "${APPLY_ITERS}"
+      --apply-chunk-size "${APPLY_CHUNK_SIZE}"
       --no-enrich-labels
     )
 

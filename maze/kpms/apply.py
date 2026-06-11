@@ -161,6 +161,18 @@ class KpmsApplyConfig:
     )
     verbose: bool = True
     overwrite_results: bool = True
+    #: Process manifest in chunks to limit GPU memory (``None`` = single batch).
+    apply_chunk_size: int | None = None
+
+
+def _iter_manifest_chunks(
+    manifests: list[TrialManifest],
+    chunk_size: int | None,
+) -> list[list[TrialManifest]]:
+    """Split manifests for batched apply; one chunk when ``chunk_size`` is unset."""
+    if chunk_size is None or chunk_size <= 0 or len(manifests) <= chunk_size:
+        return [manifests]
+    return [manifests[i : i + chunk_size] for i in range(0, len(manifests), chunk_size)]
 
 
 def apply_kpms_checkpoint_from_manifests(
@@ -174,7 +186,11 @@ def apply_kpms_checkpoint_from_manifests(
     manifest_csv: Path | str | None = None,
 ) -> dict[str, Any]:
     """
-    Preprocess all selected trials like ``fit.py``, then run a single ``apply_model`` call.
+    Preprocess selected trials like ``fit.py``, then run ``apply_model``.
+
+    When ``apply_chunk_size`` is set, runs one ``apply_model`` call per chunk and
+    appends recording groups into the same results HDF5 (independent trials given
+    fixed checkpoint params).
 
     Writes one HDF5 (default: ``<project_dir>/<model_name>/results_apply.h5``).
     """
@@ -187,69 +203,97 @@ def apply_kpms_checkpoint_from_manifests(
     if not manifests:
         raise RuntimeError("No trials selected for kpMS apply (empty manifest list).")
 
-    coordinates, confidences, bodyparts, skipped = build_kpms_inputs(manifests, pre_cfg)
-    bodyparts_list = list(bodyparts)
-
-    if cfg.verbose:
-        print(
-            f"kpMS apply: {len(manifests)} manifest row(s), "
-            f"{len(coordinates)} recording(s) after preprocess, {len(skipped)} skipped"
-        )
-
-    if not coordinates:
-        raise RuntimeError("No usable trajectories after preprocessing; nothing to apply.")
-
-    # interpolate_nans_in_coordinates(coordinates)
-    # filter_low_confidence_fragments(
-    #     coordinates,
-    #     confidences,
-    #     conf_thresh=cfg.conf_threshold,
-    #     min_points=cfg.min_points_per_frame,
-    #     min_fragment=cfg.min_fragment_frames,
-    # )
-    # if not coordinates:
-    #     raise RuntimeError("No recordings left after confidence / fragment filtering.")
-
-    data, metadata = kpms.format_data(
-        coordinates,
-        confidences,
-        bodyparts=bodyparts_list,
-    )
-    from jax_moseq.utils.debugging import convert_data_precision
-
-    data = convert_data_precision(data, x64=True)
-
-    if cfg.reindex_syllables_before_load:
-        kpms.reindex_syllables_in_checkpoint(str(project_dir), model_name)
-
-    model, _, _, _ = kpms.load_checkpoint(str(project_dir), model_name)
-
     if results_path is None:
         results_path = project_dir / model_name / DEFAULT_RESULTS_NAME
     results_path = Path(results_path)
     ensure_dir(results_path.parent)
 
-    anterior_idxs, posterior_idxs = anterior_posterior_idxs(
-        bodyparts_list,
-        pre_cfg.pose_stream,
-    )
+    if cfg.reindex_syllables_before_load:
+        kpms.reindex_syllables_in_checkpoint(str(project_dir), model_name)
 
-    kpms.apply_model(
-        model,
-        data,
-        metadata,
-        project_dir=str(project_dir),
-        model_name=model_name,
-        results_path=str(results_path),
-        num_iters=cfg.num_iters,
-        conf_threshold=cfg.conf_threshold,
-        anterior_idxs=anterior_idxs,
-        posterior_idxs=posterior_idxs,
-        error_estimator=dict(cfg.error_estimator),
-        parallel_message_passing=cfg.parallel_message_passing,
-        verbose=cfg.verbose,
-        overwrite=cfg.overwrite_results,
-    )
+    if cfg.overwrite_results and results_path.is_file():
+        results_path.unlink()
+        if cfg.verbose:
+            print(f"Removed {results_path} (overwrite_results).")
+
+    model, _, _, _ = kpms.load_checkpoint(str(project_dir), model_name)
+
+    chunks = _iter_manifest_chunks(manifests, cfg.apply_chunk_size)
+    all_trial_keys: list[str] = []
+    all_skipped: list[str] = []
+    bodyparts_list: list[str] | None = None
+
+    if cfg.verbose:
+        n_chunks = len(chunks)
+        if n_chunks > 1:
+            print(
+                f"kpMS apply: {len(manifests)} manifest row(s) in {n_chunks} chunk(s) "
+                f"(apply_chunk_size={cfg.apply_chunk_size})"
+            )
+        else:
+            print(f"kpMS apply: {len(manifests)} manifest row(s), single batch")
+
+    anterior_idxs: list[int] | None = None
+    posterior_idxs: list[int] | None = None
+
+    for chunk_idx, chunk in enumerate(chunks, start=1):
+        coordinates, confidences, bodyparts, skipped = build_kpms_inputs(chunk, pre_cfg)
+        all_skipped.extend(skipped)
+        if bodyparts_list is None:
+            bodyparts_list = list(bodyparts)
+            anterior_idxs, posterior_idxs = anterior_posterior_idxs(
+                bodyparts_list,
+                pre_cfg.pose_stream,
+            )
+        elif list(bodyparts) != bodyparts_list:
+            raise RuntimeError(
+                "Inconsistent bodyparts across apply chunks; check pose_stream and preprocess."
+            )
+
+        if cfg.verbose and len(chunks) > 1:
+            print(
+                f"  chunk {chunk_idx}/{len(chunks)}: "
+                f"{len(chunk)} manifest row(s), "
+                f"{len(coordinates)} recording(s), {len(skipped)} skipped"
+            )
+
+        if not coordinates:
+            continue
+
+        data, metadata = kpms.format_data(
+            coordinates,
+            confidences,
+            bodyparts=bodyparts_list,
+        )
+        from jax_moseq.utils.debugging import convert_data_precision
+
+        data = convert_data_precision(data, x64=True)
+
+        kpms.apply_model(
+            model,
+            data,
+            metadata,
+            project_dir=str(project_dir),
+            model_name=model_name,
+            results_path=str(results_path),
+            num_iters=cfg.num_iters,
+            conf_threshold=cfg.conf_threshold,
+            anterior_idxs=anterior_idxs,
+            posterior_idxs=posterior_idxs,
+            error_estimator=dict(cfg.error_estimator),
+            parallel_message_passing=cfg.parallel_message_passing,
+            verbose=cfg.verbose,
+        )
+        all_trial_keys.extend(sorted(coordinates.keys()))
+
+    if not all_trial_keys:
+        raise RuntimeError("No usable trajectories after preprocessing; nothing to apply.")
+
+    if cfg.verbose:
+        print(
+            f"kpMS apply done: {len(all_trial_keys)} recording(s) after preprocess, "
+            f"{len(all_skipped)} skipped"
+        )
 
     manifest_csv_path = Path(manifest_csv) if manifest_csv else None
     prov_inputs: dict[str, Any] = {
@@ -267,10 +311,10 @@ def apply_kpms_checkpoint_from_manifests(
         "model_name": model_name,
         "results_path": str(results_path),
         "n_manifest_rows": len(manifests),
-        "trial_keys_applied": sorted(coordinates.keys()),
-        "n_recordings_after_preprocess": len(coordinates),
-        "n_skipped_preprocess": len(skipped),
-        "skipped_preprocess_examples": skipped[:50],
+        "trial_keys_applied": sorted(set(all_trial_keys)),
+        "n_recordings_after_preprocess": len(set(all_trial_keys)),
+        "n_skipped_preprocess": len(all_skipped),
+        "skipped_preprocess_examples": all_skipped[:50],
         "apply_config": asdict(cfg),
         "preprocess_config": asdict(pre_cfg),
         "run_provenance": provenance_envelope(
@@ -278,7 +322,7 @@ def apply_kpms_checkpoint_from_manifests(
             inputs=prov_inputs,
             outputs={
                 "n_manifest_rows": len(manifests),
-                "n_recordings_after_preprocess": len(coordinates),
+                "n_recordings_after_preprocess": len(set(all_trial_keys)),
                 "results_path": str(results_path),
             },
         ),
@@ -314,6 +358,7 @@ def apply_run_config_from_args(args: argparse.Namespace) -> KpmsApplyRunConfig:
         verbose=not args.quiet,
         overwrite_results=not args.no_overwrite_results,
         pose_stream=args.pose_stream,
+        apply_chunk_size=args.apply_chunk_size,
     )
 
 
@@ -364,6 +409,7 @@ def run_kpms_apply(cfg: KpmsApplyRunConfig) -> dict[str, Any]:
         reindex_syllables_before_load=cfg.reindex_syllables_before_load,
         verbose=cfg.verbose,
         overwrite_results=cfg.overwrite_results,
+        apply_chunk_size=cfg.apply_chunk_size,
     )
     cohort_db = resolve_cohort_db_path(manifests)
     pre_cfg = KpmsPreprocessConfig(pose_stream=cfg.pose_stream, db_path=cohort_db)
@@ -431,6 +477,17 @@ def parse_args() -> argparse.Namespace:
         "--no-overwrite-results",
         action="store_true",
         help="Pass overwrite=False to apply_model (fails if results file already has these keys)",
+    )
+    p.add_argument(
+        "--apply-chunk-size",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Apply N manifest rows per GPU batch (append into one results_apply.h5). "
+            "Use 1 for one trial at a time, or ~30-50 on a 24GB GPU for full cohorts. "
+            "Default: all rows in one batch (may OOM on large manifests)."
+        ),
     )
     p.add_argument("--quiet", action="store_true")
     p.add_argument(

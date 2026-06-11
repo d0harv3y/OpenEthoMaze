@@ -28,3 +28,4 @@ class KpmsApplyRunConfig:
     reindex_syllables_before_load: bool = True
     verbose: bool = True
     overwrite_results: bool = True
+    apply_chunk_size: int | None = None
