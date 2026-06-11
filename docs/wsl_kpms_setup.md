@@ -103,6 +103,14 @@ Default: **anatomical**, **blob**, **fused** × seeds **5, 13, 42, 67, 111** →
 `/home/data/test/<stream>/seed_<NNN>/` (80 trials, stratified balance, `--force-new`).  
 Logs: `/home/data/test/fit_logs/`. Override paths via `KPMS_PROJECT_DIR`, `KPMS_MANIFEST`, etc. (see script header).
 
+After fits complete, apply all models to the full manifest:
+
+```bash
+bash scripts/wsl_kpms_multi_stream_apply_sweep.sh
+```
+
+Ensemble comparison plan: [scratch/kpms_ensemble_compare/README.md](../scratch/kpms_ensemble_compare/README.md).
+
 ---
 
 ## Performance notes

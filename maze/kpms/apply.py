@@ -21,7 +21,7 @@ from ..pipeline.io.file_discovery import TrialManifest
 from ..pipeline.run_provenance import provenance_envelope, provenance_run, sha256_file
 from .io import ensure_dir, write_json
 from .apply_run_config import KpmsApplyRunConfig
-from .manifest_subset import SubsetConfig, filter_manifests, load_manifests
+from .manifest_subset import SubsetConfig, filter_manifests, load_manifests, resolve_cohort_db_path
 from .heading_idxs import anterior_posterior_idxs
 from .preprocess import KpmsPreprocessConfig, build_kpms_inputs
 from .project_paths import POSE_STREAM_CHOICES, resolve_kpms_project_dir
@@ -365,7 +365,8 @@ def run_kpms_apply(cfg: KpmsApplyRunConfig) -> dict[str, Any]:
         verbose=cfg.verbose,
         overwrite_results=cfg.overwrite_results,
     )
-    pre_cfg = KpmsPreprocessConfig(pose_stream=cfg.pose_stream)
+    cohort_db = resolve_cohort_db_path(manifests)
+    pre_cfg = KpmsPreprocessConfig(pose_stream=cfg.pose_stream, db_path=cohort_db)
     project_dir = resolve_kpms_project_dir(cfg.project_dir, cfg.pose_stream)
     prov_inputs = {
         "project_dir": str(project_dir),
