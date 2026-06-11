@@ -58,6 +58,18 @@ def test_fit_run_config_from_args() -> None:
     )
 
 
+def test_write_json_serializes_path(tmp_path: Path) -> None:
+    import json
+
+    from maze.kpms.io import write_json
+
+    db = tmp_path / "kpms_tracking.h5"
+    out = tmp_path / "summary.json"
+    write_json(out, {"db_path": db})
+    loaded = json.loads(out.read_text(encoding="utf-8"))
+    assert loaded["db_path"] == str(db)
+
+
 def test_prepare_results_path_removes_stale_file(tmp_path: Path) -> None:
     pytest.importorskip("keypoint_moseq")
     from maze.kpms.fit import _prepare_results_path
