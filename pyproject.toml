@@ -2,7 +2,7 @@
 name = "maze"
 version = "0.1.0"
 description = "OEM — controller, pipeline, and core for ethology behavior maze tasks"
-readme = "README.md"
+readme = "readme.md"
 license = { file = "LICENSE" }
 requires-python = "==3.12.*"
 dependencies = [
