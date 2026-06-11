@@ -31,8 +31,18 @@ If you created a duplicate clone under `~/code/OpenEthoMaze` in WSL, prefer a sy
 
 ```bash
 cd /mnt/c/Users/admin/code/OpenEthoMaze
+# Use a Linux-native .venv (do not reuse a Windows-created .venv on /mnt/c/...).
 uv sync --extra kpms --extra dev
 ```
+
+`pyproject.toml` selects **Linux-only** wheels when you run `uv sync` inside WSL:
+
+| Package | Linux (WSL) | Windows |
+|---------|-------------|---------|
+| OpenCV | `opencv-python-headless` (no `libGL.so.1`) | `opencv-python` |
+| JAX (kpms extra) | `jax[cuda12]<0.7` | `jax` + `jaxlib` CPU |
+
+After dependency changes on either OS: `uv lock` then re-run `uv sync` **on that OS**.
 
 ---
 
@@ -40,11 +50,10 @@ uv sync --extra kpms --extra dev
 
 OpenEthoMaze pins **`jax<0.7`** and **`keypoint-moseq==0.6.3`** (tensorflow_probability compatibility).
 
-Inside **WSL only**, after `uv sync --extra kpms`, install Linux CUDA wheels per [JAX installation](https://docs.jax.dev/en/latest/installation.html):
+On **WSL/Linux**, `uv sync --extra kpms` should install **`jax[cuda12]<0.7`** automatically. If you still see CPU-only JAX, reinstall the extra:
 
 ```bash
-# Example — verify versions against pyproject.toml before running
-uv pip install "jax[cuda12]"   # or cuda13 per JAX docs; must stay <0.7
+uv sync --extra kpms --reinstall-package jax --reinstall-package jaxlib
 ```
 
 Verify:
@@ -94,7 +103,8 @@ Streams **blob** and **fused** use separate `--project-dir` subtrees after multi
 
 | Symptom | Check |
 |---------|--------|
-| `CpuDevice` only | CUDA jax not installed in **WSL** venv; re-run cuda extra install |
+| `libGL.so.1: cannot open shared object file` | Run `uv sync` **inside WSL** (headless OpenCV is Linux-only in pyproject); do not reuse Windows `.venv` |
+| `CpuDevice` only | `nvidia-smi` in WSL; then `uv sync --extra kpms --reinstall-package jax --reinstall-package jaxlib` |
 | Manifest paths not found | Translate `D:\` → `/mnt/d/` in CSV or regenerate manifest in WSL |
 | kpMS import error | `uv sync --extra kpms` in WSL `.venv` (separate from Windows `.venv`) |
 | Slow fit I/O | Move data to WSL native disk or reduce `--max-trials` |
