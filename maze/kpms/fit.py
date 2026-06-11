@@ -48,6 +48,14 @@ class FitConfig:
     reindex_syllables: bool = True
 
 
+def _configure_jax_precision(*, use_float32: bool) -> None:
+    """Match JAX global precision to fit data (kpms import forces x64 on by default)."""
+    if use_float32:
+        from jax import config
+
+        config.update("jax_enable_x64", False)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Fit keypoint-MoSeq model from ORM manifest subset."
@@ -92,6 +100,14 @@ def parse_args() -> argparse.Namespace:
             "Project outputs default to <project-dir>/<stream>/<model-name>/."
         ),
     )
+    parser.add_argument(
+        "--float32",
+        action="store_true",
+        help=(
+            "Use float32 and jax_enable_x64=False (roughly half GPU memory vs default float64). "
+            "Less numerically stable; use for large cohorts on 24GB cards."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -132,6 +148,7 @@ def run_kpms_fit(cfg: KpmsFitRunConfig) -> Path:
     Raises:
         RuntimeError: No trials selected or no usable trajectories after preprocess.
     """
+    _configure_jax_precision(use_float32=cfg.use_float32)
     project_dir = resolve_kpms_project_dir(cfg.project_dir, cfg.pose_stream)
     ensure_dir(project_dir)
     subset_cfg = subset_config_from_fit_run(cfg)
@@ -142,6 +159,7 @@ def run_kpms_fit(cfg: KpmsFitRunConfig) -> Path:
         "model_name": cfg.model_name,
         "manifest_csv": str(cfg.manifest_csv) if cfg.manifest_csv else None,
         "force_new": bool(cfg.force_new),
+        "use_float32": bool(cfg.use_float32),
         "subset_config": asdict(subset_cfg),
     }
     if subset_cfg.manifest_csv and Path(subset_cfg.manifest_csv).is_file():
@@ -156,6 +174,7 @@ def run_kpms_fit(cfg: KpmsFitRunConfig) -> Path:
             force_new=cfg.force_new,
             subset_cfg=subset_cfg,
             pose_stream=cfg.pose_stream,
+            use_float32=cfg.use_float32,
             fit_cfg=fit_cfg,
             prov=prov,
         )
@@ -177,6 +196,7 @@ def fit_run_config_from_args(args: argparse.Namespace) -> KpmsFitRunConfig:
         balance_columns=balance_cols,
         enrich_from_treatment_labels=not args.no_enrich_labels,
         force_new=bool(args.force_new),
+        use_float32=bool(args.float32),
     )
 
 
@@ -191,6 +211,7 @@ def _run_fit_body(
     force_new: bool,
     subset_cfg: SubsetConfig,
     pose_stream: PoseStream,
+    use_float32: bool,
     fit_cfg: FitConfig,
     prov: dict,
 ) -> None:
@@ -220,7 +241,7 @@ def _run_fit_body(
         confidences,
         bodyparts=bodyparts,
     )
-    data = convert_data_precision(data, x64=True)
+    data = convert_data_precision(data, x64=not use_float32)
 
     _prepare_checkpoint_path(model_out / "checkpoint.h5", data, force_new=force_new)
 
@@ -299,6 +320,7 @@ def _run_fit_body(
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "project_dir": str(project_dir),
         "pose_stream": pre_cfg.pose_stream,
+        "use_float32": use_float32,
         "model_name": fitted_name,
         "n_selected_trials": len(manifests),
         "n_used_recordings": len(coordinates),

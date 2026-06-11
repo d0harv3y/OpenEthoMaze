@@ -24,6 +24,8 @@ class KpmsFitRunConfig:
     balance_columns: tuple[str, ...] = ("sex", "tx", "phase", "strain")
     enrich_from_treatment_labels: bool = True
     force_new: bool = False
+    #: float32 + ``jax_enable_x64=False`` (lower GPU memory; less numerically stable).
+    use_float32: bool = False
 
 
 def subset_config_from_fit_run(cfg: KpmsFitRunConfig) -> SubsetConfig:

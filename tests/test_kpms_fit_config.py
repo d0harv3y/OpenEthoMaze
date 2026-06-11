@@ -44,11 +44,13 @@ def test_fit_run_config_from_args() -> None:
         no_enrich_labels = True
         force_new = True
         pose_stream = "blob"
+        float32 = True
 
     cfg = fit_run_config_from_args(Args())  # type: ignore[arg-type]
     assert cfg.project_dir == Path("/proj")
     assert cfg.pose_stream == "blob"
     assert cfg.force_new is True
+    assert cfg.use_float32 is True
     assert cfg.enrich_from_treatment_labels is False
     assert cfg.balance_columns == ("sex", "phase")
     assert resolve_kpms_project_dir(cfg.project_dir, cfg.pose_stream) == Path(
@@ -67,6 +69,7 @@ def test_fit_cli_pose_stream_help() -> None:
     )
     assert proc.returncode == 0
     assert "--pose-stream" in proc.stdout
+    assert "--float32" in proc.stdout
     assert "fused" in proc.stdout
 
 
