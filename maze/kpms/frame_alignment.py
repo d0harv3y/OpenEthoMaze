@@ -8,7 +8,6 @@ confidence fragment filter) so indices align with ``results_apply.h5`` syllable 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import MutableMapping
 
 import numpy as np
 
@@ -19,7 +18,6 @@ from ..pipeline.tracking.trace_processing import (
     filter_frames_no_animal,
     process_trace_data,
 )
-from .apply import filter_low_confidence_fragments, interpolate_nans_in_coordinates
 from .preprocess import KpmsPreprocessConfig, _stack_anatomical_nodes
 
 
@@ -62,7 +60,7 @@ def kpms_aligned_coordinates_and_indices(
     )
     valid_frames = filter_frames_no_animal(trace.traces, trace.n_frames)
     arr_xy, arr_conf = _stack_anatomical_nodes(processed, trace.n_frames)
-    keep = valid_frames & np.isfinite(arr_xy).all(axis=(1, 2))
+    keep = valid_frames
     if int(keep.sum()) < pre_cfg.min_fragment_frames:
         return None
 
@@ -71,24 +69,20 @@ def kpms_aligned_coordinates_and_indices(
     conf = arr_conf[keep]
 
     key = kpms_recording_key(manifest)
-    coords_map: MutableMapping[str, np.ndarray] = {key: coord}
-    conf_map: MutableMapping[str, np.ndarray] = {key: conf}
-    interpolate_nans_in_coordinates(coords_map)
-    filter_low_confidence_fragments(
-        coords_map,
-        conf_map,
-        conf_thresh=conf_threshold,
-        min_points=min_points_per_frame,
-        min_fragment=min_fragment_frames,
-    )
-    if key not in coords_map:
-        return None
+    from .preprocess import finalize_kpms_recording_with_frame_indices
 
-    conf2 = conf_map[key]
-    valid2 = (conf2 >= conf_threshold).sum(axis=1) >= min_points_per_frame
-    if int(valid2.sum()) < min_fragment_frames:
+    finalized = finalize_kpms_recording_with_frame_indices(
+        coord,
+        conf,
+        idx,
+        pre_cfg,
+        conf_threshold=conf_threshold,
+        min_points_per_frame=min_points_per_frame,
+    )
+    if finalized is None:
         return None
-    return key, coords_map[key], idx[valid2]
+    coord, conf, src_idx = finalized
+    return key, coord, src_idx
 
 
 def kpms_source_frame_indices_after_apply_filters(

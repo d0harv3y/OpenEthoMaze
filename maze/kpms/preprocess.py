@@ -23,6 +23,76 @@ from .h5_pose import (
 )
 from .heading_idxs import PoseStream
 
+# Apply-stage defaults; used when finalizing coordinates after anatomical preprocess.
+_KPMS_CONF_THRESHOLD = 0.2
+_KPMS_MIN_POINTS_PER_FRAME = 3
+
+
+def finalize_kpms_recording_tensors(
+    coordinates: np.ndarray,
+    confidences: np.ndarray,
+    cfg: KpmsPreprocessConfig,
+    *,
+    conf_threshold: float = _KPMS_CONF_THRESHOLD,
+    min_points_per_frame: int = _KPMS_MIN_POINTS_PER_FRAME,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """
+    Interpolate short NaN gaps per keypoint, then keep frames with enough confident nodes.
+
+    Matches apply thresholds (``conf_threshold``, ``min_points_per_frame``,
+    ``min_fragment_frames``). Called from :func:`build_kpms_inputs` so fit/apply
+    see the same row count; anatomical rows are no longer dropped for single-node gaps
+    before interpolation runs.
+    """
+    if coordinates.shape[0] != confidences.shape[0]:
+        raise ValueError("coordinates and confidences time lengths must match")
+    from .apply import filter_low_confidence_fragments, interpolate_nans_in_coordinates
+
+    key = "__kpms_recording__"
+    coords_map: dict[str, np.ndarray] = {key: coordinates}
+    conf_map: dict[str, np.ndarray] = {key: confidences}
+    interpolate_nans_in_coordinates(coords_map)
+    filter_low_confidence_fragments(
+        coords_map,
+        conf_map,
+        conf_thresh=conf_threshold,
+        min_points=min_points_per_frame,
+        min_fragment=cfg.min_fragment_frames,
+    )
+    if key not in coords_map:
+        return None
+    return coords_map[key], conf_map[key]
+
+
+def finalize_kpms_recording_with_frame_indices(
+    coordinates: np.ndarray,
+    confidences: np.ndarray,
+    source_frame_indices: np.ndarray,
+    cfg: KpmsPreprocessConfig,
+    *,
+    conf_threshold: float = _KPMS_CONF_THRESHOLD,
+    min_points_per_frame: int = _KPMS_MIN_POINTS_PER_FRAME,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    """Like :func:`finalize_kpms_recording_tensors` but also subset ``source_frame_indices``."""
+    if not (
+        coordinates.shape[0] == confidences.shape[0] == source_frame_indices.shape[0]
+    ):
+        raise ValueError("coordinates, confidences, and source_frame_indices lengths must match")
+    from .apply import interpolate_nans_in_coordinates
+
+    key = "__kpms_recording__"
+    coords_map: dict[str, np.ndarray] = {key: coordinates}
+    conf_map: dict[str, np.ndarray] = {key: confidences}
+    interpolate_nans_in_coordinates(coords_map)
+    conf = conf_map[key]
+    valid = (conf >= conf_threshold).sum(axis=1) >= min_points_per_frame
+    if int(valid.sum()) < cfg.min_fragment_frames:
+        return None
+    fi = np.asarray(source_frame_indices, dtype=np.uint32)[valid]
+    coords_map[key] = coords_map[key][valid]
+    conf_map[key] = conf[valid]
+    return coords_map[key], conf_map[key], fi
+
 
 def _manifest_input_h5_path(manifest: TrialManifest) -> Path | None:
     raw = str(getattr(manifest, "input_h5_path", "") or "").strip()
@@ -112,11 +182,15 @@ def build_kpms_inputs(
             continue
 
         if cfg.retain_all_frames:
-            coordinates[trial_key] = arr_xy
-            confidences[trial_key] = arr_conf
+            xy, cf = arr_xy, arr_conf
         else:
-            coordinates[trial_key] = arr_xy[keep]
-            confidences[trial_key] = arr_conf[keep]
+            xy, cf = arr_xy[keep], arr_conf[keep]
+
+        finalized = finalize_kpms_recording_tensors(xy, cf, cfg)
+        if finalized is None:
+            skipped.append(f"{trial_key}:too_short_after_filter")
+            continue
+        coordinates[trial_key], confidences[trial_key] = finalized
 
     return coordinates, confidences, bodyparts, skipped
 
@@ -332,7 +406,7 @@ def _preprocess_sleap_trace(
     )
     arr_xy, arr_conf = _stack_anatomical_nodes(processed, trace.n_frames)
     valid_frames = filter_frames_no_animal(trace.traces, trace.n_frames)
-    keep = valid_frames & np.isfinite(arr_xy).all(axis=(1, 2))
+    keep = valid_frames
     return arr_xy, arr_conf, keep
 
 
@@ -356,7 +430,7 @@ def _preprocess_h5_pose(
     processed = process_trace_data(traces, node_names, TraceProcessingParams())
     arr_xy, arr_conf = _stack_anatomical_nodes(processed, n_frames)
     valid_frames = filter_frames_no_animal(traces, n_frames)
-    keep = valid_frames & np.isfinite(arr_xy).all(axis=(1, 2))
+    keep = valid_frames
     return arr_xy, arr_conf, keep
 
 

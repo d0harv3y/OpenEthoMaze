@@ -288,9 +288,59 @@ def test_build_kpms_inputs_fused_partial_validity(tmp_path: Path) -> None:
     assert skipped == []
     xy = coordinates["3-S01-T01"]
     conf = confidences["3-S01-T01"]
-    assert not np.isfinite(xy[2, 8:]).any()
+    # Blob half may be temporally interpolated when anatomical is present; conf stays 0.
     assert conf[2, 8:].max() == 0.0
     assert np.isfinite(xy[2, :8]).all()
+
+
+def test_build_kpms_inputs_interpolates_partial_anatomical_nodes(tmp_path: Path) -> None:
+    """Single-node gaps should not drop whole frames; finalize interpolates then applies conf gate."""
+    db = tmp_path / "trials.h5"
+    key = TrialKey("9", "S01", "T01")
+    t = 40
+    k = len(STANDARD_NODE_NAMES)
+    frame_index = np.arange(t, dtype=np.uint32)
+    x = np.full((t, k), 100.0, dtype=np.float32)
+    y = np.full((t, k), 100.0, dtype=np.float32)
+    score = np.full((t, k), 0.95, dtype=np.float32)
+    valid = np.ones((t, k), dtype=np.uint8)
+    # Nose missing on 10 scattered frames (would fail old all-8-finite keep).
+    for fi in (5, 8, 12, 17, 21, 25, 29, 33, 36, 39):
+        x[fi, 0] = np.nan
+        y[fi, 0] = np.nan
+        score[fi, 0] = 0.0
+        valid[fi, 0] = 0
+    with h5py.File(db, "a") as h5:
+        g = h5.require_group(key.path().lstrip("/"))
+        write_anatomical_tracking(
+            g,
+            frame_index=frame_index,
+            x=x,
+            y=y,
+            score=score,
+            valid=valid,
+            node_names=STANDARD_NODE_NAMES,
+            pose_source="sleap_live",
+            fps=30.0,
+            h5=h5,
+        )
+
+    manifest = TrialManifest(
+        animal_id="9",
+        session="S01",
+        trial="T01",
+        input_h5_path=db,
+        sleap_path=None,
+        kpms_recording_key="9-S01-T01",
+    )
+    coordinates, confidences, _, skipped = build_kpms_inputs(
+        [manifest],
+        KpmsPreprocessConfig(min_fragment_frames=4, db_path=db),
+    )
+    assert skipped == []
+    xy = coordinates["9-S01-T01"]
+    assert xy.shape[0] == t
+    assert np.isfinite(xy).all()
 
 
 def test_fused_anterior_posterior_idxs() -> None:
