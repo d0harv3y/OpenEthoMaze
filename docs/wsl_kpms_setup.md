@@ -109,6 +109,75 @@ After fits complete, apply all models to the full manifest:
 bash scripts/wsl_kpms_multi_stream_apply_sweep.sh
 ```
 
+1707 trials in one batch needs ~55 GiB GPU; chunk size ~30 fits a 24 GiB 3090 (tune `KPMS_APPLY_CHUNK_SIZE`).
+
+---
+
+## Incremental cohort updates (new animals / tx labels)
+
+**Fit checkpoints are not invalidated** when you add trials. You only need to (1) extend the tracking H5 + manifest, then (2) **append** apply for new trials.
+
+### 1. Update treatment labels (Windows)
+
+Add the 4 `animal_id` rows to `inputs/treatment_labels.csv` (or your cohort CSV). Discovery applies labels during build.
+
+### 2. Extend `kpms_tracking.h5` (Windows)
+
+Run **full discovery** (do **not** use `--animal-id` alone — that would replace the manifest with only those rows):
+
+```bash
+uv run maze-legacy-db build-kpms-h5 \
+  --db-path outputs/legacy/kpms_tracking.h5 \
+  --data-dir <your-data-root> \
+  --profile <profile.json> \
+  --treatment-labels inputs/treatment_labels.csv
+```
+
+- **Existing trials:** `tracking/anatomical` and `tracking/blob` are **skipped** by default (`keep_live` / no `--overwrite-pose`).
+- **New trials** (the 4 animals): pose + blob written when `.slp` / video exist.
+- **Manifest CSV** beside the H5 is **regenerated for the full discovered cohort** (`trial_manifest_kpms_tracking.csv`).
+- **Animal `tx` / `sex` attrs** on H5 animal groups are refreshed from labels.
+
+Label-only refresh (no new tracking writes):
+
+```bash
+uv run maze-legacy-db build-kpms-h5 \
+  --db-path outputs/legacy/kpms_tracking.h5 \
+  --data-dir <root> \
+  --treatment-labels inputs/treatment_labels.csv \
+  --skip-anatomical --skip-blob
+```
+
+### 3. Sync to WSL
+
+Copy updated `kpms_tracking.h5` and manifest; set Linux `input_h5_path` in `trial_manifest_kpms_tracking_wsl.csv` (or regenerate from H5).
+
+### 4. Append apply (WSL) — no re-fit
+
+Use **`--no-overwrite-results`** so new trials merge into existing `results_apply.h5`. Filter to new animals:
+
+```bash
+ANIMAL_IDS="id1 id2 id3 id4" bash scripts/wsl_kpms_incremental_apply.sh
+```
+
+Or one model:
+
+```bash
+uv run maze-kpms-apply \
+  --project-dir /home/data/test \
+  --manifest-csv /home/data/test/trial_manifest_kpms_tracking_wsl.csv \
+  --model-name seed_042 \
+  --pose-stream anatomical \
+  --animal-id id1 id2 id3 id4 \
+  --apply-chunk-size 30 \
+  --no-overwrite-results \
+  --no-enrich-labels
+```
+
+**Do not** use `--force-new` or default overwrite on apply — that deletes the whole `results_apply.h5`.
+
+If a recording key already exists, apply fails for that key (by design). Skip or drop those rows from the filter.
+
 Ensemble comparison plan: [scratch/kpms_ensemble_compare/README.md](../scratch/kpms_ensemble_compare/README.md).
 
 ---
