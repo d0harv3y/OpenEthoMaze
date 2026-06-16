@@ -9,6 +9,7 @@ Trial selection supports optional ``--animal-id`` / ``--session`` / ``--trial`` 
 from __future__ import annotations
 
 import argparse
+import gc
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -165,6 +166,30 @@ class KpmsApplyConfig:
     apply_chunk_size: int | None = None
 
 
+def _release_chunk_runtime_memory() -> None:
+    """Best-effort release of JAX/Python allocations between apply chunks.
+
+    kpMS already appends each chunk to ``results_apply.h5`` on disk; peak RSS
+    often still grows because XLA CPU arenas and JIT caches are not returned to
+    the OS every iteration.
+    """
+    gc.collect()
+    try:
+        import jax
+
+        jax.clear_caches()
+    except Exception:
+        pass
+
+
+def _applied_recording_keys(results_path: Path) -> frozenset[str]:
+    if not results_path.is_file():
+        return frozenset()
+    import keypoint_moseq as kpms
+
+    return frozenset(kpms.load_hdf5(str(results_path)).keys())
+
+
 def _iter_manifest_chunks(
     manifests: list[TrialManifest],
     chunk_size: int | None,
@@ -190,7 +215,12 @@ def apply_kpms_checkpoint_from_manifests(
 
     When ``apply_chunk_size`` is set, runs one ``apply_model`` call per chunk and
     appends recording groups into the same results HDF5 (independent trials given
-    fixed checkpoint params).
+    fixed checkpoint params). Completed trials are **not** kept in Python memory;
+    only lightweight trial-key bookkeeping is retained. JAX/XLA may still grow
+    resident memory across chunks until explicitly released.
+
+    With ``overwrite_results=False``, manifest rows whose recording key already
+    exists in the results HDF5 are skipped (resume / incremental apply).
 
     Writes one HDF5 (default: ``<project_dir>/<model_name>/results_apply.h5``).
     """
@@ -215,6 +245,42 @@ def apply_kpms_checkpoint_from_manifests(
         results_path.unlink()
         if cfg.verbose:
             print(f"Removed {results_path} (overwrite_results).")
+    elif results_path.is_file():
+        done_keys = _applied_recording_keys(results_path)
+        if done_keys:
+            before = len(manifests)
+            manifests = [m for m in manifests if m.kpms_results_dict_key not in done_keys]
+            skipped_done = before - len(manifests)
+            if cfg.verbose and skipped_done:
+                print(
+                    f"kpMS apply: skipping {skipped_done} manifest row(s) "
+                    f"already present in {results_path.name}"
+                )
+            if not manifests:
+                if cfg.verbose:
+                    print(f"kpMS apply: nothing left to apply for {model_name}")
+                return {
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    "project_dir": str(project_dir),
+                    "model_name": model_name,
+                    "results_path": str(results_path),
+                    "n_manifest_rows": 0,
+                    "trial_keys_applied": sorted(done_keys),
+                    "n_recordings_after_preprocess": len(done_keys),
+                    "n_skipped_preprocess": 0,
+                    "skipped_preprocess_examples": [],
+                    "apply_config": asdict(cfg),
+                    "preprocess_config": asdict(pre_cfg),
+                    "run_provenance": provenance_envelope(
+                        operation="kpms_apply",
+                        inputs={"project_dir": str(project_dir), "model_name": model_name},
+                        outputs={
+                            "n_manifest_rows": 0,
+                            "n_recordings_after_preprocess": len(done_keys),
+                            "results_path": str(results_path),
+                        },
+                    ),
+                }
 
     model, _, _, _ = kpms.load_checkpoint(str(project_dir), model_name)
 
@@ -285,6 +351,9 @@ def apply_kpms_checkpoint_from_manifests(
             verbose=cfg.verbose,
         )
         all_trial_keys.extend(sorted(coordinates.keys()))
+        del coordinates, confidences, data, metadata
+        if len(chunks) > 1:
+            _release_chunk_runtime_memory()
 
     if not all_trial_keys:
         raise RuntimeError("No usable trajectories after preprocessing; nothing to apply.")
