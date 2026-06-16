@@ -123,6 +123,13 @@ def _base_env() -> dict[str, str]:
     env.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
     # Avoid accidental GPU use on hybrid boxes.
     env.setdefault("CUDA_VISIBLE_DEVICES", "")
+    # Limit host thread oversubscription when running many subprocesses in parallel.
+    env.setdefault("OMP_NUM_THREADS", "1")
+    env.setdefault("MKL_NUM_THREADS", "1")
+    env.setdefault("OPENBLAS_NUM_THREADS", "1")
+    env.setdefault("NUMEXPR_NUM_THREADS", "1")
+    env.setdefault("TF_NUM_INTRAOP_THREADS", "1")
+    env.setdefault("TF_NUM_INTEROP_THREADS", "1")
     return env
 
 
@@ -316,7 +323,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=list(DEFAULT_STREAMS),
     )
     p.add_argument("--fit-workers", type=int, default=2, help="Parallel fit subprocesses")
-    p.add_argument("--apply-workers", type=int, default=2, help="Parallel apply subprocesses")
+    p.add_argument(
+        "--apply-workers",
+        type=int,
+        default=1,
+        help=(
+            "Parallel apply subprocesses. CPU apply is memory-heavy; start with 1 "
+            "and increase carefully."
+        ),
+    )
     p.add_argument(
         "--balance-by",
         type=str,
@@ -369,6 +384,16 @@ def main(argv: list[str] | None = None) -> None:
     print(f"Streams:     {', '.join(args.streams)}")
     print(f"Seeds:       {', '.join(str(s) for s in args.seeds)}")
     print("JAX_PLATFORMS=cpu (via subprocess env)")
+    print(
+        "Thread caps: OMP/MKL/OPENBLAS/NUMEXPR/TF intra+inter-op = 1 "
+        "(override with env if needed)"
+    )
+    if args.phase in ("apply", "all") and args.apply_workers > 2:
+        print(
+            "[warn] apply-workers > 2 on CPU may trigger OOM/native crashes "
+            "(0xC0000409 / 0xC0000005).",
+            file=sys.stderr,
+        )
     print()
 
     if args.phase in ("fit", "all"):
