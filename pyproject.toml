@@ -64,6 +64,7 @@ kpms = [
     "jax<0.7.0; sys_platform != 'linux'",
     "jaxlib<0.7.0; sys_platform != 'linux'",
     "pyyaml>=6.0",
+    "hdbscan>=0.8.33",
 ]
 
 lab = ["maze[gui,sleap,local-service,kpms,dev]"]
@@ -86,6 +87,7 @@ maze-generate-selected-trials-nor-kpms = "maze.cli.generate_selected_trials_from
 maze-overlay-slp-bout = "maze.cli.overlay_slp_bout_pipeline:main"
 maze-export-ram-trial-manifest = "maze.cli.export_ram_trial_manifest_csv:main"
 maze-fix-ele-h5-session-animal-ids = "maze.cli.fix_ele_h5_session_animal_ids:main"
+maze-average-block-dwell-plots = "maze.cli.average_block_dwell_plots:main"
 maze-sleap-nn-batch-inference = "maze.cli.sleap_nn_batch_inference:main"
 maze-kpms-fit = "maze.kpms.fit:main"
 maze-kpms-apply = "maze.kpms.apply:main"
