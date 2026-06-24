@@ -60,7 +60,10 @@ def main(argv: list[str] | None = None) -> int:
         "--tracking-h5",
         type=Path,
         default=None,
-        help="Cohort H5 with tracking/anatomical (default: <kpms-root>/kpms_tracking.h5)",
+        help=(
+            "Cohort H5 with tracking/anatomical for pose (required if not at "
+            "<kpms-root>/kpms_tracking.h5). Example: test2/kpms_tracking.h5"
+        ),
     )
     ap.add_argument("--out-dir", type=Path, default=None, help="Default: <kpms-root>/behavior_ethogram/stage_ii")
     ap.add_argument("--seeds", type=str, default=None, help="Comma-separated seed ids (default: all on disk)")
@@ -84,7 +87,6 @@ def main(argv: list[str] | None = None) -> int:
     tracking_h5 = resolve_tracking_h5_path(
         kpms_root=kpms_root,
         tracking_h5=args.tracking_h5,
-        legacy_db=args.legacy_db,
     )
     if tracking_h5 is None:
         print(

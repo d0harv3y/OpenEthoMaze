@@ -39,16 +39,42 @@ def preprocess_config_from_apply_summary(results_h5: Path) -> KpmsPreprocessConf
     return preprocess_config_from_summary_dict(data.get("preprocess_config"))
 
 
+def _h5_has_any_anatomical_tracking(path: Path) -> bool:
+    """Return True when ``path`` contains at least one trial with ``tracking/anatomical``."""
+    import h5py
+
+    from ..pipeline.tracking_io import has_anatomical_tracking
+
+    try:
+        with h5py.File(path, "r") as h5:
+            stack: list[h5py.Group] = [h5]
+            while stack:
+                group = stack.pop()
+                if has_anatomical_tracking(group):
+                    return True
+                for key in group.keys():
+                    child = group[key]
+                    if isinstance(child, h5py.Group):
+                        stack.append(child)
+    except OSError:
+        return False
+    return False
+
+
 def resolve_tracking_h5_path(
     *,
     kpms_root: Path,
     tracking_h5: Path | None = None,
-    legacy_db: Path | None = None,
     preprocess_db_path: Path | None = None,
 ) -> Path | None:
-    """Pick a cohort H5 path for ``tracking/anatomical`` reads (local overrides lab paths)."""
+    """
+    Pick a cohort H5 with ``tracking/anatomical`` for pose alignment.
+
+    ``legacy_db`` (ambulation / trial_state) is intentionally excluded — it typically
+    lacks ``tracking/`` and must not be used for pose.
+    """
     candidates: list[Path] = []
-    for raw in (tracking_h5, preprocess_db_path, legacy_db):
+    for raw in (tracking_h5, preprocess_db_path):
         if raw is not None:
             p = Path(raw)
             if p not in candidates:
@@ -61,6 +87,6 @@ def resolve_tracking_h5_path(
             candidates.append(p)
 
     for path in candidates:
-        if path.is_file():
+        if path.is_file() and _h5_has_any_anatomical_tracking(path):
             return path.resolve()
     return None

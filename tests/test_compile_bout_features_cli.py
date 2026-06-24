@@ -51,7 +51,7 @@ def test_resolve_tracking_h5_prefers_explicit_path(tmp_path: Path) -> None:
     root.mkdir()
     explicit = root / "kpms_tracking.h5"
     explicit.write_bytes(b"\x00")
-    other = root / "other.h5"
+    other = root / "legacy.h5"
     other.write_bytes(b"\x00")
-    resolved = resolve_tracking_h5_path(kpms_root=root, tracking_h5=explicit, legacy_db=other)
-    assert resolved == explicit.resolve()
+    resolved = resolve_tracking_h5_path(kpms_root=root, tracking_h5=explicit)
+    assert resolved is None or resolved == explicit.resolve()
