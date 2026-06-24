@@ -59,8 +59,11 @@ def _load_trial_states_legacy(legacy_db: Path, manifest: TrialManifest) -> np.nd
         g = h5[group_path]
         for point in ("spot_hybrid", "center"):
             xy_path = f"ambulation_metrics/{point}/xy"
-            if xy_path in g and "trial_state" in g[xy_path]:
-                return np.asarray(g[xy_path]["trial_state"])
+            if xy_path not in g:
+                continue
+            rec = g[xy_path]
+            if "trial_state" in rec.dtype.names:
+                return np.asarray(rec["trial_state"])
     return None
 
 
@@ -98,12 +101,13 @@ def compile_trial_bouts(
     abs_dheading = abs_dheading_per_frame(heading)
 
     blob_area = np.full(len(z), np.nan, dtype=np.float64)
-    h5_path = resolve_canonical_trial_h5(manifest)
+    db_path = pre_cfg.db_path if pre_cfg.db_path is not None else Path()
+    h5_path = resolve_canonical_trial_h5(manifest, db_path)
     if h5_path is not None:
         trial_key = TrialKey.from_manifest(manifest)
         blob = load_blob_from_h5(h5_path, trial_key)
         if blob is not None:
-            blob_area = blob_area_px2_for_rows(blob.xy, blob.valid, frame_idx)
+            blob_area = blob_area_px2_for_rows(blob.coordinates, blob.valid, frame_idx)
 
     trial_states: list[str] | None = None
     if legacy_db is not None and legacy_db.is_file():
@@ -132,6 +136,16 @@ def compile_trial_bouts(
     ]
 
 
+def filter_manifests_with_results_h5(
+    manifests: Sequence[TrialManifest],
+    results_h5: Path,
+) -> list[TrialManifest]:
+    """Keep manifest rows whose kpMS recording key exists in ``results_apply.h5``."""
+    with h5py.File(results_h5, "r") as h5:
+        keys = set(h5.keys())
+    return [m for m in manifests if kpms_recording_key(m) in keys]
+
+
 def compile_cohort_bout_features(
     manifests: Sequence[TrialManifest],
     *,
@@ -147,8 +161,9 @@ def compile_cohort_bout_features(
     if not results_h5.is_file():
         raise FileNotFoundError(f"missing results_apply.h5 for seed {seed}: {results_h5}")
 
+    cohort_manifests = filter_manifests_with_results_h5(list(manifests), results_h5)
     rows: list[dict] = []
-    for manifest in manifests:
+    for manifest in cohort_manifests:
         rows.extend(
             compile_trial_bouts(
                 manifest,

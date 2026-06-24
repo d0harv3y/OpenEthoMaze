@@ -72,12 +72,16 @@ def _trial_states_legacy(legacy_db: Path, manifest: TrialManifest) -> list[str] 
         g = h5[group_path]
         for point in ("spot_hybrid", "center"):
             xy_path = f"ambulation_metrics/{point}/xy"
-            if xy_path in g and "trial_state" in g[xy_path]:
-                raw = g[xy_path]["trial_state"]
-                return [
-                    x.decode("utf-8") if isinstance(x, (bytes, bytearray)) else str(x)
-                    for x in raw
-                ]
+            if xy_path not in g:
+                continue
+            rec = g[xy_path]
+            if "trial_state" not in rec.dtype.names:
+                continue
+            raw = rec["trial_state"]
+            return [
+                x.decode("utf-8") if isinstance(x, (bytes, bytearray)) else str(x)
+                for x in raw
+            ]
     return None
 
 
