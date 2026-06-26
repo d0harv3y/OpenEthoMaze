@@ -274,7 +274,7 @@ def process_trial(
                 status=pose_status,
                 policy=overwrite_pose_to_policy(overwrite_pose),
             )
-            log.info("%s — %s", key.path(), pose_status)
+            log(f"{key.path()} — {pose_status}")
 
         # Step 2: Load tracking data (SLEAP + in-range when available; merge into one TraceData)
         trace_data_sleap = None
