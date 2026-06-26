@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--num-iters", type=int, default=200)
     ap.add_argument("--num-states", type=int, default=20)
     ap.add_argument("--nlags", type=int, default=2)
-    ap.add_argument("--kappa", type=float, default=50.0)
+    ap.add_argument("--kappa", type=float, default=500.0)
     args = ap.parse_args(argv)
 
     kpms_root = Path(args.kpms_root)
@@ -93,8 +93,10 @@ def main(argv: list[str] | None = None) -> int:
         kappa=args.kappa,
         num_iters=args.num_iters,
     )
-    model = fit_bout_arhmm(batched, cfg)
-    decoded = decode_behavior_tokens(model, batched)
+    fit_result = fit_bout_arhmm(batched, cfg)
+    decoded = decode_behavior_tokens(
+        fit_result.model, fit_result.scaled, nlags=cfg.nlags
+    )
 
     token_lookup: dict[tuple[str, str, int], int] = {}
     for seed, trial_key, tokens in decoded:
@@ -118,6 +120,11 @@ def main(argv: list[str] | None = None) -> int:
         "include_cluster_feature": args.include_cluster_feature,
         "include_heading_direction": args.include_heading_direction,
         "hyperparams": cfg.to_json_dict(),
+        "feature_zscore_mean": fit_result.feature_mean.tolist(),
+        "feature_zscore_std": fit_result.feature_std.tolist(),
+        "n_unique_behavior_tokens": len(
+            {int(t) for _s, _k, toks in decoded for t in toks}
+        ),
         "output_dir": str(out_stage_iii),
     }
     write_json(arhmm_fit_summary_json(out_stage_iii), summary)

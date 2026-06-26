@@ -130,6 +130,7 @@ def summary_fields_for_task(
         "time_in_exit_zone_fraction": exit_metrics.time_in_exit_zone_fraction,
         "mean_distance_to_exit_cm": exit_metrics.mean_distance_to_exit_cm,
         "min_distance_to_exit_cm": exit_metrics.min_distance_to_exit_cm,
+        "last_frame_distance_to_exit_cm": exit_metrics.last_frame_distance_to_exit_cm,
         "path_efficiency": exit_metrics.path_efficiency,
         "n_exit_zone_entries": exit_metrics.n_exit_zone_entries,
         "time_in_center_s": center_metrics.time_in_center_s,

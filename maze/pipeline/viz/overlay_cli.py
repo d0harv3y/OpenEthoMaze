@@ -56,7 +56,7 @@ def overlay_run_config_to_namespace(cfg: UnifiedOverlayRunConfig) -> argparse.Na
         no_history_fade=False,
         history_fade_floor=None,
         history_fade_gamma=None,
-        no_hypnogram=cfg.no_hypnogram,
+        no_ethogram=cfg.no_ethogram,
         no_syllable_tray=cfg.no_syllable_tray,
         tray_width=None,
         vertical_exemplar_heading=False,
@@ -72,7 +72,7 @@ def overlay_run_config_to_namespace(cfg: UnifiedOverlayRunConfig) -> argparse.Na
         opacity_trail=None,
         opacity_skeleton=None,
         opacity_arena=None,
-        opacity_hypnogram=None,
+        opacity_ethogram=None,
         opacity_tray=None,
         no_skeleton=cfg.no_skeleton,
         no_hud=False,
@@ -97,7 +97,7 @@ def _apply_layer_opacities(cfg: UnifiedOverlayConfig, args: argparse.Namespace) 
         ("opacity_trail", "trajectory_history"),
         ("opacity_skeleton", "skeleton"),
         ("opacity_arena", "arena_geometry"),
-        ("opacity_hypnogram", "hypnogram"),
+        ("opacity_ethogram", "ethogram"),
         ("opacity_tray", "syllable_tray"),
     )
     for arg_attr, layer_attr in pairs:
@@ -111,7 +111,7 @@ def build_unified_overlay_parser(
     manifest_default: Optional[Path] = None,
     pipeline_default: Optional[Path] = None,
     description: str = (
-        "Unified overlay: source video + pipeline HDF5 + optional kpMS hypnogram and exemplar tray."
+        "Unified overlay: source video + pipeline HDF5 + optional kpMS ethogram and exemplar tray."
     ),
 ) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=description)
@@ -146,7 +146,7 @@ def build_unified_overlay_parser(
         "--kpms-h5",
         type=Path,
         default=None,
-        help="Per-trial syllable series (e.g. results_apply.h5) for hypnogram alignment",
+        help="Per-trial syllable series (e.g. results_apply.h5) for ethogram alignment",
     )
     g_src.add_argument(
         "--kpms-training-exemplars",
@@ -154,7 +154,7 @@ def build_unified_overlay_parser(
         default=None,
         help=(
             "HDF5 from build_kpms_training_exemplar_table; tray uses these loops "
-            "(still pass --kpms-h5 for the hypnogram)"
+            "(still pass --kpms-h5 for the ethogram)"
         ),
     )
 
@@ -198,10 +198,10 @@ def build_unified_overlay_parser(
     )
 
     g_kpms = p.add_argument_group(
-        "kpMS tray / hypnogram",
+        "kpMS tray / ethogram",
         "Requires keypoint-moseq (uv sync --extra kpms in ORM env)",
     )
-    g_kpms.add_argument("--no-hypnogram", action="store_true", help="Disable bottom syllable strip")
+    g_kpms.add_argument("--no-ethogram", action="store_true", help="Disable bottom syllable strip")
     g_kpms.add_argument(
         "--no-syllable-tray",
         action="store_true",
@@ -278,7 +278,7 @@ def build_unified_overlay_parser(
     g_layers.add_argument("--opacity-trail", type=float, default=None, help="Trajectory history")
     g_layers.add_argument("--opacity-skeleton", type=float, default=None)
     g_layers.add_argument("--opacity-arena", type=float, default=None, help="Arena + exit overlay")
-    g_layers.add_argument("--opacity-hypnogram", type=float, default=None)
+    g_layers.add_argument("--opacity-ethogram", type=float, default=None)
     g_layers.add_argument("--opacity-tray", type=float, default=None, help="Exemplar tray patches")
 
     g_flags = p.add_argument_group("other toggles")
@@ -322,7 +322,7 @@ def run_unified_overlay_from_args(
             Path(args.kpms_training_exemplars) if args.kpms_training_exemplars else None
         ),
         show_skeleton=not args.no_skeleton,
-        show_hypnogram=not args.no_hypnogram,
+        show_ethogram=not args.no_ethogram,
         show_syllable_tray=not args.no_syllable_tray,
         show_hud=not args.no_hud,
         show_circular_motor_hud=not args.no_circular_motor_hud,
@@ -379,7 +379,7 @@ def main_cli(
 ) -> int:
     """Entry point for ``python -m`` style wrappers."""
     desc = description or (
-        "Unified overlay: source video + pipeline HDF5 + optional kpMS hypnogram and exemplar tray."
+        "Unified overlay: source video + pipeline HDF5 + optional kpMS ethogram and exemplar tray."
     )
     p = build_unified_overlay_parser(
         manifest_default=manifest_default,

@@ -11,10 +11,10 @@
 | **Input** | Video + strata labels | Same + SLEAP pose (required) |
 | **Core metrics** | Ambulation & exploration (movement bouts, arms, objects, …) in pipeline HDF5 → long CSV | Unchanged |
 | **Behavior labels** | Not in pipeline | **DB:** per-frame syllable id on the video/SLEAP timeline. **Export:** bout-level rows only (derived). |
-| **Human QC** | QC images, mistrials | Hypnogram + exemplar tray (reads per-frame store); grid movies / similarity (CLI review) |
+| **Human QC** | QC images, mistrials | ethogram + exemplar tray (reads per-frame store); grid movies / similarity (CLI review) |
 | **Publication / stats** | Trial-level CSV | Trial-level CSV **plus** bout-level ethogram CSV (no frame-grain export in v1) |
 
-**Ethogram** here means: a time-aligned discrete behavior sequence over the trial (the “hypnogram” in `unified_overlay.py`), after optional **merge** (taxonomy) and **bout cleanup** (temporal rules)—not raw kpMS states before review.
+**Ethogram** here means: a time-aligned discrete behavior sequence over the trial (the “ethogram” in `unified_overlay.py`), after optional **merge** (taxonomy) and **bout cleanup** (temporal rules)—not raw kpMS states before review.
 
 ---
 
@@ -22,7 +22,7 @@
 
 | Layer | Grain | Rule |
 |-------|-------|------|
-| **HDF5 / database** | **Per frame** | One syllable label per source frame index (after merge/clean). Hypnogram, overlay, and future frame-wise joins read this. |
+| **HDF5 / database** | **Per frame** | One syllable label per source frame index (after merge/clean). ethogram, overlay, and future frame-wise joins read this. |
 | **CSV / tables export** | **Per bout** | Contiguous runs of the same syllable id → one row (start/end frame, duration, id, optional name). **Derived** at export time via RLE; not stored as the canonical label stream. |
 
 **Do not** ship a default frame-level ethogram CSV (too large, duplicates the DB). Frame dumps are debug-only if ever added.
@@ -42,7 +42,7 @@
 ```mermaid
 flowchart LR
   Z["syllable_id per frame in HDF5"]
-  Z --> H[hypnogram / overlay / frame joins]
+  Z --> H[ethogram / overlay / frame joins]
   Z --> RLE[RLE / ethogram.py]
   RLE --> CSV["bout-level export CSV"]
 ```
@@ -64,7 +64,7 @@ flowchart LR
 | Review | `scripts/kpms_review_artifacts.py` | Grid movies, trajectories, similarity CSV |
 | Merge | `scripts/kpms_apply_syllable_merge.py`, `maze/kpms/syllable_merge.py` | Collapse syllable IDs |
 | Bout cleanup | `scripts/kpms_clean_syllable_bouts.py`, `maze/kpms/syllable_bout_clean.py` | Temporal rules on label stream |
-| Visualization | `maze/pipeline/viz/unified_overlay.py` | Hypnogram + syllable tray on video |
+| Visualization | `maze/pipeline/viz/unified_overlay.py` | ethogram + syllable tray on video |
 | Manifest bridge | `TrialManifest.kpms_recording_key`, `kpms_results_dict_key` | Links trial row → kpMS dict key |
 
 **Gap:** No `run_pipeline` stage; no GUI workers; **no CSV/HDF5 ethogram export** in `maze/pipeline/exports/`; pipeline HDF5 contract (`h5_results_contract`) has no syllable datasets.

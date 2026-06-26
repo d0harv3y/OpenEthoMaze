@@ -47,6 +47,9 @@ class ExitMetrics:
     # Minimum distance to exit (cm) achieved
     min_distance_to_exit_cm: float = np.nan
 
+    # Distance to exit (cm) at the last valid tracking frame in the band
+    last_frame_distance_to_exit_cm: float = np.nan
+
     # Path efficiency: straight-line distance / actual path distance
     # 1.0 = perfect efficiency, < 1.0 = inefficient path
     path_efficiency: float = np.nan
@@ -128,14 +131,17 @@ def calculate_exit_metrics(
     else:
         time_in_exit_zone_fraction = 0.0
 
-    # Calculate mean and min distance (over valid frames)
+    # Calculate mean, min, and last-valid-frame distance (over valid frames)
     valid_distances = distance_to_exit_cm[valid]
     if len(valid_distances) > 0:
         mean_distance_to_exit_cm = float(np.nanmean(valid_distances))
         min_distance_to_exit_cm = float(np.nanmin(valid_distances))
+        last_valid_idx = int(np.where(valid)[0][-1])
+        last_frame_distance_to_exit_cm = float(distance_to_exit_cm[last_valid_idx])
     else:
         mean_distance_to_exit_cm = np.nan
         min_distance_to_exit_cm = np.nan
+        last_frame_distance_to_exit_cm = np.nan
 
     # Calculate path efficiency
     path_efficiency = _calculate_path_efficiency(xy, valid, exit_pos, px_per_cm)
@@ -149,6 +155,7 @@ def calculate_exit_metrics(
         time_in_exit_zone_fraction=time_in_exit_zone_fraction,
         mean_distance_to_exit_cm=mean_distance_to_exit_cm,
         min_distance_to_exit_cm=min_distance_to_exit_cm,
+        last_frame_distance_to_exit_cm=last_frame_distance_to_exit_cm,
         path_efficiency=path_efficiency,
         n_exit_zone_entries=n_exit_zone_entries,
         distance_to_exit_per_frame=distance_to_exit_cm,

@@ -223,6 +223,7 @@ _NODE_METRIC_HELP: dict[str, str] = {
     "time_in_exit_zone_fraction": "Fraction of band time in the exit zone.",
     "mean_distance_to_exit_cm": "Mean distance to exit hole / zone centerline (cm).",
     "min_distance_to_exit_cm": "Minimum distance to exit (cm).",
+    "last_frame_distance_to_exit_cm": "Distance to exit at the last valid tracking frame in the band (cm).",
     "path_efficiency": "Path efficiency metric (straight-line vs traveled; unitless 0–1 scale).",
     "n_exit_zone_entries": "Number of exit-zone entries in the band.",
     "time_in_center_s": "Time in center zone in the band (seconds).",

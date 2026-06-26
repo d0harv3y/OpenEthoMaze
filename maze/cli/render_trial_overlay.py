@@ -12,7 +12,7 @@ Example::
       --out outputs/overlays ^
       --kpms-h5 /path/to/results_apply.h5
 
-Requires ``uv sync --extra kpms`` for the hypnogram and exemplar tray.
+Requires ``uv sync --extra kpms`` for the ethogram and exemplar tray.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ def main() -> int:
         manifest_default=_DEFAULT_MANIFEST,
         pipeline_default=_DEFAULT_PIPELINE,
         description=(
-            "Unified ORM overlay: source video + pipeline HDF5 + optional kpMS hypnogram "
+            "Unified ORM overlay: source video + pipeline HDF5 + optional kpMS ethogram "
             "and exemplar tray."
         ),
     )

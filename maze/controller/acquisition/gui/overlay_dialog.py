@@ -100,7 +100,7 @@ if HAS_OVERLAY_DIALOG:
         out_hint = (config.output_dir or "").strip()
 
         hint = QLabel(
-            "Render one trial MP4: source video + pipeline HDF5 + optional kpMS hypnogram/tray. "
+            "Render one trial MP4: source video + pipeline HDF5 + optional kpMS ethogram/tray. "
             "Requires OpenCV (opencv-python). kpMS layers need uv sync --extra kpms. "
             "CLI equivalent: uv run maze-render-trial-overlay --help"
         )
@@ -115,7 +115,7 @@ if HAS_OVERLAY_DIALOG:
         trial_edit = QLineEdit("T01")
         out_edit = QLineEdit(str(_default_overlay_out_dir(config)))
         kpms_edit = QLineEdit()
-        kpms_edit.setPlaceholderText("Optional results_apply.h5 for hypnogram")
+        kpms_edit.setPlaceholderText("Optional results_apply.h5 for ethogram")
 
         def browse_manifest() -> None:
             start = str(Path(manifest_edit.text()).parent)
@@ -186,7 +186,7 @@ if HAS_OVERLAY_DIALOG:
         form.addRow("kpMS H5 (optional):", kpms_row)
         lay.addLayout(form)
 
-        no_hyp = QCheckBox("Disable hypnogram strip")
+        no_hyp = QCheckBox("Disable ethogram strip")
         no_tray = QCheckBox("Disable syllable exemplar tray")
         no_skel = QCheckBox("Hide SLEAP skeleton")
         lay.addWidget(no_hyp)
@@ -239,7 +239,7 @@ if HAS_OVERLAY_DIALOG:
                     dlg,
                     "Unified overlay",
                     "kpMS H5 set but keypoint-moseq is not installed. "
-                    "Run: uv sync --extra kpms — or clear kpMS H5 to render without hypnogram.",
+                    "Run: uv sync --extra kpms — or clear kpMS H5 to render without ethogram.",
                 )
                 return
             if worker is not None:
@@ -252,7 +252,7 @@ if HAS_OVERLAY_DIALOG:
                 trial=tri,
                 out=out_dir,
                 kpms_h5=Path(kpath) if kpath else None,
-                no_hypnogram=no_hyp.isChecked(),
+                no_ethogram=no_hyp.isChecked(),
                 no_syllable_tray=no_tray.isChecked(),
                 no_skeleton=no_skel.isChecked(),
             )

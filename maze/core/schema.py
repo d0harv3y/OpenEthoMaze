@@ -55,6 +55,7 @@ NODE_SUMMARY_DTYPE = np.dtype(
         ("time_in_exit_zone_fraction", np.float64),
         ("mean_distance_to_exit_cm", np.float64),
         ("min_distance_to_exit_cm", np.float64),
+        ("last_frame_distance_to_exit_cm", np.float64),
         ("path_efficiency", np.float64),
         ("n_exit_zone_entries", np.int32),
         # Center

@@ -19,6 +19,6 @@ class UnifiedOverlayRunConfig:
     out: Path
     kpms_h5: Optional[Path] = None
     kpms_training_exemplars: Optional[Path] = None
-    no_hypnogram: bool = False
+    no_ethogram: bool = False
     no_syllable_tray: bool = False
     no_skeleton: bool = False

@@ -72,7 +72,7 @@ flowchart TB
 
 **Orientation (B):** Resample contour → 8 vertices; order anchored to velocity heading (unwrap); low confidence when ‖v‖ < ε. When anatomical available, optional **hint** from neck→nose vector for disambiguation — document in provenance, do not mix anatomy names into `BLOB_NODE_NAMES`.
 
-**Syllable IDs are not comparable across streams.** Exports tag `pose_stream`; overlay picks one hypnogram layer.
+**Syllable IDs are not comparable across streams.** Exports tag `pose_stream`; overlay picks one ethogram layer.
 
 **Ops:** 3× rare fit + 3× apply + 3× materialize per cohort unless lab defers B/C. Pilot with `--max-trials 50` per stream.
 

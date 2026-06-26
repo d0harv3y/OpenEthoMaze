@@ -1,7 +1,7 @@
 """
 Unified trial overlay video: manifest-driven source video + pipeline HDF5 + optional kpMS.
 
-Hypnogram sits at the bottom (full composite width); an optional **exemplar tray** column
+ethogram sits at the bottom (full composite width); an optional **exemplar tray** column
 sits to the **right** of the video (RGBA kpMS-style trajectories) when ``keypoint-moseq``
 is installed (``uv sync --extra kpms``). Tray patch position is vertically centered by
 default; set :attr:`UnifiedOverlayConfig.exemplar_tray_bout_centered` to tie it to the
@@ -189,7 +189,7 @@ class LayerWeights:
     skeleton: float = 0.9
     arena_geometry: float = 0.75
     hud: float = 1.0
-    hypnogram: float = 1.0
+    ethogram: float = 1.0
     syllable_tray: float = 1.0
 
 
@@ -209,7 +209,7 @@ class UnifiedOverlayConfig:
     trajectory_history_fade_floor: float = 0.07
     #: Fade curve: weight uses ``u**gamma`` where ``u`` goes 0 (old) → 1 (recent); ``gamma>1`` keeps the bright part tighter near the head.
     trajectory_history_fade_gamma: float = 1.0
-    hypnogram_height_px: int = 64
+    ethogram_height_px: int = 64
     #: Pixel width of the exemplar tray column to the right of the video.
     syllable_tray_width_px: int = 220
     syllable_tray_margin_px: int = 6
@@ -251,7 +251,7 @@ class UnifiedOverlayConfig:
     #: Motor feedback (``feedback`` / ``motor_fb``) when ``arena_type`` is circular and
     #: ``ram_polys`` is unset; see HUD loop in :func:`render_unified_overlay_video`.
     show_circular_motor_hud: bool = True
-    show_hypnogram: bool = True
+    show_ethogram: bool = True
     show_syllable_tray: bool = True
     kpms_pre: KpmsPreprocessConfig = field(default_factory=KpmsPreprocessConfig)
     kpms_apply: KpmsApplyConfig = field(default_factory=KpmsApplyConfig)
@@ -389,7 +389,7 @@ def _precompute_state_elapsed_s(trial_states: list[str], fps: float) -> np.ndarr
     return out
 
 
-def _draw_hypnogram(
+def _draw_ethogram(
     strip: np.ndarray,
     syllable_run: np.ndarray,
     frame_idx: int,
@@ -514,7 +514,7 @@ def render_unified_overlay_video(
 
     Video frames are read from ``manifest.video_path``. By default the clip starts at table row 0;
     set ``include_pre_trial_frames=False`` to start at the resolved run-phase row (post-ITI).
-    Metrics come from ``pipeline_db``; optional kpMS hypnogram and exemplar tray from
+    Metrics come from ``pipeline_db``; optional kpMS ethogram and exemplar tray from
     ``kpms_results_h5`` (and optional training exemplar HDF5 on ``cfg``).
     """
     if not HAS_CV2:
@@ -768,7 +768,7 @@ def render_unified_overlay_video(
         cap.release()
         raise RuntimeError("Failed to read video dimensions")
 
-    hyp_h = cfg.hypnogram_height_px if cfg.show_hypnogram else 0
+    hyp_h = cfg.ethogram_height_px if cfg.show_ethogram else 0
     hyp_y0 = h_vid
     out_h = h_vid + hyp_h
     out_w = w_vid + tray_w
@@ -1014,9 +1014,9 @@ def render_unified_overlay_video(
                         float(cfg.layers.syllable_tray),
                     )
 
-            if hyp_h > 0 and cfg.show_hypnogram:
+            if hyp_h > 0 and cfg.show_ethogram:
                 strip = canvas[hyp_y0 : hyp_y0 + hyp_h, :]
-                _draw_hypnogram(strip, syllable_run, i, alpha=cfg.layers.hypnogram)
+                _draw_ethogram(strip, syllable_run, i, alpha=cfg.layers.ethogram)
 
             writer.write(canvas)
     finally:
