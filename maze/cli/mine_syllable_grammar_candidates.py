@@ -16,6 +16,7 @@ from maze.kpms.behavior_ethogram.grammar_enrich import (
     flag_candidates_for_overlay_review,
 )
 from maze.kpms.behavior_ethogram.bout_table_io import read_bout_table_csv
+from maze.kpms.behavior_ethogram.grammar_matches import attach_example_matches_to_candidates
 from maze.kpms.behavior_ethogram.paths import (
     bout_features_csv,
     grammar_candidates_csv,
@@ -84,6 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     cfg = SubsetConfig(manifest_csv=args.manifest_path, require_sleap=False)
     manifests = filter_manifests(load_manifests(cfg), cfg)
     trial_streams: dict[str, list[int]] = {}
+    trial_source_frames: dict[str, list[int]] = {}
     for manifest in manifests:
         trial_key = kpms_recording_key(manifest)
         z = _load_syllables(results_h5, trial_key)
@@ -92,10 +94,11 @@ def main(argv: list[str] | None = None) -> int:
         aligned = kpms_aligned_coordinates_and_indices(manifest, pre_cfg)
         if aligned is None:
             continue
-        _rk, _coord, _src = aligned
-        if len(z) != len(_src):
+        _rk, _coord, src = aligned
+        if len(z) != len(src):
             continue
         trial_streams[trial_key] = [int(x) for x in z.tolist()]
+        trial_source_frames[trial_key] = [int(x) for x in src.tolist()]
 
     if not trial_streams:
         print("No aligned syllable streams found.", file=sys.stderr)
@@ -115,6 +118,12 @@ def main(argv: list[str] | None = None) -> int:
                 candidates, bout_rows, seed=args.seed, trial_keys=trial_streams.keys()
             )
             candidates = flag_candidates_for_overlay_review(candidates, bout_rows, seed=args.seed)
+            candidates = attach_example_matches_to_candidates(
+                candidates,
+                bout_rows,
+                trial_source_frames,
+                seed=args.seed,
+            )
             enriched = True
     write_candidate_sequences_csv(out_csv, candidates)
     print(

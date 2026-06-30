@@ -44,6 +44,10 @@ _Avoid_: merge (memoryless), taxonomy (id-level only)
 Per-behavior harness tag (`moving`, `still`, `ignore`) assigned at curation time alongside the portable `behavior_name`. Lets ethological names (`groom`, `rear`) coexist with the only contracted anchor today (`is_moving`). `ignore` excludes a behavior from anchor scoring until a finer anchor exists.
 _Avoid_: ground truth, is_moving (anchor_bucket is producer metadata for validation, not the anchor itself)
 
+**Pattern match exemplar**:
+One concrete bout-span occurrence of a mined syllable n-gram in a specific trial, with kpMS row bounds and source-video frame bounds. Serialized in `example_matches_json` for overlay preview during grammar curation (S3.2).
+_Avoid_: example trial (too coarse — a trial can contain many matches), syllable (a match is a *sequence* of syllable bouts)
+
 **Behavior labeling**:
 The unified artifact every Producer must emit: a per-frame Behavior label stream on the source-video timeline, a derived bout-level CSV, and a provenance JSON. The common currency the evaluation harness scores. Schema: `docs/behavior_labeling_contract.md`.
 

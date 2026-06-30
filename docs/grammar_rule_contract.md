@@ -90,6 +90,7 @@ Two different ranking systems apply:
 | `count` | Total occurrences |
 | `n_trials` | Distinct trials containing the pattern |
 | `example_trial_keys` | Up to 5 trial keys for exemplar review (`;`-separated) |
+| `example_matches_json` | Up to 3 bout-span exemplars with source-frame bounds (S3.2; auto at mine) |
 | `mean_speed_mps`, `mean_abs_dheading`, `mean_straightness`, `mean_blob_area_px2` | Pooled bout scalars from `stage_ii/bout_features.csv` (auto at mine when file present) |
 | `must_review_overlay` | `1` if exemplar movie required before naming |
 | `behavior_name` | Curator-assigned portable name (empty until curated) |
@@ -99,6 +100,36 @@ Two different ranking systems apply:
 | `notes` | Optional notes |
 
 Overlay gate (`must_review_overlay=1`) when **any** of: bout `ambiguous=1` on a matching bout; mean speed in gray zone (~0.06–0.14 m/s); low speed + high mean \|dheading\|.
+
+### `example_matches_json` (S3.2)
+
+JSON list (max **3** entries per row) of **pattern match exemplars** — one concrete bout-span occurrence:
+
+```json
+[
+  {
+    "trial_key": "1-S01-T01",
+    "bout_start_index": 4,
+    "bout_end_exclusive": 7,
+    "row_start": 120,
+    "row_end_exclusive": 185,
+    "source_start_frame": 4500,
+    "source_end_frame": 4620
+  }
+]
+```
+
+Populated at mine when `stage_ii/bout_features.csv` is present. Selection prefers non-ambiguous spans, diverse trials, and speeds near the row’s pooled mean.
+
+Preview a match:
+
+```bash
+uv run maze-preview-grammar-candidate \
+  --kpms-root … --seed 042 --manifest-path … --pipeline-h5 … \
+  --row-index 0 --match-index 0 --out …/grammar_review/
+```
+
+Clips the overlay to the match span ± 1 s (default) using `clip_source_start_frame` / `clip_source_end_frame` on the unified overlay renderer.
 
 ## `grammar_rules.json`
 
@@ -147,7 +178,7 @@ Grill decisions (2026-06-30):
 
 1. `maze-mine-syllable-grammar-candidates` (optionally `--max-n`, `--min-count`)
 2. Join / review scalars; sort by `must_review_overlay` then `count`
-3. `render_trial_overlay` on `example_trial_keys` for flagged rows → stamp `reviewed_at`
+3. `maze-preview-grammar-candidate` on `example_matches_json` for flagged rows → stamp `reviewed_at` / `reviewed_trial_key`
 4. Fill `behavior_name`, `anchor_bucket`
 5. `maze-build-grammar-rules` (enforces review + bucket consistency; `--force` skips overlay gate)
 6. `maze-export-syllable-grammar-labeling`
@@ -163,6 +194,7 @@ Prototype TUI: [`scratch/PROTOTYPE-grammar-curate/`](../scratch/PROTOTYPE-gramma
 
 ```bash
 uv run maze-mine-syllable-grammar-candidates --kpms-root … --seed … --manifest-path … [--max-n 4] [--min-count 5] [--bout-features-csv …] [--no-enrich]
+uv run maze-preview-grammar-candidate --kpms-root … --seed … --manifest-path … --pipeline-h5 … --row-index 0 --out …/
 uv run maze-build-grammar-rules --kpms-root … --seed … [--force]   # after curating CSV
 uv run maze-export-syllable-grammar-labeling --kpms-root … --seed … --manifest-path …
 uv run maze-evaluate-behavior-producers --anchor-dir …/is_moving/ele_v1 --producer-dir …/syllable_grammar/seed_042

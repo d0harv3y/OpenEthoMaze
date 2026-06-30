@@ -19,6 +19,7 @@ class MinedSequence:
     count: int
     n_trials: int
     example_trial_keys: tuple[str, ...]
+    example_matches_json: str = ""
     mean_speed_mps: float | None = None
     mean_abs_dheading: float | None = None
     mean_straightness: float | None = None
@@ -105,6 +106,7 @@ def write_candidate_sequences_csv(path: Path | str, candidates: Sequence[MinedSe
                     "count": cand.count,
                     "n_trials": cand.n_trials,
                     "example_trial_keys": ";".join(cand.example_trial_keys),
+                    "example_matches_json": cand.example_matches_json,
                     "mean_speed_mps": _fmt_float(cand.mean_speed_mps),
                     "mean_abs_dheading": _fmt_float(cand.mean_abs_dheading),
                     "mean_straightness": _fmt_float(cand.mean_straightness),

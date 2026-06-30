@@ -24,6 +24,7 @@ CANDIDATE_SEQUENCE_FIELDS: tuple[str, ...] = (
     "count",
     "n_trials",
     "example_trial_keys",
+    "example_matches_json",
     "mean_speed_mps",
     "mean_abs_dheading",
     "mean_straightness",
@@ -51,6 +52,10 @@ CANDIDATE_FIELD_SPECS: tuple[CandidateFieldSpec, ...] = (
     CandidateFieldSpec(
         "example_trial_keys",
         "Semicolon-separated trial keys for exemplar review (up to 5).",
+    ),
+    CandidateFieldSpec(
+        "example_matches_json",
+        "JSON list of bout-span exemplars with source-frame bounds for overlay preview.",
     ),
     CandidateFieldSpec("mean_speed_mps", "Pooled mean bout speed over pattern matches (m/s)."),
     CandidateFieldSpec("mean_abs_dheading", "Pooled mean |dheading| over pattern matches."),

@@ -201,6 +201,10 @@ class UnifiedOverlayConfig:
     #: If True (default), render from video frame 0 so ``iti_wait`` rows in ``xy`` appear in
     #: the HUD; if False, start at ``trial_start_frame`` (analysis / run window only).
     include_pre_trial_frames: bool = True
+    #: When set, render from this source-video frame (overrides ``include_pre_trial_frames`` start).
+    clip_source_start_frame: Optional[int] = None
+    #: When set with ``clip_source_start_frame``, cap the clip at this source frame (inclusive).
+    clip_source_end_frame: Optional[int] = None
     #: How many past frames to include in the trajectory tail (spot history polyline).
     trajectory_history_frames: int = 42
     #: If True, older segments of the tail are drawn dimmer (see fade floor / gamma).
@@ -586,6 +590,8 @@ def render_unified_overlay_video(
     n_effective = min(n_vid, n_table) if n_vid > 0 else n_table
 
     render_start_frame = 0 if cfg.include_pre_trial_frames else trial_start_frame
+    if cfg.clip_source_start_frame is not None:
+        render_start_frame = int(cfg.clip_source_start_frame)
     if render_start_frame >= n_effective:
         raise ValueError(
             f"Overlay start frame {render_start_frame} (trial_start_frame={trial_start_frame}, "
@@ -593,6 +599,14 @@ def render_unified_overlay_video(
         )
 
     run_len = n_effective - render_start_frame
+    if cfg.clip_source_end_frame is not None:
+        clip_end = int(cfg.clip_source_end_frame)
+        run_len = min(run_len, clip_end - render_start_frame + 1)
+    if run_len <= 0:
+        raise ValueError(
+            f"Overlay clip is empty: render_start_frame={render_start_frame}, "
+            f"clip_source_end_frame={cfg.clip_source_end_frame}"
+        )
     if cfg.max_seconds is not None and cfg.max_seconds > 0:
         run_len = min(run_len, int(cfg.max_seconds * fps))
     max_frames = run_len
