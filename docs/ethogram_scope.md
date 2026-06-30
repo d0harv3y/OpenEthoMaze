@@ -2,6 +2,8 @@
 
 **Status:** Pre-implementation scope (May 2026). Extends [rescue_plan.md](rescue_plan.md); does not replace ambulation/exploration as the primary contract.
 
+> **Note (2026-06-29):** "ethogram" here is the storage/materialize contract (per-frame syllable store → bout CSV). The producer-agnostic **Behavior** model that sits above syllables is defined in [CONTEXT-MAP.md](../CONTEXT-MAP.md) → `maze/kpms/behavior_ethogram/CONTEXT.md` and ADRs `docs/adr/0001`–`0004`. This doc is narrower; defer to those for the Behavior layer.
+
 ---
 
 ## Product definition

@@ -96,6 +96,8 @@ maze-cluster-bouts-hdbscan = "maze.cli.cluster_bouts_hdbscan:main"
 maze-fit-bout-arhmm = "maze.cli.fit_bout_arhmm:main"
 maze-calibrate-locomotion-tiers = "maze.cli.calibrate_locomotion_tiers:main"
 maze-block-ethogram-exports = "maze.cli.block_ethogram_exports:main"
+maze-build-is-moving-anchor = "maze.cli.build_is_moving_anchor:main"
+maze-evaluate-behavior-producers = "maze.cli.evaluate_behavior_producers:main"
 maze-langfuse-demo = "maze.cli.langfuse_demo:main"
 maze-local-service = "maze.controller.local_service.__main__:main"
 

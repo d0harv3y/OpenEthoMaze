@@ -1,0 +1,3 @@
+# Behavior is a producer-agnostic target scored by a shared harness
+
+The ethogram target — a **Behavior** (a contiguous, interpretable, task-portable label above syllables) — is defined independently of how it is produced. Three competing **producers** (A: syllable-sequence grammar; B: upstream B-SOiD/MotionMapper frame states; D: enriched bout AR-HMM) each emit the same unified `Behavior labeling` artifact, and a single evaluation harness crowns a winner. We chose this over making the existing `behavior_token` (Stage III AR-HMM output) the definition, because committing to one mechanism before evaluation would foreclose the comparison the project exists to make.
