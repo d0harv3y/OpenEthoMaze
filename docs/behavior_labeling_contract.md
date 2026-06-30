@@ -50,12 +50,13 @@ Run-length encoding of the per-frame stream (`labeling_to_bouts`); regenerable, 
   "created_at": "<ISO-8601 UTC>",
   "n_trials": 2, "n_labeled_frames": 10,
   "behavior_names": {"0": "pause", "2": "locomote"},
+  "behavior_anchor_buckets": {"0": "still", "2": "moving"},
   "params": { "...": "producer hyperparams" },
   "input_hashes": { "results_apply.h5": "<sha256>" }
 }
 ```
 
-Producers should populate `input_hashes` (e.g. via `labeling.hash_file`) and `params` for reproducibility.
+Producers should populate `input_hashes` (e.g. via `labeling.hash_file`) and `params` for reproducibility. Optional `behavior_anchor_buckets` maps behavior id → `moving` | `still` | `ignore` for harness scoring (S3.1 grammar export).
 
 ## Consumer rules
 

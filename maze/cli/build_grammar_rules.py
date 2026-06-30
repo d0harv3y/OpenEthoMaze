@@ -18,6 +18,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--candidates-csv", type=Path, default=None)
     ap.add_argument("--fit-id", type=str, default=None)
     ap.add_argument("--output-json", type=Path, default=None)
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="Allow build when must_review_overlay rows lack reviewed_at",
+    )
     args = ap.parse_args(argv)
 
     kpms_root = Path(args.kpms_root)
@@ -30,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     out = args.output_json or grammar_rules_json(gdir)
 
     try:
-        doc = rules_from_curated_candidates(candidates, fit_id=fit_id)
+        doc = rules_from_curated_candidates(candidates, fit_id=fit_id, force=args.force)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -43,6 +48,7 @@ def main(argv: list[str] | None = None) -> int:
                 "fit_id": doc.fit_id,
                 "n_rules": len(doc.rules),
                 "behavior_names": list(doc.behavior_names()),
+                "behavior_anchor_buckets": dict(doc.behavior_anchor_buckets),
             },
             indent=2,
         )

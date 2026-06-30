@@ -37,17 +37,18 @@ The first (coarsest) anchor: a binary per-frame signal of whether the animal is 
 _Avoid_: active, mobile, locomote (locomote is a Behavior; is_moving is a binary anchor)
 
 **Behavior grammar** (Option A):
-A per-fit mapping from characteristic syllable sequences to named Behaviors, *discovered* by mining the syllable stream then *curated and named* by a human. Re-derived on refit; only the behavior names are portable, not the underlying syllable-id rules.
+A per-fit mapping from characteristic syllable sequences to named Behaviors, *discovered* by mining the syllable stream then *curated and named* by a human. Re-derived on refit; only the behavior names are portable, not the underlying syllable-id rules. Substrate schema: `docs/grammar_rule_contract.md`.
 _Avoid_: merge (memoryless), taxonomy (id-level only)
+
+**anchor_bucket**:
+Per-behavior harness tag (`moving`, `still`, `ignore`) assigned at curation time alongside the portable `behavior_name`. Lets ethological names (`groom`, `rear`) coexist with the only contracted anchor today (`is_moving`). `ignore` excludes a behavior from anchor scoring until a finer anchor exists.
+_Avoid_: ground truth, is_moving (anchor_bucket is producer metadata for validation, not the anchor itself)
 
 **Behavior labeling**:
 The unified artifact every Producer must emit: a per-frame Behavior label stream on the source-video timeline, a derived bout-level CSV, and a provenance JSON. The common currency the evaluation harness scores. Schema: `docs/behavior_labeling_contract.md`.
 
 **Bout scalar features** (Option D substrate):
 Per-syllable-run kinematic summary rows for Stage II/III (clustering, AR-HMM). Schema: `docs/bout_feature_contract.md`.
-
-**Behavior grammar** (Option A substrate):
-Per-fit syllable-sequence rules and mined candidates. Schema: `docs/grammar_rule_contract.md`.
 _Avoid_: tokens CSV, results h5 (those are mechanism-specific)
 
 **Producer seam**:

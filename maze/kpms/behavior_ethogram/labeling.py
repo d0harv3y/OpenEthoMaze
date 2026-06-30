@@ -100,6 +100,7 @@ class BehaviorLabeling:
     fps: float
     trials: tuple[TrialFrameLabels, ...]
     behavior_names: Mapping[int, str] = field(default_factory=dict)
+    behavior_anchor_buckets: Mapping[int, str] = field(default_factory=dict)
     params: Mapping[str, object] = field(default_factory=dict)
     input_hashes: Mapping[str, str] = field(default_factory=dict)
 
@@ -228,7 +229,7 @@ def _write_bouts_csv(path: Path, bouts: list[BehaviorBout]) -> None:
 
 def _provenance_payload(labeling: BehaviorLabeling) -> dict:
     n_labeled = int(sum(int(np.sum(t.behavior_id != UNLABELED)) for t in labeling.trials))
-    return {
+    payload = {
         "schema": SCHEMA_VERSION,
         "producer": labeling.producer,
         "fit_id": labeling.fit_id,
@@ -240,6 +241,11 @@ def _provenance_payload(labeling: BehaviorLabeling) -> dict:
         "params": dict(labeling.params),
         "input_hashes": dict(labeling.input_hashes),
     }
+    if labeling.behavior_anchor_buckets:
+        payload["behavior_anchor_buckets"] = {
+            str(k): str(v) for k, v in labeling.behavior_anchor_buckets.items()
+        }
+    return payload
 
 
 def write_behavior_labeling(
@@ -275,12 +281,16 @@ def read_behavior_labeling(artifact_dir: Path | str) -> BehaviorLabeling:
         prov = json.load(f)
     trials = _read_frames_h5(behavior_frames_h5(artifact_dir))
     behavior_names = {int(k): str(v) for k, v in prov.get("behavior_names", {}).items()}
+    behavior_anchor_buckets = {
+        int(k): str(v) for k, v in prov.get("behavior_anchor_buckets", {}).items()
+    }
     return BehaviorLabeling(
         producer=str(prov["producer"]),
         fit_id=str(prov["fit_id"]),
         fps=float(prov["fps"]),
         trials=tuple(trials),
         behavior_names=behavior_names,
+        behavior_anchor_buckets=behavior_anchor_buckets,
         params=dict(prov.get("params", {})),
         input_hashes=dict(prov.get("input_hashes", {})),
     )

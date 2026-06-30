@@ -56,6 +56,15 @@ def _anchor_lookup(anchor: IsMovingAnchor) -> dict[str, dict[int, bool]]:
     return out
 
 
+def _behavior_is_moving_from_bucket(bucket: str) -> bool | None:
+    b = str(bucket).strip().lower()
+    if b == "moving":
+        return True
+    if b == "still":
+        return False
+    return None
+
+
 def _behavior_is_moving(
     behavior_id: int,
     behavior_names: Mapping[int, str],
@@ -69,6 +78,27 @@ def _behavior_is_moving(
     if name in still_names:
         return False
     return None
+
+
+def _resolve_behavior_moving(
+    behavior_id: int,
+    behavior_names: Mapping[int, str],
+    behavior_anchor_buckets: Mapping[int, str],
+    *,
+    moving_names: frozenset[str],
+    still_names: frozenset[str],
+) -> bool | None:
+    bucket = behavior_anchor_buckets.get(int(behavior_id))
+    if bucket:
+        resolved = _behavior_is_moving_from_bucket(bucket)
+        if resolved is not None or str(bucket).strip().lower() == "ignore":
+            return resolved
+    return _behavior_is_moving(
+        behavior_id,
+        behavior_names,
+        moving_names=moving_names,
+        still_names=still_names,
+    )
 
 
 def evaluate_behavior_producer(
@@ -104,9 +134,10 @@ def evaluate_behavior_producer(
             anchor_mv = amap[int(fi)]
             if anchor_mv:
                 anchor_moving += 1
-            expected = _behavior_is_moving(
+            expected = _resolve_behavior_moving(
                 int(bid),
                 labeling.behavior_names,
+                labeling.behavior_anchor_buckets,
                 moving_names=moving_names,
                 still_names=still_names,
             )

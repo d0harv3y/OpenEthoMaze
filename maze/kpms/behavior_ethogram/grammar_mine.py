@@ -19,6 +19,16 @@ class MinedSequence:
     count: int
     n_trials: int
     example_trial_keys: tuple[str, ...]
+    mean_speed_mps: float | None = None
+    mean_abs_dheading: float | None = None
+    mean_straightness: float | None = None
+    mean_blob_area_px2: float | None = None
+    must_review_overlay: bool = False
+    behavior_name: str = ""
+    anchor_bucket: str = ""
+    reviewed_at: str = ""
+    reviewed_trial_key: str = ""
+    notes: str = ""
 
 
 def bout_syllable_ids(z: Sequence[int] | Iterable[int]) -> list[int]:
@@ -75,6 +85,12 @@ def mine_ngram_candidates(
     return out
 
 
+def _fmt_float(val: float | None) -> str:
+    if val is None:
+        return ""
+    return str(float(val))
+
+
 def write_candidate_sequences_csv(path: Path | str, candidates: Sequence[MinedSequence]) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -89,8 +105,16 @@ def write_candidate_sequences_csv(path: Path | str, candidates: Sequence[MinedSe
                     "count": cand.count,
                     "n_trials": cand.n_trials,
                     "example_trial_keys": ";".join(cand.example_trial_keys),
-                    "behavior_name": "",
-                    "notes": "",
+                    "mean_speed_mps": _fmt_float(cand.mean_speed_mps),
+                    "mean_abs_dheading": _fmt_float(cand.mean_abs_dheading),
+                    "mean_straightness": _fmt_float(cand.mean_straightness),
+                    "mean_blob_area_px2": _fmt_float(cand.mean_blob_area_px2),
+                    "must_review_overlay": int(bool(cand.must_review_overlay)),
+                    "behavior_name": cand.behavior_name,
+                    "anchor_bucket": cand.anchor_bucket,
+                    "reviewed_at": cand.reviewed_at,
+                    "reviewed_trial_key": cand.reviewed_trial_key,
+                    "notes": cand.notes,
                 }
             )
 

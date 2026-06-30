@@ -136,12 +136,18 @@ def export_option_a_labeling(
         raise ValueError("no trials labeled — check grammar rules / manifest alignment")
 
     behavior_names = {bid: name for name, bid in name_to_id.items()}
+    id_buckets: dict[int, str] = {}
+    for name, bucket in grammar.behavior_anchor_buckets.items():
+        bid = name_to_id.get(str(name))
+        if bid is not None:
+            id_buckets[int(bid)] = str(bucket)
     labeling = BehaviorLabeling(
         producer="syllable_grammar",
         fit_id=fit_id,
         fps=float(fps),
         trials=tuple(trials),
         behavior_names=behavior_names,
+        behavior_anchor_buckets=id_buckets,
         params={"seed": seed, "n_rules": len(grammar.rules)},
         input_hashes={
             "grammar_rules.json": hash_file(rules_json),

@@ -11,7 +11,17 @@ import h5py
 
 from maze.kpms.apply_summary import preprocess_config_from_apply_summary, resolve_tracking_h5_path
 from maze.kpms.behavior_ethogram.grammar_mine import mine_ngram_candidates, write_candidate_sequences_csv
-from maze.kpms.behavior_ethogram.paths import grammar_candidates_csv, grammar_dir
+from maze.kpms.behavior_ethogram.grammar_enrich import (
+    enrich_candidates_with_bout_scalars,
+    flag_candidates_for_overlay_review,
+)
+from maze.kpms.behavior_ethogram.bout_table_io import read_bout_table_csv
+from maze.kpms.behavior_ethogram.paths import (
+    bout_features_csv,
+    grammar_candidates_csv,
+    grammar_dir,
+    stage_ii_dir,
+)
 from maze.kpms.frame_alignment import kpms_aligned_coordinates_and_indices, kpms_recording_key
 from maze.kpms.manifest_subset import SubsetConfig, filter_manifests, load_manifests
 from maze.kpms.preprocess import KpmsPreprocessConfig
@@ -38,6 +48,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--min-count", type=int, default=5)
     ap.add_argument("--max-n", type=int, default=4)
     ap.add_argument("--output-csv", type=Path, default=None)
+    ap.add_argument(
+        "--bout-features-csv",
+        type=Path,
+        default=None,
+        help="Bout feature table for scalar enrich (default: stage_ii/bout_features.csv)",
+    )
+    ap.add_argument("--no-enrich", action="store_true", help="Skip bout-scalar enrich and overlay flags")
     args = ap.parse_args(argv)
 
     kpms_root = Path(args.kpms_root)
@@ -89,6 +106,16 @@ def main(argv: list[str] | None = None) -> int:
         min_count=args.min_count,
         max_n=args.max_n,
     )
+    enriched = False
+    if not args.no_enrich:
+        bout_csv = args.bout_features_csv or bout_features_csv(stage_ii_dir(kpms_root))
+        if bout_csv.is_file():
+            bout_rows = read_bout_table_csv(bout_csv)
+            candidates = enrich_candidates_with_bout_scalars(
+                candidates, bout_rows, seed=args.seed, trial_keys=trial_streams.keys()
+            )
+            candidates = flag_candidates_for_overlay_review(candidates, bout_rows, seed=args.seed)
+            enriched = True
     write_candidate_sequences_csv(out_csv, candidates)
     print(
         json.dumps(
@@ -98,6 +125,7 @@ def main(argv: list[str] | None = None) -> int:
                 "n_candidates": len(candidates),
                 "min_count": args.min_count,
                 "max_n": args.max_n,
+                "enriched_from_bout_features": enriched,
             },
             indent=2,
         )

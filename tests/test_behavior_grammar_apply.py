@@ -55,13 +55,33 @@ def test_trial_frame_labels_from_grammar_maps_bout_spans() -> None:
 
 def test_rules_from_curated_candidates_builds_doc(tmp_path) -> None:
     path = tmp_path / "c.csv"
+    header = ",".join(
+        [
+            "pattern_json",
+            "pattern_len",
+            "count",
+            "n_trials",
+            "example_trial_keys",
+            "mean_speed_mps",
+            "mean_abs_dheading",
+            "mean_straightness",
+            "mean_blob_area_px2",
+            "must_review_overlay",
+            "behavior_name",
+            "anchor_bucket",
+            "reviewed_at",
+            "reviewed_trial_key",
+            "notes",
+        ]
+    )
     path.write_text(
-        "pattern_json,pattern_len,count,n_trials,example_trial_keys,behavior_name,notes\n"
-        '"[3, 7]",2,5,2,t1,groom,\n',
+        f'{header}\n'
+        '"[3, 7]",2,5,2,t1,,,,,0,groom,ignore,2026-06-30T00:00:00+00:00,t1,\n',
         encoding="utf-8",
     )
     doc = rules_from_curated_candidates(path, fit_id="seed_042")
     assert doc.rules[0].behavior_name == "groom"
+    assert doc.behavior_anchor_buckets["groom"] == "ignore"
 
 
 def test_grammar_rules_json_round_trip(tmp_path) -> None:
