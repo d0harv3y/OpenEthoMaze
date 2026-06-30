@@ -156,3 +156,8 @@ def test_empty_trial_produces_no_bouts(tmp_path) -> None:
     loaded = read_behavior_labeling(art)
     assert len(loaded.trials) == 1
     assert len(loaded.trials[0]) == 0
+
+
+def test_read_behavior_labeling_missing_files_raises_clear_error(tmp_path) -> None:
+    with pytest.raises(FileNotFoundError, match="Not a Behavior labeling artifact"):
+        read_behavior_labeling(tmp_path / "empty")

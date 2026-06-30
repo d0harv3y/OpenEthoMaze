@@ -10,6 +10,8 @@ from maze.kpms.behavior_ethogram.bout_scalars import (
     aggregate_bout_scalars,
     bout_ambiguous,
     bout_iqr,
+    bout_net_dheading_rad,
+    bout_straightness,
     compile_trial_bout_features,
     feature_matrix_for_clustering,
     mean_abs_dheading,
@@ -68,7 +70,7 @@ def test_feature_matrix_for_clustering_shape() -> None:
         fps=30.0,
     )
     mat, names = feature_matrix_for_clustering(rows)
-    assert mat.shape == (2, 7)
+    assert mat.shape == (2, 9)
     assert "bout_duration_s" in names
 
 
@@ -86,3 +88,36 @@ def test_aggregate_bout_scalars_primary_state_majority() -> None:
         trial_states=["run", "iti", "iti", "iti"],
     )
     assert feat.bout_primary_state == "iti"
+
+
+def test_bout_straightness_straight_line_is_one() -> None:
+    xy = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]])
+    assert bout_straightness(xy) == pytest.approx(1.0)
+
+
+def test_bout_straightness_back_and_forth_is_low() -> None:
+    xy = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 0.0], [1.0, 0.0]])
+    assert bout_straightness(xy) < 0.4
+
+
+def test_bout_net_dheading_signed_turn() -> None:
+    heading = np.array([0.0, 0.5, 1.0, 1.5])
+    assert bout_net_dheading_rad(heading) == pytest.approx(1.5)
+
+
+def test_compile_trial_includes_net_dheading_and_straightness() -> None:
+    z = np.array([3, 3, 3, 3], dtype=np.int64)
+    centroid = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]], dtype=np.float64)
+    heading = np.array([0.0, 0.2, 0.4, 0.6])
+    rows = compile_trial_bout_features(
+        z,
+        speed_mps=np.ones(4) * 0.1,
+        abs_dheading=np.zeros(4),
+        blob_area_px2=np.ones(4) * 100.0,
+        heading_rad=heading,
+        centroid_xy_px=centroid,
+        fps=30.0,
+    )
+    assert len(rows) == 1
+    assert rows[0].bout_straightness == pytest.approx(1.0)
+    assert rows[0].bout_net_dheading_rad == pytest.approx(0.6)

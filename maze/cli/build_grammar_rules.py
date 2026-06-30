@@ -1,0 +1,54 @@
+"""CLI: build grammar_rules.json from curated candidate_sequences.csv."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from maze.kpms.behavior_ethogram.grammar_rules import rules_from_curated_candidates, write_grammar_rules_json
+from maze.kpms.behavior_ethogram.paths import grammar_candidates_csv, grammar_dir, grammar_rules_json
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Build grammar_rules.json from curated candidates CSV.")
+    ap.add_argument("--kpms-root", type=Path, required=True)
+    ap.add_argument("--seed", type=str, required=True)
+    ap.add_argument("--candidates-csv", type=Path, default=None)
+    ap.add_argument("--fit-id", type=str, default=None)
+    ap.add_argument("--output-json", type=Path, default=None)
+    args = ap.parse_args(argv)
+
+    kpms_root = Path(args.kpms_root)
+    fit_id = args.fit_id or f"seed_{args.seed}"
+    gdir = grammar_dir(kpms_root, seed=args.seed)
+    candidates = args.candidates_csv or grammar_candidates_csv(gdir)
+    if not candidates.is_file():
+        print(f"Missing candidates CSV: {candidates}", file=sys.stderr)
+        return 1
+    out = args.output_json or grammar_rules_json(gdir)
+
+    try:
+        doc = rules_from_curated_candidates(candidates, fit_id=fit_id)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    write_grammar_rules_json(out, doc)
+    print(
+        json.dumps(
+            {
+                "output_json": str(out),
+                "fit_id": doc.fit_id,
+                "n_rules": len(doc.rules),
+                "behavior_names": list(doc.behavior_names()),
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

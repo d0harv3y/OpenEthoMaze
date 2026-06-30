@@ -1,4 +1,8 @@
-"""CSV I/O for bout feature tables."""
+"""CSV I/O for bout feature tables.
+
+Column order: ``bout_feature_contract.BOUT_TABLE_FIELDS``;
+see ``docs/bout_feature_contract.md``.
+"""
 
 from __future__ import annotations
 
@@ -7,31 +11,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from .bout_feature_contract import BOUT_TABLE_FIELDS
 from .bout_scalars import BoutScalarFeatures
-
-BOUT_TABLE_FIELDS = (
-    "stream",
-    "seed",
-    "trial_key",
-    "raw_syllable_id",
-    "bout_index",
-    "row_start",
-    "row_end_exclusive",
-    "bout_frames",
-    "bout_duration_s",
-    "bout_mean_speed_mps",
-    "bout_mean_abs_dheading",
-    "bout_mean_blob_area_px2",
-    "bout_iqr_speed_mps",
-    "bout_iqr_abs_dheading",
-    "bout_iqr_blob_area_px2",
-    "bout_mean_heading_rad",
-    "bout_iqr_heading_rad",
-    "bout_primary_state",
-    "ambiguous",
-    "cluster_id",
-    "behavior_token",
-)
 
 
 def bout_row_to_dict(
@@ -104,6 +85,8 @@ def dict_to_bout_scalar_features(row: Mapping[str, str]) -> BoutScalarFeatures:
         bout_iqr_blob_area_px2=_parse_float(row["bout_iqr_blob_area_px2"]),
         bout_mean_heading_rad=_parse_optional_float(row.get("bout_mean_heading_rad", "")),
         bout_iqr_heading_rad=_parse_optional_float(row.get("bout_iqr_heading_rad", "")),
+        bout_net_dheading_rad=_parse_float(row.get("bout_net_dheading_rad", "0")),
+        bout_straightness=_parse_float(row.get("bout_straightness", "0")),
         bout_primary_state=str(row.get("bout_primary_state", "")),
         ambiguous=bool(int(row.get("ambiguous", "0"))),
     )

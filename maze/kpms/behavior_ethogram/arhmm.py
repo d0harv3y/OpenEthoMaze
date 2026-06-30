@@ -97,8 +97,16 @@ def build_trial_sequences_from_table(
     *,
     include_heading_direction: bool = False,
     include_cluster_feature: bool = False,
+    use_syllable_signature: bool = True,
 ) -> list[TrialBoutSequence]:
     from .bout_table_io import dict_to_bout_scalar_features
+    from .syllable_signature import SYLLABLE_SIGNATURE_NAMES, build_syllable_kinematic_signatures, syllable_signature_row
+
+    if include_cluster_feature:
+        raise ValueError("include_cluster_feature is removed in S2")
+
+    all_feats = [dict_to_bout_scalar_features(row) for row in table_rows]
+    signatures = build_syllable_kinematic_signatures(all_feats) if use_syllable_signature else {}
 
     by_trial: dict[tuple[str, str], list[tuple[int, dict[str, str], BoutScalarFeatures]]] = {}
     for row in table_rows:
@@ -110,12 +118,16 @@ def build_trial_sequences_from_table(
     for (seed, trial_key), items in sorted(by_trial.items()):
         items.sort(key=lambda t: t[0])
         feats = [t[2] for t in items]
-        cluster_ids = [int(t[1]["cluster_id"]) if str(t[1].get("cluster_id", "")).strip() else -1 for t in items]
+        append = None
+        append_names = None
+        if use_syllable_signature:
+            append = np.stack([syllable_signature_row(f, signatures) for f in feats], axis=0)
+            append_names = SYLLABLE_SIGNATURE_NAMES
         mat, _ = feature_matrix_for_arhmm(
             feats,
             include_heading_direction=include_heading_direction,
-            include_cluster_feature=include_cluster_feature,
-            cluster_ids=cluster_ids if include_cluster_feature else None,
+            append_columns=append,
+            append_names=append_names,
         )
         sequences.append(
             TrialBoutSequence(

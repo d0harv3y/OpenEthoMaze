@@ -42,6 +42,12 @@ _Avoid_: merge (memoryless), taxonomy (id-level only)
 
 **Behavior labeling**:
 The unified artifact every Producer must emit: a per-frame Behavior label stream on the source-video timeline, a derived bout-level CSV, and a provenance JSON. The common currency the evaluation harness scores. Schema: `docs/behavior_labeling_contract.md`.
+
+**Bout scalar features** (Option D substrate):
+Per-syllable-run kinematic summary rows for Stage II/III (clustering, AR-HMM). Schema: `docs/bout_feature_contract.md`.
+
+**Behavior grammar** (Option A substrate):
+Per-fit syllable-sequence rules and mined candidates. Schema: `docs/grammar_rule_contract.md`.
 _Avoid_: tokens CSV, results h5 (those are mechanism-specific)
 
 **Producer seam**:

@@ -51,12 +51,23 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=str, default=None, help="Interim per-seed fit (default when multiple seeds)")
     ap.add_argument("--pooled-cohort", action="store_true")
     ap.add_argument("--include-heading-direction", action="store_true")
-    ap.add_argument("--include-cluster-feature", action="store_true")
+    ap.add_argument(
+        "--include-cluster-feature",
+        action="store_true",
+        help="Removed in S2 (syllable kinematic signatures replace cluster_id).",
+    )
     ap.add_argument("--num-iters", type=int, default=200)
     ap.add_argument("--num-states", type=int, default=20)
     ap.add_argument("--nlags", type=int, default=2)
     ap.add_argument("--kappa", type=float, default=500.0)
     args = ap.parse_args(argv)
+
+    if args.include_cluster_feature:
+        print(
+            "--include-cluster-feature was removed in S2; syllable kinematic signatures are used instead.",
+            file=sys.stderr,
+        )
+        return 2
 
     kpms_root = Path(args.kpms_root)
     stage_ii = Path(args.stage_ii_dir) if args.stage_ii_dir else kpms_root / "behavior_ethogram" / "stage_ii"
@@ -80,7 +91,6 @@ def main(argv: list[str] | None = None) -> int:
     sequences = build_trial_sequences_from_table(
         subset,
         include_heading_direction=args.include_heading_direction,
-        include_cluster_feature=args.include_cluster_feature,
     )
     if not sequences:
         print("No trial bout sequences to fit.", file=sys.stderr)
@@ -117,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         "seed": fit_seed,
         "n_trials": len(sequences),
         "n_bouts": len(subset),
-        "include_cluster_feature": args.include_cluster_feature,
+        "include_cluster_feature": False,
         "include_heading_direction": args.include_heading_direction,
         "hyperparams": cfg.to_json_dict(),
         "feature_zscore_mean": fit_result.feature_mean.tolist(),

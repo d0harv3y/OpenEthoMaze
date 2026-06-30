@@ -19,10 +19,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--kpms-root", type=Path, required=True)
     ap.add_argument("--calibration-id", type=str, default="default")
     ap.add_argument("--out-dir", type=Path, default=None, help="Override anchor artifact dir")
+    ap.add_argument("--include-habituation", action="store_true")
+    ap.add_argument(
+        "--enrich-labels",
+        action="store_true",
+        help="Fill blank manifest fields from repo inputs/treatment_labels.csv (off by default)",
+    )
     args = ap.parse_args(argv)
 
-    manifests = load_manifests(SubsetConfig(manifest_path=args.manifest_path))
-    manifests = filter_manifests(manifests, SubsetConfig(manifest_path=args.manifest_path))
+    cfg = SubsetConfig(
+        manifest_csv=args.manifest_path,
+        require_sleap=False,
+        include_habituation=args.include_habituation,
+        enrich_from_treatment_labels=args.enrich_labels,
+    )
+    manifests = filter_manifests(load_manifests(cfg), cfg)
     if not manifests:
         print("No manifest rows after filter.", file=sys.stderr)
         return 1

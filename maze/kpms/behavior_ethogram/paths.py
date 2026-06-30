@@ -90,6 +90,19 @@ def token_tiers_csv(stage_iii: Path | str) -> Path:
     return Path(stage_iii) / "token_tiers.csv"
 
 
+def grammar_dir(kpms_root: Path | str, *, seed: str) -> Path:
+    """Per-seed Option A workspace: mined candidates + curated rules."""
+    return behavior_ethogram_root(kpms_root) / "grammar" / f"seed_{seed}"
+
+
+def grammar_candidates_csv(grammar: Path | str) -> Path:
+    return Path(grammar) / "candidate_sequences.csv"
+
+
+def grammar_rules_json(grammar: Path | str) -> Path:
+    return Path(grammar) / "grammar_rules.json"
+
+
 def discover_anatomical_seeds(kpms_root: Path | str) -> tuple[str, ...]:
     """Return sorted seed ids with ``anatomical/seed_*/results_apply.h5``."""
     root = Path(kpms_root) / "anatomical"

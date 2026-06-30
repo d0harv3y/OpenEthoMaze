@@ -20,6 +20,16 @@ from maze.kpms.io import write_json
 ANCHOR_SCHEMA_VERSION = "is_moving_anchor_v1"
 
 
+def missing_is_moving_anchor_files(artifact_dir: Path | str) -> tuple[str, ...]:
+    d = Path(artifact_dir)
+    missing: list[str] = []
+    if not anchor_provenance_json(d).is_file():
+        missing.append("provenance.json")
+    if not anchor_frames_h5(d).is_file():
+        missing.append("anchor_frames.h5")
+    return tuple(missing)
+
+
 @dataclass(frozen=True, eq=False)
 class TrialAnchorFrames:
     trial_key: str
@@ -106,6 +116,14 @@ def write_is_moving_anchor(artifact_dir: Path | str, anchor: IsMovingAnchor) -> 
 
 def read_is_moving_anchor(artifact_dir: Path | str) -> IsMovingAnchor:
     artifact_dir = Path(artifact_dir)
+    missing = missing_is_moving_anchor_files(artifact_dir)
+    if missing:
+        raise FileNotFoundError(
+            f"Not an is_moving anchor artifact dir: {artifact_dir}\n"
+            f"Missing: {', '.join(missing)}\n"
+            "Expected: anchor_frames.h5 + provenance.json\n"
+            "Build with: uv run maze-build-is-moving-anchor --legacy-db ... --manifest-path ..."
+        )
     with anchor_provenance_json(artifact_dir).open(encoding="utf-8") as f:
         prov = json.load(f)
     trials = _read_frames_h5(anchor_frames_h5(artifact_dir))

@@ -1,4 +1,7 @@
-"""Compile bout scalar table from anatomical kpMS apply + trial H5."""
+"""Compile bout scalar table from anatomical kpMS apply + trial H5.
+
+Output columns: ``docs/bout_feature_contract.md`` (schema ``bout_feature_v2``).
+"""
 
 from __future__ import annotations
 
@@ -121,6 +124,7 @@ def compile_trial_bouts(
         abs_dheading=abs_dheading,
         blob_area_px2=blob_area,
         heading_rad=heading,
+        centroid_xy_px=centroid,
         fps=cfg.fps,
         trial_states=trial_states,
         include_heading_direction=cfg.include_heading_direction,

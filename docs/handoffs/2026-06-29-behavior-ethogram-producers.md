@@ -12,7 +12,7 @@ A generalizable, task-portable **ethogram**: produce interpretable **Behavior** 
 
 - Glossary: [`maze/kpms/behavior_ethogram/CONTEXT.md`](../../maze/kpms/behavior_ethogram/CONTEXT.md); map: [`CONTEXT-MAP.md`](../../CONTEXT-MAP.md)
 - ADRs: [`docs/adr/0001`](../adr/0001-behavior-producer-agnostic-target.md) (producer-agnostic Behavior), [`0002`](../adr/0002-is-moving-anchor-independent-speed.md) (independent-speed anchor), [`0003`](../adr/0003-bsoid-resolver-gate-and-boundary.md) (B-SOiD env gate), [`0004`](../adr/0004-producer-seam-is-file-artifact.md) (producer seam = file artifact)
-- Artifact schema: [`docs/behavior_labeling_contract.md`](../behavior_labeling_contract.md)
+- Artifact schema: [`docs/behavior_labeling_contract.md`](../behavior_labeling_contract.md), [`docs/bout_feature_contract.md`](../bout_feature_contract.md), [`docs/grammar_rule_contract.md`](../grammar_rule_contract.md)
 - Superseded pre-grill plan (do not cite): `scratch/archive/behavior_ethogram_2026-06-24_pre-grill/` (+ its `SUPERSEDED.md`)
 
 ## Slice plan
@@ -21,7 +21,7 @@ A generalizable, task-portable **ethogram**: produce interpretable **Behavior** 
 
 - **S0 — DONE.** `maze/kpms/behavior_ethogram/labeling.py` (`BehaviorLabeling`, `TrialFrameLabels`, `labeling_to_bouts`, `write_/read_behavior_labeling`), path helpers in `paths.py`, exports in `__init__.py`, tests `tests/test_behavior_labeling.py` (15 tests green; ruff+black clean). Zero new deps (HDF5 not parquet — pyarrow absent).
 - **S2 — Option D.** Extend `bout_scalars.py`: add `bout_net_dheading_rad` (signed turn) + `bout_straightness` (net/path ∈ [0,1]); fix circular heading (sin/cos); drop `cluster_id`-as-float; add low-D **syllable kinematic-signature embedding** (pooling-safe, Gaussian-valid — never raw id/one-hot). Emit the S0 artifact. PCA/correlation-check the embedding adds independent signal.
-- **S3 — Option A.** Mine candidate syllable sequences → exemplar tray → human-curated **per-fit rule table** (discover→curate) → apply grammar → S0 artifact. Portability is at the behavior-*name* level only (syllable ids non-comparable across seeds).
+- **S3 — Option A.** Mine candidate syllable sequences → exemplar tray → human-curated **per-fit rule table** (discover→curate) → apply grammar → S0 artifact. Portability is at the behavior-*name* level only (syllable ids non-comparable across seeds). **DONE:** `grammar_mine.py`, `grammar_rules.py`, `producer_option_a.py`, CLIs `maze-mine-syllable-grammar-candidates`, `maze-build-grammar-rules`, `maze-export-syllable-grammar-labeling`; contract `docs/grammar_rule_contract.md`.
 - **S4 — Option B.** Upstream **B-SOiD first** (MotionMapper later). Gate on a uv resolver spike (ADR-0003); isolated env + file boundary fallback. Pose-export adapter → import frame labels → S0 artifact.
 - **S5 — bake-off.** Run S1 across producers; comparison report (consider a canvas); grow anchor beyond `is_moving` (rear/freeze/turn).
 

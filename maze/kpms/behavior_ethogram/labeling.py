@@ -53,6 +53,17 @@ BEHAVIOR_BOUT_FIELDS = (
 )
 
 
+def missing_behavior_labeling_files(artifact_dir: Path | str) -> tuple[str, ...]:
+    """Return names of required S0 files absent from ``artifact_dir``."""
+    d = Path(artifact_dir)
+    missing: list[str] = []
+    if not behavior_provenance_json(d).is_file():
+        missing.append("provenance.json")
+    if not behavior_frames_h5(d).is_file():
+        missing.append("behavior_frames.h5")
+    return tuple(missing)
+
+
 @dataclass(frozen=True, eq=False)
 class TrialFrameLabels:
     """Per-frame Behavior labels for one trial on the source-video timeline.
@@ -251,6 +262,15 @@ def write_behavior_labeling(
 def read_behavior_labeling(artifact_dir: Path | str) -> BehaviorLabeling:
     """Load a Behavior labeling artifact written by :func:`write_behavior_labeling`."""
     artifact_dir = Path(artifact_dir)
+    missing = missing_behavior_labeling_files(artifact_dir)
+    if missing:
+        raise FileNotFoundError(
+            f"Not a Behavior labeling artifact dir: {artifact_dir}\n"
+            f"Missing: {', '.join(missing)}\n"
+            "Expected layout (ADR-0004): behavior_frames.h5 + behavior_bouts.csv + provenance.json\n"
+            "Path pattern: <kpms_root>/behavior_ethogram/producers/<producer>/<fit_id>/\n"
+            "kpMS dirs such as anatomical/seed_042 are not producers — emit S0 artifacts in S2–S4 first."
+        )
     with behavior_provenance_json(artifact_dir).open(encoding="utf-8") as f:
         prov = json.load(f)
     trials = _read_frames_h5(behavior_frames_h5(artifact_dir))
