@@ -8,9 +8,10 @@ import sys
 from pathlib import Path
 
 import h5py
+import numpy as np
 
 from maze.kpms.apply_summary import preprocess_config_from_apply_summary, resolve_tracking_h5_path
-from maze.kpms.behavior_ethogram.grammar_mine import mine_ngram_candidates, write_candidate_sequences_csv
+from maze.kpms.behavior_ethogram.grammar_mine import mine_ngram_candidates, write_candidate_artifacts
 from maze.kpms.behavior_ethogram.grammar_enrich import (
     enrich_candidates_with_bout_scalars,
     flag_candidates_for_overlay_review,
@@ -28,16 +29,13 @@ from maze.kpms.manifest_subset import SubsetConfig, filter_manifests, load_manif
 from maze.kpms.preprocess import KpmsPreprocessConfig
 
 
-def _load_syllables(results_h5: Path, recording_key: str):
-    import numpy as np
-
-    with h5py.File(results_h5, "r") as h5:
-        if recording_key not in h5:
-            return None
-        rec = h5[recording_key]
-        if "syllable" not in rec:
-            return None
-        return np.asarray(rec["syllable"], dtype=np.int64)
+def _load_syllables(results_h5: h5py.File, recording_key: str) -> np.ndarray | None:
+    if recording_key not in results_h5:
+        return None
+    rec = results_h5[recording_key]
+    if "syllable" not in rec:
+        return None
+    return np.asarray(rec["syllable"], dtype=np.int64)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -84,21 +82,23 @@ def main(argv: list[str] | None = None) -> int:
 
     cfg = SubsetConfig(manifest_csv=args.manifest_path, require_sleap=False)
     manifests = filter_manifests(load_manifests(cfg), cfg)
-    trial_streams: dict[str, list[int]] = {}
-    trial_source_frames: dict[str, list[int]] = {}
-    for manifest in manifests:
-        trial_key = kpms_recording_key(manifest)
-        z = _load_syllables(results_h5, trial_key)
-        if z is None or len(z) == 0:
-            continue
-        aligned = kpms_aligned_coordinates_and_indices(manifest, pre_cfg)
-        if aligned is None:
-            continue
-        _rk, _coord, src = aligned
-        if len(z) != len(src):
-            continue
-        trial_streams[trial_key] = [int(x) for x in z.tolist()]
-        trial_source_frames[trial_key] = [int(x) for x in src.tolist()]
+    trial_streams: dict[str, np.ndarray] = {}
+    trial_source_frames: dict[str, np.ndarray] = {}
+
+    with h5py.File(results_h5, "r") as results_h5_file:
+        for manifest in manifests:
+            trial_key = kpms_recording_key(manifest)
+            z = _load_syllables(results_h5_file, trial_key)
+            if z is None or len(z) == 0:
+                continue
+            aligned = kpms_aligned_coordinates_and_indices(manifest, pre_cfg)
+            if aligned is None:
+                continue
+            _rk, _coord, src = aligned
+            if len(z) != len(src):
+                continue
+            trial_streams[trial_key] = z
+            trial_source_frames[trial_key] = np.asarray(src, dtype=np.int64)
 
     if not trial_streams:
         print("No aligned syllable streams found.", file=sys.stderr)
@@ -125,11 +125,13 @@ def main(argv: list[str] | None = None) -> int:
                 seed=args.seed,
             )
             enriched = True
-    write_candidate_sequences_csv(out_csv, candidates)
+    fit_id = f"seed_{args.seed}"
+    out_csv, exemplars_json = write_candidate_artifacts(out_dir, candidates, fit_id=fit_id)
     print(
         json.dumps(
             {
                 "output_csv": str(out_csv),
+                "output_exemplars_json": str(exemplars_json),
                 "n_trials": len(trial_streams),
                 "n_candidates": len(candidates),
                 "min_count": args.min_count,

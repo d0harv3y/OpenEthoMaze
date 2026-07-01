@@ -28,9 +28,32 @@ def test_subset_config_skips_treatment_labels_by_default(tmp_path: Path, monkeyp
         "maze.kpms.manifest_subset.enrich_manifests_from_treatment_labels",
         lambda manifests, labels_path=None: _boom(),
     )
-    cfg = SubsetConfig(manifest_csv=csv_path, enrich_from_treatment_labels=False)
+    cfg = SubsetConfig(manifest_csv=csv_path)
     manifests = load_manifests(cfg)
     assert len(manifests) == 1
+    assert manifests[0].sex == "F"
+
+
+def test_subset_config_enriches_when_opted_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    csv_path = tmp_path / "manifest.csv"
+    csv_path.write_text(
+        "animal_id,session,trial,phase\n" "3243,S01,T01,experimental\n",
+        encoding="utf-8",
+    )
+    calls: list[int] = []
+
+    def _enrich(manifests, labels_path=None):
+        calls.append(len(manifests))
+        for m in manifests:
+            m.sex = "F"
+
+    monkeypatch.setattr(
+        "maze.kpms.manifest_subset.enrich_manifests_from_treatment_labels",
+        _enrich,
+    )
+    cfg = SubsetConfig(manifest_csv=csv_path, enrich_from_treatment_labels=True)
+    manifests = load_manifests(cfg)
+    assert calls == [1]
     assert manifests[0].sex == "F"
 
 

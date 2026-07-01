@@ -22,7 +22,8 @@ Rules are **per-fit** (raw syllable ids are seed-specific). Only **behavior name
 
 ```
 <kpms_root>/behavior_ethogram/grammar/seed_<seed>/
-  candidate_sequences.csv    # mined n-grams (discover)
+  candidate_sequences.csv    # mined n-grams (discover; lean curation table)
+  candidate_exemplars.json   # review exemplars keyed by pattern_json
   grammar_rules.json         # curated rules (apply)
 
 <kpms_root>/behavior_ethogram/producers/syllable_grammar/<fit_id>/
@@ -31,7 +32,7 @@ Rules are **per-fit** (raw syllable ids are seed-specific). Only **behavior name
   provenance.json
 ```
 
-Path helpers: `grammar_dir`, `grammar_candidates_csv`, `grammar_rules_json`, `producer_dir(kpms_root, "syllable_grammar", fit_id)`.
+Path helpers: `grammar_dir`, `grammar_candidates_csv`, `grammar_candidate_exemplars_json`, `grammar_rules_json`, `producer_dir(kpms_root, "syllable_grammar", fit_id)`.
 
 ## Mining parameters (current code)
 
@@ -89,8 +90,6 @@ Two different ranking systems apply:
 | `pattern_len` | Pattern length in bouts |
 | `count` | Total occurrences |
 | `n_trials` | Distinct trials containing the pattern |
-| `example_trial_keys` | Up to 5 trial keys for exemplar review (`;`-separated) |
-| `example_matches_json` | Up to 3 bout-span exemplars with source-frame bounds (S3.2; auto at mine) |
 | `mean_speed_mps`, `mean_abs_dheading`, `mean_straightness`, `mean_blob_area_px2` | Pooled bout scalars from `stage_ii/bout_features.csv` (auto at mine when file present) |
 | `must_review_overlay` | `1` if exemplar movie required before naming |
 | `behavior_name` | Curator-assigned portable name (empty until curated) |
@@ -101,25 +100,34 @@ Two different ranking systems apply:
 
 Overlay gate (`must_review_overlay=1`) when **any** of: bout `ambiguous=1` on a matching bout; mean speed in gray zone (~0.06–0.14 m/s); low speed + high mean \|dheading\|.
 
-### `example_matches_json` (S3.2)
+### `candidate_exemplars.json` (S3.2 sidecar)
 
-JSON list (max **3** entries per row) of **pattern match exemplars** — one concrete bout-span occurrence:
+Verbose review data lives outside the CSV. Schema: `grammar_candidate_exemplars_v1`. Keys are `pattern_json` strings; values hold `example_trial_keys` and `example_matches` (max **3** bout-span exemplars per pattern):
 
 ```json
-[
-  {
-    "trial_key": "1-S01-T01",
-    "bout_start_index": 4,
-    "bout_end_exclusive": 7,
-    "row_start": 120,
-    "row_end_exclusive": 185,
-    "source_start_frame": 4500,
-    "source_end_frame": 4620
+{
+  "schema": "grammar_candidate_exemplars_v1",
+  "fit_id": "seed_042",
+  "patterns": {
+    "[3, 7, 7]": {
+      "example_trial_keys": ["1-S01-T01", "1-S01-T02"],
+      "example_matches": [
+        {
+          "trial_key": "1-S01-T01",
+          "bout_start_index": 4,
+          "bout_end_exclusive": 7,
+          "row_start": 120,
+          "row_end_exclusive": 185,
+          "source_start_frame": 4500,
+          "source_end_frame": 4620
+        }
+      ]
+    }
   }
-]
+}
 ```
 
-Populated at mine when `stage_ii/bout_features.csv` is present. Selection prefers non-ambiguous spans, diverse trials, and speeds near the row’s pooled mean.
+Populated at mine when `stage_ii/bout_features.csv` is present. Selection prefers non-ambiguous spans, diverse trials, and speeds near the row’s pooled mean. Legacy CSV columns are still read as a fallback by `maze-preview-grammar-candidate`.
 
 Preview a match:
 

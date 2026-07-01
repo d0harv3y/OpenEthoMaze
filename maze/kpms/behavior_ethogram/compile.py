@@ -43,44 +43,57 @@ class CompileBoutFeaturesConfig:
     px_per_cm: float = 2.42
 
 
+def _load_syllables_from_h5(results_h5: h5py.File, recording_key: str) -> np.ndarray | None:
+    if recording_key not in results_h5:
+        return None
+    rec = results_h5[recording_key]
+    if "syllable" not in rec:
+        return None
+    return np.asarray(rec["syllable"], dtype=np.int64)
+
+
 def _load_syllables(results_h5: Path, recording_key: str) -> np.ndarray | None:
     with h5py.File(results_h5, "r") as h5:
-        if recording_key not in h5:
-            return None
-        rec = h5[recording_key]
-        if "syllable" not in rec:
-            return None
-        return np.asarray(rec["syllable"], dtype=np.int64)
+        return _load_syllables_from_h5(h5, recording_key)
+
+
+def _load_trial_states_legacy_h5(
+    legacy_h5: h5py.File | None,
+    manifest: TrialManifest,
+) -> np.ndarray | None:
+    if legacy_h5 is None:
+        return None
+    key = TrialKey.from_manifest(manifest)
+    group_path = key.path().lstrip("/")
+    if group_path not in legacy_h5:
+        return None
+    g = legacy_h5[group_path]
+    for point in ("spot_hybrid", "center"):
+        xy_path = f"ambulation_metrics/{point}/xy"
+        if xy_path not in g:
+            continue
+        rec = g[xy_path]
+        if "trial_state" in rec.dtype.names:
+            return np.asarray(rec["trial_state"])
+    return None
 
 
 def _load_trial_states_legacy(legacy_db: Path, manifest: TrialManifest) -> np.ndarray | None:
-    key = TrialKey.from_manifest(manifest)
     with h5py.File(legacy_db, "r") as h5:
-        group_path = key.path().lstrip("/")
-        if group_path not in h5:
-            return None
-        g = h5[group_path]
-        for point in ("spot_hybrid", "center"):
-            xy_path = f"ambulation_metrics/{point}/xy"
-            if xy_path not in g:
-                continue
-            rec = g[xy_path]
-            if "trial_state" in rec.dtype.names:
-                return np.asarray(rec["trial_state"])
-    return None
+        return _load_trial_states_legacy_h5(h5, manifest)
 
 
 def compile_trial_bouts(
     manifest: TrialManifest,
     *,
-    results_h5: Path,
+    results_h5: h5py.File,
     seed: str,
     cfg: CompileBoutFeaturesConfig,
     pre_cfg: KpmsPreprocessConfig,
-    legacy_db: Path | None = None,
+    legacy_h5: h5py.File | None = None,
 ) -> list[dict]:
     recording_key = kpms_recording_key(manifest)
-    z = _load_syllables(results_h5, recording_key)
+    z = _load_syllables_from_h5(results_h5, recording_key)
     if z is None or len(z) == 0:
         return []
 
@@ -113,10 +126,9 @@ def compile_trial_bouts(
             blob_area = blob_area_px2_for_rows(blob.coordinates, blob.valid, frame_idx)
 
     trial_states: list[str] | None = None
-    if legacy_db is not None and legacy_db.is_file():
-        raw_states = _load_trial_states_legacy(legacy_db, manifest)
-        if raw_states is not None:
-            trial_states = trial_state_for_rows(raw_states, frame_idx)
+    raw_states = _load_trial_states_legacy_h5(legacy_h5, manifest)
+    if raw_states is not None:
+        trial_states = trial_state_for_rows(raw_states, frame_idx)
 
     feats: list[BoutScalarFeatures] = compile_trial_bout_features(
         z,
@@ -167,15 +179,23 @@ def compile_cohort_bout_features(
 
     cohort_manifests = filter_manifests_with_results_h5(list(manifests), results_h5)
     rows: list[dict] = []
-    for manifest in cohort_manifests:
-        rows.extend(
-            compile_trial_bouts(
-                manifest,
-                results_h5=results_h5,
-                seed=seed,
-                cfg=cfg,
-                pre_cfg=pre_cfg,
-                legacy_db=legacy_db,
-            )
-        )
+    legacy_h5: h5py.File | None = None
+    if legacy_db is not None and legacy_db.is_file():
+        legacy_h5 = h5py.File(legacy_db, "r")
+    try:
+        with h5py.File(results_h5, "r") as results_h5_file:
+            for manifest in cohort_manifests:
+                rows.extend(
+                    compile_trial_bouts(
+                        manifest,
+                        results_h5=results_h5_file,
+                        seed=seed,
+                        cfg=cfg,
+                        pre_cfg=pre_cfg,
+                        legacy_h5=legacy_h5,
+                    )
+                )
+    finally:
+        if legacy_h5 is not None:
+            legacy_h5.close()
     return rows

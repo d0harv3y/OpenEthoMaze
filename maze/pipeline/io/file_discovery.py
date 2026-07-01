@@ -13,6 +13,7 @@ The source data is organized across multiple folders under two researcher direct
 from __future__ import annotations
 
 import re
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +22,8 @@ from typing import Optional, Sequence, Union
 import h5py
 
 from ..paths import DATA_DIR, DATA_DIRS, MAX_SESSION_NUM, MAX_TRIAL_NUM, SESSION_RENUMBER
+
+logger = logging.getLogger(__name__)
 
 # Canonical CSV column order for trial manifests (discovery, legacy_db, kpMS selection).
 # Labels first (identity + treatment), then QA counts, then paths.
@@ -932,7 +935,7 @@ def load_treatment_labels(labels_path: Optional[Path] = None) -> dict[str, Treat
     labels_path = Path(labels_path).resolve()
 
     if not labels_path.exists():
-        print(f"Warning: Treatment labels file not found: {labels_path}")
+        logger.warning("Treatment labels file not found: %s", labels_path)
         return labels
 
     mtime = labels_path.stat().st_mtime
@@ -956,7 +959,7 @@ def load_treatment_labels(labels_path: Optional[Path] = None) -> dict[str, Treat
             )
             labels[row["key"]] = label
 
-    print(f"Loaded {len(labels)} treatment labels from {labels_path}")
+    logger.debug("Loaded %d treatment labels from %s", len(labels), labels_path)
     _TREATMENT_LABELS_CACHE[labels_path] = (mtime, dict(labels))
     return labels
 

@@ -25,16 +25,11 @@ def syllable_runs(z: np.ndarray) -> list[tuple[int, int, int]]:
     n = len(arr)
     if n == 0:
         return []
-    out: list[tuple[int, int, int]] = []
-    i0 = 0
-    cur = int(arr[0])
-    for i in range(1, n):
-        if int(arr[i]) != cur:
-            out.append((cur, i0, i))
-            i0 = i
-            cur = int(arr[i])
-    out.append((cur, i0, n))
-    return out
+    boundaries = np.flatnonzero(np.diff(arr)) + 1
+    starts = np.concatenate(([0], boundaries))
+    ends = np.concatenate((boundaries, [n]))
+    ids = arr[starts]
+    return [(int(ids[i]), int(starts[i]), int(ends[i])) for i in range(len(starts))]
 
 
 def _finite(values: Sequence[float] | np.ndarray) -> np.ndarray:

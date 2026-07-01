@@ -99,6 +99,10 @@ def grammar_candidates_csv(grammar: Path | str) -> Path:
     return Path(grammar) / "candidate_sequences.csv"
 
 
+def grammar_candidate_exemplars_json(grammar: Path | str) -> Path:
+    return Path(grammar) / "candidate_exemplars.json"
+
+
 def grammar_rules_json(grammar: Path | str) -> Path:
     return Path(grammar) / "grammar_rules.json"
 

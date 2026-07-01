@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 
-from maze.kpms.behavior_ethogram.grammar_contract import CANDIDATE_SEQUENCE_FIELDS
 from maze.kpms.behavior_ethogram.grammar_matches import (
     PatternMatch,
     attach_example_matches_to_candidates,
@@ -88,16 +87,7 @@ def test_attach_example_matches_writes_json_column(tmp_path) -> None:
     assert matches[0].source_end_frame == 15
 
 
-def test_candidate_csv_includes_example_matches_json(tmp_path) -> None:
-    match = PatternMatch(
-        trial_key="t1",
-        bout_start_index=0,
-        bout_end_exclusive=2,
-        row_start=0,
-        row_end_exclusive=6,
-        source_start_frame=10,
-        source_end_frame=15,
-    )
+def test_candidate_csv_includes_scalar_columns_only(tmp_path) -> None:
     path = tmp_path / "c.csv"
     write_candidate_sequences_csv(
         path,
@@ -107,13 +97,13 @@ def test_candidate_csv_includes_example_matches_json(tmp_path) -> None:
                 count=2,
                 n_trials=1,
                 example_trial_keys=("t1",),
-                example_matches_json=example_matches_to_json((match,)),
+                mean_speed_mps=0.2,
             )
         ],
     )
     header = path.read_text(encoding="utf-8").splitlines()[0]
-    assert "example_matches_json" in header
-    assert header == ",".join(CANDIDATE_SEQUENCE_FIELDS)
+    assert "mean_speed_mps" in header
+    assert "example_matches_json" not in header
 
 
 def test_clip_frames_for_match_adds_padding() -> None:

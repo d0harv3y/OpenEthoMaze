@@ -74,8 +74,8 @@ class SubsetConfig:
     random_seed: int = 42
     # Stratification keys for representative subsampling (must be TrialManifest attrs).
     balance_columns: tuple[str, ...] = ("sex", "tx", "phase", "strain")
-    # When loading from CSV, fill blank sex/tx/strain/... from inputs/treatment_labels.csv
-    enrich_from_treatment_labels: bool = True
+    # When loading from CSV, fill blank sex/tx/strain/... from treatment_labels.csv (opt-in).
+    enrich_from_treatment_labels: bool = False
     #: Cohort / results HDF5 for ``has_tracking_pose`` when ``input_h5_path`` is empty.
     db_path: Path | None = None
 
@@ -100,9 +100,10 @@ def load_manifests(cfg: SubsetConfig) -> list[TrialManifest]:
             enrich_manifests_from_treatment_labels(manifests)
     else:
         result = discover_trials()
-        labels = load_treatment_labels()
-        apply_treatment_labels(result, labels)
         manifests = result.trials
+        if cfg.enrich_from_treatment_labels:
+            labels = load_treatment_labels()
+            apply_treatment_labels(result, labels)
     enrich_manifests_exit_number(manifests)
     db_path = _effective_db_path(cfg)
     if not db_path.is_file():

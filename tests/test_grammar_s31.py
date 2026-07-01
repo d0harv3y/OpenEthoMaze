@@ -145,8 +145,8 @@ def test_rules_from_curated_candidates_includes_buckets(tmp_path) -> None:
     header = ",".join(CANDIDATE_SEQUENCE_FIELDS)
     path.write_text(
         f"{header}\n"
-        '"[3, 7]",2,5,2,t1,[],,,,,0,groom,ignore,2026-06-30T00:00:00+00:00,t1,\n'
-        '"[12]",1,10,3,t2,[],,,,,0,pause,still,2026-06-30T00:00:00+00:00,t2,\n',
+        '"[3, 7]",2,5,2,,,,,0,groom,ignore,2026-06-30T00:00:00+00:00,t1,\n'
+        '"[12]",1,10,3,,,,,0,pause,still,2026-06-30T00:00:00+00:00,t2,\n',
         encoding="utf-8",
     )
     doc = rules_from_curated_candidates(path, fit_id="seed_042")

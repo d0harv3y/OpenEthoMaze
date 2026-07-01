@@ -73,13 +73,20 @@ def blob_area_px2_for_rows(
     src = np.asarray(source_frame_indices, dtype=np.int64).ravel()
     n = len(src)
     out = np.full(n, np.nan, dtype=np.float64)
-    for i, fi in enumerate(src):
-        if fi < 0 or fi >= len(blob_valid) or not blob_valid[fi]:
-            continue
-        poly = blob_xy[fi]
-        if not np.isfinite(poly).all():
-            continue
-        out[i] = polygon_area(poly)
+    in_range = (src >= 0) & (src < len(blob_valid))
+    if not np.any(in_range):
+        return out
+    idx = np.flatnonzero(in_range)
+    fi = src[in_range]
+    valid = blob_valid[fi]
+    if not np.any(valid):
+        return out
+    idx = idx[valid]
+    fi = fi[valid]
+    for row_i, frame_i in zip(idx, fi, strict=True):
+        poly = blob_xy[int(frame_i)]
+        if np.isfinite(poly).all():
+            out[int(row_i)] = polygon_area(poly)
     return out
 
 
@@ -89,14 +96,14 @@ def trial_state_for_rows(
 ) -> list[str]:
     states = np.asarray(trial_states)
     src = np.asarray(source_frame_indices, dtype=np.int64).ravel()
-    out: list[str] = []
-    for fi in src:
-        if fi < 0 or fi >= len(states):
-            out.append("")
-            continue
-        raw = states[fi]
+    out = [""] * len(src)
+    ok = (src >= 0) & (src < len(states))
+    if not np.any(ok):
+        return out
+    for i in np.flatnonzero(ok):
+        raw = states[int(src[i])]
         if isinstance(raw, (bytes, np.bytes_)):
-            out.append(raw.decode("utf-8", errors="replace"))
+            out[int(i)] = raw.decode("utf-8", errors="replace")
         else:
-            out.append(str(raw))
+            out[int(i)] = str(raw)
     return out

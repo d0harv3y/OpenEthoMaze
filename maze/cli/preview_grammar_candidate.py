@@ -9,10 +9,10 @@ import sys
 from pathlib import Path
 
 from maze.kpms.apply_summary import preprocess_config_from_apply_summary, resolve_tracking_h5_path
+from maze.kpms.behavior_ethogram.grammar_exemplars import load_pattern_exemplars
 from maze.kpms.behavior_ethogram.grammar_matches import (
     DEFAULT_PREVIEW_PADDING_S,
     clip_frames_for_match,
-    parse_example_matches_json,
     resolve_manifest_for_trial_key,
 )
 from maze.kpms.behavior_ethogram.paths import grammar_candidates_csv, grammar_dir
@@ -88,11 +88,13 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    matches = parse_example_matches_json(str(row.get("example_matches_json", "")))
+    pattern_json = str(row.get("pattern_json", "")).strip()
+    exemplars = load_pattern_exemplars(gdir, pattern_json, candidates_row=row)
+    matches = exemplars.example_matches
     if not matches:
         print(
-            "No example_matches_json on this row — re-run maze-mine-syllable-grammar-candidates "
-            "with bout_features.csv present.",
+            "No exemplar matches for this pattern — re-run maze-mine-syllable-grammar-candidates "
+            "with bout_features.csv present (writes candidate_exemplars.json).",
             file=sys.stderr,
         )
         return 1
