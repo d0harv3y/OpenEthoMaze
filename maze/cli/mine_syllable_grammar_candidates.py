@@ -24,7 +24,7 @@ from maze.kpms.behavior_ethogram.paths import (
     grammar_dir,
     stage_ii_dir,
 )
-from maze.kpms.frame_alignment import kpms_aligned_coordinates_and_indices, kpms_recording_key
+from maze.kpms.frame_alignment import KpmsAlignmentCache, kpms_recording_key
 from maze.kpms.manifest_subset import SubsetConfig, filter_manifests, load_manifests
 from maze.kpms.preprocess import KpmsPreprocessConfig
 
@@ -82,6 +82,8 @@ def main(argv: list[str] | None = None) -> int:
 
     cfg = SubsetConfig(manifest_csv=args.manifest_path, require_sleap=False)
     manifests = filter_manifests(load_manifests(cfg), cfg)
+    alignment_cache = KpmsAlignmentCache()
+    alignment_cache.preload(manifests, pre_cfg)
     trial_streams: dict[str, np.ndarray] = {}
     trial_source_frames: dict[str, np.ndarray] = {}
 
@@ -91,14 +93,14 @@ def main(argv: list[str] | None = None) -> int:
             z = _load_syllables(results_h5_file, trial_key)
             if z is None or len(z) == 0:
                 continue
-            aligned = kpms_aligned_coordinates_and_indices(manifest, pre_cfg)
+            aligned = alignment_cache.aligned_trial(manifest, pre_cfg)
             if aligned is None:
                 continue
-            _rk, _coord, src = aligned
+            src = aligned.source_frame_indices
             if len(z) != len(src):
                 continue
             trial_streams[trial_key] = z
-            trial_source_frames[trial_key] = np.asarray(src, dtype=np.int64)
+            trial_source_frames[trial_key] = src
 
     if not trial_streams:
         print("No aligned syllable streams found.", file=sys.stderr)

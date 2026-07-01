@@ -11,6 +11,7 @@ from maze.kpms.apply_summary import (
     preprocess_config_from_apply_summary,
     resolve_tracking_h5_path,
 )
+from maze.kpms.frame_alignment import KpmsAlignmentCache
 from maze.kpms.behavior_ethogram.bout_table_io import write_bout_table_csv
 from maze.kpms.behavior_ethogram.compile import CompileBoutFeaturesConfig, compile_cohort_bout_features
 from maze.kpms.behavior_ethogram.paths import bout_features_csv, discover_anatomical_seeds, stage_ii_dir
@@ -110,6 +111,9 @@ def main(argv: list[str] | None = None) -> int:
 
     compile_cfg = CompileBoutFeaturesConfig(include_heading_direction=args.include_heading_direction, fps=args.fps)
 
+    alignment_cache = KpmsAlignmentCache()
+    alignment_cache.preload(manifests, _pre_cfg_for_seed(kpms_root, seeds[0], tracking_h5))
+
     all_rows: list[dict] = []
     for seed in seeds:
         pre_cfg = _pre_cfg_for_seed(kpms_root, seed, tracking_h5)
@@ -121,6 +125,7 @@ def main(argv: list[str] | None = None) -> int:
                 cfg=compile_cfg,
                 pre_cfg=pre_cfg,
                 legacy_db=args.legacy_db,
+                alignment_cache=alignment_cache,
             )
         )
 

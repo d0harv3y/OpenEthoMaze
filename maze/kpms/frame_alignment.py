@@ -7,7 +7,9 @@ confidence fragment filter) so indices align with ``results_apply.h5`` syllable 
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 import numpy as np
 
@@ -19,6 +21,72 @@ from ..pipeline.tracking.trace_processing import (
     process_trace_data,
 )
 from .preprocess import KpmsPreprocessConfig, _stack_anatomical_nodes
+
+
+@dataclass(frozen=True)
+class AlignedTrial:
+    """kpMS-aligned coordinates and source-video frame indices for one trial."""
+
+    recording_key: str
+    coordinates: np.ndarray
+    source_frame_indices: np.ndarray
+
+
+def _preprocess_cache_token(pre_cfg: KpmsPreprocessConfig) -> str:
+    db = str(Path(pre_cfg.db_path).resolve()) if pre_cfg.db_path else ""
+    return "|".join(
+        (
+            db,
+            str(pre_cfg.min_fragment_frames),
+            str(pre_cfg.jump_filter_cm),
+            str(pre_cfg.jump_filter_lookahead_frames),
+            str(pre_cfg.px_per_cm),
+            str(int(pre_cfg.retain_all_frames)),
+            str(pre_cfg.pose_stream),
+        )
+    )
+
+
+class KpmsAlignmentCache:
+    """Memoize :func:`kpms_aligned_coordinates_and_indices` per trial + preprocess config."""
+
+    def __init__(self) -> None:
+        self._entries: dict[tuple[str, str], AlignedTrial | None] = {}
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+    def aligned_trial(
+        self,
+        manifest: TrialManifest,
+        pre_cfg: KpmsPreprocessConfig,
+    ) -> AlignedTrial | None:
+        recording_key = kpms_recording_key(manifest)
+        cache_key = (recording_key, _preprocess_cache_token(pre_cfg))
+        if cache_key not in self._entries:
+            raw = kpms_aligned_coordinates_and_indices(manifest, pre_cfg)
+            if raw is None:
+                self._entries[cache_key] = None
+            else:
+                rk, coord, src_idx = raw
+                self._entries[cache_key] = AlignedTrial(
+                    recording_key=rk,
+                    coordinates=coord,
+                    source_frame_indices=np.asarray(src_idx, dtype=np.int64),
+                )
+        return self._entries[cache_key]
+
+    def preload(
+        self,
+        manifests: Sequence[TrialManifest],
+        pre_cfg: KpmsPreprocessConfig,
+    ) -> int:
+        """Warm cache for all manifests; return count of aligned trials."""
+        n = 0
+        for manifest in manifests:
+            if self.aligned_trial(manifest, pre_cfg) is not None:
+                n += 1
+        return n
 
 
 def kpms_recording_key(manifest: TrialManifest) -> str:

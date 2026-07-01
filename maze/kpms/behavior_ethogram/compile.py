@@ -14,6 +14,7 @@ import numpy as np
 
 from maze.core.anatomy import STANDARD_NODE_NAMES
 from maze.kpms.frame_alignment import (
+    KpmsAlignmentCache,
     kpms_aligned_coordinates_and_indices,
     kpms_recording_key,
 )
@@ -91,16 +92,24 @@ def compile_trial_bouts(
     cfg: CompileBoutFeaturesConfig,
     pre_cfg: KpmsPreprocessConfig,
     legacy_h5: h5py.File | None = None,
+    alignment_cache: KpmsAlignmentCache | None = None,
 ) -> list[dict]:
     recording_key = kpms_recording_key(manifest)
     z = _load_syllables_from_h5(results_h5, recording_key)
     if z is None or len(z) == 0:
         return []
 
-    aligned_out = kpms_aligned_coordinates_and_indices(manifest, pre_cfg)
-    if aligned_out is None:
-        return []
-    _, coordinates, frame_idx = aligned_out
+    if alignment_cache is not None:
+        aligned = alignment_cache.aligned_trial(manifest, pre_cfg)
+        if aligned is None:
+            return []
+        coordinates = aligned.coordinates
+        frame_idx = aligned.source_frame_indices
+    else:
+        aligned_out = kpms_aligned_coordinates_and_indices(manifest, pre_cfg)
+        if aligned_out is None:
+            return []
+        _rk, coordinates, frame_idx = aligned_out
     if len(coordinates) != len(z):
         return []
 
@@ -170,6 +179,7 @@ def compile_cohort_bout_features(
     cfg: CompileBoutFeaturesConfig | None = None,
     pre_cfg: KpmsPreprocessConfig | None = None,
     legacy_db: Path | None = None,
+    alignment_cache: KpmsAlignmentCache | None = None,
 ) -> list[dict]:
     cfg = cfg or CompileBoutFeaturesConfig()
     pre_cfg = pre_cfg or KpmsPreprocessConfig()
@@ -193,6 +203,7 @@ def compile_cohort_bout_features(
                         cfg=cfg,
                         pre_cfg=pre_cfg,
                         legacy_h5=legacy_h5,
+                        alignment_cache=alignment_cache,
                     )
                 )
     finally:
