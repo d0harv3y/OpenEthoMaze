@@ -41,11 +41,10 @@ def _load_candidate_row(candidates_csv: Path, *, row_index: int | None, pattern_
 
 
 def _trial_fps(pipeline_h5: Path, manifest) -> float:
-    from maze.pipeline.db import open_db, read_trial_settings
+    from maze.pipeline.db import read_trial_settings
 
     key = TrialKey.from_manifest(manifest)
-    with open_db(pipeline_h5) as db:
-        _settings, fps, _timing = read_trial_settings(db, key)
+    _settings, fps, _timing = read_trial_settings(pipeline_h5, key)
     return float(fps) if fps and fps > 0 else 30.0
 
 
@@ -183,31 +182,37 @@ def main(argv: list[str] | None = None) -> int:
         no_circular_motor_hud=False,
     )
 
+    cfg_holder: list[UnifiedOverlayConfig] = []
+
     def _clip_cfg(cfg: UnifiedOverlayConfig) -> None:
         cfg.clip_source_start_frame = clip_start
         cfg.clip_source_end_frame = clip_end
         cfg.include_pre_trial_frames = False
 
     try:
-        written = run_unified_overlay_from_args(ns, extend_cfg=_clip_cfg)
+        written = run_unified_overlay_from_args(
+            ns, extend_cfg=_clip_cfg, cfg_out=cfg_holder
+        )
     except Exception as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
-    print(
-        json.dumps(
-            {
-                "output_mp4": str(written),
-                "pattern_json": row.get("pattern_json"),
-                "trial_key": match.trial_key,
-                "match_index": args.match_index,
-                "clip_source_start_frame": clip_start,
-                "clip_source_end_frame": clip_end,
-                "kpms_recording_key": kpms_recording_key(manifest),
-            },
-            indent=2,
-        )
-    )
+    provenance = cfg_holder[0].data_provenance if cfg_holder else None
+    payload: dict = {
+        "output_mp4": str(written),
+        "pattern_json": row.get("pattern_json"),
+        "trial_key": match.trial_key,
+        "match_index": args.match_index,
+        "clip_source_start_frame": clip_start,
+        "clip_source_end_frame": clip_end,
+        "kpms_recording_key": kpms_recording_key(manifest),
+        "pipeline_h5": str(Path(args.pipeline_h5).resolve()),
+        "tracking_h5": str(Path(tracking_h5).resolve()),
+    }
+    if provenance is not None:
+        payload["data_sources"] = provenance.to_dict()
+
+    print(json.dumps(payload, indent=2))
     return 0
 
 

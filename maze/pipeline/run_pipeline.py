@@ -32,6 +32,7 @@ from .trial_filters import (
 )
 from .process_trial import process_trial
 from .run_provenance import provenance_run
+from .video_paths import resolve_video_path
 
 
 def _attr_str(attrs, key: str) -> str:
@@ -77,7 +78,7 @@ def load_trial_manifests_from_db(db_path: Path) -> list[TrialManifest]:
                     session=key.session,
                     trial=key.trial,
                     input_h5_path=Path(input_h5_str) if input_h5_str else Path(""),
-                    video_path=Path(video_path_str) if video_path_str else None,
+                    video_path=resolve_video_path(video_path_str) if video_path_str else None,
                     sleap_path=Path(sleap_path_str) if sleap_path_str else None,
                     is_habituation=(key.phase == "habituation"),
                     h5_n_frames=h5_n_frames,

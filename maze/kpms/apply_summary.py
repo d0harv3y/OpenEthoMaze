@@ -39,6 +39,31 @@ def preprocess_config_from_apply_summary(results_h5: Path) -> KpmsPreprocessConf
     return preprocess_config_from_summary_dict(data.get("preprocess_config"))
 
 
+def preprocess_config_from_fit_summary(kpms_root: Path) -> KpmsPreprocessConfig | None:
+    """Read ``fit_summary.json`` beside cohort ``results.h5``."""
+    summary_path = Path(kpms_root) / "fit_summary.json"
+    if not summary_path.is_file():
+        return None
+    try:
+        data = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return preprocess_config_from_summary_dict(data.get("preprocess_config"))
+
+
+def preprocess_config_for_results_h5(
+    results_h5: Path,
+    *,
+    kpms_root: Path | None = None,
+) -> KpmsPreprocessConfig | None:
+    """Apply sidecar first, then cohort ``fit_summary.json`` when results live at kpms root."""
+    cfg = preprocess_config_from_apply_summary(results_h5)
+    if cfg is not None:
+        return cfg
+    root = kpms_root if kpms_root is not None else results_h5.parent
+    return preprocess_config_from_fit_summary(root)
+
+
 def _h5_has_any_anatomical_tracking(path: Path) -> bool:
     """Return True when ``path`` contains at least one trial with ``tracking/anatomical``."""
     import h5py

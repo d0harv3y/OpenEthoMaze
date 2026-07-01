@@ -22,6 +22,7 @@ from maze.kpms.heading_idxs import anterior_posterior_idxs
 from maze.kpms.h5_pose import load_blob_from_h5, resolve_canonical_trial_h5
 from maze.kpms.preprocess import KpmsPreprocessConfig
 from maze.pipeline.db.trial_key import TrialKey
+from maze.kpms.manifest_subset import manifest_stratify_fields
 from maze.pipeline.io.file_discovery import TrialManifest
 
 from .bout_kinematics import (
@@ -34,6 +35,7 @@ from .bout_kinematics import (
 )
 from .bout_scalars import BoutScalarFeatures, compile_trial_bout_features
 from .bout_table_io import bout_row_to_dict
+from .paths import resolve_results_h5_path
 
 
 @dataclass(frozen=True)
@@ -151,12 +153,15 @@ def compile_trial_bouts(
         include_heading_direction=cfg.include_heading_direction,
     )
     return [
-        bout_row_to_dict(
-            f,
-            stream=cfg.stream,
-            seed=seed,
-            trial_key=recording_key,
-        )
+        {
+            **manifest_stratify_fields(manifest),
+            **bout_row_to_dict(
+                f,
+                stream=cfg.stream,
+                seed=seed,
+                trial_key=recording_key,
+            ),
+        }
         for f in feats
     ]
 
@@ -180,20 +185,21 @@ def compile_cohort_bout_features(
     pre_cfg: KpmsPreprocessConfig | None = None,
     legacy_db: Path | None = None,
     alignment_cache: KpmsAlignmentCache | None = None,
+    results_h5: Path | None = None,
 ) -> list[dict]:
     cfg = cfg or CompileBoutFeaturesConfig()
     pre_cfg = pre_cfg or KpmsPreprocessConfig()
-    results_h5 = Path(kpms_root) / "anatomical" / f"seed_{seed}" / "results_apply.h5"
-    if not results_h5.is_file():
-        raise FileNotFoundError(f"missing results_apply.h5 for seed {seed}: {results_h5}")
+    results_path = resolve_results_h5_path(kpms_root, seed, results_h5=results_h5)
+    if not results_path.is_file():
+        raise FileNotFoundError(f"missing kpMS results H5 for seed {seed}: {results_path}")
 
-    cohort_manifests = filter_manifests_with_results_h5(list(manifests), results_h5)
+    cohort_manifests = filter_manifests_with_results_h5(list(manifests), results_path)
     rows: list[dict] = []
     legacy_h5: h5py.File | None = None
     if legacy_db is not None and legacy_db.is_file():
         legacy_h5 = h5py.File(legacy_db, "r")
     try:
-        with h5py.File(results_h5, "r") as results_h5_file:
+        with h5py.File(results_path, "r") as results_h5_file:
             for manifest in cohort_manifests:
                 rows.extend(
                     compile_trial_bouts(

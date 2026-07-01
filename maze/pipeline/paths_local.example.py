@@ -18,6 +18,15 @@ from pathlib import Path
 DATA_DIR = Path(r"D:\work sack\vibration maze")
 DATA_DIRS: list[Path] = [DATA_DIR]
 
+# Remap stored trial video_path prefixes when files moved to another drive.
+# First element is the prefix stored in legacy H5 attrs; second is the local root.
+VIDEO_PATH_PREFIX_REMAPS: list[tuple[str, str]] = [
+    (
+        r"E:\videos\vibration maze",
+        r"C:\Users\admin\Documents\work\sack\datas\videos\vibration maze",
+    ),
+]
+
 # Optional: override consolidated pipeline HDF5 output location.
 # OUTPUT_H5 = Path(r"E:\analysis\maze_results.h5")
 

@@ -58,8 +58,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--num-iters", type=int, default=200)
     ap.add_argument("--num-states", type=int, default=20)
-    ap.add_argument("--nlags", type=int, default=2)
-    ap.add_argument("--kappa", type=float, default=500.0)
+    ap.add_argument("--nlags", type=int, default=3)
+    ap.add_argument("--kappa", type=float, default=1000.0)
     args = ap.parse_args(argv)
 
     if args.include_cluster_feature:

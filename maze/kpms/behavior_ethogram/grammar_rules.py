@@ -9,6 +9,7 @@ from typing import Any, Mapping, Sequence
 
 from maze.kpms.io import write_json
 
+from .anchor_buckets import behavior_name_from_pattern, infer_anchor_bucket_from_mean_speed
 from .grammar_contract import GRAMMAR_RULES_SCHEMA_VERSION
 from .grammar_enrich import validate_curated_candidate_rows
 from .grammar_mine import read_candidate_sequences_csv
@@ -117,6 +118,39 @@ def rules_from_curated_candidates(
         rules.append(GrammarRule(pattern=pat, behavior_name=name, priority=priority))
     if not rules:
         raise ValueError(f"no curated rows with behavior_name in {candidates_csv}")
+    rules.sort(key=lambda r: (-len(r.pattern), -r.priority))
+    return GrammarRules(
+        fit_id=fit_id,
+        rules=tuple(rules),
+        behavior_anchor_buckets=behavior_anchor_buckets,
+    )
+
+
+def rules_from_auto_candidates(
+    candidates_csv: Path | str,
+    *,
+    fit_id: str,
+    still_max_mps: float = 0.06,
+    moving_min_mps: float = 0.14,
+) -> GrammarRules:
+    """Build rules from mined candidates using speed-inferred anchor buckets (no curation)."""
+    rows = read_candidate_sequences_csv(candidates_csv)
+    rules: list[GrammarRule] = []
+    behavior_anchor_buckets: dict[str, str] = {}
+    for row in rows:
+        pat = _parse_pattern(row["pattern_json"])
+        name = behavior_name_from_pattern(pat)
+        speed_raw = str(row.get("mean_speed_mps", "")).strip()
+        speed = float(speed_raw) if speed_raw else float("nan")
+        bucket = infer_anchor_bucket_from_mean_speed(
+            speed,
+            still_max_mps=still_max_mps,
+            moving_min_mps=moving_min_mps,
+        )
+        behavior_anchor_buckets[name] = bucket
+        rules.append(GrammarRule(pattern=pat, behavior_name=name, priority=len(pat) * 10))
+    if not rules:
+        raise ValueError(f"no candidate rows in {candidates_csv}")
     rules.sort(key=lambda r: (-len(r.pattern), -r.priority))
     return GrammarRules(
         fit_id=fit_id,

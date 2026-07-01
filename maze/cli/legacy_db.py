@@ -17,6 +17,7 @@ Usage:
   uv run maze-legacy-db run-pipeline [--animal-id ID ...] [--session S01] [--trial T01] [--no-qc]
   uv run maze-legacy-db run-exports [--animal-id ID ...] [--session S01] [--trial T01] [--include-mistrials]
   uv run maze-legacy-db build-kpms-h5 [--data-dir PATH] [--db-path PATH] [--profile PATH] [--animal-id ID ...]
+  uv run maze-legacy-db materialize-blob --db-path PATH [--video-prefix-remap SOURCE TARGET ...]
 """
 
 from __future__ import annotations
@@ -72,8 +73,10 @@ from maze.pipeline.build_tracking_h5 import (
     build_tracking_h5,
     default_kpms_tracking_db,
     manifest_path_for_db,
+    materialize_blob_tracking_in_h5,
 )
 from maze.pipeline.offline_tracking import offline_blob_params_from_fallback
+from maze.pipeline.video_paths import set_runtime_video_path_prefix_remaps
 from maze.controller.acquisition.profile import load_fallback_tracking_from_profile
 from maze.repo_paths import REPO_ROOT
 
@@ -837,6 +840,87 @@ def cmd_build_kpms_h5(
 
 
 # -----------------------------------------------------------------------------
+# Subcommand: materialize-blob
+# -----------------------------------------------------------------------------
+def _parse_video_prefix_remaps(values: list[str] | None) -> list[tuple[str, str]]:
+    if not values:
+        return []
+    if len(values) % 2 != 0:
+        raise ValueError("--video-prefix-remap requires pairs: SOURCE TARGET [SOURCE TARGET ...]")
+    pairs: list[tuple[str, str]] = []
+    for i in range(0, len(values), 2):
+        pairs.append((values[i], values[i + 1]))
+    return pairs
+
+
+def cmd_materialize_blob(
+    *,
+    db_path: Path,
+    animal_ids: Optional[list[str]] = None,
+    sessions: Optional[list[str]] = None,
+    trials: Optional[list[str]] = None,
+    overwrite_blob: bool = False,
+    update_video_paths: bool = True,
+    profile_path: Path | None = None,
+    video_prefix_remaps: list[tuple[str, str]] | None = None,
+) -> None:
+    """Offline re-track ``tracking/blob`` for trials already present in a results H5."""
+    if not HAS_CV2:
+        print("Error: cv2 required for blob materialization.", file=sys.stderr)
+        sys.exit(1)
+    if not db_path.exists():
+        print(f"Error: Database not found: {db_path}", file=sys.stderr)
+        sys.exit(1)
+
+    if video_prefix_remaps:
+        set_runtime_video_path_prefix_remaps(video_prefix_remaps)
+        print("Video path prefix remaps:")
+        for source, target in video_prefix_remaps:
+            print(f"  {source} -> {target}")
+
+    manifests = load_manifests_from_db(db_path)
+    manifests = _filter_manifests(manifests, animal_ids, sessions, trials)
+    if not manifests:
+        print("No trials matched filters.")
+        return
+
+    blob_params = None
+    if profile_path is not None:
+        ft = load_fallback_tracking_from_profile(profile_path)
+        blob_params = offline_blob_params_from_fallback(ft)
+        print(f"Blob profile: {profile_path}")
+        print(
+            f"  range [{blob_params.range_low}, {blob_params.range_high}], "
+            f"min_area={blob_params.min_area}, min_circularity={blob_params.min_circularity}"
+        )
+
+    print(f"Materializing tracking/blob for {len(manifests)} trial(s) -> {db_path}")
+    print(f"  Overwrite existing blob: {overwrite_blob}")
+    print(f"  Update stored video_path attrs: {update_video_paths}")
+
+    def _log(msg: str) -> None:
+        print(f"  {msg}")
+
+    stats = materialize_blob_tracking_in_h5(
+        db_path,
+        manifests,
+        overwrite_blob=overwrite_blob,
+        update_video_paths=update_video_paths,
+        blob_params=blob_params,
+        log=_log,
+    )
+
+    print("\nDone.")
+    print(
+        f"  Blob: written={stats.blob_written}, skipped={stats.blob_skipped}, failed={stats.blob_failed}"
+    )
+    if stats.errors:
+        print(f"  Errors ({len(stats.errors)}); first 5:")
+        for err in stats.errors[:5]:
+            print(f"    {err}")
+
+
+# -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
 def main() -> int:
@@ -967,8 +1051,54 @@ def main() -> int:
         ),
     )
 
+    # materialize-blob
+    p_blob = sub.add_parser(
+        "materialize-blob",
+        help="Offline re-track tracking/blob for trials already in a results H5",
+    )
+    p_blob.add_argument(
+        "--db-path",
+        type=Path,
+        required=True,
+        help="Existing results H5 to update in place",
+    )
+    p_blob.add_argument("--animal-id", type=str, nargs="*", default=None, help="Animal ID(s)")
+    p_blob.add_argument("--session", type=str, nargs="*", default=None, help="Session(s), e.g. S01")
+    p_blob.add_argument("--trial", type=str, nargs="*", default=None, help="Trial(s), e.g. T01")
+    p_blob.add_argument(
+        "--overwrite-blob",
+        action="store_true",
+        help="Replace existing tracking/blob",
+    )
+    p_blob.add_argument(
+        "--keep-stored-video-path",
+        action="store_true",
+        help="Do not rewrite video_path attrs to resolved local paths",
+    )
+    p_blob.add_argument(
+        "--video-prefix-remap",
+        dest="video_prefix_remaps",
+        nargs="+",
+        default=None,
+        metavar="PREFIX",
+        help=(
+            "Optional prefix remap pairs (SOURCE TARGET ...). "
+            "Also configure VIDEO_PATH_PREFIX_REMAPS in paths_local.py."
+        ),
+    )
+    p_blob.add_argument(
+        "--profile",
+        type=Path,
+        default=None,
+        help="Controller acquisition profile JSON for offline blob tracker params",
+    )
+
     args = parser.parse_args()
-    _set_legacy_paths(args.db_path if args.command != "build-kpms-h5" else None)
+    _set_legacy_paths(
+        args.db_path
+        if args.command not in ("build-kpms-h5", "materialize-blob")
+        else None
+    )
 
     if args.command == "init":
         cmd_init(data_dirs=args.data_dirs, treatment_labels_path=args.treatment_labels)
@@ -1032,6 +1162,24 @@ def main() -> int:
             overwrite_blob=args.overwrite_blob,
             profile_path=args.profile,
             treatment_labels_path=args.treatment_labels,
+        )
+        return 0
+
+    if args.command == "materialize-blob":
+        try:
+            remaps = _parse_video_prefix_remaps(args.video_prefix_remaps)
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+        cmd_materialize_blob(
+            db_path=args.db_path,
+            animal_ids=_expand_filter_arg(args.animal_id),
+            sessions=_expand_filter_arg(args.session),
+            trials=_expand_filter_arg(args.trial),
+            overwrite_blob=args.overwrite_blob,
+            update_video_paths=not args.keep_stored_video_path,
+            profile_path=args.profile,
+            video_prefix_remaps=remaps or None,
         )
         return 0
 

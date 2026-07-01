@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from maze.kpms.manifest_subset import STRATIFY_LABEL_COLUMNS
+
 BOUT_FEATURE_SCHEMA_VERSION = "bout_feature_v2"
 
 # Stage II HDBSCAN / default AR-HMM base (z-scored in cluster.py and arhmm.py).
@@ -41,6 +43,7 @@ BOUT_TABLE_FIELDS: tuple[str, ...] = (
     "stream",
     "seed",
     "trial_key",
+    *STRATIFY_LABEL_COLUMNS,
     "raw_syllable_id",
     "bout_index",
     "row_start",
@@ -90,6 +93,15 @@ BOUT_FIELD_SPECS: tuple[BoutFieldSpec, ...] = (
         "",
         "kpMS recording key / manifest trial key (e.g. ``3243/S01/T01``).",
         "identity",
+    ),
+    *(
+        BoutFieldSpec(
+            name,
+            "",
+            f"Manifest stratification label ``{name}`` (from trial manifest; optional ``--enrich-labels``).",
+            "stratify",
+        )
+        for name in STRATIFY_LABEL_COLUMNS
     ),
     BoutFieldSpec(
         "raw_syllable_id",

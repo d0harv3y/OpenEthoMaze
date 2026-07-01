@@ -16,6 +16,7 @@ from maze.core.anatomy import BLOB_VERTEX_COUNT
 from maze.core.schema import FEEDBACK_ROW_DTYPE, XY_ROW_DTYPE
 from maze.core.h5_layout import open_db, write_feedback_table, write_xy_table
 from maze.pipeline.tracking_io import AnatomicalTrackingBuffer, BlobTrackingBuffer
+from maze.pipeline.video_paths import resolve_video_path, video_path_for_storage
 
 from .shared_config import AcquisitionConfig, FallbackTrackingConfig
 from .radial_arm.config import RadialArmControllerConfig
@@ -101,7 +102,7 @@ class TrialRecorder:
         self._fps: float = 30.0
         self._seek_to_frame = int(seek_to_frame)
         self._virtual_source_video_path = (
-            Path(virtual_source_video_path).resolve()
+            resolve_video_path(virtual_source_video_path)
             if virtual_source_video_path is not None
             else None
         )
@@ -426,7 +427,7 @@ class TrialRecorder:
                 self.animal_id,
                 self.session_id,
                 self.trial,
-                video_path=str(self._video_path) if self._video_path else None,
+                video_path=video_path_for_storage(self._video_path) if self._video_path else None,
                 sleap_path=None,
                 run_phase=run_phase,
                 run_mode=run_mode,

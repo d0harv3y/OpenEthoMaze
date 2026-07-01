@@ -26,7 +26,7 @@ import subprocess
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import numpy as np
 
@@ -59,8 +59,20 @@ from ..db import (
     resolve_trial_key_for_hdf5,
 )
 from ..io.file_discovery import TrialManifest
-from ..io.sleap_loader import apply_jump_filter, get_skeleton_edges, load_sleap_file
-from ..tracking.trace_processing import TraceProcessingParams, process_trace_data
+from ..video_paths import resolve_video_path
+from .overlay_frame_align import (
+    sample_xy_table_rows,
+    source_frame_exclusive_end,
+    xy_rows_for_source_frames,
+    xy_source_frame_indices,
+)
+from .overlay_pose import (
+    OverlayPoseProvenance,
+    OverlaySkeletonLoad,
+    load_overlay_skeleton,
+    select_overlay_trajectory,
+)
+from .overlay_provenance import OverlayDataProvenance
 from .ehram_global_template_draw import load_ehram_global_template_polygons_px
 from .ehram_memory_hud import merge_ehram_memory_metrics_into_ram_attrs
 from .ram_template_draw import load_ram_region_polygons_px
@@ -273,6 +285,11 @@ class UnifiedOverlayConfig:
     arena_center_x_px_override: Optional[float] = None
     arena_center_y_px_override: Optional[float] = None
     arena_radius_px_override: Optional[float] = None
+    trajectory_preference: Literal["auto", "ambulation", "pose_centroid"] = "auto"
+    #: When True, show per-layer source paths on the HUD (first frame of clip).
+    show_source_hud: bool = True
+    #: Filled by :func:`render_unified_overlay_video` after a successful render.
+    data_provenance: OverlayDataProvenance | None = field(default=None, repr=False)
 
 
 def _apply_arena_geometry_overrides(
@@ -525,10 +542,11 @@ def render_unified_overlay_video(
         raise RuntimeError("OpenCV (cv2) is required for unified overlay")
 
     cfg = cfg or UnifiedOverlayConfig()
-    if manifest.video_path is None or not Path(manifest.video_path).is_file():
+    resolved_video = resolve_video_path(manifest.video_path)
+    if resolved_video is None or not resolved_video.is_file():
         raise ValueError("Manifest row has no usable video_path")
 
-    video_path = str(Path(manifest.video_path).resolve())
+    video_path = str(resolved_video.resolve())
     out_path = Path(out_path)
 
     with open_db(pipeline_db, "r") as h5:
@@ -586,12 +604,14 @@ def render_unified_overlay_video(
     n_vid = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     cap.release()
 
-    n_table = n_xy
-    n_effective = min(n_vid, n_table) if n_vid > 0 else n_table
+    fi_rows = xy_source_frame_indices(xy_full)
+    n_effective = source_frame_exclusive_end(fi_rows, n_vid=n_vid)
 
     render_start_frame = 0 if cfg.include_pre_trial_frames else trial_start_frame
     if cfg.clip_source_start_frame is not None:
         render_start_frame = int(cfg.clip_source_start_frame)
+    elif not cfg.include_pre_trial_frames and 0 <= trial_start_frame < len(fi_rows):
+        render_start_frame = int(fi_rows[trial_start_frame])
     if render_start_frame >= n_effective:
         raise ValueError(
             f"Overlay start frame {render_start_frame} (trial_start_frame={trial_start_frame}, "
@@ -611,7 +631,10 @@ def render_unified_overlay_video(
         run_len = min(run_len, int(cfg.max_seconds * fps))
     max_frames = run_len
 
-    xy_run = xy_full[render_start_frame : render_start_frame + max_frames]
+    overlay_rows = xy_rows_for_source_frames(
+        fi_rows, n_xy, render_start_frame, max_frames
+    )
+    xy_run = sample_xy_table_rows(xy_full, overlay_rows)
     trial_states = _trial_states_for_xy_overlay(xy_run)
     state_elapsed = _precompute_state_elapsed_s(trial_states, fps)
 
@@ -619,6 +642,48 @@ def render_unified_overlay_video(
     y = np.asarray(xy_run["y"], dtype=np.float64)
     valid = np.asarray(xy_run["valid"], dtype=bool)
     is_moving = np.asarray(xy_run["is_moving"], dtype=bool)
+
+    sleap_path_str = _decode_attr(attrs.get("sleap_path", ""))
+    if not sleap_path_str and manifest.sleap_path:
+        sleap_path_str = str(Path(manifest.sleap_path))
+
+    node_xy_sliced: Optional[dict[str, dict[str, np.ndarray]]] = None
+    skeleton_edges: list[tuple[int, int]] = []
+    pose_load = OverlaySkeletonLoad(skeleton=None, pose=OverlayPoseProvenance(kind="none"))
+    trajectory_dot_label = f"ambulation_metrics:{primary}"
+    trajectory_dot_detail = f"{trajectory_dot_label} in pipeline H5, frame_index-mapped"
+    tracking_db = cfg.kpms_pre.db_path if cfg.kpms_pre.db_path is not None else None
+    if cfg.show_skeleton or cfg.show_trajectory:
+        pose_load = load_overlay_skeleton(
+            manifest=manifest,
+            key=key,
+            pipeline_db=pipeline_db,
+            tracking_db=tracking_db,
+            sleap_path=sleap_path_str or None,
+            render_start_frame=render_start_frame,
+            max_frames=max_frames,
+            px_per_cm=px_per_cm,
+            jump_filter_cm=cfg.kpms_pre.jump_filter_cm,
+            jump_filter_lookahead_frames=cfg.kpms_pre.jump_filter_lookahead_frames,
+        )
+        if pose_load.skeleton is not None and cfg.show_skeleton:
+            node_xy_sliced = pose_load.skeleton.nodes
+            skeleton_edges = pose_load.skeleton.edges
+        if cfg.show_trajectory:
+            x, y, valid, is_moving, trajectory_dot_label, trajectory_dot_detail = (
+                select_overlay_trajectory(
+                    primary_point=primary,
+                    amb_x=x,
+                    amb_y=y,
+                    amb_valid=valid,
+                    amb_is_moving=is_moving,
+                    skeleton=pose_load.skeleton,
+                    pose=pose_load.pose,
+                    fps=fps,
+                    px_per_cm=px_per_cm,
+                    preference=cfg.trajectory_preference,
+                )
+            )
 
     cum_distance_m = np.zeros(max_frames, dtype=np.float64)
     cum_time_still_s = np.zeros(max_frames, dtype=np.float64)
@@ -681,43 +746,6 @@ def render_unified_overlay_video(
             _w_fb, m_fb = fb
             m_hud_frames = _slice_series_to_overlay(m_fb, render_start_frame, max_frames)
 
-    sleap_path_str = _decode_attr(attrs.get("sleap_path", ""))
-    if not sleap_path_str and manifest.sleap_path:
-        sleap_path_str = str(Path(manifest.sleap_path))
-
-    node_xy_sliced: Optional[dict[str, dict[str, np.ndarray]]] = None
-    skeleton_edges: list[tuple[int, int]] = []
-    if cfg.show_skeleton and sleap_path_str and Path(sleap_path_str).exists():
-        try:
-            trace_data = load_sleap_file(Path(sleap_path_str))
-            if trace_data is not None and trace_data.n_frames > 0:
-                trace_data = apply_jump_filter(
-                    trace_data,
-                    max_jump_cm=cfg.kpms_pre.jump_filter_cm,
-                    px_per_cm=px_per_cm,
-                    lookahead_frames=cfg.kpms_pre.jump_filter_lookahead_frames,
-                )
-                processed = process_trace_data(
-                    trace_data.traces,
-                    trace_data.node_names,
-                    TraceProcessingParams(),
-                )
-                start = render_start_frame
-                end = min(render_start_frame + max_frames, trace_data.n_frames)
-                if end > start:
-                    node_xy_sliced = {}
-                    for node_name in STANDARD_NODE_NAMES:
-                        if node_name not in processed:
-                            continue
-                        node = processed[node_name]
-                        node_xy_sliced[node_name] = {
-                            "x": np.asarray(node["x"][start:end], dtype=np.float64),
-                            "y": np.asarray(node["y"][start:end], dtype=np.float64),
-                        }
-                    skeleton_edges = get_skeleton_edges()
-        except OSError:
-            node_xy_sliced = None
-
     exit_x = float(attrs["exit_x"]) if "exit_x" in attrs else settings.exit_x
     exit_y = float(attrs["exit_y"]) if "exit_y" in attrs else settings.exit_y
     exit_radius_px = QC_EXIT_ZONE_RADIUS_CM * px_per_cm
@@ -772,6 +800,63 @@ def render_unified_overlay_video(
                     exemplar_loops = {}
         if exemplar_loops:
             tray_w = int(cfg.syllable_tray_width_px)
+
+    from maze.kpms.h5_pose import resolve_canonical_trial_h5
+
+    tracking_pose_h5 = (
+        resolve_canonical_trial_h5(manifest, tracking_db)
+        if tracking_db is not None
+        else None
+    )
+    skeleton_detail = pose_load.pose.summary()
+    if pose_load.pose.kind == "none":
+        checked = [f"pipeline {pipeline_db}: no tracking/anatomical"]
+        if tracking_db is not None:
+            has_t = "has" if tracking_pose_h5 is not None else "no"
+            checked.append(f"tracking {tracking_db}: {has_t} tracking/anatomical")
+        if sleap_path_str:
+            checked.append(f"sleap: {sleap_path_str} (missing or unreadable)")
+        else:
+            checked.append("no sleap_path")
+        skeleton_detail = "; ".join(checked)
+
+    if ram_polys is not None:
+        arena_geometry = "RAM template polygons (task_data/radial_arm or ehram global_template)"
+    elif arena_type == ARENA_TYPE_CIRCULAR:
+        arena_geometry = f"pipeline trial attrs + trial_settings @ {pipeline_db}"
+    else:
+        arena_geometry = f"pipeline trial attrs @ {pipeline_db}"
+
+    ethogram_h5: str | None = None
+    if cfg.show_ethogram and kpms_results_h5 is not None and Path(kpms_results_h5).is_file():
+        ethogram_h5 = str(Path(kpms_results_h5).resolve())
+
+    kpms_alignment: str | None = None
+    if kpms_aligned is not None:
+        align_db = tracking_db if tracking_db is not None else pipeline_db
+        kpms_alignment = (
+            f"kpms frame_alignment (db={align_db}, pose_stream={cfg.kpms_pre.pose_stream!r})"
+        )
+
+    cfg.data_provenance = OverlayDataProvenance(
+        video=video_path,
+        pipeline_h5=str(Path(pipeline_db).resolve()),
+        tracking_h5=str(Path(tracking_db).resolve()) if tracking_db is not None else None,
+        ambulation_point=primary,
+        trajectory_dot=trajectory_dot_label,
+        trajectory_dot_detail=trajectory_dot_detail,
+        skeleton=pose_load.pose.kind,
+        skeleton_detail=skeleton_detail,
+        ethogram_h5=ethogram_h5,
+        kpms_alignment=kpms_alignment,
+        arena_geometry=arena_geometry,
+        hud_trial_state=(
+            f"ambulation_metrics/{primary}.xy trial_state @ {Path(pipeline_db).name}"
+        ),
+    )
+    source_hud_lines = (
+        cfg.data_provenance.hud_lines() if cfg.show_source_hud else []
+    )
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -956,6 +1041,9 @@ def render_unified_overlay_video(
                 st = trial_states[i] if i < len(trial_states) else ""
                 put(f"state: {st or '--'}  t: {state_elapsed[i]:.1f}s")
                 put(f"dist: {cum_distance_m[i]:.3f}m  still: {cum_time_still_s[i]:.1f}s")
+                if source_hud_lines and i == 0:
+                    for line in source_hud_lines:
+                        put(line)
                 if cfg.hud_extra_lines_for_frame is not None:
                     abs_frame = int(render_start_frame) + int(i)
                     for extra in cfg.hud_extra_lines_for_frame(abs_frame):

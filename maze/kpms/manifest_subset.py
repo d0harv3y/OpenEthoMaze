@@ -61,6 +61,39 @@ BALANCE_COLUMN_CHOICES: frozenset[str] = frozenset(
     }
 )
 
+# Stable column order for bout tables (must match ``bout_feature_contract.STRATIFY_LABEL_COLUMNS``).
+STRATIFY_LABEL_COLUMNS: tuple[str, ...] = (
+    "animal_id",
+    "session",
+    "trial",
+    "phase",
+    "exit_number",
+    "sex",
+    "strain",
+    "tx",
+    "experiment",
+    "drug",
+    "cohort",
+    "researcher",
+    "is_habituation",
+)
+
+
+def manifest_stratify_fields(manifest: TrialManifest) -> dict[str, str]:
+    """Manifest stratification labels as string values for bout CSV rows."""
+    out: dict[str, str] = {}
+    for name in STRATIFY_LABEL_COLUMNS:
+        if name == "phase":
+            out[name] = manifest.phase
+        elif name == "is_habituation":
+            out[name] = "1" if manifest.is_habituation else "0"
+        elif name == "exit_number":
+            out[name] = "" if manifest.exit_number is None else str(int(manifest.exit_number))
+        else:
+            val = getattr(manifest, name, "")
+            out[name] = "" if val is None else str(val)
+    return out
+
 
 @dataclass(frozen=True)
 class SubsetConfig:

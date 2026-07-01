@@ -82,6 +82,41 @@ def bout_tokens_csv(stage_iii: Path | str) -> Path:
     return Path(stage_iii) / "bout_behavior_tokens.csv"
 
 
+def resolve_results_h5_path(
+    kpms_root: Path | str,
+    seed: str,
+    *,
+    results_h5: Path | None = None,
+) -> Path:
+    """Resolve kpMS syllable results H5 for compile (apply seed dir or cohort fit)."""
+    if results_h5 is not None:
+        return Path(results_h5)
+    root = Path(kpms_root)
+    apply_path = root / "anatomical" / f"seed_{seed}" / "results_apply.h5"
+    if apply_path.is_file():
+        return apply_path
+    fit_path = root / "results.h5"
+    if fit_path.is_file():
+        return fit_path
+    return apply_path
+
+
+def discover_compile_seeds(
+    kpms_root: Path | str,
+    *,
+    results_h5: Path | None = None,
+) -> tuple[str, ...]:
+    """Seed ids for compile: apply seeds on disk, or ``fit`` when only ``results.h5`` exists."""
+    if results_h5 is not None:
+        return ("fit",)
+    apply_seeds = discover_anatomical_seeds(kpms_root)
+    if apply_seeds:
+        return apply_seeds
+    if (Path(kpms_root) / "results.h5").is_file():
+        return ("fit",)
+    return ()
+
+
 def locomotion_rules_yaml(stage_iii: Path | str) -> Path:
     return Path(stage_iii) / "locomotion_tiers.yaml"
 

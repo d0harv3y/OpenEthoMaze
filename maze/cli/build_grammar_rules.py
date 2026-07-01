@@ -7,7 +7,11 @@ import json
 import sys
 from pathlib import Path
 
-from maze.kpms.behavior_ethogram.grammar_rules import rules_from_curated_candidates, write_grammar_rules_json
+from maze.kpms.behavior_ethogram.grammar_rules import (
+    rules_from_auto_candidates,
+    rules_from_curated_candidates,
+    write_grammar_rules_json,
+)
 from maze.kpms.behavior_ethogram.paths import grammar_candidates_csv, grammar_dir, grammar_rules_json
 
 
@@ -23,6 +27,23 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Allow build when must_review_overlay rows lack reviewed_at",
     )
+    ap.add_argument(
+        "--auto-buckets",
+        action="store_true",
+        help="Skip curation: synthetic behavior_name from pattern + speed anchor buckets",
+    )
+    ap.add_argument(
+        "--still-max-mps",
+        type=float,
+        default=0.06,
+        help="mean_speed_mps <= this → still (auto-buckets only)",
+    )
+    ap.add_argument(
+        "--moving-min-mps",
+        type=float,
+        default=0.14,
+        help="mean_speed_mps >= this → moving (auto-buckets only)",
+    )
     args = ap.parse_args(argv)
 
     kpms_root = Path(args.kpms_root)
@@ -35,7 +56,15 @@ def main(argv: list[str] | None = None) -> int:
     out = args.output_json or grammar_rules_json(gdir)
 
     try:
-        doc = rules_from_curated_candidates(candidates, fit_id=fit_id, force=args.force)
+        if args.auto_buckets:
+            doc = rules_from_auto_candidates(
+                candidates,
+                fit_id=fit_id,
+                still_max_mps=args.still_max_mps,
+                moving_min_mps=args.moving_min_mps,
+            )
+        else:
+            doc = rules_from_curated_candidates(candidates, fit_id=fit_id, force=args.force)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1

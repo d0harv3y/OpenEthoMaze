@@ -101,12 +101,13 @@ def manifest_from_controller_h5(db_path: Path, key: TrialKey) -> TrialManifest:
     import h5py
 
     from maze.pipeline.io.file_discovery import TrialManifest
+    from maze.pipeline.video_paths import resolve_video_path
 
     with h5py.File(db_path, "r") as h5:
         g_trial = h5[key.path()]
         attrs = g_trial.attrs
         vp = _decode_h5_attr(attrs.get("video_path", ""))
-        video_path = Path(vp) if vp else None
+        video_path = resolve_video_path(vp) if vp else None
         sp = _decode_h5_attr(attrs.get("sleap_path", ""))
         sleap_path = Path(sp) if sp else None
         phase = _decode_h5_attr(attrs.get("phase", "")) or _decode_h5_attr(attrs.get("stage", ""))

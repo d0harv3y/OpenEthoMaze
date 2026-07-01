@@ -12,9 +12,11 @@ from maze.kpms.frame_alignment import kpms_aligned_coordinates_and_indices, kpms
 from maze.kpms.preprocess import KpmsPreprocessConfig
 from maze.pipeline.io.file_discovery import TrialManifest, load_manifest_csv
 
-from .bout_table_io import read_bout_table_csv
-from .labeling import UNLABELED, BehaviorLabeling, TrialFrameLabels, hash_file, write_behavior_labeling
-from .paths import producer_dir
+from maze.kpms.behavior_ethogram.anchor_buckets import bout_token_rows_from_table, token_anchor_buckets_from_bout_rows
+from maze.kpms.behavior_ethogram.bout_table_io import read_bout_table_csv
+from maze.kpms.behavior_ethogram.labeling import UNLABELED, BehaviorLabeling, TrialFrameLabels, hash_file, write_behavior_labeling
+from maze.kpms.behavior_ethogram.locomotion import DEFAULT_LOCOMOTION_RULES, load_locomotion_rules_yaml
+from maze.kpms.behavior_ethogram.paths import locomotion_rules_yaml, producer_dir, stage_iii_dir
 
 
 def trial_frame_labels_from_bout_rows(
@@ -59,6 +61,7 @@ def export_option_d_labeling(
     tracking_h5: Path | str,
     fit_id: str | None = None,
     fps: float = 30.0,
+    locomotion_rules_path: Path | str | None = None,
     artifact_dir: Path | str | None = None,
 ) -> BehaviorLabeling:
     """Write ``producers/bout_arhmm/<fit_id>/`` from decoded bout token CSV."""
@@ -107,6 +110,16 @@ def export_option_d_labeling(
     if not trials:
         raise ValueError("no trials exported — check manifest / tracking_h5 alignment")
 
+    token_rows = bout_token_rows_from_table(table, seed=seed)
+    rules_doc: dict[str, object] = dict(DEFAULT_LOCOMOTION_RULES)
+    if locomotion_rules_path is not None:
+        rules_doc = load_locomotion_rules_yaml(locomotion_rules_path)
+    else:
+        stage_rules = locomotion_rules_yaml(stage_iii_dir(kpms_root, seed=seed))
+        if stage_rules.is_file():
+            rules_doc = load_locomotion_rules_yaml(stage_rules)
+    id_buckets = token_anchor_buckets_from_bout_rows(token_rows, rules_doc=rules_doc)
+
     behavior_names = {tid: f"token_{tid}" for tid in sorted(token_ids)}
     labeling = BehaviorLabeling(
         producer="bout_arhmm",
@@ -114,6 +127,7 @@ def export_option_d_labeling(
         fps=float(fps),
         trials=tuple(trials),
         behavior_names=behavior_names,
+        behavior_anchor_buckets=id_buckets,
         params={"seed": seed},
         input_hashes={
             "bout_tokens_csv": hash_file(tokens_csv),

@@ -26,6 +26,9 @@ MAX_WORKERS = 4
 PARALLEL_ENABLED = True
 PARALLEL_HDF5_WRITE = False
 
+# Optional stored-path prefix remaps (source_prefix, target_prefix). Override in paths_local.py.
+VIDEO_PATH_PREFIX_REMAPS: list[tuple[str, str]] = []
+
 try:
     from .paths_local import *  # noqa: F403
 except ImportError:

@@ -20,6 +20,7 @@ from maze.core.anatomy import BLOB_VERTEX_COUNT
 from maze.pipeline.blob_orient import BlobOrientTracker, DEFAULT_SPEED_EPSILON_PX
 from maze.pipeline.defaults import DEFAULT_FPS
 from maze.pipeline.tracking_io import AnatomicalTrackingData, BlobTrackingBuffer
+from maze.pipeline.video_paths import resolve_video_path
 
 
 @dataclass(frozen=True)
@@ -143,9 +144,9 @@ def materialize_blob_buffer_from_video(
     """
     import cv2
 
-    path = Path(video_path)
-    if not path.is_file():
-        raise FileNotFoundError(path)
+    path = resolve_video_path(video_path)
+    if path is None or not path.is_file():
+        raise FileNotFoundError(video_path)
 
     blob_params = params or OfflineBlobParams()
     tracker = _build_adaptive_threshold_tracker(blob_params)

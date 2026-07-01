@@ -15,6 +15,7 @@ from .db import (
 from .io.file_discovery import DiscoveryResult
 from .run_provenance import provenance_run, sha256_file
 from .treatment_labels_csv import validate_treatment_labels_csv
+from .video_paths import video_path_for_storage
 from .sources.legacy_vast import (
     apply_treatment_labels,
     check_duplicates,
@@ -76,7 +77,7 @@ def sync_discovery_into_h5(
             ensure_trial_group(
                 db_path,
                 key,
-                video_path=str(trial.video_path) if trial.video_path else None,
+                video_path=video_path_for_storage(trial.video_path),
                 sleap_path=str(trial.sleap_path) if trial.sleap_path else None,
                 input_h5_path=ih5,
                 has_tracking_pose=trial.has_tracking_pose,

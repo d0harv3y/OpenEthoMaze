@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from maze.kpms.apply_summary import resolve_tracking_h5_path
-from maze.kpms.behavior_ethogram.paths import bout_tokens_csv, producer_dir, stage_iii_dir
+from maze.kpms.behavior_ethogram.paths import bout_tokens_csv, locomotion_rules_yaml, producer_dir, stage_iii_dir
 from maze.kpms.behavior_ethogram.producer_option_d import export_option_d_labeling
 
 
@@ -21,6 +21,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tracking-h5", type=Path, default=None)
     ap.add_argument("--fit-id", type=str, default=None)
     ap.add_argument("--fps", type=float, default=30.0)
+    ap.add_argument(
+        "--locomotion-rules-yaml",
+        type=Path,
+        default=None,
+        help="Token tier rules for behavior_anchor_buckets (default: stage_iii/locomotion_rules.yaml)",
+    )
     args = ap.parse_args(argv)
 
     kpms_root = Path(args.kpms_root)
@@ -37,6 +43,11 @@ def main(argv: list[str] | None = None) -> int:
         print("No tracking H5 found; pass --tracking-h5", file=sys.stderr)
         return 1
 
+    loco_rules = args.locomotion_rules_yaml
+    if loco_rules is None:
+        candidate = locomotion_rules_yaml(stage_iii_dir(kpms_root, seed=args.seed))
+        loco_rules = candidate if candidate.is_file() else None
+
     try:
         labeling = export_option_d_labeling(
             kpms_root=kpms_root,
@@ -46,6 +57,7 @@ def main(argv: list[str] | None = None) -> int:
             tracking_h5=tracking_h5,
             fit_id=fit_id,
             fps=args.fps,
+            locomotion_rules_path=loco_rules,
         )
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
@@ -60,6 +72,9 @@ def main(argv: list[str] | None = None) -> int:
                 "fit_id": labeling.fit_id,
                 "n_trials": len(labeling.trials),
                 "n_behavior_ids": len(labeling.behavior_names),
+                "behavior_anchor_buckets": {
+                    int(k): v for k, v in labeling.behavior_anchor_buckets.items()
+                },
             },
             indent=2,
         )

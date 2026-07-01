@@ -29,6 +29,7 @@ from maze.pipeline.io.file_discovery import (
 from maze.pipeline.offline_tracking import OfflineBlobParams, materialize_blob_buffer_from_video
 from maze.pipeline.persist_pose import persist_pose_from_sidecar
 from maze.pipeline.tracking_io import has_anatomical_tracking, has_blob_tracking, read_anatomical_tracking
+from maze.pipeline.video_paths import resolve_video_path, video_path_for_storage
 
 
 @dataclass
@@ -114,7 +115,7 @@ def build_tracking_h5(
         ensure_trial_group(
             db_path,
             key,
-            video_path=str(trial.video_path) if trial.video_path else None,
+            video_path=video_path_for_storage(trial.video_path),
             sleap_path=str(trial.sleap_path) if trial.sleap_path else None,
             input_h5_path=str(db_path.resolve()),
         )
@@ -152,7 +153,8 @@ def build_tracking_h5(
 
         if skip_blob:
             continue
-        if trial.video_path is None or not trial.video_path.is_file():
+        resolved_video = resolve_video_path(trial.video_path)
+        if resolved_video is None or not resolved_video.is_file():
             stats.blob_skipped += 1
             continue
 
@@ -171,13 +173,16 @@ def build_tracking_h5(
 
         try:
             buffer, _fps = materialize_blob_buffer_from_video(
-                trial.video_path,
+                resolved_video,
                 anatomical=anatomical,
                 params=blob_params,
             )
             with h5py.File(db_path, "a") as h5:
                 g_trial = h5[key.path()]
                 flushed = buffer.flush(g_trial, h5=h5)
+                stored_video = video_path_for_storage(resolved_video)
+                if stored_video is not None:
+                    g_trial.attrs["video_path"] = stored_video
             if flushed is not None:
                 stats.blob_written += 1
             else:
@@ -192,6 +197,66 @@ def build_tracking_h5(
     enrich_manifests_has_tracking_pose(manifests, db_path=db_path)
     write_trial_manifest_rows(db_path, manifests)
     save_manifest_csv(DiscoveryResult(trials=manifests), manifest_path_for_db(db_path))
+
+    return stats
+
+
+def materialize_blob_tracking_in_h5(
+    db_path: Path,
+    trials: Sequence[TrialManifest],
+    *,
+    overwrite_blob: bool = False,
+    update_video_paths: bool = True,
+    blob_params: OfflineBlobParams | None = None,
+    log: Callable[[str], None] | None = None,
+) -> BuildTrackingH5Stats:
+    """
+    Write ``tracking/blob`` into an existing results H5 from stored trial video paths.
+
+    ``update_video_paths`` rewrites ``video_path`` attrs to machine-local resolved paths.
+    """
+    db_path = Path(db_path)
+    stats = BuildTrackingH5Stats(trials_total=len(trials))
+    import h5py
+
+    with h5py.File(db_path, "a") as h5:
+        for trial in trials:
+            key = TrialKey.from_manifest(trial)
+            resolved_video = resolve_video_path(trial.video_path)
+            if resolved_video is None or not resolved_video.is_file():
+                stats.blob_skipped += 1
+                continue
+
+            g_trial = h5[key.path()]
+            if has_blob_tracking(g_trial) and not overwrite_blob:
+                stats.blob_skipped += 1
+                continue
+
+            anatomical = None
+            if has_anatomical_tracking(g_trial):
+                anatomical = read_anatomical_tracking(g_trial)
+
+            try:
+                buffer, _fps = materialize_blob_buffer_from_video(
+                    resolved_video,
+                    anatomical=anatomical,
+                    params=blob_params,
+                )
+                flushed = buffer.flush(g_trial, h5=h5)
+                if update_video_paths:
+                    stored_video = video_path_for_storage(resolved_video)
+                    if stored_video is not None:
+                        g_trial.attrs["video_path"] = stored_video
+                if flushed is not None:
+                    stats.blob_written += 1
+                else:
+                    stats.blob_skipped += 1
+            except Exception as exc:
+                stats.blob_failed += 1
+                msg = f"{key.path()}: blob {type(exc).__name__}: {exc}"
+                stats.errors.append(msg)
+                if log:
+                    log(msg)
 
     return stats
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Optional
 
 from .io.file_discovery import TrialManifest
+from .video_paths import resolve_video_path
 
 # Reason codes stored in DB and reported to user
 REASON_MISSING_VIDEO = "missing_video"
@@ -42,7 +43,10 @@ def detect_trial_data_quality(
     Returns:
         A mistrial reason code string, or ``None`` if the trial looks processable.
     """
-    if manifest.video_path is None or not manifest.video_path.exists():
+    if manifest.video_path is None:
+        return REASON_MISSING_VIDEO
+    resolved_video = resolve_video_path(manifest.video_path)
+    if resolved_video is None or not resolved_video.is_file():
         return REASON_MISSING_VIDEO
 
     if manifest.h5_n_frames is None or manifest.video_n_frames is None:

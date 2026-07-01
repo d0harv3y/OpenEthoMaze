@@ -297,11 +297,15 @@ def run_unified_overlay_from_args(
     args: argparse.Namespace,
     *,
     extend_cfg: Optional[Callable[[UnifiedOverlayConfig], None]] = None,
+    cfg_out: Optional[list[UnifiedOverlayConfig]] = None,
 ) -> Path:
     """Configure :class:`UnifiedOverlayConfig` from *args* and render; returns output path.
 
     ``extend_cfg`` can attach e.g. :attr:`UnifiedOverlayConfig.hud_extra_lines_for_frame`
     for downstream wrappers (NOR exploration HUD, etc.).
+
+    When ``cfg_out`` is provided, the configured (and post-render provenance-populated)
+  ``UnifiedOverlayConfig`` is appended after rendering.
     """
     manifests = load_manifest_csv(Path(args.manifest_csv))
     manifest = resolve_unique_manifest(manifests, args.animal_id, args.session, args.trial)
@@ -360,7 +364,7 @@ def run_unified_overlay_from_args(
     if extend_cfg is not None:
         extend_cfg(cfg)
 
-    return render_unified_overlay_video(
+    out = render_unified_overlay_video(
         manifest=manifest,
         pipeline_db=Path(args.pipeline_h5),
         key=key,
@@ -368,6 +372,9 @@ def run_unified_overlay_from_args(
         kpms_results_h5=Path(args.kpms_h5) if args.kpms_h5 else None,
         cfg=cfg,
     )
+    if cfg_out is not None:
+        cfg_out.append(cfg)
+    return out
 
 
 def main_cli(

@@ -9,6 +9,7 @@ import pytest
 
 from maze.kpms.apply_summary import resolve_tracking_h5_path
 from maze.kpms.behavior_ethogram.compile import filter_manifests_with_results_h5
+from maze.kpms.behavior_ethogram.paths import resolve_results_h5_path
 from maze.kpms.manifest_subset import SubsetConfig, load_manifests
 from maze.pipeline.io.file_discovery import TrialManifest
 
@@ -67,6 +68,36 @@ def test_filter_manifests_with_results_h5(tmp_path: Path) -> None:
     m_miss = TrialManifest(animal_id="9999", session="S01", trial="T01", input_h5_path=str(tmp_path / "y.h5"))
     out = filter_manifests_with_results_h5([m_hit, m_miss], results)
     assert [x.kpms_results_dict_key for x in out] == ["3243-S01-T01"]
+
+
+def test_resolve_results_h5_path_fit_layout(tmp_path: Path) -> None:
+    root = tmp_path / "gerstner_vast_fit"
+    root.mkdir()
+    fit_results = root / "results.h5"
+    fit_results.write_bytes(b"\x00")
+    assert resolve_results_h5_path(root, "fit") == fit_results
+
+
+def test_manifest_stratify_fields() -> None:
+    from maze.kpms.manifest_subset import STRATIFY_LABEL_COLUMNS, manifest_stratify_fields
+
+    m = TrialManifest(
+        animal_id="3245",
+        session="S01",
+        trial="T01",
+        input_h5_path=Path("x.h5"),
+        sex="F",
+        strain="tg",
+        tx="n/a",
+        exit_number=3,
+    )
+    fields = manifest_stratify_fields(m)
+    assert set(fields) == set(STRATIFY_LABEL_COLUMNS)
+    assert fields["animal_id"] == "3245"
+    assert fields["sex"] == "F"
+    assert fields["exit_number"] == "3"
+    assert fields["phase"] == "experimental"
+    assert fields["is_habituation"] == "0"
 
 
 def test_resolve_tracking_h5_prefers_explicit_path(tmp_path: Path) -> None:
