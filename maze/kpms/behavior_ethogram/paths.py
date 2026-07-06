@@ -82,6 +82,21 @@ def bout_tokens_csv(stage_iii: Path | str) -> Path:
     return Path(stage_iii) / "bout_behavior_tokens.csv"
 
 
+def resolve_stage_iii_dir(kpms_root: Path | str, seed: str | None = None) -> Path:
+    """Resolve Stage III workspace for per-seed or pooled (cohort ``results.h5``) AR-HMM."""
+    root = Path(kpms_root)
+    if seed is not None:
+        per_seed = stage_iii_dir(root, seed=seed)
+        if bout_tokens_csv(per_seed).is_file():
+            return per_seed
+    pooled = stage_iii_dir(root, seed=None)
+    if bout_tokens_csv(pooled).is_file():
+        return pooled
+    if seed is not None:
+        return stage_iii_dir(root, seed=seed)
+    return pooled
+
+
 def resolve_results_h5_path(
     kpms_root: Path | str,
     seed: str,
@@ -127,6 +142,11 @@ def token_tiers_csv(stage_iii: Path | str) -> Path:
 
 def token_grid_movies_dir(stage_iii: Path | str) -> Path:
     return Path(stage_iii) / "grid_movies"
+
+
+def token_grid_clips_dir(stage_iii: Path | str, behavior_token: int) -> Path:
+    """Per-token exemplar clip staging under the grid output tree (not system temp)."""
+    return token_grid_movies_dir(stage_iii) / "clips" / f"token_{int(behavior_token):02d}"
 
 
 def behavior_token_labels_csv(stage_iii: Path | str) -> Path:

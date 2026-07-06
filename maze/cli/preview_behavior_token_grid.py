@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
-import tempfile
 from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 
-from maze.kpms.apply_summary import preprocess_config_from_apply_summary, resolve_tracking_h5_path
+from maze.kpms.apply_summary import (
+    preprocess_config_for_results_h5,
+    resolve_tracking_h5_path,
+)
 from maze.kpms.behavior_ethogram.bout_table_io import read_bout_table_csv
 from maze.kpms.behavior_ethogram.grammar_matches import (
     DEFAULT_PREVIEW_PADDING_S,
@@ -20,7 +23,9 @@ from maze.kpms.behavior_ethogram.grammar_matches import (
 )
 from maze.kpms.behavior_ethogram.paths import (
     bout_tokens_csv,
-    stage_iii_dir,
+    resolve_results_h5_path,
+    resolve_stage_iii_dir,
+    token_grid_clips_dir,
     token_grid_movies_dir,
 )
 from maze.kpms.behavior_ethogram.token_exemplars import (
@@ -123,11 +128,13 @@ def render_token_grid_movie(
     results_h5: Path,
     tracking_h5: Path,
     out_path: Path,
+    clips_dir: Path,
     max_exemplars: int = DEFAULT_MAX_TOKEN_EXEMPLARS,
     padding_s: float = DEFAULT_PREVIEW_PADDING_S,
     keypoints_only: bool = False,
     no_ethogram: bool = False,
     no_syllable_tray: bool = False,
+    keep_clips: bool = False,
 ) -> tuple[Path, int] | None:
     """Render one grid MP4 for ``behavior_token``; return ``(path, n_exemplars)`` or None."""
     matches = select_token_bout_exemplars(
@@ -142,32 +149,39 @@ def render_token_grid_movie(
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="maze_token_grid_") as tmp:
-        tmp_dir = Path(tmp)
-        clip_paths: list[Path] = []
-        labels: list[str] = []
+    clip_stage = Path(clips_dir)
+    clip_stage.mkdir(parents=True, exist_ok=True)
+    clip_paths: list[Path] = []
+    labels: list[str] = []
+    try:
         for idx, match in enumerate(matches):
-            clip_path = tmp_dir / f"clip_{idx:02d}.mp4"
-            _render_exemplar_clip(
+            clip_dest = clip_stage / f"exemplar_{idx:02d}.mp4"
+            written = _render_exemplar_clip(
                 match,
                 behavior_token=behavior_token,
                 manifest_path=manifest_path,
                 pipeline_h5=pipeline_h5,
                 results_h5=results_h5,
                 tracking_h5=tracking_h5,
-                out_path=clip_path,
+                out_path=clip_dest,
                 padding_s=padding_s,
                 keypoints_only=keypoints_only,
                 no_ethogram=no_ethogram,
                 no_syllable_tray=no_syllable_tray,
             )
-            clip_paths.append(clip_path)
+            if not written.is_file():
+                raise RuntimeError(f"clip not written: {written}")
+            clip_paths.append(written)
             labels.append(match.trial_key)
-        return compose_grid_video(
+        grid_path = compose_grid_video(
             clip_paths,
             out_path,
             cell_labels=labels,
-        ), len(matches)
+        )
+    finally:
+        if not keep_clips and clip_stage.is_dir():
+            shutil.rmtree(clip_stage, ignore_errors=True)
+    return grid_path, len(matches)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -178,6 +192,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pipeline-h5", type=Path, required=True, help="Legacy / pipeline tracking HDF5")
     ap.add_argument("--tracking-h5", type=Path, default=None)
     ap.add_argument("--tokens-csv", type=Path, default=None)
+    ap.add_argument(
+        "--results-h5",
+        type=Path,
+        default=None,
+        help="kpMS syllable results H5 (default: anatomical/seed_*/results_apply.h5 or <kpms-root>/results.h5)",
+    )
     ap.add_argument(
         "--token",
         type=str,
@@ -195,6 +215,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--keypoints-only", action="store_true")
     ap.add_argument("--no-ethogram", action="store_true")
     ap.add_argument("--no-syllable-tray", action="store_true")
+    ap.add_argument(
+        "--keep-clips",
+        action="store_true",
+        help="Keep per-exemplar clips under grid_movies/clips/ (default: delete after grid compose)",
+    )
     args = ap.parse_args(argv)
 
     if not is_unified_overlay_available():
@@ -202,15 +227,23 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     kpms_root = Path(args.kpms_root)
-    stage_iii = stage_iii_dir(kpms_root, seed=args.seed)
+    stage_iii = resolve_stage_iii_dir(kpms_root, seed=args.seed)
     tokens_csv = Path(args.tokens_csv) if args.tokens_csv else bout_tokens_csv(stage_iii)
     if not tokens_csv.is_file():
         print(f"Missing bout tokens CSV: {tokens_csv}", file=sys.stderr)
         return 1
 
-    results_h5 = kpms_root / "anatomical" / f"seed_{args.seed}" / "results_apply.h5"
+    results_h5 = resolve_results_h5_path(
+        kpms_root,
+        args.seed,
+        results_h5=Path(args.results_h5) if args.results_h5 else None,
+    )
     if not results_h5.is_file():
-        print(f"Missing results_apply.h5: {results_h5}", file=sys.stderr)
+        print(
+            f"Missing kpMS results H5: {results_h5} "
+            "(expected anatomical/seed_*/results_apply.h5 or <kpms-root>/results.h5; pass --results-h5)",
+            file=sys.stderr,
+        )
         return 1
 
     tracking_h5 = resolve_tracking_h5_path(kpms_root=kpms_root, tracking_h5=args.tracking_h5)
@@ -225,7 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         tokens = tuple(sorted(set(token_filter)))
 
-    pre_cfg = preprocess_config_from_apply_summary(results_h5) or KpmsPreprocessConfig()
+    pre_cfg = preprocess_config_for_results_h5(results_h5, kpms_root=kpms_root) or KpmsPreprocessConfig()
     pre_cfg = replace(pre_cfg, db_path=Path(tracking_h5))
     trial_keys = {str(row["trial_key"]) for row in bout_rows if str(row.get("seed", "")) == str(args.seed)}
     trial_source_frames = _build_trial_source_frames(
@@ -255,11 +288,13 @@ def main(argv: list[str] | None = None) -> int:
                 results_h5=results_h5,
                 tracking_h5=Path(tracking_h5),
                 out_path=out_file,
+                clips_dir=token_grid_clips_dir(stage_iii, int(token)),
                 max_exemplars=int(args.max_exemplars),
                 padding_s=float(args.padding_s),
                 keypoints_only=bool(args.keypoints_only),
                 no_ethogram=bool(args.no_ethogram),
                 no_syllable_tray=bool(args.no_syllable_tray),
+                keep_clips=bool(args.keep_clips),
             )
         except Exception as exc:
             print(f"token {token}: {exc}", file=sys.stderr)
@@ -284,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
         "skipped_tokens": skipped,
         "movies": written,
         "tokens_csv": str(tokens_csv.resolve()),
+        "results_h5": str(results_h5.resolve()),
         "pipeline_h5": str(Path(args.pipeline_h5).resolve()),
         "tracking_h5": str(Path(tracking_h5).resolve()),
     }

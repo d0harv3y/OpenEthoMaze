@@ -11,7 +11,7 @@ from typing import Callable
 import numpy as np
 
 from maze.core.anatomy import SKELETON_EDGES, STANDARD_NODE_NAMES
-from maze.kpms.apply_summary import preprocess_config_from_apply_summary
+from maze.kpms.apply_summary import preprocess_config_for_results_h5
 from maze.kpms.behavior_ethogram.grammar_matches import (
     DEFAULT_PREVIEW_PADDING_S,
     PatternMatch,
@@ -106,6 +106,20 @@ def _clip_overlay_cfg(
     cfg.hud_extra_lines_for_frame = _extra_lines
 
 
+def _sync_kpms_pre_cfg(cfg: UnifiedOverlayConfig, pre_cfg: KpmsPreprocessConfig) -> None:
+    """Propagate tracking/preprocess settings into overlay (tray + skeleton read H5 first)."""
+    cfg.kpms_pre = replace(
+        cfg.kpms_pre,
+        min_fragment_frames=pre_cfg.min_fragment_frames,
+        jump_filter_cm=pre_cfg.jump_filter_cm,
+        jump_filter_lookahead_frames=pre_cfg.jump_filter_lookahead_frames,
+        px_per_cm=pre_cfg.px_per_cm,
+        retain_all_frames=pre_cfg.retain_all_frames,
+        db_path=pre_cfg.db_path,
+        pose_stream=pre_cfg.pose_stream,
+    )
+
+
 def manifest_has_video(manifest: TrialManifest) -> bool:
     if not manifest.video_path:
         return False
@@ -128,7 +142,7 @@ def render_overlay_clip_for_match(
     no_syllable_tray: bool = False,
 ) -> Path:
     """Render one clipped unified-overlay MP4 for a bout exemplar."""
-    pre_cfg = preprocess_config_from_apply_summary(results_h5) or KpmsPreprocessConfig()
+    pre_cfg = preprocess_config_for_results_h5(results_h5) or KpmsPreprocessConfig()
     pre_cfg = replace(pre_cfg, db_path=Path(tracking_h5))
     fps = _trial_fps(pipeline_h5, manifest)
     clip_start, clip_end = clip_frames_for_match(match, fps=fps, padding_s=padding_s)
@@ -136,6 +150,7 @@ def render_overlay_clip_for_match(
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _extend(cfg: UnifiedOverlayConfig) -> None:
+        _sync_kpms_pre_cfg(cfg, pre_cfg)
         _clip_overlay_cfg(
             cfg,
             clip_start=clip_start,
@@ -207,7 +222,7 @@ def render_pose_only_clip_for_match(
     """Render a pose-only MP4 on a black canvas when source video is unavailable."""
     import cv2
 
-    pre_cfg = preprocess_config_from_apply_summary(results_h5) or KpmsPreprocessConfig()
+    pre_cfg = preprocess_config_for_results_h5(results_h5) or KpmsPreprocessConfig()
     pre_cfg = replace(pre_cfg, db_path=Path(tracking_h5))
 
     aligned = kpms_aligned_coordinates_and_indices(manifest, pre_cfg)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
+from maze.kpms.behavior_ethogram.paths import resolve_stage_iii_dir
 from maze.kpms.behavior_ethogram.token_exemplars import (
     pattern_match_from_bout_row,
     select_token_bout_exemplars,
@@ -92,6 +93,23 @@ def test_unique_behavior_tokens_filters_seed() -> None:
         _bout_row(bout_index=1, behavior_token=9, row_start=2, row_end_exclusive=4, seed="067"),
     ]
     assert unique_behavior_tokens(rows, seed="042") == (3,)
+
+
+def test_resolve_stage_iii_dir_prefers_pooled_when_seed_fit(tmp_path) -> None:
+    root = tmp_path / "kpms"
+    pooled = root / "behavior_ethogram" / "stage_iii"
+    pooled.mkdir(parents=True)
+    (pooled / "bout_behavior_tokens.csv").write_text("behavior_token\n", encoding="utf-8")
+    resolved = resolve_stage_iii_dir(root, seed="fit")
+    assert resolved == pooled
+
+
+def test_token_grid_clips_dir_under_grid_movies(tmp_path) -> None:
+    from maze.kpms.behavior_ethogram.paths import token_grid_clips_dir
+
+    stage = tmp_path / "behavior_ethogram" / "stage_iii" / "seed_fit"
+    clips = token_grid_clips_dir(stage, 10)
+    assert clips == stage / "grid_movies" / "clips" / "token_10"
 
 
 def test_grid_layout_square() -> None:
