@@ -50,7 +50,7 @@ Rules are **per-seed fit** (raw `behavior_token` ids are fit-local). Only **`beh
     provenance.json
 ```
 
-Path helpers (existing): `stage_iii_dir`, `bout_tokens_csv`, `arhmm_fit_summary_json`, `token_tiers_csv`, `token_grid_movies_dir`, `producer_dir`. **Planned:** `behavior_token_labels_csv`, `token_summaries_dir`.
+Path helpers (existing): `stage_iii_dir`, `bout_tokens_csv`, `arhmm_fit_summary_json`, `token_tiers_csv`, `behavior_token_labels_csv`, `token_grid_movies_dir`, `producer_dir`. **Planned:** `token_summaries_dir`.
 
 ## `behavior_token_labels.csv`
 
@@ -138,8 +138,8 @@ Grill decisions (2026-07-06):
 
 1. `maze-fit-bout-arhmm --kpms-root … --seed …`
 2. `maze-calibrate-locomotion-tiers --kpms-root …` (reference tiers)
-3. `maze-init-behavior-token-labels --kpms-root … --seed …` *(planned)*
-4. `maze-preview-behavior-token-grid --kpms-root … --seed … --manifest-path … --pipeline-h5 …` *(planned)*
+3. `maze-init-behavior-token-labels --kpms-root … --seed …` *(shipped)*
+4. `maze-preview-behavior-token-grid --kpms-root … --seed … --manifest-path … --pipeline-h5 …` *(shipped)*
 5. Fill `behavior_name`, `anchor_bucket`; stamp `reviewed_at`
 6. `maze-summarize-behavior-tokens --kpms-root … --seed … --grain token` then `--grain ethology` *(planned)*
 7. `maze-export-bout-arhmm-labeling --kpms-root … --seed …` (reads labels file when present)
@@ -176,7 +176,7 @@ uv run maze-preview-behavior-token-grid --kpms-root … --seed … --manifest-pa
 |-------|--------|
 | AR-HMM fit + bout CSV | Shipped |
 | Locomotion tiers | Shipped |
-| `behavior_token_labels.csv` init CLI | **Not implemented** (path helper shipped) |
+| `behavior_token_labels.csv` init CLI | **Shipped** — `maze-init-behavior-token-labels` |
 | Token grid movies | **Shipped** — `maze-preview-behavior-token-grid` |
 | Summarize (occupancy / session / transitions) | **Not implemented** |
 | Export reads labels file | **Not implemented** (`token_{id}` placeholder today) |
