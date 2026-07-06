@@ -83,6 +83,21 @@ def _candidate_sort_key(
     return (amb_rank, speed_rank, trial_key)
 
 
+def _shuffle_exemplar_candidates(
+    candidates: list[tuple[PatternMatch, bool, float]],
+    *,
+    exemplar_seed: int,
+    behavior_token: int,
+) -> list[tuple[PatternMatch, bool, float]]:
+    """Shuffle within ambiguity tier; non-ambiguous candidates stay ahead."""
+    rng = np.random.default_rng([int(exemplar_seed), int(behavior_token)])
+    non_amb = [item for item in candidates if not item[1]]
+    amb = [item for item in candidates if item[1]]
+    rng.shuffle(non_amb)
+    rng.shuffle(amb)
+    return non_amb + amb
+
+
 def select_token_bout_exemplars(
     bout_rows: Sequence[Mapping[str, str]],
     *,
@@ -94,6 +109,7 @@ def select_token_bout_exemplars(
     trial_fps: Mapping[str, float] | None = None,
     trial_usable_overlay_frame_end: Mapping[str, int] | None = None,
     require_overlay_clip_fit: bool = False,
+    exemplar_seed: int | None = None,
 ) -> tuple[PatternMatch, ...]:
     """Pick diverse, review-friendly bout spans for one ``behavior_token``."""
     if max_exemplars < 1:
@@ -135,14 +151,21 @@ def select_token_bout_exemplars(
             )
         )
 
-    candidates.sort(
-        key=lambda t: _candidate_sort_key(
-            ambiguous=t[1],
-            mean_speed=t[2],
-            token_mean_speed=token_mean_speed,
-            trial_key=t[0].trial_key,
+    if exemplar_seed is not None:
+        candidates = _shuffle_exemplar_candidates(
+            candidates,
+            exemplar_seed=int(exemplar_seed),
+            behavior_token=int(behavior_token),
         )
-    )
+    else:
+        candidates.sort(
+            key=lambda t: _candidate_sort_key(
+                ambiguous=t[1],
+                mean_speed=t[2],
+                token_mean_speed=token_mean_speed,
+                trial_key=t[0].trial_key,
+            )
+        )
 
     seen_trials: set[str] = set()
     picked: list[PatternMatch] = []

@@ -143,6 +143,27 @@ def test_select_token_bout_exemplars_skips_nonfitting_overlay_clips() -> None:
     assert [m.trial_key for m in matches] == ["good"]
 
 
+def test_exemplar_seed_is_reproducible_and_changes_selection() -> None:
+    rows = [
+        _bout_row(trial_key=f"t{i}", bout_index=0, behavior_token=6, row_start=0, row_end_exclusive=3)
+        for i in range(6)
+    ]
+    src = {f"t{i}": [10 + i, 11 + i, 12 + i] for i in range(6)}
+    kwargs = dict(
+        bout_rows=rows,
+        behavior_token=6,
+        trial_source_frames=src,
+        seed="042",
+        max_exemplars=3,
+    )
+    a = select_token_bout_exemplars(**kwargs, exemplar_seed=7)
+    b = select_token_bout_exemplars(**kwargs, exemplar_seed=7)
+    c = select_token_bout_exemplars(**kwargs, exemplar_seed=99)
+    assert [m.trial_key for m in a] == [m.trial_key for m in b]
+    assert len({m.trial_key for m in a}) == 3
+    assert [m.trial_key for m in a] != [m.trial_key for m in c]
+
+
 def test_unique_behavior_tokens_filters_seed() -> None:
     rows = [
         _bout_row(bout_index=0, behavior_token=3, row_start=0, row_end_exclusive=2, seed="042"),

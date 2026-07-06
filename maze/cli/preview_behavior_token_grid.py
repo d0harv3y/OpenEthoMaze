@@ -150,6 +150,7 @@ def render_token_grid_movie(
     keep_clips: bool = False,
     trial_fps: dict[str, float] | None = None,
     trial_usable_overlay_frame_end: dict[str, int] | None = None,
+    exemplar_seed: int | None = None,
 ) -> tuple[Path, int] | None:
     """Render one grid MP4 for ``behavior_token``; return ``(path, n_exemplars)`` or None."""
     matches = select_token_bout_exemplars(
@@ -162,6 +163,7 @@ def render_token_grid_movie(
         trial_fps=trial_fps,
         trial_usable_overlay_frame_end=trial_usable_overlay_frame_end,
         require_overlay_clip_fit=not keypoints_only,
+        exemplar_seed=exemplar_seed,
     )
     if not matches:
         return None
@@ -224,6 +226,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Comma-separated behavior_token ids (default: all tokens in CSV)",
     )
     ap.add_argument("--max-exemplars", type=int, default=DEFAULT_MAX_TOKEN_EXEMPLARS)
+    ap.add_argument(
+        "--exemplar-seed",
+        type=int,
+        default=None,
+        help="RNG seed for exemplar selection shuffle (default: deterministic speed-ranked pick)",
+    )
     ap.add_argument("--padding-s", type=float, default=DEFAULT_PREVIEW_PADDING_S)
     ap.add_argument(
         "--out",
@@ -318,6 +326,7 @@ def main(argv: list[str] | None = None) -> int:
                 keep_clips=bool(args.keep_clips),
                 trial_fps=trial_fps,
                 trial_usable_overlay_frame_end=trial_usable_overlay_frame_end,
+                exemplar_seed=args.exemplar_seed,
             )
         except Exception as exc:
             print(f"token {token}: {exc}", file=sys.stderr)
@@ -336,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
 
     payload = {
         "seed": str(args.seed),
+        "exemplar_seed": args.exemplar_seed,
         "output_dir": str(out_dir.resolve()),
         "n_written": len(written),
         "n_skipped": len(skipped),
