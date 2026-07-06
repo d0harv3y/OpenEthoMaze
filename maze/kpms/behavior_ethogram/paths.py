@@ -153,6 +153,22 @@ def behavior_token_labels_csv(stage_iii: Path | str) -> Path:
     return Path(stage_iii) / "behavior_token_labels.csv"
 
 
+def token_summaries_dir(stage_iii: Path | str) -> Path:
+    return Path(stage_iii) / "summaries"
+
+
+def token_occupancy_csv(stage_iii: Path | str) -> Path:
+    return token_summaries_dir(stage_iii) / "occupancy.csv"
+
+
+def token_occupancy_by_session_csv(stage_iii: Path | str) -> Path:
+    return token_summaries_dir(stage_iii) / "occupancy_by_session.csv"
+
+
+def token_transitions_csv(stage_iii: Path | str) -> Path:
+    return token_summaries_dir(stage_iii) / "transitions.csv"
+
+
 def grammar_dir(kpms_root: Path | str, *, seed: str) -> Path:
     """Per-seed Option A workspace: mined candidates + curated rules."""
     return behavior_ethogram_root(kpms_root) / "grammar" / f"seed_{seed}"

@@ -130,11 +130,6 @@ def merge_behavior_token_label_rows(
     return merged
 
 
-def read_behavior_token_labels_csv(path: Path | str) -> list[dict[str, str]]:
-    with Path(path).open(newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
-
-
 def write_behavior_token_labels_csv(path: Path | str, rows: Sequence[Mapping[str, str]]) -> Path:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -167,3 +162,29 @@ def init_behavior_token_labels(
         rows = [dict(r) for r in scaffolded]
     write_behavior_token_labels_csv(out_csv, rows)
     return out_csv, rows
+
+
+def read_behavior_token_labels_csv(path: Path | str) -> list[dict[str, str]]:
+    with Path(path).open(newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def validate_ethology_curation_complete(
+    label_rows: Sequence[Mapping[str, str]],
+    *,
+    min_token_bouts: int = 20,
+) -> list[str]:
+    """Return human-readable errors for tokens failing ethology review gate."""
+    errors: list[str] = []
+    for row in label_rows:
+        n_bouts = int(str(row.get("token_n_bouts", "0")).strip() or "0")
+        if n_bouts < int(min_token_bouts):
+            continue
+        token = str(row.get("behavior_token", "")).strip()
+        name = str(row.get("behavior_name", "")).strip()
+        reviewed_at = str(row.get("reviewed_at", "")).strip()
+        if not name:
+            errors.append(f"behavior_token {token}: missing behavior_name (token_n_bouts={n_bouts})")
+        elif not reviewed_at:
+            errors.append(f"behavior_token {token}: missing reviewed_at (behavior_name={name!r})")
+    return errors
