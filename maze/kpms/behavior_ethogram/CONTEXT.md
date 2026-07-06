@@ -24,6 +24,10 @@ _Avoid_: relabel, taxonomy (when sequence context is intended)
 The Stage III bout AR-HMM state assigned to each bout (`fit_bout_arhmm`). One specific *producer* of Behavior (Option D), not the Behavior concept itself.
 _Avoid_: behavior, label (unqualified)
 
+**Behavior token labels**:
+The fit-scoped human curation table mapping each `behavior_token` id to a portable `behavior_name` and `anchor_bucket`, with optional review stamps. Many tokens may share one `behavior_name`. Lives under Stage III; consumed by grid review and `export-bout-arhmm-labeling`.
+_Avoid_: token_tiers (auto locomotion only), behavior (unqualified)
+
 **Producer**:
 A method that emits Behavior labels over frames/bouts. Current candidates: Option A (syllable-sequence grammar relabeling), Option B (frame-level physical-feature states, B-SOiD/MotionMapper), Option D (enriched bout AR-HMM).
 _Avoid_: model, pipeline (unqualified)

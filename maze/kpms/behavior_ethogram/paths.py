@@ -125,6 +125,14 @@ def token_tiers_csv(stage_iii: Path | str) -> Path:
     return Path(stage_iii) / "token_tiers.csv"
 
 
+def token_grid_movies_dir(stage_iii: Path | str) -> Path:
+    return Path(stage_iii) / "grid_movies"
+
+
+def behavior_token_labels_csv(stage_iii: Path | str) -> Path:
+    return Path(stage_iii) / "behavior_token_labels.csv"
+
+
 def grammar_dir(kpms_root: Path | str, *, seed: str) -> Path:
     """Per-seed Option A workspace: mined candidates + curated rules."""
     return behavior_ethogram_root(kpms_root) / "grammar" / f"seed_{seed}"
