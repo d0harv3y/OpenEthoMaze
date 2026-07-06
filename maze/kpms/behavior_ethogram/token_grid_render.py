@@ -127,6 +127,59 @@ def manifest_has_video(manifest: TrialManifest) -> bool:
     return resolved is not None and Path(resolved).is_file()
 
 
+def trial_usable_overlay_frame_end_exclusive(
+    manifest: TrialManifest,
+    pipeline_h5: Path,
+) -> int | None:
+    """Exclusive upper bound on overlay source frames (matches unified overlay ``n_effective``)."""
+    import cv2
+
+    from maze.pipeline.db import open_db
+    from maze.pipeline.db.trial_key import TrialKey
+    from maze.pipeline.viz.overlay_frame_align import source_frame_exclusive_end, xy_source_frame_indices
+    from maze.pipeline.viz.unified_overlay import (
+        HYBRID_POINT_NAME,
+        _decode_attr,
+        _open_pipeline_trial_group,
+        resolve_ambulation_metrics_group,
+        resolve_trial_key_for_hdf5,
+    )
+
+    resolved = resolve_video_path(manifest.video_path)
+    if resolved is None or not resolved.is_file():
+        return None
+
+    n_vid = manifest.video_n_frames
+    if n_vid is None or int(n_vid) <= 0:
+        cap = cv2.VideoCapture(str(resolved.resolve()))
+        if not cap.isOpened():
+            return None
+        n_vid = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        cap.release()
+    if int(n_vid) <= 0:
+        return None
+
+    key = TrialKey.from_manifest(manifest)
+    try:
+        with open_db(pipeline_h5, "r") as h5:
+            key = resolve_trial_key_for_hdf5(h5, key)
+            g_trial = _open_pipeline_trial_group(h5, key, manifest)
+            primary = _decode_attr(g_trial.attrs.get("primary_trajectory", HYBRID_POINT_NAME)) or HYBRID_POINT_NAME
+            g_amb = resolve_ambulation_metrics_group(g_trial)
+            if g_amb is None:
+                return None
+            if primary not in g_amb:
+                if "spot" not in g_amb:
+                    return None
+                primary = "spot"
+            xy_full = g_amb[primary]["xy"][:]
+    except (OSError, KeyError, ValueError):
+        return None
+
+    fi_rows = xy_source_frame_indices(xy_full)
+    return int(source_frame_exclusive_end(fi_rows, n_vid=int(n_vid)))
+
+
 def render_overlay_clip_for_match(
     match: PatternMatch,
     *,

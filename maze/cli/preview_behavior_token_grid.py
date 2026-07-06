@@ -35,9 +35,11 @@ from maze.kpms.behavior_ethogram.token_exemplars import (
 )
 from maze.kpms.behavior_ethogram.token_grid_compose import compose_grid_video
 from maze.kpms.behavior_ethogram.token_grid_render import (
+    _trial_fps,
     manifest_has_video,
     render_overlay_clip_for_match,
     render_pose_only_clip_for_match,
+    trial_usable_overlay_frame_end_exclusive,
 )
 from maze.kpms.frame_alignment import kpms_aligned_coordinates_and_indices
 from maze.kpms.preprocess import KpmsPreprocessConfig
@@ -55,14 +57,19 @@ def _parse_token_list(raw: str | None) -> list[int] | None:
     return out or None
 
 
-def _build_trial_source_frames(
+def _build_trial_overlay_context(
     trial_keys: set[str],
     *,
     manifest_path: Path,
+    pipeline_h5: Path,
     pre_cfg: KpmsPreprocessConfig,
-) -> dict[str, np.ndarray]:
+    keypoints_only: bool,
+) -> tuple[dict[str, np.ndarray], dict[str, int], dict[str, float]]:
+    """Aligned source frames plus overlay clip bounds for exemplar filtering."""
     by_key = manifest_lookup_by_kpms_key(manifest_path)
-    out: dict[str, np.ndarray] = {}
+    source_frames: dict[str, np.ndarray] = {}
+    usable_ends: dict[str, int] = {}
+    fps_by_trial: dict[str, float] = {}
     for trial_key in sorted(trial_keys):
         manifest = by_key.get(trial_key)
         if manifest is None:
@@ -71,8 +78,14 @@ def _build_trial_source_frames(
         if aligned is None:
             continue
         _rk, _coord, src_idx = aligned
-        out[trial_key] = np.asarray(src_idx, dtype=np.int64)
-    return out
+        source_frames[trial_key] = np.asarray(src_idx, dtype=np.int64)
+        if keypoints_only or not manifest_has_video(manifest):
+            continue
+        end_exclusive = trial_usable_overlay_frame_end_exclusive(manifest, pipeline_h5)
+        if end_exclusive is not None:
+            usable_ends[trial_key] = int(end_exclusive)
+        fps_by_trial[trial_key] = _trial_fps(pipeline_h5, manifest)
+    return source_frames, usable_ends, fps_by_trial
 
 
 def _render_exemplar_clip(
@@ -135,6 +148,8 @@ def render_token_grid_movie(
     no_ethogram: bool = False,
     no_syllable_tray: bool = False,
     keep_clips: bool = False,
+    trial_fps: dict[str, float] | None = None,
+    trial_usable_overlay_frame_end: dict[str, int] | None = None,
 ) -> tuple[Path, int] | None:
     """Render one grid MP4 for ``behavior_token``; return ``(path, n_exemplars)`` or None."""
     matches = select_token_bout_exemplars(
@@ -143,6 +158,10 @@ def render_token_grid_movie(
         trial_source_frames=trial_source_frames,
         seed=seed,
         max_exemplars=max_exemplars,
+        padding_s=padding_s,
+        trial_fps=trial_fps,
+        trial_usable_overlay_frame_end=trial_usable_overlay_frame_end,
+        require_overlay_clip_fit=not keypoints_only,
     )
     if not matches:
         return None
@@ -261,10 +280,12 @@ def main(argv: list[str] | None = None) -> int:
     pre_cfg = preprocess_config_for_results_h5(results_h5, kpms_root=kpms_root) or KpmsPreprocessConfig()
     pre_cfg = replace(pre_cfg, db_path=Path(tracking_h5))
     trial_keys = {str(row["trial_key"]) for row in bout_rows if str(row.get("seed", "")) == str(args.seed)}
-    trial_source_frames = _build_trial_source_frames(
+    trial_source_frames, trial_usable_overlay_frame_end, trial_fps = _build_trial_overlay_context(
         trial_keys,
         manifest_path=Path(args.manifest_path),
+        pipeline_h5=Path(args.pipeline_h5),
         pre_cfg=pre_cfg,
+        keypoints_only=bool(args.keypoints_only),
     )
     if not trial_source_frames:
         print("No aligned trials found for manifest / tracking H5.", file=sys.stderr)
@@ -295,6 +316,8 @@ def main(argv: list[str] | None = None) -> int:
                 no_ethogram=bool(args.no_ethogram),
                 no_syllable_tray=bool(args.no_syllable_tray),
                 keep_clips=bool(args.keep_clips),
+                trial_fps=trial_fps,
+                trial_usable_overlay_frame_end=trial_usable_overlay_frame_end,
             )
         except Exception as exc:
             print(f"token {token}: {exc}", file=sys.stderr)

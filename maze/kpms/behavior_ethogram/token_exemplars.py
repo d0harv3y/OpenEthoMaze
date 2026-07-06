@@ -7,7 +7,7 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
-from .grammar_matches import PatternMatch
+from .grammar_matches import DEFAULT_PREVIEW_PADDING_S, PatternMatch, clip_frames_for_match
 
 DEFAULT_MAX_TOKEN_EXEMPLARS = 10
 
@@ -44,8 +44,28 @@ def _token_mean_speed(rows: Sequence[Mapping[str, str]]) -> float | None:
     speeds = [float(r["bout_mean_speed_mps"]) for r in rows]
     if not speeds:
         return None
-    mean = float(np.nanmean(speeds))
+    arr = np.asarray(speeds, dtype=np.float64)
+    if arr.size == 0 or not np.any(np.isfinite(arr)):
+        return None
+    mean = float(np.nanmean(arr))
     return mean if math.isfinite(mean) else None
+
+
+def overlay_clip_fits_usable_frames(
+    match: PatternMatch,
+    *,
+    fps: float,
+    padding_s: float,
+    usable_frame_end_exclusive: int,
+) -> bool:
+    """True when padded bout clip fits unified-overlay source video bounds."""
+    clip_start, clip_end = clip_frames_for_match(match, fps=fps, padding_s=padding_s)
+    end_exclusive = int(usable_frame_end_exclusive)
+    if int(clip_start) >= end_exclusive:
+        return False
+    run_len = end_exclusive - int(clip_start)
+    run_len = min(run_len, int(clip_end) - int(clip_start) + 1)
+    return run_len > 0
 
 
 def _candidate_sort_key(
@@ -70,6 +90,10 @@ def select_token_bout_exemplars(
     trial_source_frames: Mapping[str, Sequence[int] | np.ndarray],
     seed: str | None = None,
     max_exemplars: int = DEFAULT_MAX_TOKEN_EXEMPLARS,
+    padding_s: float = DEFAULT_PREVIEW_PADDING_S,
+    trial_fps: Mapping[str, float] | None = None,
+    trial_usable_overlay_frame_end: Mapping[str, int] | None = None,
+    require_overlay_clip_fit: bool = False,
 ) -> tuple[PatternMatch, ...]:
     """Pick diverse, review-friendly bout spans for one ``behavior_token``."""
     if max_exemplars < 1:
@@ -87,6 +111,22 @@ def select_token_bout_exemplars(
         match = pattern_match_from_bout_row(trial_key, row, src)
         if match is None:
             continue
+        if require_overlay_clip_fit:
+            end_exclusive = (
+                int(trial_usable_overlay_frame_end[trial_key])
+                if trial_usable_overlay_frame_end is not None
+                else None
+            )
+            fps = float(trial_fps[trial_key]) if trial_fps is not None else None
+            if end_exclusive is None or fps is None or fps <= 0:
+                continue
+            if not overlay_clip_fits_usable_frames(
+                match,
+                fps=fps,
+                padding_s=padding_s,
+                usable_frame_end_exclusive=end_exclusive,
+            ):
+                continue
         candidates.append(
             (
                 match,

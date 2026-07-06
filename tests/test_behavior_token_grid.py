@@ -7,6 +7,7 @@ import numpy as np
 
 from maze.kpms.behavior_ethogram.paths import resolve_stage_iii_dir
 from maze.kpms.behavior_ethogram.token_exemplars import (
+    overlay_clip_fits_usable_frames,
     pattern_match_from_bout_row,
     select_token_bout_exemplars,
     unique_behavior_tokens,
@@ -85,6 +86,61 @@ def test_select_token_bout_exemplars_prefers_non_ambiguous() -> None:
         max_exemplars=2,
     )
     assert matches[0].trial_key == "t2"
+
+
+def test_overlay_clip_fits_usable_frames_rejects_past_video_end() -> None:
+    row = _bout_row(bout_index=0, behavior_token=6, row_start=0, row_end_exclusive=3)
+    src = np.array([3340, 3345, 3350], dtype=np.int64)
+    match = pattern_match_from_bout_row("t1", row, src)
+    assert match is not None
+    # 1s pad @ 30fps => clip_start=3310; usable end 3295 rejects
+    assert not overlay_clip_fits_usable_frames(
+        match,
+        fps=30.0,
+        padding_s=1.0,
+        usable_frame_end_exclusive=3295,
+    )
+    assert overlay_clip_fits_usable_frames(
+        match,
+        fps=30.0,
+        padding_s=1.0,
+        usable_frame_end_exclusive=3400,
+    )
+
+
+def test_select_token_bout_exemplars_skips_nonfitting_overlay_clips() -> None:
+    rows = [
+        _bout_row(
+            trial_key="bad",
+            bout_index=0,
+            behavior_token=6,
+            row_start=0,
+            row_end_exclusive=3,
+        ),
+        _bout_row(
+            trial_key="good",
+            bout_index=0,
+            behavior_token=6,
+            row_start=0,
+            row_end_exclusive=3,
+        ),
+    ]
+    src = {
+        "bad": [3340, 3345, 3350],
+        "good": [100, 105, 110],
+    }
+    matches = select_token_bout_exemplars(
+        rows,
+        behavior_token=6,
+        trial_source_frames=src,
+        seed="042",
+        max_exemplars=2,
+        padding_s=1.0,
+        trial_fps={"bad": 30.0, "good": 30.0},
+        trial_usable_overlay_frame_end={"bad": 3295, "good": 500},
+        require_overlay_clip_fit=True,
+    )
+    assert [m.trial_key for m in matches] == ["good"]
 
 
 def test_unique_behavior_tokens_filters_seed() -> None:
