@@ -1,0 +1,392 @@
+/* Shared lesson stylesheet — dark theme, Tufte-inspired, print-friendly */
+:root {
+  color-scheme: dark;
+  --text: #e8e6e3;
+  --muted: #9ca3af;
+  --accent: #7eb6ff;
+  --accent-dim: #4a7ab8;
+  --bg: #1a1b1e;
+  --card: #24262b;
+  --card-raised: #2c2f36;
+  --border: #3d424d;
+  --correct: #6ee7a0;
+  --correct-bg: #1a2e22;
+  --wrong: #f87171;
+  --wrong-bg: #2e1a1a;
+  --mission-bg: #1e2430;
+  --chart-grid: #3d424d;
+  --chart-line: #7eb6ff;
+  --chart-label: #9ca3af;
+  --font-serif: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --font-sans: "Segoe UI", system-ui, sans-serif;
+  --max-width: 38rem;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  font-size: 18px;
+  background: var(--bg);
+}
+
+body {
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+  max-width: var(--max-width);
+  color: var(--text);
+  font-family: var(--font-serif);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+header.lesson-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+header.lesson-header .kicker {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+h1 {
+  font-weight: 400;
+  font-size: 2rem;
+  line-height: 1.2;
+  margin: 0.35rem 0 0.5rem;
+}
+
+.meta {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+h2 {
+  font-weight: 600;
+  font-size: 1.15rem;
+  margin: 2rem 0 0.75rem;
+  font-family: var(--font-sans);
+}
+
+p { margin: 0 0 1rem; }
+
+a {
+  color: var(--accent);
+}
+
+a:visited {
+  color: #b4a0e8;
+}
+
+nav.lesson-nav {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  margin: 1.5rem 0;
+  padding: 0.75rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+nav.lesson-nav ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.eq {
+  display: block;
+  margin: 1.25rem 0;
+  padding: 1rem 1.25rem;
+  background: var(--card);
+  border-left: 3px solid var(--accent);
+  font-size: 1.05rem;
+  overflow-x: auto;
+}
+
+.eq .label {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+aside.mission-tie {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  background: var(--mission-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.95rem;
+}
+
+aside.mission-tie strong {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+aside.track-shift {
+  margin: 0 0 1.5rem;
+  padding: 0.85rem 1rem;
+  background: #2a2418;
+  border: 1px solid #6b5a2e;
+  border-radius: 4px;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  color: #e8d9b8;
+}
+
+aside.track-shift a {
+  color: #f0c674;
+}
+
+.sequence-demo {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+}
+
+.sequence-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.75rem 0;
+  align-items: center;
+}
+
+.seq-cell {
+  min-width: 2.25rem;
+  padding: 0.35rem 0.5rem;
+  text-align: center;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--card-raised);
+  font-variant-numeric: tabular-nums;
+}
+
+.seq-cell.labeled {
+  border-color: var(--accent-dim);
+}
+
+.seq-cell .sub {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.seq-legend {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.5rem;
+}
+
+.rule-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+code {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--card-raised);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+
+figure.echo-demo {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  text-align: center;
+}
+
+figure.echo-demo canvas {
+  max-width: 100%;
+  height: auto;
+  background: var(--bg);
+  border-radius: 3px;
+}
+
+figure.echo-demo input[type="range"] {
+  accent-color: var(--accent);
+}
+
+.candidate-table-wrap {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.candidate-table {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.candidate-table td.curate {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.gate-controls {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1rem 0;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+}
+
+.gate-controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.gate-controls input[type="range"] {
+  flex: 1;
+  min-width: 8rem;
+  accent-color: var(--accent);
+}
+
+figcaption {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.5rem;
+  text-align: left;
+}
+
+.quiz {
+  margin: 2rem 0;
+  padding: 1.25rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.quiz h3 {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  margin: 0 0 1rem;
+}
+
+.quiz-item {
+  margin-bottom: 1.25rem;
+}
+
+.quiz-item p.prompt {
+  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+}
+
+.quiz-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.quiz-options button {
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--card-raised);
+  cursor: pointer;
+}
+
+.quiz-options button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.quiz-options button.correct {
+  border-color: var(--correct);
+  background: var(--correct-bg);
+  color: var(--correct);
+}
+
+.quiz-options button.wrong {
+  border-color: var(--wrong);
+  background: var(--wrong-bg);
+  color: var(--wrong);
+}
+
+.quiz-feedback {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  margin-top: 0.35rem;
+  min-height: 1.2em;
+}
+
+footer.lesson-footer {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Reference tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  margin: 1rem 0;
+}
+
+th, td {
+  border: 1px solid var(--border);
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+
+th {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  background: var(--card-raised);
+}
+
+/* MathJax inherits lesson colors */
+mjx-container {
+  color: var(--text) !important;
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+    --text: #1a1a1a;
+    --muted: #555;
+    --accent: #2c5282;
+    --bg: #fff;
+    --card: #faf9f7;
+    --card-raised: #f0f0f0;
+    --border: #ccc;
+    --correct-bg: #f0fff4;
+    --wrong-bg: #fff5f5;
+    --mission-bg: #f0f4f8;
+  }
+
+  body { padding: 0; }
+  .quiz-options button { border: 1px solid #ccc; }
+}

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Lesson 0002 — Syllables to words</title>
+  <link rel="stylesheet" href="../assets/base.css">
+</head>
+<body>
+  <header class="lesson-header">
+    <div class="kicker">Discrete sequences · Lesson 0002</div>
+    <h1>Syllables to words</h1>
+    <p class="meta">~10 min · start here on the main track</p>
+  </header>
+
+  <nav class="lesson-nav">
+    <strong>In this course</strong>
+    <ul>
+      <li>This lesson</li>
+      <li><a href="../reference/discrete-sequences-cheat-sheet.html">Reference: discrete sequences cheat sheet</a></li>
+      <li><a href="../GLOSSARY.md">Glossary</a></li>
+      <li><a href="../MISSION.md">Mission</a></li>
+      <li><a href="0003-mining-and-curating-candidates.html">Lesson 0003: Mining &amp; curating</a></li>
+    </ul>
+  </nav>
+
+  <h2>The metaphor, made precise</h2>
+  <p>
+    In your pipeline, a <strong>syllable</strong> is a per-frame kpMS pose label — a discrete symbol,
+    cohort-specific, sub-second. A <strong>bout</strong> is a maximal run of one syllable along the stream.
+    A <strong>behavior</strong> (“word”) is a portable ethological name: <code>groom</code>,
+    <code>rear</code>, <code>locomote</code>, …
+  </p>
+  <p>
+  The hard part: <strong>the same syllable can mean different behaviors depending on neighbors</strong>
+  — grammar-with-memory. That is a <em>discrete sequence</em> problem, not a continuous
+  autoregression problem.
+  </p>
+
+  <aside class="mission-tie">
+    <strong>Mission tie-in</strong><br>
+    Option A (<code>maze-mine-syllable-grammar-candidates</code> → curate →
+    <code>maze-build-grammar-rules</code>) treats behaviors as <strong>patterns of syllable bouts</strong>.
+    Option D (bout AR-HMM) is a separate producer — it clusters bout <em>kinematics</em>, not syllable phrases.
+  </aside>
+
+  <h2>Discrete sequences &amp; n-grams</h2>
+  <p>
+    A <strong>discrete sequence</strong> is an ordered list of symbols from a finite alphabet.
+    Here the alphabet is syllable ids; the sequence is read at <strong>bout grain</strong>
+    (one symbol per bout, not per frame).
+  </p>
+  <p>
+    An <strong>n-gram</strong> is a contiguous subsequence of length \(n\).
+    Pattern <code>[3, 7, 7]</code> is a 3-gram of syllable bouts. In language modeling,
+    n-grams estimate \(P(\text{next symbol} \mid \text{previous } n{-}1)\) — the
+    <strong>Markov</strong> idea that only a finite window of history matters
+    (<a href="https://web.stanford.edu/~jurafsky/slp3/3.pdf">Jurafsky &amp; Martin, Ch. 3</a>).
+  </p>
+  <p>
+    Your grammar does not need probability estimates to start: <strong>mine</strong> frequent patterns,
+    then a human assigns behavior names. The Markov intuition still helps — behaviors are defined by
+    <em>local</em> bout context, not the entire trial history.
+  </p>
+
+  <h2>Mine vs apply (two different games)</h2>
+  <table>
+    <thead><tr><th>Phase</th><th>What it does</th><th>What “wins”</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Mine</strong></td>
+        <td>Count n-grams → <code>candidate_sequences.csv</code></td>
+        <td>High <code>count</code>, then long <code>pattern_len</code> (curation sort)</td>
+      </tr>
+      <tr>
+        <td><strong>Apply</strong></td>
+        <td><code>label_bouts_with_grammar</code> labels trials</td>
+        <td><strong>Longest matching pattern</strong>, then priority</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    CSV row order is for discovery UX only. Labeling uses greedy longest-match left-to-right —
+    see <a href="../../docs/grammar_rule_contract.md">grammar_rule_contract.md</a>.
+  </p>
+
+  <h2>Interactive: longest match</h2>
+  <p>Fixed bout stream and three rules. Notice how <code>[3,7,7]</code> beats lone <code>[3]</code>.</p>
+  <div class="sequence-demo" id="grammar-match-demo" aria-live="polite"></div>
+
+  <h2>Curation rule of thumb</h2>
+  <ol>
+    <li>Name <strong>specific</strong> behaviors on <strong>long</strong> patterns first (<code>[3,7,7]</code> → groom).</li>
+    <li>Use <strong>short</strong> patterns as broad defaults (<code>[3]</code> → locomote) where longer rules do not match.</li>
+    <li>Conflicting names on nested patterns are <em>intentional</em> — apply resolves by span length, not curator gut feel.</li>
+  </ol>
+
+  <h2>Not the same as autoregression</h2>
+  <p>
+    Classical AR predicts a <em>continuous</em> value from past continuous values.
+    Grammar matching predicts a <em>discrete label</em> when a <em>symbol pattern</em> fits.
+    Bout AR-HMM uses AR on kinematic <em>features</em> inside hidden states — useful for Option D,
+    but it does not read “syllable 3 then 7 then 7” as a phrase. For the syllables→words metaphor,
+    stay on the discrete track first.
+  </p>
+
+  <h2>Retrieval practice</h2>
+  <p>Recall first, then click. Every option is exactly four words.</p>
+
+  <div class="quiz" data-quiz>
+    <h3>Check your grasp</h3>
+
+    <div class="quiz-item" data-answer="2">
+      <p class="prompt">1. A bout in this pipeline is what?</p>
+      <div class="quiz-options">
+        <button type="button">One frame of video</button>
+        <button type="button">A portable behavior name</button>
+        <button type="button" data-ok="Maximal run, one syllable.">Maximal run, one syllable</button>
+        <button type="button">An AR-HMM hidden state</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-item" data-answer="0">
+      <p class="prompt">2. At apply time, which pattern wins?</p>
+      <div class="quiz-options">
+        <button type="button" data-ok="Longest match at index.">Longest match at index</button>
+        <button type="button">Highest count in CSV</button>
+        <button type="button">Shortest match at index</button>
+        <button type="button">First row in CSV file</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-item" data-answer="1">
+      <p class="prompt">3. Same syllable, different behavior implies what?</p>
+      <div class="quiz-options">
+        <button type="button">Memoryless syllable merge map</button>
+        <button type="button" data-ok="Grammar rules with context.">Grammar rules with context</button>
+        <button type="button">Higher AR lag order</button>
+        <button type="button">Raw syllable id feature</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-item" data-answer="3">
+      <p class="prompt">4. Option A grammar patterns are measured at what grain?</p>
+      <div class="quiz-options">
+        <button type="button">Symbols at each video frame</button>
+        <button type="button">Scalars averaged per whole trial</button>
+        <button type="button">Session level occupancy fractions only</button>
+        <button type="button" data-ok="Patterns across syllable bout runs.">Patterns across syllable bout runs</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+  </div>
+
+  <h2>Primary source to read next</h2>
+  <p>
+    <a href="../../docs/grammar_rule_contract.md">OpenEthoMaze grammar_rule_contract.md</a>
+    — subset/superset curation and apply semantics. Then skim
+    <a href="https://web.stanford.edu/~jurafsky/slp3/3.pdf">Jurafsky &amp; Martin Ch. 3</a> §3.1–3.2 for Markov n-gram vocabulary.
+  </p>
+
+  <h2>What comes next</h2>
+  <p>
+    <a href="0003-mining-and-curating-candidates.html">Lesson 0003 — Mining &amp; curating candidates</a>
+    — reading <code>candidate_sequences.csv</code>, overlay gates, and build validation.
+  </p>
+
+  <footer class="lesson-footer">
+    <p>
+      <strong>Ask your teacher.</strong> Confused about mine vs apply, overlapping rules, or how
+      this compares to AR-HMM tokens? Reply in chat.
+    </p>
+    <p>
+      <a href="../reference/discrete-sequences-cheat-sheet.html">→ Cheat sheet</a> ·
+      <a href="../RESOURCES.md">→ Resources</a>
+    </p>
+  </footer>
+
+  <script src="../assets/quiz.js"></script>
+  <script src="../assets/grammar-match.js"></script>
+</body>
+</html>

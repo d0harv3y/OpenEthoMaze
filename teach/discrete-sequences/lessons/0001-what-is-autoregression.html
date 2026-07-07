@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Lesson 0001 — What is autoregression? (appendix)</title>
+  <link rel="stylesheet" href="../assets/base.css">
+</head>
+<body>
+  <aside class="track-shift">
+    <strong>Appendix track.</strong> The main course moved to
+    <a href="0002-syllables-to-words.html">Lesson 0002: Syllables to words</a>
+    (grammar + discrete sequences). Keep this lesson for Option D bout AR-HMM emissions only.
+  </aside>
+
+  <header class="lesson-header">
+    <div class="kicker">Appendix · Continuous AR · Lesson 0001</div>
+    <h1>What is autoregression?</h1>
+    <p class="meta">~8 min · optional · not the syllables→words spine</p>
+  </header>
+
+  <nav class="lesson-nav">
+    <strong>In this course</strong>
+    <ul>
+      <li><a href="0002-syllables-to-words.html">Lesson 0002: Syllables to words</a> (main track)</li>
+      <li>This lesson (appendix)</li>
+      <li><a href="../reference/discrete-sequences-cheat-sheet.html">Reference: discrete sequences</a></li>
+      <li><a href="../reference/ar-models-cheat-sheet.html">Reference: AR models (appendix)</a></li>
+      <li><a href="../MISSION.md">Mission</a></li>
+    </ul>
+  </nav>
+
+  <h2>The one-sentence idea</h2>
+  <p>
+    An <strong>autoregressive</strong> model says the value <em>now</em> is a function of values
+    <em>you already observed</em> in the same series, plus fresh random noise.
+  </p>
+  <p>
+    “Auto” = self. “Regressive” = regression — predicting a variable from predictors.
+    Here the predictors are past versions of the same variable.
+  </p>
+
+  <aside class="mission-tie">
+    <strong>Appendix tie-in</strong><br>
+    Option D (<code>maze-fit-bout-arhmm</code>) uses AR on <em>continuous bout features</em> inside hidden states —
+    not syllable-id n-grams. For syllables→words, see
+    <a href="0002-syllables-to-words.html">Lesson 0002</a>.
+  </aside>
+
+  <h2>AR(1): the smallest nontrivial model</h2>
+  <p>
+    Order 1 means one lag. Write the series as \(Y_t\) (value at time \(t\)) and noise as
+    \(\varepsilon_t\) (white noise — unpredictable shocks, mean zero):
+  </p>
+
+  <div class="eq">
+    <span class="label">AR(1)</span>
+    \(Y_t = \phi\, Y_{t-1} + \varepsilon_t\)
+  </div>
+
+  <p>
+    Read it aloud: “Today equals phi times yesterday, plus a new shock.”
+    If \(\phi = 0.8\), yesterday’s value is echoed into today but damped; shocks still nudge
+    the path. If \(|\phi| \ge 1\) without extra structure, the echo never dies — the series
+    is <em>non-stationary</em> (variance blows up). For AR(1), stationarity needs
+    \(|\phi| &lt; 1\).
+  </p>
+
+  <figure class="echo-demo">
+    <canvas id="ar1-echo-canvas" width="560" height="160" aria-label="AR(1) sample paths for different phi"></canvas>
+    <label for="ar1-phi-slider" style="font-family: var(--font-sans); font-size: 0.9rem;">
+      Drag \(\phi\): <input type="range" id="ar1-phi-slider" min="-0.95" max="0.95" step="0.05" value="0.75">
+    </label>
+    <figcaption>
+      Same random shocks, different \(\phi\). Large \(|\phi|\) → longer memory; sign flips → oscillation.
+      Source intuition: <a href="https://stat153.berkeley.edu/spring-2026/ar-models-notes/">Berkeley Stat 153 AR notes</a>.
+    </figcaption>
+  </figure>
+
+  <h2>AR(p): look back p steps</h2>
+  <p>
+    General order \(p\) keeps \(p\) lags as linear predictors:
+  </p>
+
+  <div class="eq">
+    <span class="label">AR(p)</span>
+    \(Y_t = \phi_1 Y_{t-1} + \phi_2 Y_{t-2} + \cdots + \phi_p Y_{t-p} + \varepsilon_t\)
+  </div>
+
+  <p>
+    \(p\) is a <strong>hyperparameter</strong>: how far back direct linear dependence runs.
+    In your bout AR-HMM, <code>nlags</code> plays the same role for <em>latent</em> dynamics
+    inside each hidden state — higher order → richer short-term kinematics, but more matrices
+    to estimate and more ways for numerics to go wrong.
+  </p>
+
+  <h2>How this differs from ordinary regression</h2>
+  <p>
+    Linear regression: \(Y\) from fixed covariates \(X\). AR: covariates <em>are</em> past \(Y\).
+    That creates <strong>serial correlation</strong> by construction — today correlates with
+    yesterday because yesterday is literally in the equation. Diagnostics (ACF, PACF) exist
+    precisely because independence assumptions from vanilla regression fail.
+  </p>
+
+  <h2>Retrieval practice</h2>
+  <p>Answer from memory first, then click. Every option is exactly four words.</p>
+
+  <div class="quiz" data-quiz>
+    <h3>Check your grasp</h3>
+
+    <div class="quiz-item" data-answer="1">
+      <p class="prompt">1. In AR models, “auto” means what?</p>
+      <div class="quiz-options">
+        <button type="button" data-bad="Independent variables — that’s ordinary regression.">External predictor variables used</button>
+        <button type="button" data-ok="Yes — the series predicts itself.">The series predicts itself</button>
+        <button type="button" data-bad="Automatic tuning — order is chosen deliberately.">Automatic order selection happens</button>
+        <button type="button" data-bad="Autocorrelation is measured, not defined by ‘auto’.">Correlation with time index</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-item" data-answer="2">
+      <p class="prompt">2. In \(Y_t = \phi Y_{t-1} + \varepsilon_t\), what is \(\varepsilon_t\)?</p>
+      <div class="quiz-options">
+        <button type="button" data-bad="φ scales yesterday, not noise.">The autoregressive coefficient</button>
+        <button type="button" data-bad="Lags are in φY_{t-1}, not ε.">The lagged observation term</button>
+        <button type="button" data-ok="Fresh shock at time t.">A new random shock</button>
+        <button type="button" data-bad="Trend is separate structure.">The deterministic time trend</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-item" data-answer="0">
+      <p class="prompt">3. AR(1) is stationary when which holds?</p>
+      <div class="quiz-options">
+        <button type="button" data-ok="Echo dies; variance stable.">The coefficient abs below one</button>
+        <button type="button" data-bad="φ = 0 is white noise, not general AR(1).">The coefficient equals zero</button>
+        <button type="button" data-bad="Positive φ can still explode if ≥ 1.">The coefficient is positive</button>
+        <button type="button" data-bad="Large p is AR(p), not AR(1).">The lag order exceeds one</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-item" data-answer="3">
+      <p class="prompt">4. In your pipeline, `--nlags` mainly controls what?</p>
+      <div class="quiz-options">
+        <button type="button" data-bad="num_states sets discrete tokens.">The hidden state count</button>
+        <button type="button" data-bad="Gibbs iterations, not memory depth.">The MCMC iteration count</button>
+        <button type="button" data-bad="Stickiness is κ, not nlags.">The transition stickiness value</button>
+        <button type="button" data-ok="Same role as p in AR(p).">The autoregressive lag order</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+  </div>
+
+  <h2>Primary source to read next</h2>
+  <p>
+    <a href="https://vlyubchich.github.io/tsar/l02_tsintro.html">TSaR Lecture 2 — Introduction to Time Series Analysis</a>
+    (sections on equation 2.1 and stationarity). Short, free, matches this lesson’s notation.
+  </p>
+
+  <h2>What comes next</h2>
+  <p>
+    Return to the main track:
+    <a href="0002-syllables-to-words.html">Lesson 0002 — Syllables to words</a>.
+    PACF / classical AR order selection is out of scope for the current mission.
+  </p>
+
+  <footer class="lesson-footer">
+    <p>
+      <strong>Ask your teacher.</strong> Anything unclear — AR vs ARMA, stationarity,
+      connection to HMM emissions, or your specific <code>nlags</code> choice — reply in chat.
+      That’s what the teaching agent is for.
+    </p>
+    <p>
+      <a href="../reference/ar-models-cheat-sheet.html">→ AR cheat sheet</a> ·
+      <a href="../RESOURCES.md">→ Full resource list</a>
+    </p>
+  </footer>
+
+  <script src="../assets/quiz.js"></script>
+  <script src="../assets/ar1-echo.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+</body>
+</html>

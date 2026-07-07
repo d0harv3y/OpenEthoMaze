@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Lesson 0003 — Mining &amp; curating candidates</title>
+  <link rel="stylesheet" href="../assets/base.css">
+</head>
+<body>
+  <header class="lesson-header">
+    <div class="kicker">Discrete sequences · Lesson 0003</div>
+    <h1>Mining &amp; curating candidates</h1>
+    <p class="meta">~12 min · read a real <code>candidate_sequences.csv</code></p>
+  </header>
+
+  <nav class="lesson-nav">
+    <strong>In this course</strong>
+    <ul>
+      <li><a href="0002-syllables-to-words.html">← Lesson 0002: Syllables to words</a></li>
+      <li>This lesson</li>
+      <li><a href="../reference/discrete-sequences-cheat-sheet.html#curation">Reference: curation columns</a></li>
+      <li><a href="../MISSION.md">Mission</a></li>
+    </ul>
+  </nav>
+
+  <h2>Where the CSV lives</h2>
+  <p>
+    After mining, artifacts land under:
+  </p>
+  <div class="eq">
+    <span class="label">Paths</span>
+    <code>&lt;kpms_root&gt;/behavior_ethogram/grammar/seed_&lt;seed&gt;/</code><br>
+    · <code>candidate_sequences.csv</code> — lean curation table<br>
+    · <code>candidate_exemplars.json</code> — overlay match spans (verbose)
+  </div>
+  <p>
+    Mine command:
+  </p>
+  <div class="eq">
+    <span class="label">CLI</span>
+    <code>uv run maze-mine-syllable-grammar-candidates --kpms-root … --seed … --manifest-path …</code>
+  </div>
+  <p>
+    Knobs: <code>--max-n 4</code> (longest bout n-gram), <code>--min-count 5</code> (drop rare patterns).
+    When <code>stage_ii/bout_features.csv</code> exists, mine auto-enriches pooled scalars and sets overlay flags.
+  </p>
+
+  <h2>What mine gives you (read-only columns)</h2>
+  <div class="candidate-table-wrap">
+    <table class="candidate-table">
+      <thead>
+        <tr>
+          <th>pattern_json</th>
+          <th>count</th>
+          <th>n_trials</th>
+          <th>mean_speed_mps</th>
+          <th>must_review_overlay</th>
+          <th class="curate">behavior_name</th>
+          <th class="curate">anchor_bucket</th>
+          <th class="curate">reviewed_at</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>[3, 7, 7]</code></td>
+          <td>842</td>
+          <td>61</td>
+          <td>0.09</td>
+          <td>1</td>
+          <td class="curate"><em>you fill</em></td>
+          <td class="curate"><em>you fill</em></td>
+          <td class="curate"><em>you fill</em></td>
+        </tr>
+        <tr>
+          <td><code>[3]</code></td>
+          <td>1204</td>
+          <td>88</td>
+          <td>0.18</td>
+          <td>0</td>
+          <td class="curate">locomote</td>
+          <td class="curate">moving</td>
+          <td class="curate"></td>
+        </tr>
+        <tr>
+          <td><code>[12]</code></td>
+          <td>310</td>
+          <td>44</td>
+          <td>0.03</td>
+          <td>0</td>
+          <td class="curate">pause</td>
+          <td class="curate">still</td>
+          <td class="curate"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <strong>Discovery sort</strong> (how rows appear): <code>count</code> ↓, then <code>pattern_len</code> ↓.
+    Subset patterns are <em>not</em> removed — <code>[3]</code> and <code>[3,7,7]</code> can both appear.
+    Name long specific patterns first; short patterns are defaults (lesson 0002).
+  </p>
+
+  <aside class="mission-tie">
+    <strong>Curation loop</strong><br>
+    1. Mine → 2. Sort flagged rows (<code>must_review_overlay=1</code>) to the top →
+    3. <code>maze-preview-grammar-candidate</code> on exemplar matches → stamp <code>reviewed_at</code> →
+    4. Fill <code>behavior_name</code> + <code>anchor_bucket</code> →
+    5. <code>maze-build-grammar-rules</code> → export → evaluate vs <code>is_moving</code> anchor.
+  </aside>
+
+  <h2>Columns you own</h2>
+  <table>
+    <thead><tr><th>Column</th><th>Your job</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>behavior_name</code></td>
+        <td>Portable ethology string (<code>groom</code>, <code>rear</code>, …). Empty rows are skipped at build.</td>
+      </tr>
+      <tr>
+        <td><code>anchor_bucket</code></td>
+        <td><code>moving</code> | <code>still</code> | <code>ignore</code> — harness tag, one bucket per name.</td>
+      </tr>
+      <tr>
+        <td><code>reviewed_at</code></td>
+        <td>ISO timestamp after you watched an overlay clip (required when <code>must_review_overlay=1</code>).</td>
+      </tr>
+      <tr>
+        <td><code>reviewed_trial_key</code></td>
+        <td>Optional audit trail — which exemplar trial you reviewed.</td>
+      </tr>
+      <tr>
+        <td><code>notes</code></td>
+        <td>Freeform — subset/superset reminders, pose notes, etc.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>anchor_bucket cheat sheet</h2>
+  <table>
+    <thead><tr><th>Bucket</th><th>When to use</th><th>Harness</th></tr></thead>
+    <tbody>
+      <tr><td><code>moving</code></td><td>Locomotion, traversal</td><td>Scores vs <code>is_moving</code> anchor</td></tr>
+      <tr><td><code>still</code></td><td>Pause, freeze, low displacement</td><td>Scores vs <code>is_moving</code> anchor</td></tr>
+      <tr><td><code>ignore</code></td><td>Groom, rear, pose-shaped still</td><td>Exported but excluded from anchor agreement</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Build fails if the same <code>behavior_name</code> gets two different buckets.
+    Pose-shaped classes usually need <code>ignore</code> until finer anchors exist — scalars alone cannot separate groom vs rear.
+  </p>
+
+  <h2>When must_review_overlay = 1?</h2>
+  <p>
+    Auto-flagged when matches hit ambiguous bouts, speed gray zone (~0.06–0.14 m/s),
+    or low speed + high |dheading|. Drag the simulator — thresholds match
+    <code>grammar_contract.py</code>.
+  </p>
+  <figure class="echo-demo">
+    <div class="gate-controls">
+      <label><input type="checkbox" id="gate-ambiguous"> Ambiguous bout in match span</label>
+      <label>Mean speed (m/s): <span id="gate-speed-val">0.09</span>
+        <input type="range" id="gate-speed" min="0" max="0.35" step="0.01" value="0.09"></label>
+      <label>Mean |dheading|: <span id="gate-dheading-val">0.12</span>
+        <input type="range" id="gate-dheading" min="0" max="0.5" step="0.01" value="0.12"></label>
+      <label>Max bout speed IQR: <span id="gate-iqr-val">0.05</span>
+        <input type="range" id="gate-iqr" min="0" max="0.15" step="0.01" value="0.05"></label>
+    </div>
+    <div id="gate-result" aria-live="polite"></div>
+    <figcaption>Overlay gate simulator. Flagged rows need <code>reviewed_at</code> before <code>maze-build-grammar-rules</code> (unless <code>--force</code>).</figcaption>
+  </figure>
+
+  <h2>Preview before you name</h2>
+  <p>
+    For row <code>i</code>, match <code>j</code> in <code>candidate_exemplars.json</code>:
+  </p>
+  <div class="eq">
+    <span class="label">CLI</span>
+    <code>uv run maze-preview-grammar-candidate … --row-index 0 --match-index 0 --out …/grammar_review/</code><br>
+    Multiple: <code>--match-index 2,3,4</code> or <code>--random-matches 6 --match-seed 0</code> (directory <code>--out</code>)
+  </div>
+  <p>
+    Clips the pose overlay to the matched bout span ± 1 s. Watch → assign <code>behavior_name</code> →
+    set <code>reviewed_at</code> (e.g. <code>2026-07-06T14:30:00</code>).
+  </p>
+
+  <h2>Build gates (what blocks you)</h2>
+  <ul>
+    <li>Named row missing <code>anchor_bucket</code> → build error</li>
+    <li><code>must_review_overlay=1</code> and empty <code>reviewed_at</code> → build error (<code>--force</code> overrides)</li>
+    <li>Conflicting <code>anchor_bucket</code> for same <code>behavior_name</code> → build error</li>
+    <li>No rows with both name and bucket → build error</li>
+  </ul>
+  <p>
+    Successful build writes <code>grammar_rules.json</code> with
+    <code>priority = len(pattern) × 10</code> per rule — tying apply precedence to pattern length.
+  </p>
+
+  <h2>Retrieval practice</h2>
+  <p>Every option is exactly four words.</p>
+
+  <div class="quiz" data-quiz>
+    <h3>Check your grasp</h3>
+
+    <div class="quiz-item" data-answer="1">
+      <p class="prompt">1. Rows with empty behavior_name at build are what?</p>
+      <div class="quiz-options">
+        <button type="button">Exported as UNLABELED default</button>
+        <button type="button" data-ok="Skipped — not compiled rules.">Skipped — not compiled rules</button>
+        <button type="button">Assigned anchor bucket ignore</button>
+        <button type="button">Merged into longest pattern</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-item" data-answer="0">
+      <p class="prompt">2. groom vs rear at low speed needs what?</p>
+      <div class="quiz-options">
+        <button type="button" data-ok="Overlay exemplar review required.">Overlay exemplar review required</button>
+        <button type="button">Higher min-count at mine</button>
+        <button type="button">anchor_bucket set to moving</button>
+        <button type="button">Scalars mean speed alone</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-item" data-answer="2">
+      <p class="prompt">3. Same behavior_name, two anchor_buckets causes what?</p>
+      <div class="quiz-options">
+        <button type="button">Longer pattern wins apply</button>
+        <button type="button">Harness picks still bucket</button>
+        <button type="button" data-ok="Build validation fails hard.">Build validation fails hard</button>
+        <button type="button">Export uses first row only</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-item" data-answer="3">
+      <p class="prompt">4. Exemplar bout spans for overlay live where?</p>
+      <div class="quiz-options">
+        <button type="button">Inside pattern_json column itself</button>
+        <button type="button">Only in stage two bout</button>
+        <button type="button">Inside grammar rules dot json</button>
+        <button type="button" data-ok="In exemplars json sidecar file.">In exemplars json sidecar file</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+  </div>
+
+  <h2>Primary source to read next</h2>
+  <p>
+    <a href="../../docs/grammar_rule_contract.md">grammar_rule_contract.md</a> — full column spec,
+    subset/superset curation, and S3.1 workflow table. Skim your mined CSV alongside it.
+  </p>
+
+  <h2>What comes next</h2>
+  <p>
+    <a href="0004-language-models-merge-and-strata.html">Lesson 0004 — Language models, merge &amp; strata</a>
+  </p>
+
+  <footer class="lesson-footer">
+    <p>
+      <strong>Ask your teacher.</strong> Stuck on a real row from gerstner_vast_fit? Paste
+      <code>pattern_json</code> + scalars + flags and we can curate it together.
+    </p>
+    <p>
+      <a href="../reference/discrete-sequences-cheat-sheet.html#curation">→ Curation cheat sheet</a> ·
+      <a href="../RESOURCES.md">→ Resources</a>
+    </p>
+  </footer>
+
+  <script src="../assets/quiz.js"></script>
+  <script src="../assets/overlay-gate.js"></script>
+</body>
+</html>

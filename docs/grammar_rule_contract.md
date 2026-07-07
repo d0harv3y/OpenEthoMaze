@@ -91,12 +91,19 @@ Two different ranking systems apply:
 | `count` | Total occurrences |
 | `n_trials` | Distinct trials containing the pattern |
 | `mean_speed_mps`, `mean_abs_dheading`, `mean_straightness`, `mean_blob_area_px2` | Pooled bout scalars from `stage_ii/bout_features.csv` (auto at mine when file present) |
+| `mean_duration_s` | Pooled mean per-bout duration (s) over **all** matched bouts |
+| `mean_distance_m` | Pooled mean per-bout path length (m), derived as `bout_mean_speed_mps * bout_duration_s` |
+| `mean_iqr_speed_mps` | Pooled mean of per-bout speed IQR (m/s) |
+| `mean_heading_rad` | Pooled **circular** mean of per-bout mean heading (rad); requires `bout_mean_heading_rad` in `bout_features.csv` (compile with `--include-heading-direction`) |
 | `must_review_overlay` | `1` if exemplar movie required before naming |
 | `behavior_name` | Curator-assigned portable name (empty until curated) |
 | `anchor_bucket` | `moving` \| `still` \| `ignore` — harness tag (per **behavior_name**, validated at build) |
 | `reviewed_at` | ISO timestamp after overlay review |
 | `reviewed_trial_key` | Which exemplar trial was watched |
+| `preview_grid_path` | Relative path to exemplar grid MP4, back-filled by `maze-preview-grammar-candidate-grid` |
 | `notes` | Optional notes |
+
+Pooled scalar means (including the new columns) are computed over **every** matched bout in the corpus for the seed, not just the capped `example_trial_keys`. Exemplar spans in `candidate_exemplars.json` are selected to spread across **animals then sessions then trials** (ranked by non-ambiguous + closeness to the pooled mean speed), so a candidate's preview grid does not collapse onto one animal/session.
 
 Overlay gate (`must_review_overlay=1`) when **any** of: bout `ambiguous=1` on a matching bout; mean speed in gray zone (~0.06–0.14 m/s); low speed + high mean \|dheading\|.
 
@@ -129,12 +136,18 @@ Verbose review data lives outside the CSV. Schema: `grammar_candidate_exemplars_
 
 Populated at mine when `stage_ii/bout_features.csv` is present. Selection prefers non-ambiguous spans, diverse trials, and speeds near the row’s pooled mean. Legacy CSV columns are still read as a fallback by `maze-preview-grammar-candidate`.
 
-Preview a match:
+Preview one or more matches:
 
 ```bash
 uv run maze-preview-grammar-candidate \
-  --kpms-root … --seed 042 --manifest-path … --pipeline-h5 … \
+  --kpms-root … --seed … --manifest-path … --pipeline-h5 … \
   --row-index 0 --match-index 0 --out …/grammar_review/
+
+# comma-separated match indices (writes one MP4 per index when --out is a directory)
+uv run maze-preview-grammar-candidate … --row-index 42 --match-index 2,3,4,5,6,7 --out …/grammar_review/
+
+# N random distinct matches (optional --match-seed for reproducibility)
+uv run maze-preview-grammar-candidate … --row-index 42 --random-matches 6 --match-seed 0 --out …/grammar_review/
 ```
 
 Clips the overlay to the match span ± 1 s (default) using `clip_source_start_frame` / `clip_source_end_frame` on the unified overlay renderer.

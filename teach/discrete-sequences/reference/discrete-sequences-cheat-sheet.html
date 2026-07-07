@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Reference — Discrete sequences cheat sheet</title>
+  <link rel="stylesheet" href="../assets/base.css">
+  <style>
+    dl { margin: 0; }
+    dt { font-weight: 600; font-family: var(--font-sans); margin-top: 0.75rem; }
+    dd { margin: 0.2rem 0 0 0; color: var(--muted); font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <header class="lesson-header">
+    <div class="kicker">Reference</div>
+    <h1>Discrete sequences cheat sheet</h1>
+    <p class="meta">Syllable grammar / Option A · lesson 0002</p>
+  </header>
+
+  <nav class="lesson-nav">
+    <ul style="list-style: none; padding: 0; margin: 0;">
+      <li><a href="../lessons/0002-syllables-to-words.html">← Lesson 0002: Syllables to words</a></li>
+      <li><a href="../lessons/0001-what-is-autoregression.html">Appendix: classical AR</a></li>
+    </ul>
+  </nav>
+
+  <h2>Pipeline (Option A)</h2>
+  <ol>
+    <li>Mine n-grams → <code>candidate_sequences.csv</code></li>
+    <li>Curate names + <code>anchor_bucket</code> + overlay review</li>
+    <li>Build → <code>grammar_rules.json</code></li>
+    <li>Export → <code>producers/syllable_grammar/</code></li>
+  </ol>
+
+  <h2>Apply algorithm</h2>
+  <p>Greedy scan index <code>i = 0 … n-1</code>:</p>
+  <ol>
+    <li>Sort rules by <strong>(−pattern length, −priority, pattern)</strong></li>
+    <li>At <code>i</code>, first rule whose pattern matches <code>ids[i:i+len]</code> wins</li>
+    <li>Label span; set <code>i += len(pattern)</code></li>
+    <li>If no match, <code>i += 1</code> (bout stays unlabeled)</li>
+  </ol>
+
+  <h2>Mine vs apply</h2>
+  <table>
+    <thead><tr><th></th><th>Mine CSV sort</th><th>Apply labeling</th></tr></thead>
+    <tbody>
+      <tr><td>Primary key</td><td><code>count</code> ↓</td><td>Pattern length ↓</td></tr>
+      <tr><td>Secondary</td><td><code>pattern_len</code> ↓</td><td><code>priority</code> ↓</td></tr>
+      <tr><td>Purpose</td><td>What to review first</td><td>What labels trials</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Symbols → pipeline</h2>
+  <dl>
+    <dt>Syllable id</dt>
+    <dd>kpMS per-frame label; bout = maximal run of one id.</dd>
+    <dt>Pattern / n-gram</dt>
+    <dd>JSON list e.g. <code>[3, 7, 7]</code> at bout grain.</dd>
+    <dt><code>--max-n</code></dt>
+    <dd>Max pattern length when mining (default 4 bouts).</dd>
+    <dt><code>behavior_name</code></dt>
+    <dd>Portable ethology string assigned at curation.</dd>
+    <dt>Merge</dt>
+    <dd>Memoryless id remap — <em>cannot</em> express context-dependent behaviors.</dd>
+  </dl>
+
+  <h2>vs AR-HMM (Option D)</h2>
+  <table>
+    <thead><tr><th></th><th>Grammar (A)</th><th>Bout AR-HMM (D)</th></tr></thead>
+    <tbody>
+      <tr><td>Input</td><td>Syllable bout ids</td><td>Bout kinematic features + signatures</td></tr>
+      <tr><td>Context</td><td>Explicit patterns</td><td>Hidden state + AR on features</td></tr>
+      <tr><td>Output names</td><td>Curator assigns on rules</td><td>Curator assigns on tokens</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="curation">Curation columns (lesson 0003)</h2>
+  <table>
+    <thead><tr><th>Column</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td><code>pattern_json</code>, <code>count</code>, <code>n_trials</code></td><td>Mine</td></tr>
+      <tr><td><code>mean_*</code> scalars</td><td>Enrich from <code>bout_features.csv</code></td></tr>
+      <tr><td><code>must_review_overlay</code></td><td>Auto flag (ambiguous / gray speed / pose still)</td></tr>
+      <tr><td><code>behavior_name</code>, <code>anchor_bucket</code></td><td>You</td></tr>
+      <tr><td><code>reviewed_at</code>, <code>reviewed_trial_key</code></td><td>You (after overlay)</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size: 0.9rem;">
+    <a href="../lessons/0003-mining-and-curating-candidates.html">Lesson 0003</a> ·
+    Overlay thresholds: gray 0.06–0.14 m/s; low speed + |dheading| ≥ 0.25.
+  </p>
+
+  <footer class="lesson-footer">
+    <p>
+      <a href="../../docs/grammar_rule_contract.md">grammar_rule_contract.md</a> ·
+      <a href="../GLOSSARY.md">Glossary</a> ·
+      <a href="../RESOURCES.md">Resources</a>
+    </p>
+  </footer>
+</body>
+</html>

@@ -63,6 +63,17 @@ def test_select_example_matches_prefers_non_ambiguous() -> None:
     assert matches[0].trial_key == "t1"
 
 
+def test_select_example_matches_spreads_across_animals() -> None:
+    # animal 1 has three trials; animal 2 has one. First picks must not both be animal 1.
+    keys = ["1-S01-T01", "1-S01-T02", "1-S02-T01", "2-S01-T01"]
+    rows = [_bout_row(trial_key=k, bout_index=0, raw_syllable_id=3, row_start=0, row_end_exclusive=5) for k in keys]
+    by_trial = {k: [(0, rows[i])] for i, k in enumerate(keys)}
+    src = {k: [100, 101, 102, 103, 104] for k in keys}
+    matches = select_example_matches((3,), tuple(keys), by_trial, src, max_matches=2)
+    animals = {m.trial_key.split("-")[0] for m in matches}
+    assert animals == {"1", "2"}
+
+
 def test_attach_example_matches_writes_json_column(tmp_path) -> None:
     rows = [
         _bout_row(trial_key="t1", bout_index=0, raw_syllable_id=3, row_start=0, row_end_exclusive=3),

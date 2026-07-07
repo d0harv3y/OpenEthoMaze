@@ -92,13 +92,11 @@ def _clip_overlay_cfg(
     *,
     clip_start: int,
     clip_end: int,
-    behavior_token: int,
-    trial_key: str,
+    label: str,
 ) -> None:
     cfg.clip_source_start_frame = clip_start
     cfg.clip_source_end_frame = clip_end
     cfg.include_pre_trial_frames = False
-    label = f"token {behavior_token} | {trial_key}"
 
     def _extra_lines(_frame_index: int) -> tuple[str, ...]:
         return (label,)
@@ -193,6 +191,7 @@ def render_overlay_clip_for_match(
     padding_s: float = DEFAULT_PREVIEW_PADDING_S,
     no_ethogram: bool = False,
     no_syllable_tray: bool = False,
+    label: str | None = None,
 ) -> Path:
     """Render one clipped unified-overlay MP4 for a bout exemplar."""
     pre_cfg = preprocess_config_for_results_h5(results_h5) or KpmsPreprocessConfig()
@@ -201,6 +200,7 @@ def render_overlay_clip_for_match(
     clip_start, clip_end = clip_frames_for_match(match, fps=fps, padding_s=padding_s)
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    hud_label = label if label is not None else f"token {behavior_token} | {match.trial_key}"
 
     def _extend(cfg: UnifiedOverlayConfig) -> None:
         _sync_kpms_pre_cfg(cfg, pre_cfg)
@@ -208,8 +208,7 @@ def render_overlay_clip_for_match(
             cfg,
             clip_start=clip_start,
             clip_end=clip_end,
-            behavior_token=behavior_token,
-            trial_key=match.trial_key,
+            label=hud_label,
         )
 
     ns = _overlay_namespace(
@@ -271,6 +270,7 @@ def render_pose_only_clip_for_match(
     tracking_h5: Path,
     out_path: Path,
     padding_s: float = DEFAULT_PREVIEW_PADDING_S,
+    label: str | None = None,
 ) -> Path:
     """Render a pose-only MP4 on a black canvas when source video is unavailable."""
     import cv2
@@ -299,7 +299,7 @@ def render_pose_only_clip_for_match(
     if not writer.isOpened():
         raise RuntimeError(f"Failed to open VideoWriter: {out_path}")
 
-    label = f"token {behavior_token} | {match.trial_key}"
+    hud_label = label if label is not None else f"token {behavior_token} | {match.trial_key}"
     for row in row_indices:
         frame = np.zeros((height, width, 3), dtype=np.uint8)
         pts = coords[int(row)]
@@ -315,7 +315,7 @@ def render_pose_only_clip_for_match(
             cv2.line(frame, p0, p1, (0, 200, 255), 2, cv2.LINE_AA)
         cv2.putText(
             frame,
-            label,
+            hud_label,
             (8, 22),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,

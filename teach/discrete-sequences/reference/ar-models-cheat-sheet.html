@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Reference — AR models cheat sheet</title>
+  <link rel="stylesheet" href="../assets/base.css">
+  <style>
+    dl { margin: 0; }
+    dt { font-weight: 600; font-family: var(--font-sans); margin-top: 0.75rem; }
+    dd { margin: 0.2rem 0 0 0; color: var(--muted); font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <header class="lesson-header">
+    <div class="kicker">Reference</div>
+    <h1>AR models cheat sheet</h1>
+    <p class="meta">Appendix · continuous AR · lesson 0001</p>
+  </header>
+
+  <nav class="lesson-nav">
+    <ul style="list-style: none; padding: 0; margin: 0;">
+      <li><a href="../lessons/0002-syllables-to-words.html">← Main track: Lesson 0002</a></li>
+      <li><a href="../reference/discrete-sequences-cheat-sheet.html">Discrete sequences cheat sheet</a></li>
+    </ul>
+  </nav>
+
+  <h2>Core equations</h2>
+  <div class="eq">
+    <span class="label">AR(p)</span>
+    \(Y_t = \phi_1 Y_{t-1} + \cdots + \phi_p Y_{t-p} + \varepsilon_t\), &nbsp;
+    \(\varepsilon_t \sim \text{WN}(0, \sigma^2)\)
+  </div>
+  <div class="eq">
+    <span class="label">AR(1) stationarity</span>
+    \(|\phi_1| &lt; 1\)
+  </div>
+
+  <h2>Symbols</h2>
+  <table>
+    <thead><tr><th>Symbol</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>\(Y_t\)</td><td>Observation (or latent value) at time \(t\)</td></tr>
+      <tr><td>\(p\)</td><td>Order — number of lags</td></tr>
+      <tr><td>\(\phi_k\)</td><td>Coefficient on lag \(k\)</td></tr>
+      <tr><td>\(\varepsilon_t\)</td><td>White-noise innovation at \(t\)</td></tr>
+      <tr><td>\(\phi\)</td><td>AR(1) single coefficient (special case)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Identification (preview)</h2>
+  <table>
+    <thead><tr><th>Tool</th><th>AR(p) signature</th></tr></thead>
+    <tbody>
+      <tr><td>ACF</td><td>Tails off (decays), does not cut to zero sharply</td></tr>
+      <tr><td>PACF</td><td>Significant spikes through lag \(p\), then ≈ 0</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size: 0.9rem; color: var(--muted);">
+    Full lesson on PACF: forthcoming 0002. Source:
+    <a href="https://vlyubchich.github.io/tsar/l02_tsintro.html">TSaR L02</a>.
+  </p>
+
+  <h2>OpenEthoMaze mapping</h2>
+  <dl>
+    <dt><code>--nlags</code> (bout AR-HMM)</dt>
+    <dd>AR order \(p\) for latent bout-feature dynamics per hidden state.</dd>
+    <dt><code>latent_dim</code> (kpMS)</dt>
+    <dd>Dimension of vector \(Y_t\) — multivariate AR, not scalar.</dd>
+    <dt>AR-HMM</dt>
+    <dd>Hidden Markov <em>regime</em> + AR <em>emissions</em> inside each regime.</dd>
+  </dl>
+
+  <footer class="lesson-footer">
+    <p><a href="../RESOURCES.md">Resources</a> · <a href="../MISSION.md">Mission</a></p>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+</body>
+</html>

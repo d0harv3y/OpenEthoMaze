@@ -78,6 +78,29 @@ def test_resolve_results_h5_path_fit_layout(tmp_path: Path) -> None:
     assert resolve_results_h5_path(root, "fit") == fit_results
 
 
+def test_resolve_grammar_results_h5_cohort_fit(tmp_path: Path) -> None:
+    from maze.kpms.behavior_ethogram.paths import resolve_grammar_results_h5
+
+    root = tmp_path / "kpms_fit"
+    root.mkdir()
+    fit_results = root / "results.h5"
+    fit_results.write_bytes(b"\x00")
+    assert resolve_grammar_results_h5(root, "fit") == fit_results
+
+
+def test_resolve_grammar_results_h5_raises_when_missing(tmp_path: Path) -> None:
+    from maze.kpms.behavior_ethogram.paths import resolve_grammar_results_h5
+
+    root = tmp_path / "empty"
+    root.mkdir()
+    try:
+        resolve_grammar_results_h5(root, "fit")
+    except FileNotFoundError as exc:
+        assert "results.h5" in str(exc)
+    else:
+        raise AssertionError("expected FileNotFoundError")
+
+
 def test_manifest_stratify_fields() -> None:
     from maze.kpms.manifest_subset import STRATIFY_LABEL_COLUMNS, manifest_stratify_fields
 

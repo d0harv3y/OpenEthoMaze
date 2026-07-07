@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Reference — Language models &amp; strata</title>
+  <link rel="stylesheet" href="../assets/base.css">
+</head>
+<body>
+  <header class="lesson-header">
+    <div class="kicker">Reference</div>
+    <h1>Language models &amp; strata cheat sheet</h1>
+    <p class="meta">Lesson 0004</p>
+  </header>
+
+  <nav class="lesson-nav">
+    <ul style="list-style: none; padding: 0; margin: 0;">
+      <li><a href="../lessons/0004-language-models-merge-and-strata.html">← Lesson 0004</a></li>
+    </ul>
+  </nav>
+
+  <h2>Bigram estimate</h2>
+  <div class="eq">
+    \(P(s_t \mid s_{t-1}) = \dfrac{\mathrm{Count}(s_{t-1}, s_t)}{\mathrm{Count}(s_{t-1})}\)
+  </div>
+  <p>Bout grain: \(s_t\) = syllable id at bout <em>t</em>.</p>
+
+  <h2>Perplexity (intuition)</h2>
+  <p>
+    \(\mathrm{PP} = 2^{H}\) or \(\exp(-\frac{1}{N}\sum \log P)\) on test transitions.
+    Lower = more predictable bigrams. Compare before/after merge or between strata — not an absolute “good” threshold.
+  </p>
+
+  <h2>Merge vs grammar vs LM</h2>
+  <table>
+    <thead><tr><th></th><th>Merge</th><th>Grammar</th><th>LM metrics</th></tr></thead>
+    <tbody>
+      <tr><td>Changes alphabet</td><td>Yes</td><td>No</td><td>Describes alphabet</td></tr>
+      <tr><td>Uses context</td><td>No</td><td>Yes (patterns)</td><td>Yes (probabilities)</td></tr>
+      <tr><td>Shipped CLI</td><td><code>maze-kpms-apply-syllable-merge</code></td><td>Option A chain</td><td>— (manual / future)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Strata occupancy (shipped)</h2>
+  <div class="eq">
+    <code>uv run maze-summarize-behavior-tokens --grain {token,ethology} --phase {run,iti,all} …</code>
+  </div>
+  <table>
+    <thead><tr><th>Output</th><th>Contents</th></tr></thead>
+    <tbody>
+      <tr><td><code>occupancy.csv</code></td><td>Pooled (session, tx, sex, strain) × label × phase</td></tr>
+      <tr><td><code>occupancy_by_session.csv</code></td><td>Session in stratum key</td></tr>
+      <tr><td><code>transitions.csv</code></td><td>Bout bigram counts between behavior labels</td></tr>
+    </tbody>
+  </table>
+
+  <h2>After merge checklist</h2>
+  <ol>
+    <li><code>maze-kpms-apply-syllable-merge</code> → merged H5</li>
+    <li>Re-compile bout features if downstream needs scalars</li>
+    <li>Re-mine grammar candidates (patterns change)</li>
+    <li>Re-summarize occupancy / transitions</li>
+  </ol>
+
+  <footer class="lesson-footer">
+    <p><a href="../RESOURCES.md">Resources</a> · <a href="../GLOSSARY.md">Glossary</a></p>
+  </footer>
+</body>
+</html>

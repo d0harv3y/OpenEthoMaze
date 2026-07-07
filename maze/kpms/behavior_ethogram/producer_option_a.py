@@ -9,7 +9,7 @@ from typing import Mapping, Sequence
 import h5py
 import numpy as np
 
-from maze.kpms.apply_summary import preprocess_config_from_apply_summary
+from maze.kpms.apply_summary import preprocess_config_for_results_h5
 from maze.kpms.frame_alignment import kpms_aligned_coordinates_and_indices, kpms_recording_key
 from maze.kpms.preprocess import KpmsPreprocessConfig
 from maze.pipeline.io.file_discovery import TrialManifest, load_manifest_csv
@@ -23,7 +23,7 @@ from .grammar_rules import (
     read_grammar_rules_json,
 )
 from .labeling import UNLABELED, BehaviorLabeling, TrialFrameLabels, hash_file, write_behavior_labeling
-from .paths import producer_dir
+from .paths import producer_dir, resolve_grammar_results_h5
 
 
 @dataclass(frozen=True)
@@ -88,6 +88,7 @@ def export_option_a_labeling(
     fps: float = 30.0,
     artifact_dir: Path | str | None = None,
     grammar: GrammarRules | None = None,
+    results_h5: Path | str | None = None,
 ) -> BehaviorLabeling:
     """Write ``producers/syllable_grammar/<fit_id>/`` from curated grammar rules."""
     kpms_root = Path(kpms_root)
@@ -99,8 +100,12 @@ def export_option_a_labeling(
     grammar = grammar or read_grammar_rules_json(rules_json)
 
     manifests = _manifest_by_recording_key(load_manifest_csv(Path(manifest_path)))
-    results_h5 = kpms_root / "anatomical" / f"seed_{seed}" / "results_apply.h5"
-    pre_cfg = preprocess_config_from_apply_summary(results_h5) or KpmsPreprocessConfig()
+    resolved_results = resolve_grammar_results_h5(
+        kpms_root,
+        seed,
+        results_h5=Path(results_h5) if results_h5 is not None else None,
+    )
+    pre_cfg = preprocess_config_for_results_h5(resolved_results, kpms_root=kpms_root) or KpmsPreprocessConfig()
     pre_cfg = KpmsPreprocessConfig(
         min_fragment_frames=pre_cfg.min_fragment_frames,
         jump_filter_cm=pre_cfg.jump_filter_cm,
@@ -114,7 +119,7 @@ def export_option_a_labeling(
     name_to_id = behavior_name_to_id_map(grammar.behavior_names())
     trials: list[TrialFrameLabels] = []
     for trial_key, manifest in sorted(manifests.items()):
-        z = _load_syllables(results_h5, trial_key)
+        z = _load_syllables(resolved_results, trial_key)
         if z is None or len(z) == 0:
             continue
         aligned = kpms_aligned_coordinates_and_indices(manifest, pre_cfg)
@@ -151,7 +156,7 @@ def export_option_a_labeling(
         params={"seed": seed, "n_rules": len(grammar.rules)},
         input_hashes={
             "grammar_rules.json": hash_file(rules_json),
-            "results_apply.h5": hash_file(results_h5),
+            "results_apply.h5": hash_file(resolved_results),
         },
     )
     write_behavior_labeling(artifact_dir, labeling)

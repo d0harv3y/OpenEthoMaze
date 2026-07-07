@@ -11,7 +11,7 @@ import numpy as np
 from .grammar_enrich import _trial_bout_table
 from .grammar_mine import MinedSequence
 
-DEFAULT_MAX_EXAMPLE_MATCHES = 3
+DEFAULT_MAX_EXAMPLE_MATCHES = 20
 DEFAULT_PREVIEW_PADDING_S = 1.0
 
 
@@ -123,6 +123,14 @@ def _match_sort_key(
     return (amb_rank, speed_rank, match.trial_key)
 
 
+def _trial_key_strata(trial_key: str) -> tuple[str, str, str]:
+    """Split ``animal-session-trial`` (e.g. ``1-S01-T01``) into diversity strata."""
+    parts = str(trial_key).split("-")
+    animal = parts[0] if parts else str(trial_key)
+    session = parts[1] if len(parts) > 1 else ""
+    return animal, session, str(trial_key)
+
+
 def select_example_matches(
     pattern: tuple[int, ...],
     trial_keys: Sequence[str],
@@ -132,7 +140,13 @@ def select_example_matches(
     max_matches: int = DEFAULT_MAX_EXAMPLE_MATCHES,
     pattern_mean_speed: float | None = None,
 ) -> tuple[PatternMatch, ...]:
-    """Pick diverse, review-friendly exemplar spans across trials."""
+    """Pick diverse, review-friendly exemplar spans stratified across animals/sessions.
+
+    Ranking prefers non-ambiguous spans whose mean speed is closest to the
+    pattern's pooled mean. Selection then spreads picks so the exemplar set does
+    not collapse onto a single animal or session: first one span per animal, then
+    fill new sessions, then new trials, then any remaining by rank.
+    """
     if max_matches < 1:
         return ()
     candidates: list[tuple[PatternMatch, bool, float]] = []
@@ -140,8 +154,8 @@ def select_example_matches(
         src = trial_source_frames.get(str(tk))
         if src is None:
             continue
+        spans = _match_span_rows(pattern, str(tk), by_trial)
         for match in find_pattern_matches_in_trial(pattern, str(tk), by_trial, src):
-            spans = _match_span_rows(pattern, str(tk), by_trial)
             bout_rows: list[Mapping[str, str]] = []
             for bs, be, rows in spans:
                 if bs == match.bout_start_index and be == match.bout_end_exclusive:
@@ -159,22 +173,29 @@ def select_example_matches(
             pattern_mean_speed=pattern_mean_speed,
         )
     )
-    seen_trials: set[str] = set()
+
     picked: list[PatternMatch] = []
-    for match, _amb, _sp in candidates:
-        if match.trial_key in seen_trials:
-            continue
-        picked.append(match)
-        seen_trials.add(match.trial_key)
-        if len(picked) >= max_matches:
-            break
-    if len(picked) < max_matches:
+    picked_ids: set[int] = set()
+
+    def _fill(level: int | None) -> None:
+        seen: set[tuple[str, ...]] = set()
         for match, _amb, _sp in candidates:
-            if match in picked:
-                continue
-            picked.append(match)
             if len(picked) >= max_matches:
-                break
+                return
+            if id(match) in picked_ids:
+                continue
+            if level is not None:
+                stratum = _trial_key_strata(match.trial_key)[: level + 1]
+                if stratum in seen:
+                    continue
+                seen.add(stratum)
+            picked.append(match)
+            picked_ids.add(id(match))
+
+    _fill(0)  # one per animal
+    _fill(1)  # add new (animal, session)
+    _fill(2)  # add new (animal, session, trial)
+    _fill(None)  # fill remaining by rank
     return tuple(picked)
 
 
@@ -190,12 +211,12 @@ def attach_example_matches_to_candidates(
     from dataclasses import replace
 
     by_trial = _trial_bout_table(bout_rows, seed=seed)
+    all_keys = tuple(sorted(by_trial.keys()))
     out: list[MinedSequence] = []
     for cand in candidates:
-        keys = cand.example_trial_keys or tuple(sorted(by_trial.keys()))
         matches = select_example_matches(
             cand.pattern,
-            keys,
+            all_keys,
             by_trial,
             trial_source_frames,
             max_matches=max_matches,

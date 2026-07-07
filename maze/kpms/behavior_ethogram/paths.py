@@ -116,6 +116,19 @@ def resolve_results_h5_path(
     return apply_path
 
 
+def resolve_grammar_results_h5(
+    kpms_root: Path | str,
+    seed: str,
+    *,
+    results_h5: Path | None = None,
+) -> Path:
+    """Resolve syllable results for Option A grammar (per-seed apply or cohort ``results.h5``)."""
+    resolved = resolve_results_h5_path(kpms_root, seed, results_h5=results_h5)
+    if resolved.is_file():
+        return resolved
+    raise FileNotFoundError(f"No kpMS results at {resolved} " f"(expected anatomical/seed_{seed}/results_apply.h5 or " f"{Path(kpms_root) / 'results.h5'}; pass --results-h5)")
+
+
 def discover_compile_seeds(
     kpms_root: Path | str,
     *,
@@ -180,6 +193,11 @@ def grammar_candidates_csv(grammar: Path | str) -> Path:
 
 def grammar_candidate_exemplars_json(grammar: Path | str) -> Path:
     return Path(grammar) / "candidate_exemplars.json"
+
+
+def grammar_grid_movies_dir(grammar: Path | str) -> Path:
+    """Per-candidate exemplar grid MP4s for grammar review."""
+    return Path(grammar) / "grid_movies"
 
 
 def grammar_rules_json(grammar: Path | str) -> Path:

@@ -28,11 +28,16 @@ CANDIDATE_SEQUENCE_FIELDS: tuple[str, ...] = (
     "mean_abs_dheading",
     "mean_straightness",
     "mean_blob_area_px2",
+    "mean_duration_s",
+    "mean_distance_m",
+    "mean_iqr_speed_mps",
+    "mean_heading_rad",
     "must_review_overlay",
     "behavior_name",
     "anchor_bucket",
     "reviewed_at",
     "reviewed_trial_key",
+    "preview_grid_path",
     "notes",
 )
 
@@ -51,7 +56,23 @@ CANDIDATE_FIELD_SPECS: tuple[CandidateFieldSpec, ...] = (
     CandidateFieldSpec("mean_speed_mps", "Pooled mean bout speed over pattern matches (m/s)."),
     CandidateFieldSpec("mean_abs_dheading", "Pooled mean |dheading| over pattern matches."),
     CandidateFieldSpec("mean_straightness", "Pooled mean straightness over pattern matches."),
-    CandidateFieldSpec("mean_blob_area_px2", "Pooled mean blob area over pattern matches."),
+    CandidateFieldSpec("mean_blob_area_px2", "Pooled mean blob area (px^2) over pattern matches."),
+    CandidateFieldSpec(
+        "mean_duration_s",
+        "Pooled mean per-bout duration (s) over pattern matches.",
+    ),
+    CandidateFieldSpec(
+        "mean_distance_m",
+        "Pooled mean per-bout path length (m), derived as bout_mean_speed_mps * bout_duration_s.",
+    ),
+    CandidateFieldSpec(
+        "mean_iqr_speed_mps",
+        "Pooled mean of per-bout speed IQR (m/s) over pattern matches.",
+    ),
+    CandidateFieldSpec(
+        "mean_heading_rad",
+        "Pooled circular mean of per-bout mean heading (rad); requires heading columns in bout_features.csv.",
+    ),
     CandidateFieldSpec(
         "must_review_overlay",
         "1 when exemplar overlay review is required before naming.",
@@ -66,6 +87,10 @@ CANDIDATE_FIELD_SPECS: tuple[CandidateFieldSpec, ...] = (
     ),
     CandidateFieldSpec("reviewed_at", "ISO timestamp after exemplar overlay review."),
     CandidateFieldSpec("reviewed_trial_key", "Trial key watched during overlay review."),
+    CandidateFieldSpec(
+        "preview_grid_path",
+        "Relative path to the exemplar grid MP4 (back-filled by maze-preview-grammar-candidate-grid).",
+    ),
     CandidateFieldSpec("notes", "Optional curator notes."),
 )
 

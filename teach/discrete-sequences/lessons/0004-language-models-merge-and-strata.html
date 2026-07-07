@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Lesson 0004 — Language models, merge, strata</title>
+  <link rel="stylesheet" href="../assets/base.css">
+</head>
+<body>
+  <header class="lesson-header">
+    <div class="kicker">Discrete sequences · Lesson 0004</div>
+    <h1>Language models, merge &amp; strata</h1>
+    <p class="meta">~14 min · n-grams → perplexity → pipeline choices</p>
+  </header>
+
+  <nav class="lesson-nav">
+    <strong>In this course</strong>
+    <ul>
+      <li><a href="0003-mining-and-curating-candidates.html">← Lesson 0003: Mining &amp; curating</a></li>
+      <li>This lesson</li>
+      <li><a href="../reference/language-models-cheat-sheet.html">Reference: LM &amp; strata cheat sheet</a></li>
+      <li><a href="../GLOSSARY.md">Glossary</a></li>
+    </ul>
+  </nav>
+
+  <h2>From n-grams to language models</h2>
+  <p>
+    Lesson 0002 introduced <strong>n-grams</strong> as frequent symbol patterns. A
+    <strong>language model</strong> (LM) assigns probabilities to those sequences:
+    how likely is the next syllable bout given recent context?
+  </p>
+  <p>
+    A <strong>bigram</strong> model approximates:
+  </p>
+  <div class="eq">
+    <span class="label">Bigram (Markov order 1 at bout grain)</span>
+    \(P(s_t \mid s_{t-1}, s_{t-2}, \ldots) \approx P(s_t \mid s_{t-1})\)
+  </div>
+  <p>
+    Estimate from counts: \(P(7 \mid 3) = \mathrm{Count}(3,7) / \mathrm{Count}(3)\).
+    Same Markov idea as Jurafsky Ch. 3 — applied here to syllable-id bouts, not words.
+    <a href="https://web.stanford.edu/~jurafsky/slp3/3.pdf">Jurafsky &amp; Martin, §3.1–3.2</a>
+  </p>
+  <p>
+    <strong>Perplexity</strong> summarizes how “surprised” the model is by a held-out stream
+    (lower = transitions look more predictable). Useful for <em>comparing</em> streams or
+    refits — not for naming behaviors by itself.
+  </p>
+
+  <h2>Three tools — don’t conflate them</h2>
+  <table>
+    <thead>
+      <tr><th>Tool</th><th>What it does</th><th>Sequence memory?</th><th>In your repo</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Syllable merge</strong></td>
+        <td>Remap ids: {3,7} → one id</td>
+        <td>No — memoryless collapse</td>
+        <td><code>maze-kpms-apply-syllable-merge</code></td>
+      </tr>
+      <tr>
+        <td><strong>Grammar rules</strong></td>
+        <td>Label bout spans from patterns</td>
+        <td>Yes — n-gram phrases + longest match</td>
+        <td>Option A (<code>grammar_rules.json</code>)</td>
+      </tr>
+      <tr>
+        <td><strong>LM / perplexity</strong></td>
+        <td>Score how predictable transitions are</td>
+        <td>Via estimated \(P(\cdot)\)</td>
+        <td>Conceptual QC (not a shipped CLI yet)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <aside class="mission-tie">
+    <strong>Glossary warning</strong><br>
+    <a href="../../maze/kpms/behavior_ethogram/CONTEXT.md">CONTEXT.md</a> is explicit:
+    <strong>merge cannot produce Behavior</strong> — it does not know whether syllable 3 meant
+    groom in one context and locomote in another. Grammar (Option A) or ethology labels handle that layer.
+  </aside>
+
+  <h2>Merge &amp; language-model thinking</h2>
+  <p>
+    When should you merge syllables 3 and 7? LM thinking suggests:
+  </p>
+  <ul>
+    <li><strong>Occupancy:</strong> if 3 and 7 are rare splits of one kinematic class, merging raises combined occupancy and simplifies tables.</li>
+    <li><strong>Transitions:</strong> if \(P(\cdot \mid 3)\) and \(P(\cdot \mid 7)\) look similar, merge may preserve bigram structure better than keeping both.</li>
+    <li><strong>Perplexity:</strong> on a validation set, a merged stream should not <em>inflate</em> surprise unless you removed real structure.</li>
+  </ul>
+  <p>
+    Current merge is <strong>manual</strong> (<code>syllable_groups.yaml</code> with
+    <code>groups: [[1,3,5], …]</code>) — you decide groups after grid review, not an auto-LM.
+    After merge: write <code>results_merged.h5</code>, then re-run compile → mine → summarize
+    so occupancy and grammar candidates reflect the new alphabet.
+  </p>
+
+  <figure class="echo-demo">
+    <label for="lm-stream-input" style="font-family: var(--font-sans); font-size: 0.88rem;">
+      Bout syllable stream (spaces or commas):
+    </label>
+    <input id="lm-stream-input" type="text" value="3 7 5 3 7 5 12 3 7 7 5 12"
+      style="width:100%;margin:0.5rem 0;padding:0.4rem;font-family:ui-monospace,monospace;background:var(--card-raised);color:var(--text);border:1px solid var(--border);border-radius:3px;">
+    <label style="font-family: var(--font-sans); font-size: 0.88rem;">
+      <input type="checkbox" id="lm-merge-toggle"> Merge 3+7 → M (memoryless)
+    </label>
+    <div id="lm-demo-out" style="text-align:left;margin-top:0.75rem;"></div>
+    <figcaption>Toggle merge: occupancy fractions change; bigrams and perplexity update. Grammar rules would <em>not</em> auto-update — you re-mine patterns on the merged stream.</figcaption>
+  </figure>
+
+  <h2>Occupancy over strata (tx, sex, strain, session)</h2>
+  <p>
+    <strong>Occupancy</strong> = fraction of phase time (or bout count) spent in each label,
+    grouped by manifest strata. This answers: “Did tg females spend more time in syllable 7 during run?”
+  </p>
+  <p>
+    Shipped today for <strong>behavior tokens / ethology</strong> (Stage III):
+  </p>
+  <div class="eq">
+    <span class="label">CLI</span>
+    <code>uv run maze-summarize-behavior-tokens --grain token --phase run …</code><br>
+    <code>uv run maze-summarize-behavior-tokens --grain ethology --phase all …</code>
+  </div>
+  <p>
+    Outputs under <code>stage_iii/…/summaries/</code>:
+    <code>occupancy.csv</code> (pooled strata),
+    <code>occupancy_by_session.csv</code>,
+    <code>transitions.csv</code> (bout-to-bout — a discrete <strong>first-order</strong> chain).
+  </p>
+  <p>
+    Strata keys: <code>(session, tx, sex, strain)</code> from the manifest
+    (<code>behavior_token_summarize.py</code>). Compare rows with the same label across strata;
+    session column empty when pooled, populated for session trends.
+  </p>
+
+  <h2>How LMs help evaluate strata changes</h2>
+  <table>
+    <thead><tr><th>Question</th><th>Occupancy alone</th><th>+ LM / transitions</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>More time in syllable 7?</td>
+        <td>Compare <code>occupancy_fraction</code> per stratum</td>
+        <td>Same — sufficient for marginal time</td>
+      </tr>
+      <tr>
+        <td>Did <em>choreography</em> change?</td>
+        <td>Misses order (3→7 vs 7→3)</td>
+        <td>Compare bigram counts or perplexity per stratum</td>
+      </tr>
+      <tr>
+        <td>Did merge/refit break structure?</td>
+        <td>Occupancy can look stable while order shifts</td>
+        <td>Perplexity + transition CSV before/after</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    For <strong>raw syllable</strong> strata (pre-grammar): aggregate
+    <code>stage_ii/bout_features.csv</code> by <code>raw_syllable_id</code> and manifest fields,
+    or count frames in <code>results.h5</code> after compile alignment. After merge or refit,
+    always recompute — ids are fit-local.
+  </p>
+
+  <h2>Neural LMs (transformers) — where they fit later</h2>
+  <p>
+    Transformer LMs learn long-context predictions from huge text. Analogies for behavior:
+    discover merge candidates from embedding similarity, or detect distributional shift between cohorts.
+    Your pipeline does <em>not</em> require them for v1: n-gram grammar + occupancy/transition tables
+    are interpretable and match shipped CLIs. Treat neural models as optional upgrades after
+    discrete baselines behave sensibly on overlays.
+  </p>
+
+  <h2>Retrieval practice</h2>
+  <div class="quiz" data-quiz>
+    <h3>Check your grasp</h3>
+
+    <div class="quiz-item" data-answer="2">
+      <p class="prompt">1. Syllable merge is memoryless because it does what?</p>
+      <div class="quiz-options">
+        <button type="button">Remaps ids using context</button>
+        <button type="button">Learns bigram probabilities first</button>
+        <button type="button" data-ok="Collapses ids without context.">Collapses ids without context</button>
+        <button type="button">Exports portable behavior names</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-item" data-answer="0">
+      <p class="prompt">2. Lower perplexity on a syllable stream means what?</p>
+      <div class="quiz-options">
+        <button type="button" data-ok="Transitions are more predictable.">Transitions are more predictable</button>
+        <button type="button">More syllable classes exist</button>
+        <button type="button">Animal moved faster overall</button>
+        <button type="button">Grammar rules were applied</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-item" data-answer="3">
+      <p class="prompt">3. After merge, you must refresh what?</p>
+      <div class="quiz-options">
+        <button type="button">Only the video paths</button>
+        <button type="button">anchor_bucket in grammar</button>
+        <button type="button">kpMS checkpoint weights</button>
+        <button type="button" data-ok="Downstream counts and grammar.">Downstream counts and grammar</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-item" data-answer="1">
+      <p class="prompt">4. Strata occupancy compares time in label across what?</p>
+      <div class="quiz-options">
+        <button type="button">Syllable ids across fits</button>
+        <button type="button" data-ok="Manifest groups like tx.">Manifest groups like tx</button>
+        <button type="button">Overlay exemplar match indices</button>
+        <button type="button">CSV row sort from mine</button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+  </div>
+
+  <h2>Primary sources</h2>
+  <ul>
+    <li><a href="https://web.stanford.edu/~jurafsky/slp3/3.pdf">Jurafsky &amp; Martin Ch. 3</a> — n-grams, Markov, perplexity</li>
+    <li><a href="../../docs/behavior_token_review_contract.md">behavior_token_review_contract.md</a> — token vs ethology grain, summarize CLIs</li>
+    <li><a href="../../maze/kpms/behavior_ethogram/CONTEXT.md">CONTEXT.md</a> — merge vs grammar</li>
+  </ul>
+
+  <h2>What comes next</h2>
+  <p>
+    Lesson 0005 (when ready): <strong>build, export, evaluate</strong> grammar →
+    <code>maze-build-grammar-rules</code> → <code>maze-export-syllable-grammar-labeling</code> →
+    compare producers vs <code>is_moving</code>.
+  </p>
+
+  <footer class="lesson-footer">
+    <p>
+      <strong>Ask your teacher.</strong> Want a scratch script for syllable bigram perplexity on
+      <code>gerstner_vast_fit</code>, or merge QC on a specific group? Paste your question.
+    </p>
+  </footer>
+
+  <script src="../assets/quiz.js"></script>
+  <script src="../assets/ngram-perplexity.js"></script>
+</body>
+</html>

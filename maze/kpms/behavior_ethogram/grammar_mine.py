@@ -26,11 +26,16 @@ class MinedSequence:
     mean_abs_dheading: float | None = None
     mean_straightness: float | None = None
     mean_blob_area_px2: float | None = None
+    mean_duration_s: float | None = None
+    mean_distance_m: float | None = None
+    mean_iqr_speed_mps: float | None = None
+    mean_heading_rad: float | None = None
     must_review_overlay: bool = False
     behavior_name: str = ""
     anchor_bucket: str = ""
     reviewed_at: str = ""
     reviewed_trial_key: str = ""
+    preview_grid_path: str = ""
     notes: str = ""
 
 
@@ -144,11 +149,16 @@ def write_candidate_sequences_csv(path: Path | str, candidates: Sequence[MinedSe
                     "mean_abs_dheading": _fmt_float(cand.mean_abs_dheading),
                     "mean_straightness": _fmt_float(cand.mean_straightness),
                     "mean_blob_area_px2": _fmt_float(cand.mean_blob_area_px2),
+                    "mean_duration_s": _fmt_float(cand.mean_duration_s),
+                    "mean_distance_m": _fmt_float(cand.mean_distance_m),
+                    "mean_iqr_speed_mps": _fmt_float(cand.mean_iqr_speed_mps),
+                    "mean_heading_rad": _fmt_float(cand.mean_heading_rad),
                     "must_review_overlay": int(bool(cand.must_review_overlay)),
                     "behavior_name": cand.behavior_name,
                     "anchor_bucket": cand.anchor_bucket,
                     "reviewed_at": cand.reviewed_at,
                     "reviewed_trial_key": cand.reviewed_trial_key,
+                    "preview_grid_path": cand.preview_grid_path,
                     "notes": cand.notes,
                 }
             )

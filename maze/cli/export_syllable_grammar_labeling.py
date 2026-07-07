@@ -19,6 +19,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--manifest-path", type=Path, required=True)
     ap.add_argument("--rules-json", type=Path, default=None)
     ap.add_argument("--tracking-h5", type=Path, default=None)
+    ap.add_argument(
+        "--results-h5",
+        type=Path,
+        default=None,
+        help="kpMS syllable results H5 (default: anatomical/seed_*/results_apply.h5 or <kpms-root>/results.h5)",
+    )
     ap.add_argument("--fit-id", type=str, default=None)
     ap.add_argument("--fps", type=float, default=30.0)
     args = ap.parse_args(argv)
@@ -44,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
             tracking_h5=tracking_h5,
             fit_id=fit_id,
             fps=args.fps,
+            results_h5=args.results_h5,
         )
     except ValueError as exc:
         print(str(exc), file=sys.stderr)

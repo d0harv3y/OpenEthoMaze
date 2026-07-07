@@ -68,6 +68,30 @@ def test_enrich_candidates_pools_bout_scalars() -> None:
     assert enriched.mean_abs_dheading == 0.1
 
 
+def test_enrich_candidates_pools_new_scalars() -> None:
+    cand = MinedSequence(pattern=(3, 7), count=2, n_trials=1, example_trial_keys=("t1",))
+    r0 = _bout_row(bout_index=0, raw_syllable_id=3, speed=0.2, iqr_speed=0.04)
+    r0["bout_duration_s"] = "1.0"
+    r0["bout_mean_heading_rad"] = "0.0"
+    r1 = _bout_row(bout_index=1, raw_syllable_id=7, speed=0.4, iqr_speed=0.06)
+    r1["bout_duration_s"] = "2.0"
+    r1["bout_mean_heading_rad"] = "0.0"
+    enriched = enrich_candidates_with_bout_scalars([cand], [r0, r1], seed="042")[0]
+    assert enriched.mean_duration_s == 1.5
+    assert enriched.mean_iqr_speed_mps == 0.05
+    # distance = speed * duration -> (0.2*1.0 + 0.4*2.0) / 2 = 0.5
+    assert abs(enriched.mean_distance_m - 0.5) < 1e-9
+    assert abs(enriched.mean_heading_rad) < 1e-9
+
+
+def test_enrich_candidates_missing_heading_leaves_none() -> None:
+    cand = MinedSequence(pattern=(3,), count=1, n_trials=1, example_trial_keys=("t1",))
+    row = _bout_row(bout_index=0, raw_syllable_id=3)
+    enriched = enrich_candidates_with_bout_scalars([cand], [row], seed="042")[0]
+    assert enriched.mean_heading_rad is None
+    assert enriched.mean_duration_s is None
+
+
 def test_overlay_flag_ambiguous_bout() -> None:
     cand = MinedSequence(
         pattern=(3,),
@@ -144,9 +168,7 @@ def test_rules_from_curated_candidates_includes_buckets(tmp_path) -> None:
     path = tmp_path / "c.csv"
     header = ",".join(CANDIDATE_SEQUENCE_FIELDS)
     path.write_text(
-        f"{header}\n"
-        '"[3, 7]",2,5,2,,,,,0,groom,ignore,2026-06-30T00:00:00+00:00,t1,\n'
-        '"[12]",1,10,3,,,,,0,pause,still,2026-06-30T00:00:00+00:00,t2,\n',
+        f"{header}\n" '"[3, 7]",2,5,2,,,,,,,,,0,groom,ignore,2026-06-30T00:00:00+00:00,t1,,\n' '"[12]",1,10,3,,,,,,,,,0,pause,still,2026-06-30T00:00:00+00:00,t2,,\n',
         encoding="utf-8",
     )
     doc = rules_from_curated_candidates(path, fit_id="seed_042")
