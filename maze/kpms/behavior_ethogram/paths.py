@@ -204,6 +204,27 @@ def grammar_rules_json(grammar: Path | str) -> Path:
     return Path(grammar) / "grammar_rules.json"
 
 
+def stimulus_mi_dir(kpms_root: Path | str) -> Path:
+    """Pilot stimulus ↔ syllable MI artifacts."""
+    return behavior_ethogram_root(kpms_root) / "stimulus_mi"
+
+
+def stimulus_bout_features_csv(stimulus_mi: Path | str) -> Path:
+    return Path(stimulus_mi) / "stimulus_bout_features.csv"
+
+
+def mi_per_animal_csv(stimulus_mi: Path | str) -> Path:
+    return Path(stimulus_mi) / "mi_per_animal.csv"
+
+
+def group_mi_tests_csv(stimulus_mi: Path | str) -> Path:
+    return Path(stimulus_mi) / "group_mi_tests.csv"
+
+
+def stimulus_bin_edges_json(stimulus_mi: Path | str) -> Path:
+    return Path(stimulus_mi) / "stimulus_bin_edges.json"
+
+
 def discover_anatomical_seeds(kpms_root: Path | str) -> tuple[str, ...]:
     """Return sorted seed ids with ``anatomical/seed_*/results_apply.h5``."""
     root = Path(kpms_root) / "anatomical"
