@@ -83,6 +83,7 @@ from .db import (
     read_animal_label,
     TrialTiming,
 )
+from .db.feedback_align import align_feedback_for_trial
 from .db.trial_settings_io import radial_arm_exit_hole_from_geometry_payload
 from .persist_pose import persist_pose_from_sidecar
 from .pose_status import (
@@ -725,6 +726,8 @@ def _process_with_sleap(
     use_inrange_primary = max_gap_spot > settings.trace_max_gap_frames and np.any(inrange_valid)
     primary_trajectory = HYBRID_POINT_NAME
     write_primary_trajectory(db_path, key, primary_trajectory)
+
+    align_feedback_for_trial(db_path, key)
 
     # Feedback error (incongruent feedback) from W/M vs distance-to-exit
     # Always write summary (0, 0.0 when feedback missing) so export and attrs exist

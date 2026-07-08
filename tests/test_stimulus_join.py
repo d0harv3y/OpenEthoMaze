@@ -109,6 +109,35 @@ def _write_synthetic_trial_h5(path: Path, *, n_frames: int = 10) -> TrialKey:
     return key
 
 
+def test_read_trial_stimulus_frames_expands_run_relative_legacy(tmp_path: Path) -> None:
+    h5_path = tmp_path / "legacy.h5"
+    run_start = 5
+    n_video = 20
+    key = TrialKey(animal_id="3243", session="S01", trial="T01")
+    with h5py.File(h5_path, "w") as h5:
+        g = h5.create_group(key.path().lstrip("/"))
+        g.attrs["trial_start_frame"] = run_start
+        xy = np.zeros(n_video, dtype=XY_ROW_DTYPE)
+        xy["frame_index"] = np.arange(n_video, dtype=np.uint32)
+        xy["trial_state"] = b"run"
+        xy["trial_state"][:run_start] = b"iti_wait"
+        xy["dist_to_exit_px"] = np.linspace(200.0, 50.0, n_video, dtype=np.float32)
+        write_xy_table(g, "spot", xy, fps=30.0)
+        n_run = n_video - run_start
+        fb = np.zeros(n_run, dtype=FEEDBACK_ROW_DTYPE)
+        fb["frame_index"] = np.arange(n_run, dtype=np.uint32)
+        fb["motor_fb"] = 55.0
+        write_feedback_table(g, fb)
+    with h5py.File(h5_path, "r") as h5:
+        frames = read_trial_stimulus_frames(h5[key.path().lstrip("/")])
+    assert frames is not None
+    assert len(frames.motor_fb) == n_video
+    assert np.isnan(frames.motor_fb[0])
+    assert frames.motor_fb[run_start] == pytest.approx(55.0)
+    assert frames.motor_fb[-1] == pytest.approx(55.0)
+    assert frames.dist_to_exit_px[-1] == pytest.approx(50.0)
+
+
 def test_read_trial_stimulus_frames_and_verify(tmp_path: Path) -> None:
     h5_path = tmp_path / "trial.h5"
     key = _write_synthetic_trial_h5(h5_path)

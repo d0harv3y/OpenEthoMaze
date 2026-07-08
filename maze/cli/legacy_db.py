@@ -314,11 +314,15 @@ def cmd_init(
             if h5_data is not None and h5_data.n_frames > 0:
                 start = trial_start_frame if trial_start_frame is not None else 0
                 start = min(start, h5_data.n_frames)
-                w_analysis = h5_data.w[start:]
-                m_analysis = h5_data.m[start:]
-                if len(w_analysis) > 0 and len(w_analysis) == len(m_analysis):
+                if len(h5_data.w) > 0 and len(h5_data.w) == len(h5_data.m):
                     try:
-                        write_feedback_series(LEGACY_DB, key, w_analysis, m_analysis)
+                        write_feedback_series(
+                            LEGACY_DB,
+                            key,
+                            h5_data.w,
+                            h5_data.m,
+                            trial_start_frame=start,
+                        )
                     except Exception:
                         pass
         except Exception as e:
@@ -473,10 +477,14 @@ def cmd_sync(
                 if h5_data and h5_data.n_frames > 0:
                     start = trial_start_frame if trial_start_frame is not None else 0
                     start = min(start, h5_data.n_frames)
-                    w_analysis = h5_data.w[start:]
-                    m_analysis = h5_data.m[start:]
-                    if len(w_analysis) > 0 and len(w_analysis) == len(m_analysis):
-                        write_feedback_series(LEGACY_DB, key, w_analysis, m_analysis)
+                    if len(h5_data.w) > 0 and len(h5_data.w) == len(h5_data.m):
+                        write_feedback_series(
+                            LEGACY_DB,
+                            key,
+                            h5_data.w,
+                            h5_data.m,
+                            trial_start_frame=start,
+                        )
             except Exception:
                 pass
             if trial.video_path and trial.video_path.exists():

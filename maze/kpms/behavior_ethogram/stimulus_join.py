@@ -10,11 +10,15 @@ from typing import Mapping, Sequence
 import h5py
 import numpy as np
 
-from maze.core.h5_layout import read_feedback_table, resolve_ambulation_metrics_group
-from maze.core.schema import XY_ROW_DTYPE
+from maze.core.h5_layout import read_feedback_table
 from maze.kpms.frame_alignment import KpmsAlignmentCache, kpms_recording_key
 from maze.kpms.h5_pose import resolve_canonical_trial_h5
 from maze.kpms.preprocess import KpmsPreprocessConfig
+from maze.pipeline.db.feedback_align import (
+    align_feedback_to_xy_table,
+    feedback_table_matches_xy,
+    read_primary_xy_table,
+)
 from maze.pipeline.db.trial_key import TrialKey, resolve_trial_key_for_hdf5
 from maze.pipeline.io.file_discovery import TrialManifest
 
@@ -23,8 +27,6 @@ from .stimulus_join_contract import (
     ALLOWED_GENOTYPE_STRAINS,
     STIMULUS_BOUT_TABLE_FIELDS,
 )
-
-_XY_POINT_PRIORITY: tuple[str, ...] = ("spot_hybrid", "spot", "center", "centroid")
 
 
 @dataclass(frozen=True)
@@ -57,6 +59,7 @@ class StimulusH5Verification:
     has_xy_dist: bool
     n_feedback_frames: int
     n_xy_frames: int
+    feedback_aligned: bool
     motor_fb_finite_frac: float
     dist_finite_frac: float
 
@@ -68,6 +71,7 @@ class StimulusH5Verification:
             and self.has_xy_dist
             and self.n_feedback_frames > 0
             and self.n_xy_frames > 0
+            and self.feedback_aligned
             and self.motor_fb_finite_frac > 0.0
             and self.dist_finite_frac > 0.0
         )
@@ -119,35 +123,36 @@ def _resolve_trial_group(h5: h5py.File, trial_key: TrialKey) -> h5py.Group | Non
 
 
 def _read_xy_dist_to_exit(g_trial: h5py.Group) -> np.ndarray | None:
-    g_amb = resolve_ambulation_metrics_group(g_trial)
-    if g_amb is None:
+    xy = read_primary_xy_table(g_trial)
+    if xy is None:
         return None
-    for point in _XY_POINT_PRIORITY:
-        if point not in g_amb:
-            continue
-        g_pt = g_amb[point]
-        if "xy" not in g_pt:
-            continue
-        rec = g_pt["xy"][:]
-        if rec.dtype != XY_ROW_DTYPE or "dist_to_exit_px" not in rec.dtype.names:
-            continue
-        return np.asarray(rec["dist_to_exit_px"], dtype=np.float64)
-    return None
+    return np.asarray(xy["dist_to_exit_px"], dtype=np.float64)
+
+
+def _aligned_feedback_table(g_trial: h5py.Group) -> np.ndarray | None:
+    xy = read_primary_xy_table(g_trial)
+    fb_table = read_feedback_table(g_trial)
+    if xy is None or fb_table is None or len(fb_table) == 0:
+        return None
+    if feedback_table_matches_xy(fb_table, xy):
+        return fb_table
+    run_start = int(g_trial.attrs.get("trial_start_frame", 0) or 0)
+    return align_feedback_to_xy_table(xy, fb_table, run_start_frame=run_start)
 
 
 def read_trial_stimulus_frames(g_trial: h5py.Group) -> TrialStimulusFrames | None:
-    """Read per-frame motor duty and distance-to-exit from a trial HDF5 group."""
-    fb_table = read_feedback_table(g_trial)
-    if fb_table is None or "motor_fb" not in fb_table.dtype.names:
+    """Read per-frame motor duty and distance-to-exit aligned to the xy timeline."""
+    xy = read_primary_xy_table(g_trial)
+    fb_table = _aligned_feedback_table(g_trial)
+    if xy is None or fb_table is None or "motor_fb" not in fb_table.dtype.names:
+        return None
+    if len(xy) == 0:
+        return None
+    if len(fb_table) != len(xy):
         return None
     motor_fb = np.asarray(fb_table["motor_fb"], dtype=np.float64)
-    dist = _read_xy_dist_to_exit(g_trial)
-    if dist is None:
-        return None
-    n = min(len(motor_fb), len(dist))
-    if n == 0:
-        return None
-    return TrialStimulusFrames(motor_fb=motor_fb[:n], dist_to_exit_px=dist[:n])
+    dist = np.asarray(xy["dist_to_exit_px"], dtype=np.float64)
+    return TrialStimulusFrames(motor_fb=motor_fb, dist_to_exit_px=dist)
 
 
 def read_trial_stimulus_frames_from_path(h5_path: Path | str, trial_key: TrialKey) -> TrialStimulusFrames | None:
@@ -174,6 +179,7 @@ def verify_trial_stimulus_h5(h5_path: Path | str, trial_key: TrialKey) -> Stimul
             has_xy_dist=False,
             n_feedback_frames=0,
             n_xy_frames=0,
+            feedback_aligned=False,
             motor_fb_finite_frac=0.0,
             dist_finite_frac=0.0,
         )
@@ -188,15 +194,21 @@ def verify_trial_stimulus_h5(h5_path: Path | str, trial_key: TrialKey) -> Stimul
                 has_xy_dist=False,
                 n_feedback_frames=0,
                 n_xy_frames=0,
+                feedback_aligned=False,
                 motor_fb_finite_frac=0.0,
                 dist_finite_frac=0.0,
             )
         fb_table = read_feedback_table(g_trial)
+        xy = read_primary_xy_table(g_trial)
         has_fb = fb_table is not None
+        has_xy = xy is not None
+        aligned = (
+            has_fb
+            and has_xy
+            and feedback_table_matches_xy(fb_table, xy)  # type: ignore[arg-type]
+        )
         motor = np.asarray(fb_table["motor_fb"], dtype=np.float64) if has_fb else np.array([], dtype=np.float64)
-        dist = _read_xy_dist_to_exit(g_trial)
-        has_dist = dist is not None
-        dist_arr = dist if dist is not None else np.array([], dtype=np.float64)
+        dist_arr = np.asarray(xy["dist_to_exit_px"], dtype=np.float64) if has_xy else np.array([], dtype=np.float64)
         motor_frac = float(np.isfinite(motor).mean()) if motor.size else 0.0
         dist_frac = float(np.isfinite(dist_arr).mean()) if dist_arr.size else 0.0
         return StimulusH5Verification(
@@ -204,9 +216,10 @@ def verify_trial_stimulus_h5(h5_path: Path | str, trial_key: TrialKey) -> Stimul
             h5_path=str(path.resolve()),
             has_feedback_table=has_fb,
             has_motor_fb=has_fb and motor.size > 0,
-            has_xy_dist=has_dist and dist_arr.size > 0,
+            has_xy_dist=has_xy and dist_arr.size > 0,
             n_feedback_frames=int(motor.size),
             n_xy_frames=int(dist_arr.size),
+            feedback_aligned=aligned,
             motor_fb_finite_frac=motor_frac,
             dist_finite_frac=dist_frac,
         )
