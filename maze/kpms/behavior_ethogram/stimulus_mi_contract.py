@@ -94,6 +94,9 @@ MI_TRIAL_ANIMAL_SUMMARY_FIELDS: tuple[str, ...] = (
     "slope_vs_excess",
     "early_late_delta_excess",
     "null_clear_fraction",
+    "early_late_delta_within_session",
+    "early_late_delta_within_session_excess",
+    "n_sessions_used",
 )
 
 GROUP_MI_WHEN_TEST_FIELDS: tuple[str, ...] = (
@@ -122,3 +125,33 @@ WHEN_TEST_METRICS: tuple[str, ...] = (
 
 PRIMARY_WHEN_PHASE: str = "run"
 PRIMARY_WHEN_MI_TYPE: str = "occupancy"
+
+SLICE_FACTORS: tuple[str, ...] = ("sex", "genotype", "tx")
+MIN_SLICE_ARM_N: int = 5
+
+FDR_FAMILY_POOLED: str = "A"
+FDR_FAMILY_SLOPE: str = "B"
+FDR_FAMILY_CAREER_DELTA: str = "C"
+FDR_FAMILY_WITHIN_SESSION_DELTA: str = "D"
+
+GROUP_MI_SLICED_TEST_FIELDS: tuple[str, ...] = (
+    "fdr_family",
+    "hold_sex",
+    "hold_strain",
+    "hold_tx",
+    "contrast_factor",
+    "level_a",
+    "level_b",
+    "phase",
+    "stim_var",
+    "mi_type",
+    "metric",
+    "n_a",
+    "n_b",
+    "median_a",
+    "median_b",
+    "stat",
+    "p",
+    "q_bh",
+    "test",
+)

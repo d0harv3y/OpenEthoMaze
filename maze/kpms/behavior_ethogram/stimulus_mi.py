@@ -7,8 +7,9 @@ import json
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from itertools import combinations
 from pathlib import Path
-from typing import Literal, Mapping, Sequence
+from typing import Iterator, Literal, Mapping, Sequence
 
 import numpy as np
 from scipy import stats
@@ -18,17 +19,24 @@ from maze.kpms.behavior_ethogram.behavior_token_summarize import bout_in_phase
 from .stimulus_join import bout_rows_for_phase
 from .stimulus_mi_contract import (
     EARLY_LATE_K,
+    FDR_FAMILY_CAREER_DELTA,
+    FDR_FAMILY_POOLED,
+    FDR_FAMILY_SLOPE,
+    FDR_FAMILY_WITHIN_SESSION_DELTA,
     GROUP_FACTORS,
+    GROUP_MI_SLICED_TEST_FIELDS,
     GROUP_MI_TEST_FIELDS,
     GROUP_MI_WHEN_TEST_FIELDS,
     MI_PER_ANIMAL_FIELDS,
     MI_PER_TRIAL_FIELDS,
     MI_TRIAL_ANIMAL_SUMMARY_FIELDS,
     MI_TYPES,
+    MIN_SLICE_ARM_N,
     MIN_TRIALS_FOR_EARLY_LATE,
     NULL_CLEAR_ALPHA,
     PRIMARY_WHEN_MI_TYPE,
     PRIMARY_WHEN_PHASE,
+    SLICE_FACTORS,
     STIM_PHASES,
     STIM_VARS,
     TRIAL_NULL_N_PERM,
@@ -975,6 +983,20 @@ def _ols_slope(x: Sequence[float], y: Sequence[float]) -> float:
     return float(slope)
 
 
+def _early_late_delta_ordered(
+    values: Sequence[float],
+    *,
+    k: int = EARLY_LATE_K,
+    min_trials: int = MIN_TRIALS_FOR_EARLY_LATE,
+) -> float:
+    finite = [float(v) for v in values if np.isfinite(v)]
+    if len(finite) < min_trials:
+        return float("nan")
+    early_vals = finite[:k]
+    late_vals = finite[-k:]
+    return float(np.mean(early_vals) - np.mean(late_vals))
+
+
 def _early_late_delta(
     trial_ord: Sequence[float],
     values: Sequence[float],
@@ -990,9 +1012,29 @@ def _early_late_delta(
     if len(pairs) < min_trials:
         return float("nan")
     pairs.sort(key=lambda item: item[0])
-    early_vals = [v for _, v in pairs[:k]]
-    late_vals = [v for _, v in pairs[-k:]]
-    return float(np.mean(early_vals) - np.mean(late_vals))
+    ordered_vals = [v for _, v in pairs]
+    return _early_late_delta_ordered(ordered_vals, k=k, min_trials=min_trials)
+
+
+def _within_session_early_late(
+    subset: Sequence[TrialMiResult],
+    *,
+    value_attr: Literal["mi_mm", "excess"],
+) -> tuple[float, int]:
+    by_session: dict[str, list[TrialMiResult]] = defaultdict(list)
+    for row in subset:
+        by_session[row.session].append(row)
+
+    session_deltas: list[float] = []
+    for trials in by_session.values():
+        trials_sorted = sorted(trials, key=lambda r: parse_ordinal_suffix(r.trial))
+        values = [getattr(r, value_attr) for r in trials_sorted]
+        delta = _early_late_delta_ordered(values)
+        if np.isfinite(delta):
+            session_deltas.append(delta)
+    if not session_deltas:
+        return float("nan"), 0
+    return float(np.mean(session_deltas)), len(session_deltas)
 
 
 @dataclass(frozen=True)
@@ -1014,6 +1056,9 @@ class TrialAnimalSummary:
     slope_vs_excess: float
     early_late_delta_excess: float
     null_clear_fraction: float
+    early_late_delta_within_session: float
+    early_late_delta_within_session_excess: float
+    n_sessions_used: int
 
 
 def compute_trial_animal_summaries(
@@ -1043,9 +1088,23 @@ def compute_trial_animal_summaries(
 
         slope_excess = float("nan")
         delta_excess = float("nan")
+        within_session = float("nan")
+        within_session_excess = float("nan")
+        n_sessions_used = 0
         if trial_nulls:
             slope_excess = _ols_slope(trial_ords, excess_vals)
             delta_excess = _early_late_delta(trial_ords, excess_vals)
+            within_session_excess, n_sessions_used = _within_session_early_late(
+                subset_sorted, value_attr="excess"
+            )
+        within_session_raw, n_sessions_raw = _within_session_early_late(subset_sorted, value_attr="mi_mm")
+        if not trial_nulls:
+            n_sessions_used = n_sessions_raw
+            within_session = within_session_raw
+        else:
+            within_session = within_session_raw
+            if n_sessions_used == 0:
+                n_sessions_used = n_sessions_raw
 
         summaries.append(
             TrialAnimalSummary(
@@ -1066,6 +1125,9 @@ def compute_trial_animal_summaries(
                 slope_vs_excess=slope_excess,
                 early_late_delta_excess=delta_excess,
                 null_clear_fraction=null_clear_fraction,
+                early_late_delta_within_session=within_session,
+                early_late_delta_within_session_excess=within_session_excess,
+                n_sessions_used=n_sessions_used,
             )
         )
     return summaries
@@ -1090,6 +1152,9 @@ def trial_animal_summary_to_row(summary: TrialAnimalSummary) -> dict[str, object
         "slope_vs_excess": summary.slope_vs_excess,
         "early_late_delta_excess": summary.early_late_delta_excess,
         "null_clear_fraction": summary.null_clear_fraction,
+        "early_late_delta_within_session": summary.early_late_delta_within_session,
+        "early_late_delta_within_session_excess": summary.early_late_delta_within_session_excess,
+        "n_sessions_used": summary.n_sessions_used,
     }
 
 
@@ -1205,6 +1270,249 @@ def write_group_mi_when_tests_csv(path: Path | str, rows: Sequence[Mapping[str, 
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(GROUP_MI_WHEN_TEST_FIELDS), extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+@dataclass(frozen=True)
+class SliceSpec:
+    hold: tuple[tuple[str, str], ...]
+    contrast_factor: str
+    level_a: str
+    level_b: str
+
+
+def _hold_columns(hold: Mapping[str, str]) -> dict[str, str]:
+    return {
+        "hold_sex": hold.get("sex", ""),
+        "hold_strain": hold.get("genotype", ""),
+        "hold_tx": hold.get("tx", ""),
+    }
+
+
+def _levels_by_factor(rows: Sequence[Mapping[str, object]]) -> dict[str, list[str]]:
+    levels: dict[str, set[str]] = {factor: set() for factor in SLICE_FACTORS}
+    for row in rows:
+        for factor in SLICE_FACTORS:
+            level = _factor_value(row, factor)
+            if level:
+                levels[factor].add(level)
+    return {factor: sorted(vals) for factor, vals in levels.items()}
+
+
+def _iter_slice_specs(levels_by_factor: Mapping[str, Sequence[str]]) -> Iterator[SliceSpec]:
+    for hold_factor in SLICE_FACTORS:
+        for hold_level in levels_by_factor.get(hold_factor, ()):
+            contrast_factors = [f for f in SLICE_FACTORS if f != hold_factor]
+            for contrast_factor in contrast_factors:
+                contrast_levels = list(levels_by_factor.get(contrast_factor, ()))
+                for i, level_a in enumerate(contrast_levels):
+                    for level_b in contrast_levels[i + 1 :]:
+                        yield SliceSpec(
+                            hold=((hold_factor, hold_level),),
+                            contrast_factor=contrast_factor,
+                            level_a=level_a,
+                            level_b=level_b,
+                        )
+
+    for hold_a, hold_b in combinations(SLICE_FACTORS, 2):
+        contrast_factor = next(f for f in SLICE_FACTORS if f not in (hold_a, hold_b))
+        for hold_a_level in levels_by_factor.get(hold_a, ()):
+            for hold_b_level in levels_by_factor.get(hold_b, ()):
+                contrast_levels = list(levels_by_factor.get(contrast_factor, ()))
+                for i, level_a in enumerate(contrast_levels):
+                    for level_b in contrast_levels[i + 1 :]:
+                        yield SliceSpec(
+                            hold=((hold_a, hold_a_level), (hold_b, hold_b_level)),
+                            contrast_factor=contrast_factor,
+                            level_a=level_a,
+                            level_b=level_b,
+                        )
+
+
+def _row_matches_hold(row: Mapping[str, object], hold: Mapping[str, str]) -> bool:
+    for factor, level in hold.items():
+        if _factor_value(row, factor) != level:
+            return False
+    return True
+
+
+def _row_metric(row: Mapping[str, object], metric: str) -> float:
+    raw = row.get(metric, float("nan"))
+    return float(raw)
+
+
+def _mann_whitney_slice_row(
+    subset: Sequence[Mapping[str, object]],
+    spec: SliceSpec,
+    *,
+    metric: str,
+    phase: str,
+    stim_var: str,
+    mi_type: str,
+    fdr_family: str,
+) -> dict[str, object] | None:
+    filtered = [row for row in subset if _row_matches_hold(row, dict(spec.hold))]
+    vals_a: list[float] = []
+    vals_b: list[float] = []
+    for row in filtered:
+        level = _factor_value(row, spec.contrast_factor)
+        val = _row_metric(row, metric)
+        if not np.isfinite(val):
+            continue
+        if level == spec.level_a:
+            vals_a.append(val)
+        elif level == spec.level_b:
+            vals_b.append(val)
+    if len(vals_a) < MIN_SLICE_ARM_N or len(vals_b) < MIN_SLICE_ARM_N:
+        return None
+    stat, p = stats.mannwhitneyu(vals_a, vals_b, alternative="two-sided")
+    hold_map = dict(spec.hold)
+    return {
+        "fdr_family": fdr_family,
+        **_hold_columns(hold_map),
+        "contrast_factor": spec.contrast_factor,
+        "level_a": spec.level_a,
+        "level_b": spec.level_b,
+        "phase": phase,
+        "stim_var": stim_var,
+        "mi_type": mi_type,
+        "metric": metric,
+        "n_a": len(vals_a),
+        "n_b": len(vals_b),
+        "median_a": float(np.median(vals_a)),
+        "median_b": float(np.median(vals_b)),
+        "stat": float(stat),
+        "p": float(p),
+        "q_bh": float("nan"),
+        "test": "mannwhitneyu",
+    }
+
+
+def _benjamini_hochberg(p_values: Sequence[float]) -> list[float]:
+    m = len(p_values)
+    if m == 0:
+        return []
+    order = np.argsort(p_values)
+    ranked = np.asarray(p_values, dtype=np.float64)[order]
+    q = ranked * m / (np.arange(m) + 1)
+    q = np.minimum.accumulate(q[::-1])[::-1]
+    q = np.clip(q, 0.0, 1.0)
+    out = np.full(m, np.nan, dtype=np.float64)
+    out[order] = q
+    return [float(x) for x in out]
+
+
+def _apply_bh_within_family(rows: list[dict[str, object]], family: str) -> None:
+    family_rows = [
+        r
+        for r in rows
+        if r["fdr_family"] == family and not r.get("_exploratory") and np.isfinite(float(r["p"]))
+    ]
+    if not family_rows:
+        return
+    q_vals = _benjamini_hochberg([float(r["p"]) for r in family_rows])
+    for row, q in zip(family_rows, q_vals, strict=True):
+        row["q_bh"] = q
+
+
+def _sliced_metric_families(
+    trial_nulls: bool,
+) -> list[tuple[str, str, str | None]]:
+    """Return ``(fdr_family, primary_metric, exploratory_metric_or_none)``."""
+    if trial_nulls:
+        return [
+            (FDR_FAMILY_POOLED, "mi_mm", None),
+            (FDR_FAMILY_SLOPE, "slope_vs_excess", "slope_vs_trial_ord"),
+            (FDR_FAMILY_CAREER_DELTA, "early_late_delta_excess", "early_late_delta"),
+            (
+                FDR_FAMILY_WITHIN_SESSION_DELTA,
+                "early_late_delta_within_session_excess",
+                "early_late_delta_within_session",
+            ),
+        ]
+    return [
+        (FDR_FAMILY_POOLED, "mi_mm", None),
+        (FDR_FAMILY_SLOPE, "slope_vs_trial_ord", None),
+        (FDR_FAMILY_CAREER_DELTA, "early_late_delta", None),
+        (FDR_FAMILY_WITHIN_SESSION_DELTA, "early_late_delta_within_session", None),
+    ]
+
+
+def _primary_animal_rows(
+    pooled_rows: Sequence[Mapping[str, object]],
+) -> dict[tuple[str, str, str], list[Mapping[str, object]]]:
+    grouped: dict[tuple[str, str, str], list[Mapping[str, object]]] = defaultdict(list)
+    for row in pooled_rows:
+        phase = str(row["phase"])
+        stim_var = str(row["stim_var"])
+        mi_type = str(row["mi_type"])
+        if not _is_primary_when_cell(phase, stim_var, mi_type):
+            continue
+        grouped[(phase, stim_var, mi_type)].append(row)
+    return grouped
+
+
+def run_group_mi_tests_sliced(
+    pooled_rows: Sequence[Mapping[str, object]],
+    summary_rows: Sequence[Mapping[str, object]],
+    *,
+    trial_nulls: bool = False,
+) -> list[dict[str, object]]:
+    """One-hold and two-hold simple-effect Mann–Whitney tests with BH-FDR in four families."""
+    out: list[dict[str, object]] = []
+    families = _sliced_metric_families(trial_nulls)
+
+    pooled_primary = _primary_animal_rows(pooled_rows)
+    summary_primary = _primary_animal_rows(summary_rows)
+
+    for family, primary_metric, exploratory_metric in families:
+        if family == FDR_FAMILY_POOLED:
+            source_by_cell = pooled_primary
+        else:
+            source_by_cell = summary_primary
+
+        for (phase, stim_var, mi_type), subset in sorted(source_by_cell.items()):
+            levels = _levels_by_factor(subset)
+            for spec in _iter_slice_specs(levels):
+                row = _mann_whitney_slice_row(
+                    subset,
+                    spec,
+                    metric=primary_metric,
+                    phase=phase,
+                    stim_var=stim_var,
+                    mi_type=mi_type,
+                    fdr_family=family,
+                )
+                if row is not None:
+                    out.append(row)
+                if exploratory_metric is not None:
+                    exploratory = _mann_whitney_slice_row(
+                        subset,
+                        spec,
+                        metric=exploratory_metric,
+                        phase=phase,
+                        stim_var=stim_var,
+                        mi_type=mi_type,
+                        fdr_family=family,
+                    )
+                    if exploratory is not None:
+                        exploratory["_exploratory"] = True
+                        exploratory["q_bh"] = float("nan")
+                        out.append(exploratory)
+
+    for family in {FDR_FAMILY_POOLED, FDR_FAMILY_SLOPE, FDR_FAMILY_CAREER_DELTA, FDR_FAMILY_WITHIN_SESSION_DELTA}:
+        _apply_bh_within_family(out, family)
+
+    return out
+
+
+def write_group_mi_sliced_tests_csv(path: Path | str, rows: Sequence[Mapping[str, object]]) -> None:
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(GROUP_MI_SLICED_TEST_FIELDS), extrasaction="ignore")
         writer.writeheader()
         for row in rows:
             writer.writerow(row)

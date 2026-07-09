@@ -27,13 +27,16 @@ Stimulus duty is a **deterministic function of distance-to-exit**. Mutual inform
   mi_per_trial.csv
   mi_trial_animal_summaries.csv
   group_mi_when_tests.csv
+  group_mi_sliced_tests.csv
   join_stimulus_bouts_summary.json
   compute_stimulus_mi_summary.json
 ```
 
-Path helpers: `stimulus_mi_dir`, `stimulus_bout_features_csv`, `stimulus_bin_edges_json`, `mi_per_animal_csv`, `group_mi_tests_csv`, `mi_per_trial_csv`, `mi_trial_animal_summaries_csv`, `group_mi_when_tests_csv`.
+Path helpers: `stimulus_mi_dir`, `stimulus_bout_features_csv`, `stimulus_bin_edges_json`, `mi_per_animal_csv`, `group_mi_tests_csv`, `mi_per_trial_csv`, `mi_trial_animal_summaries_csv`, `group_mi_when_tests_csv`, `group_mi_sliced_tests_csv`.
 
 **When-coupling (shipped):** per-trial MI + ordinal exposure summaries — see [`.cursor/plans/stimulus_mi_when_coupling.plan.md`](../.cursor/plans/stimulus_mi_when_coupling.plan.md) and [ADR-0006](adr/0006-stimulus-mi-trial-trajectory-not-mixed.md). Enable with `--per-trial`; optional `--trial-nulls` for circular nulls per trial.
+
+**Sliced strata + within-session early/late (shipped):** [`.cursor/plans/stimulus_mi_sliced_factorial.plan.md`](../.cursor/plans/stimulus_mi_sliced_factorial.plan.md). Enable with `--sliced-tests` (requires `--per-trial`).
 
 ## Stage 1 — `stimulus_bout_features.csv`
 
@@ -107,6 +110,9 @@ Per animal × phase × stim_var × mi_type trajectory scalars from per-trial row
 | `slope_vs_trial_ord` | OLS slope of `mi_mm` ~ `trial_ord` |
 | `early_late_delta` | mean(first k=3 trials) − mean(last k=3); requires N ≥ 6 |
 | `slope_vs_excess`, `early_late_delta_excess`, `null_clear_fraction` | With `--trial-nulls` only |
+| `early_late_delta_within_session` | mean of per-session early−late deltas (k=3, \(N_{sess}≥6\)) |
+| `early_late_delta_within_session_excess` | excess twin when `--trial-nulls` |
+| `n_sessions_used` | Sessions contributing a within-session delta |
 
 ## Stage 7 — `group_mi_when_tests.csv`
 
@@ -118,3 +124,24 @@ Mann–Whitney/Kruskal on animal-level when metrics. **Primary cells only:** `ru
 | `phase`, `stim_var`, `mi_type` | Slice keys |
 | `metric` | `slope_vs_trial_ord`, `early_late_delta`, or excess twins when nulls on |
 | `n_a`, `n_b`, `median_a`, `median_b`, `stat`, `p`, `test` | Same as Stage 4 |
+
+## Stage 8 — `group_mi_sliced_tests.csv` (`--sliced-tests`)
+
+One-hold and two-hold simple-effect Mann–Whitney tests on primary cells (`run × {duty, dist} × occupancy`). Both arms must have **n ≥ 5** or the row is omitted. BH-FDR (`q_bh`) is computed separately within each family:
+
+| Family | Metric |
+|--------|--------|
+| A | pooled `mi_mm` |
+| B | `slope_vs_excess` if `--trial-nulls`, else `slope_vs_trial_ord` |
+| C | career `early_late_delta` (excess twin when nulls) |
+| D | `early_late_delta_within_session` (excess twin when nulls) |
+
+| Column | Description |
+|--------|-------------|
+| `fdr_family` | A, B, C, or D |
+| `hold_sex`, `hold_strain`, `hold_tx` | Strata held fixed (blank = not held) |
+| `contrast_factor`, `level_a`, `level_b` | Simple effect contrast |
+| `phase`, `stim_var`, `mi_type`, `metric` | Slice keys |
+| `n_a`, `n_b`, `median_a`, `median_b`, `stat`, `p`, `q_bh`, `test` | Test output |
+
+When `--trial-nulls` is on, raw slope/delta metrics are also emitted with `p` but **no** `q_bh` (exploratory).

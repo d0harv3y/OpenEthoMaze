@@ -237,6 +237,10 @@ def group_mi_when_tests_csv(stimulus_mi: Path | str) -> Path:
     return Path(stimulus_mi) / "group_mi_when_tests.csv"
 
 
+def group_mi_sliced_tests_csv(stimulus_mi: Path | str) -> Path:
+    return Path(stimulus_mi) / "group_mi_sliced_tests.csv"
+
+
 def discover_anatomical_seeds(kpms_root: Path | str) -> tuple[str, ...]:
     """Return sorted seed ids with ``anatomical/seed_*/results_apply.h5``."""
     root = Path(kpms_root) / "anatomical"

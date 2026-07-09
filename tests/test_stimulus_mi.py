@@ -16,9 +16,15 @@ from maze.kpms.behavior_ethogram.stimulus_mi import (
     occupancy_mi,
     parse_ordinal_suffix,
     run_group_mi_tests,
+    run_group_mi_tests_sliced,
     run_group_mi_when_tests,
     transition_mi,
     trial_order_for_animal,
+)
+from maze.kpms.behavior_ethogram.stimulus_mi_contract import (
+    FDR_FAMILY_POOLED,
+    FDR_FAMILY_SLOPE,
+    MIN_SLICE_ARM_N,
 )
 
 def _bout_row(**kwargs: str) -> dict[str, str]:
@@ -298,3 +304,153 @@ def test_compute_per_trial_mi_with_nulls_populates_excess() -> None:
     summaries = compute_trial_animal_summaries(run_occ, trial_nulls=True)
     assert summaries
     assert np.isfinite(summaries[0].null_clear_fraction)
+
+
+def _within_session_trial_rows(*, trials_per_session: int = 6) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for s in range(2):
+        session = f"S{s + 1:02d}"
+        for t in range(trials_per_session):
+            trial = f"T{t + 1:02d}"
+            trial_key = f"3243/{session}/{trial}"
+            base_duty = 0.2 + 0.05 * t + 0.1 * s
+            for i in range(4):
+                rows.append(
+                    _bout_row(
+                        trial_key=trial_key,
+                        session=session,
+                        trial=trial,
+                        bout_index=str(i),
+                        raw_syllable_id=str((i + t) % 4),
+                        bout_mean_duty=f"{min(0.95, base_duty + i * 0.03):.2f}",
+                        bout_mean_dist_px=f"{100 + s * 50 + t * 5 + i}.0",
+                        bout_primary_state="run",
+                    )
+                )
+    return rows
+
+
+def test_within_session_early_late_delta() -> None:
+    rows = _within_session_trial_rows(trials_per_session=6)
+    edges = compute_global_bin_edges(rows, n_bins=4)
+    trial_results = compute_per_trial_mi(rows, edges=edges)
+    summaries = compute_trial_animal_summaries(
+        [r for r in trial_results if r.phase == "run" and r.stim_var == "duty" and r.mi_type == "occupancy"]
+    )
+    assert len(summaries) == 1
+    assert summaries[0].n_sessions_used == 2
+    assert np.isfinite(summaries[0].early_late_delta_within_session)
+
+
+def _factorial_cohort_fixture(*, n_per_cell: int) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    pooled: list[dict[str, object]] = []
+    summaries: list[dict[str, object]] = []
+    animal_id = 0
+    for sex in ("F", "M"):
+        for strain in ("wt", "tg"):
+            for tx in ("a", "b"):
+                for rep in range(n_per_cell):
+                    animal_id += 1
+                    aid = str(animal_id)
+                    genotype_effect = 0.2 if strain == "tg" else 0.05
+                    sex_effect = 0.03 if sex == "M" else 0.0
+                    tx_effect = 0.02 if tx == "b" else 0.0
+                    mi_mm = genotype_effect + sex_effect + tx_effect + 0.001 * rep
+                    slope = genotype_effect / 10.0
+                    pooled.append(
+                        {
+                            "animal_id": aid,
+                            "sex": sex,
+                            "strain": strain,
+                            "tx": tx,
+                            "phase": "run",
+                            "stim_var": "duty",
+                            "mi_type": "occupancy",
+                            "mi_mm": mi_mm,
+                        }
+                    )
+                    summaries.append(
+                        {
+                            "animal_id": aid,
+                            "sex": sex,
+                            "strain": strain,
+                            "tx": tx,
+                            "phase": "run",
+                            "stim_var": "duty",
+                            "mi_type": "occupancy",
+                            "slope_vs_trial_ord": slope,
+                            "early_late_delta": mi_mm / 5.0,
+                            "early_late_delta_within_session": mi_mm / 7.0,
+                            "slope_vs_excess": float("nan"),
+                            "early_late_delta_excess": float("nan"),
+                            "early_late_delta_within_session_excess": float("nan"),
+                        }
+                    )
+    return pooled, summaries
+
+
+def test_run_group_mi_tests_sliced_2x2x2_catalog_and_bh() -> None:
+    pooled, summaries = _factorial_cohort_fixture(n_per_cell=MIN_SLICE_ARM_N)
+    out = run_group_mi_tests_sliced(pooled, summaries, trial_nulls=False)
+    assert out
+    families = {str(r["fdr_family"]) for r in out}
+    assert FDR_FAMILY_POOLED in families
+    assert FDR_FAMILY_SLOPE in families
+    assert all(r["phase"] == "run" for r in out)
+    assert all(r["mi_type"] == "occupancy" for r in out)
+    pooled_rows = [r for r in out if r["fdr_family"] == FDR_FAMILY_POOLED]
+    assert pooled_rows
+    assert any(np.isfinite(float(r["q_bh"])) for r in pooled_rows)
+
+    def _n_holds(row: dict[str, object]) -> int:
+        return sum(1 for col in ("hold_sex", "hold_strain", "hold_tx") if str(row.get(col, "")).strip())
+
+    one_hold = [r for r in out if _n_holds(r) == 1]
+    two_hold = [r for r in out if _n_holds(r) == 2]
+    assert one_hold
+    assert two_hold
+
+
+def test_run_group_mi_tests_sliced_omits_small_arms() -> None:
+    pooled: list[dict[str, object]] = []
+    summaries: list[dict[str, object]] = []
+    for i in range(3):
+        base = {
+            "animal_id": f"wt{i}",
+            "sex": "F",
+            "strain": "wt",
+            "tx": "a",
+            "phase": "run",
+            "stim_var": "duty",
+            "mi_type": "occupancy",
+        }
+        pooled.append({**base, "mi_mm": 0.1})
+        summaries.append(
+            {
+                **base,
+                "slope_vs_trial_ord": 0.01,
+                "early_late_delta": 0.01,
+                "early_late_delta_within_session": 0.01,
+            }
+        )
+    for i in range(3):
+        base = {
+            "animal_id": f"tg{i}",
+            "sex": "F",
+            "strain": "tg",
+            "tx": "a",
+            "phase": "run",
+            "stim_var": "duty",
+            "mi_type": "occupancy",
+        }
+        pooled.append({**base, "mi_mm": 0.2})
+        summaries.append(
+            {
+                **base,
+                "slope_vs_trial_ord": 0.02,
+                "early_late_delta": 0.02,
+                "early_late_delta_within_session": 0.02,
+            }
+        )
+    out = run_group_mi_tests_sliced(pooled, summaries, trial_nulls=False)
+    assert out == []

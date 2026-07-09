@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from maze.kpms.behavior_ethogram.paths import (
+    group_mi_sliced_tests_csv,
     group_mi_tests_csv,
     group_mi_when_tests_csv,
     mi_per_animal_csv,
@@ -28,10 +29,12 @@ from maze.kpms.behavior_ethogram.stimulus_mi import (
     compute_trial_animal_summaries,
     load_bin_edges_json,
     run_group_mi_tests,
+    run_group_mi_tests_sliced,
     run_group_mi_when_tests,
     trial_animal_summary_to_row,
     write_bin_edges_json,
     write_group_mi_tests_csv,
+    write_group_mi_sliced_tests_csv,
     write_group_mi_when_tests_csv,
     write_mi_per_animal_csv,
     write_mi_per_trial_csv,
@@ -82,10 +85,18 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Optional gate: skip trials with H_stim below this threshold (bits)",
     )
+    ap.add_argument(
+        "--sliced-tests",
+        action="store_true",
+        help="Emit stratified one/two-hold simple-effect tests with BH-FDR (requires --per-trial)",
+    )
     args = ap.parse_args(argv)
 
     if args.trial_nulls and not args.per_trial:
         print("--trial-nulls requires --per-trial", file=sys.stderr)
+        return 2
+    if args.sliced_tests and not args.per_trial:
+        print("--sliced-tests requires --per-trial", file=sys.stderr)
         return 2
 
     kpms_root = Path(args.kpms_root)
@@ -179,6 +190,17 @@ def main(argv: list[str] | None = None) -> int:
         summary["mi_per_trial_csv"] = str(trial_csv)
         summary["mi_trial_animal_summaries_csv"] = str(summaries_csv)
         summary["group_mi_when_tests_csv"] = str(when_csv)
+
+        if args.sliced_tests:
+            sliced_rows = run_group_mi_tests_sliced(
+                [animal_mi_to_row(r) for r in animal_results],
+                [trial_animal_summary_to_row(s) for s in animal_summaries],
+                trial_nulls=args.trial_nulls,
+            )
+            sliced_csv = group_mi_sliced_tests_csv(out_dir)
+            write_group_mi_sliced_tests_csv(sliced_csv, sliced_rows)
+            summary["n_sliced_group_tests"] = len(sliced_rows)
+            summary["group_mi_sliced_tests_csv"] = str(sliced_csv)
 
     write_json(out_dir / "compute_stimulus_mi_summary.json", summary)
     print(json.dumps(summary, indent=2))
