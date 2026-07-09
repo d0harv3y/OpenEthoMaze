@@ -225,6 +225,18 @@ def stimulus_bin_edges_json(stimulus_mi: Path | str) -> Path:
     return Path(stimulus_mi) / "stimulus_bin_edges.json"
 
 
+def mi_per_trial_csv(stimulus_mi: Path | str) -> Path:
+    return Path(stimulus_mi) / "mi_per_trial.csv"
+
+
+def mi_trial_animal_summaries_csv(stimulus_mi: Path | str) -> Path:
+    return Path(stimulus_mi) / "mi_trial_animal_summaries.csv"
+
+
+def group_mi_when_tests_csv(stimulus_mi: Path | str) -> Path:
+    return Path(stimulus_mi) / "group_mi_when_tests.csv"
+
+
 def discover_anatomical_seeds(kpms_root: Path | str) -> tuple[str, ...]:
     """Return sorted seed ids with ``anatomical/seed_*/results_apply.h5``."""
     root = Path(kpms_root) / "anatomical"

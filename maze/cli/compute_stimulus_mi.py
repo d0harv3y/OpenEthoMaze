@@ -11,7 +11,10 @@ import numpy as np
 
 from maze.kpms.behavior_ethogram.paths import (
     group_mi_tests_csv,
+    group_mi_when_tests_csv,
     mi_per_animal_csv,
+    mi_per_trial_csv,
+    mi_trial_animal_summaries_csv,
     stimulus_bin_edges_json,
     stimulus_bout_features_csv,
     stimulus_mi_dir,
@@ -21,12 +24,20 @@ from maze.kpms.behavior_ethogram.stimulus_mi import (
     animal_mi_to_row,
     compute_animal_mi,
     compute_global_bin_edges,
+    compute_per_trial_mi,
+    compute_trial_animal_summaries,
     load_bin_edges_json,
     run_group_mi_tests,
+    run_group_mi_when_tests,
+    trial_animal_summary_to_row,
     write_bin_edges_json,
     write_group_mi_tests_csv,
+    write_group_mi_when_tests_csv,
     write_mi_per_animal_csv,
+    write_mi_per_trial_csv,
+    write_mi_trial_animal_summaries_csv,
 )
+from maze.kpms.behavior_ethogram.stimulus_mi_contract import TRIAL_NULL_N_PERM
 from maze.kpms.io import write_json
 
 
@@ -49,7 +60,33 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Reuse bin edges sidecar (default: compute from run-phase cohort)",
     )
+    ap.add_argument(
+        "--per-trial",
+        action="store_true",
+        help="Emit per-trial MI and animal trajectory summaries (additive to pooled path)",
+    )
+    ap.add_argument(
+        "--trial-nulls",
+        action="store_true",
+        help="Circular nulls per trial (n_perm=200); requires --per-trial",
+    )
+    ap.add_argument(
+        "--min-run-bouts",
+        type=int,
+        default=None,
+        help="Optional gate: skip trials with cum_run_bouts below this threshold",
+    )
+    ap.add_argument(
+        "--min-h-stim",
+        type=float,
+        default=None,
+        help="Optional gate: skip trials with H_stim below this threshold (bits)",
+    )
     args = ap.parse_args(argv)
+
+    if args.trial_nulls and not args.per_trial:
+        print("--trial-nulls requires --per-trial", file=sys.stderr)
+        return 2
 
     kpms_root = Path(args.kpms_root)
     out_dir = Path(args.out_dir) if args.out_dir else stimulus_mi_dir(kpms_root)
@@ -83,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     write_group_mi_tests_csv(group_csv, group_rows)
 
     iti_flags = [r for r in animal_results if r.iti_control_flag]
-    summary = {
+    summary: dict[str, object] = {
         "n_animals": len({r.animal_id for r in animal_results}),
         "n_mi_rows": len(animal_results),
         "n_group_tests": len(group_rows),
@@ -101,11 +138,48 @@ def main(argv: list[str] | None = None) -> int:
         "bin_edges_json": str(edges_path),
         "mi_per_animal_csv": str(mi_csv),
         "group_mi_tests_csv": str(group_csv),
+        "per_trial": args.per_trial,
         "confound_note": (
             "Stimulus duty is a deterministic function of distance-to-exit; MI cannot "
             "separate response to signal from response to goal proximity."
         ),
     }
+
+    if args.per_trial:
+        trial_rng = np.random.default_rng(args.seed + 1)
+        trial_results = compute_per_trial_mi(
+            rows,
+            edges=edges,
+            trial_nulls=args.trial_nulls,
+            n_perm=TRIAL_NULL_N_PERM,
+            min_run_bouts=args.min_run_bouts,
+            min_h_stim=args.min_h_stim,
+            rng=trial_rng,
+        )
+        if not trial_results:
+            print("No per-trial MI results.", file=sys.stderr)
+            return 1
+
+        trial_csv = mi_per_trial_csv(out_dir)
+        write_mi_per_trial_csv(trial_csv, trial_results)
+        animal_summaries = compute_trial_animal_summaries(trial_results, trial_nulls=args.trial_nulls)
+        summaries_csv = mi_trial_animal_summaries_csv(out_dir)
+        write_mi_trial_animal_summaries_csv(summaries_csv, animal_summaries)
+        when_rows = run_group_mi_when_tests(
+            [trial_animal_summary_to_row(s) for s in animal_summaries],
+            trial_nulls=args.trial_nulls,
+        )
+        when_csv = group_mi_when_tests_csv(out_dir)
+        write_group_mi_when_tests_csv(when_csv, when_rows)
+
+        summary["n_trial_mi_rows"] = len(trial_results)
+        summary["n_trial_animal_summaries"] = len(animal_summaries)
+        summary["n_when_group_tests"] = len(when_rows)
+        summary["trial_nulls"] = args.trial_nulls
+        summary["mi_per_trial_csv"] = str(trial_csv)
+        summary["mi_trial_animal_summaries_csv"] = str(summaries_csv)
+        summary["group_mi_when_tests_csv"] = str(when_csv)
+
     write_json(out_dir / "compute_stimulus_mi_summary.json", summary)
     print(json.dumps(summary, indent=2))
     if iti_flags:

@@ -24,11 +24,16 @@ Stimulus duty is a **deterministic function of distance-to-exit**. Mutual inform
   stimulus_bin_edges.json
   mi_per_animal.csv
   group_mi_tests.csv
+  mi_per_trial.csv
+  mi_trial_animal_summaries.csv
+  group_mi_when_tests.csv
   join_stimulus_bouts_summary.json
   compute_stimulus_mi_summary.json
 ```
 
-Path helpers: `stimulus_mi_dir`, `stimulus_bout_features_csv`, `stimulus_bin_edges_json`, `mi_per_animal_csv`, `group_mi_tests_csv`.
+Path helpers: `stimulus_mi_dir`, `stimulus_bout_features_csv`, `stimulus_bin_edges_json`, `mi_per_animal_csv`, `group_mi_tests_csv`, `mi_per_trial_csv`, `mi_trial_animal_summaries_csv`, `group_mi_when_tests_csv`.
+
+**When-coupling (shipped):** per-trial MI + ordinal exposure summaries — see [`.cursor/plans/stimulus_mi_when_coupling.plan.md`](../.cursor/plans/stimulus_mi_when_coupling.plan.md) and [ADR-0006](adr/0006-stimulus-mi-trial-trajectory-not-mixed.md). Enable with `--per-trial`; optional `--trial-nulls` for circular nulls per trial.
 
 ## Stage 1 — `stimulus_bout_features.csv`
 
@@ -75,3 +80,41 @@ Per-animal `mi_mm` compared across `sex`, `genotype` (= `strain`), or `tx`:
 | `n_a`, `n_b`, `median_a`, `median_b` | Sample sizes / medians |
 | `stat`, `p` | `mannwhitneyu` (2 levels) or `kruskal` (>2) |
 | `test` | Test name |
+
+## Stage 5 — `mi_per_trial.csv` (`--per-trial`)
+
+Per animal × trial × phase × stim_var × mi_type (full factorial). Ordinal exposure columns support trajectory summaries.
+
+| Column | Description |
+|--------|-------------|
+| `animal_id`, `sex`, `strain`, `tx` | Stratification |
+| `session`, `trial`, `trial_key` | Trial identity |
+| `trial_ord` | 0-based chronological index within animal (parsed from session/trial suffixes) |
+| `cum_run_bouts` | Running sum of run-phase bouts through this trial (inclusive) |
+| `phase`, `stim_var`, `mi_type` | Slice keys |
+| `n_bouts`, `H_stim`, `H_syll`, `mi_raw`, `mi_mm` | Same semantics as pooled rows |
+| `null_circ_mean`, `null_circ_p`, `excess` | Populated only with `--trial-nulls` (circular, n_perm=200) |
+
+Optional gates: `--min-run-bouts`, `--min-h-stim` (off by default).
+
+## Stage 6 — `mi_trial_animal_summaries.csv`
+
+Per animal × phase × stim_var × mi_type trajectory scalars from per-trial rows:
+
+| Column | Description |
+|--------|-------------|
+| `n_trials`, `mean_mi_mm`, `median_mi_mm`, `mean_n_bouts`, `mean_H_stim` | Descriptive |
+| `slope_vs_trial_ord` | OLS slope of `mi_mm` ~ `trial_ord` |
+| `early_late_delta` | mean(first k=3 trials) − mean(last k=3); requires N ≥ 6 |
+| `slope_vs_excess`, `early_late_delta_excess`, `null_clear_fraction` | With `--trial-nulls` only |
+
+## Stage 7 — `group_mi_when_tests.csv`
+
+Mann–Whitney/Kruskal on animal-level when metrics. **Primary cells only:** `run × {duty, dist} × occupancy`.
+
+| Column | Description |
+|--------|-------------|
+| `factor`, `level_a`, `level_b` | Grouping |
+| `phase`, `stim_var`, `mi_type` | Slice keys |
+| `metric` | `slope_vs_trial_ord`, `early_late_delta`, or excess twins when nulls on |
+| `n_a`, `n_b`, `median_a`, `median_b`, `stat`, `p`, `test` | Same as Stage 4 |
