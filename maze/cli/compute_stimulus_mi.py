@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from maze.kpms.behavior_ethogram.paths import (
+    group_mi_excess_tests_csv,
     group_mi_sliced_tests_csv,
     group_mi_tests_csv,
     group_mi_when_tests_csv,
@@ -28,11 +29,13 @@ from maze.kpms.behavior_ethogram.stimulus_mi import (
     compute_per_trial_mi,
     compute_trial_animal_summaries,
     load_bin_edges_json,
+    run_group_mi_excess_tests,
     run_group_mi_tests,
     run_group_mi_tests_sliced,
     run_group_mi_when_tests,
     trial_animal_summary_to_row,
     write_bin_edges_json,
+    write_group_mi_excess_tests_csv,
     write_group_mi_tests_csv,
     write_group_mi_sliced_tests_csv,
     write_group_mi_when_tests_csv,
@@ -40,7 +43,6 @@ from maze.kpms.behavior_ethogram.stimulus_mi import (
     write_mi_per_trial_csv,
     write_mi_trial_animal_summaries_csv,
 )
-from maze.kpms.behavior_ethogram.stimulus_mi_contract import TRIAL_NULL_N_PERM
 from maze.kpms.io import write_json
 
 
@@ -55,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--out-dir", type=Path, default=None)
     ap.add_argument("--n-bins", type=int, default=4)
-    ap.add_argument("--n-perm", type=int, default=1000)
+    ap.add_argument("--n-perm", type=int, default=1000, help="Circular null permutations (animal + trial)")
     ap.add_argument("--seed", type=int, default=0, help="RNG seed for shuffle nulls")
     ap.add_argument(
         "--bin-edges-json",
@@ -71,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--trial-nulls",
         action="store_true",
-        help="Circular nulls per trial (n_perm=200); requires --per-trial",
+        help="Circular nulls per trial (uses --n-perm); requires --per-trial",
     )
     ap.add_argument(
         "--min-run-bouts",
@@ -126,15 +128,20 @@ def main(argv: list[str] | None = None) -> int:
 
     mi_csv = mi_per_animal_csv(out_dir)
     write_mi_per_animal_csv(mi_csv, animal_results)
-    group_rows = run_group_mi_tests([animal_mi_to_row(r) for r in animal_results])
+    animal_rows = [animal_mi_to_row(r) for r in animal_results]
+    group_rows = run_group_mi_tests(animal_rows)
     group_csv = group_mi_tests_csv(out_dir)
     write_group_mi_tests_csv(group_csv, group_rows)
+    group_excess_rows = run_group_mi_excess_tests(animal_rows)
+    group_excess_csv = group_mi_excess_tests_csv(out_dir)
+    write_group_mi_excess_tests_csv(group_excess_csv, group_excess_rows)
 
     iti_flags = [r for r in animal_results if r.iti_control_flag]
     summary: dict[str, object] = {
         "n_animals": len({r.animal_id for r in animal_results}),
         "n_mi_rows": len(animal_results),
         "n_group_tests": len(group_rows),
+        "n_group_excess_tests": len(group_excess_rows),
         "n_iti_control_flags": len(iti_flags),
         "iti_flagged": [
             {
@@ -149,6 +156,7 @@ def main(argv: list[str] | None = None) -> int:
         "bin_edges_json": str(edges_path),
         "mi_per_animal_csv": str(mi_csv),
         "group_mi_tests_csv": str(group_csv),
+        "group_mi_excess_tests_csv": str(group_excess_csv),
         "per_trial": args.per_trial,
         "confound_note": (
             "Stimulus duty is a deterministic function of distance-to-exit; MI cannot "
@@ -162,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
             rows,
             edges=edges,
             trial_nulls=args.trial_nulls,
-            n_perm=TRIAL_NULL_N_PERM,
+            n_perm=args.n_perm,
             min_run_bouts=args.min_run_bouts,
             min_h_stim=args.min_h_stim,
             rng=trial_rng,

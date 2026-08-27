@@ -86,3 +86,45 @@ def test_align_idempotent_when_already_matched() -> None:
     again = align_feedback_to_xy_table(xy, fb, run_start_frame=5)
     assert feedback_table_matches_xy(again, xy)
     np.testing.assert_array_equal(again["motor_fb"], fb["motor_fb"])
+
+
+def test_feedback_table_from_source_wm_fills_iti_from_source() -> None:
+    from maze.pipeline.db.feedback_align import feedback_table_from_source_wm
+
+    run_start = 278
+    n_video = 3600
+    n_source = 3601
+    xy = _xy_table(n_video, run_start=run_start)
+    w = np.zeros(n_source, dtype=np.float32)
+    w[run_start:] = 50.0
+    m = np.zeros(n_source, dtype=np.float32)
+    m[run_start:] = 42.0
+    aligned_run_only = align_feedback_to_xy_table(
+        xy,
+        _run_relative_feedback(n_video - run_start, duty=42.0),
+        run_start_frame=run_start,
+    )
+    assert np.isnan(aligned_run_only["motor_fb"][0])
+    backfilled = feedback_table_from_source_wm(
+        xy,
+        w,
+        m,
+        trial_start_frame=run_start,
+    )
+    assert feedback_table_matches_xy(backfilled, xy)
+    assert backfilled["motor_fb"][0] == pytest.approx(0.0)
+    assert backfilled["light_fb"][run_start - 1] == pytest.approx(0.0)
+    assert backfilled["motor_fb"][run_start] == pytest.approx(42.0)
+    assert backfilled["light_fb"][-1] == pytest.approx(50.0)
+
+
+def test_build_feedback_table_from_wm_sets_states() -> None:
+    from maze.pipeline.db.feedback import build_feedback_table_from_wm
+
+    w = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+    m = np.array([4.0, 5.0, 6.0], dtype=np.float32)
+    fb = build_feedback_table_from_wm(w, m, trial_start_frame=1)
+    assert fb["trial_state"][0] == b"iti_wait"
+    assert fb["trial_state"][1] == b"run"
+    assert fb["light_fb"][2] == pytest.approx(3.0)
+    assert fb["motor_fb"][0] == pytest.approx(4.0)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
@@ -12,7 +12,7 @@ from jax_moseq.utils.debugging import convert_data_precision
 
 from ..pipeline.run_provenance import provenance_envelope, provenance_run, sha256_file
 from .io import ensure_dir, write_json, write_selected_manifest
-from .fit_config import KpmsFitRunConfig, subset_config_from_fit_run
+from .fit_config import FitConfig, KpmsFitRunConfig, subset_config_from_fit_run
 from .manifest_subset import (
     SubsetConfig,
     filter_manifests,
@@ -23,29 +23,6 @@ from .manifest_subset import (
 from .heading_idxs import PoseStream, anterior_posterior_idxs
 from .preprocess import KpmsPreprocessConfig, build_kpms_inputs
 from .project_paths import POSE_STREAM_CHOICES, resolve_kpms_project_dir
-
-
-@dataclass(frozen=True)
-class FitConfig:
-    """kpMS fit hyperparameters for ORM v1."""
-
-    seed: int = 42
-    pca_num_frames: int = 1_000_000
-    num_states: int = 100
-    latent_dim: int = 5
-    nlags: int = 5
-
-    stage1_kappa: float = 1e7
-    stage2_kappa: float = 1e4
-    stage1_ar_only_iters: int = 50
-    stage2_full_iters: int = 200
-    alpha: float = 5.7
-    gamma: float = 1e3
-    s0_scale: float = 0.01
-    k0_scale: float = 10.0
-    save_every: int = 50
-    conf_threshold: float = 0.2
-    reindex_syllables: bool = True
 
 
 def _configure_jax_precision(*, use_float32: bool) -> None:
@@ -107,6 +84,30 @@ def parse_args() -> argparse.Namespace:
             "Use float32 and jax_enable_x64=False (roughly half GPU memory vs default float64). "
             "Less numerically stable; use for large cohorts on 24GB cards."
         ),
+    )
+    parser.add_argument(
+        "--stage1-kappa",
+        type=float,
+        default=None,
+        help="Stage-1 stickiness kappa (default: FitConfig stage1_kappa).",
+    )
+    parser.add_argument(
+        "--stage2-kappa",
+        type=float,
+        default=None,
+        help="Stage-2 stickiness kappa — primary bout-length dial (default: 1e4).",
+    )
+    parser.add_argument(
+        "--num-states",
+        type=int,
+        default=None,
+        help="Max discrete syllable states K (default: 100).",
+    )
+    parser.add_argument(
+        "--conf-threshold",
+        type=float,
+        default=None,
+        help="Keypoint confidence threshold for masking (default: 0.2).",
     )
     return parser.parse_args()
 
@@ -178,8 +179,9 @@ def run_kpms_fit(cfg: KpmsFitRunConfig) -> Path:
     }
     if subset_cfg.manifest_csv and Path(subset_cfg.manifest_csv).is_file():
         prov_inputs["manifest_csv_sha256"] = sha256_file(subset_cfg.manifest_csv)
+    prov_inputs["fit_config"] = asdict(cfg.fit)
 
-    fit_cfg = FitConfig(seed=cfg.random_seed)
+    fit_cfg = cfg.fit
 
     with provenance_run("kpms_fit", project_dir, prov_inputs) as prov:
         _run_fit_body(
@@ -198,6 +200,17 @@ def run_kpms_fit(cfg: KpmsFitRunConfig) -> Path:
 def fit_run_config_from_args(args: argparse.Namespace) -> KpmsFitRunConfig:
     """Map :func:`parse_args` namespace to :class:`KpmsFitRunConfig`."""
     balance_cols = tuple(c.strip() for c in str(args.balance_by).split(",") if c.strip())
+    fit_defaults = FitConfig()
+    fit_overrides: dict[str, object] = {"seed": args.random_seed}
+    if getattr(args, "stage1_kappa", None) is not None:
+        fit_overrides["stage1_kappa"] = args.stage1_kappa
+    if getattr(args, "stage2_kappa", None) is not None:
+        fit_overrides["stage2_kappa"] = args.stage2_kappa
+    if getattr(args, "num_states", None) is not None:
+        fit_overrides["num_states"] = args.num_states
+    if getattr(args, "conf_threshold", None) is not None:
+        fit_overrides["conf_threshold"] = args.conf_threshold
+    fit_cfg = FitConfig(**{**asdict(fit_defaults), **fit_overrides})
     return KpmsFitRunConfig(
         project_dir=Path(args.project_dir),
         model_name=args.model_name,
@@ -211,6 +224,7 @@ def fit_run_config_from_args(args: argparse.Namespace) -> KpmsFitRunConfig:
         enrich_from_treatment_labels=not args.no_enrich_labels,
         force_new=bool(args.force_new),
         use_float32=bool(args.float32),
+        fit=fit_cfg,
     )
 
 
@@ -231,7 +245,11 @@ def _run_fit_body(
 ) -> None:
     manifests = load_manifests(subset_cfg)
     cohort_db = resolve_cohort_db_path(manifests)
-    pre_cfg = KpmsPreprocessConfig(pose_stream=pose_stream, db_path=cohort_db)
+    pre_cfg = KpmsPreprocessConfig(
+        pose_stream=pose_stream,
+        db_path=cohort_db,
+        conf_threshold=fit_cfg.conf_threshold,
+    )
     manifests = filter_manifests(manifests, subset_cfg)
     manifests = sample_representative_subset(
         manifests,

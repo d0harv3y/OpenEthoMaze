@@ -15,21 +15,20 @@ from ._shared import ensure_group, open_db
 from .trial_key import TrialKey
 
 
-def write_feedback_series(
-    db_path: Optional[Path],
-    key: TrialKey,
+def build_feedback_table_from_wm(
     w: np.ndarray,
     m: np.ndarray,
+    *,
     trial_start_frame: Optional[int] = None,
-) -> None:
-    """Write legacy W/M feedback series into the unified feedback table."""
+) -> np.ndarray:
+    """Build a source-length feedback table from legacy W/M arrays."""
     w = np.asarray(w, dtype=np.float32)
     m = np.asarray(m, dtype=np.float32)
     if len(w) != len(m):
-        raise ValueError("write_feedback_series: w and m must have the same length")
+        raise ValueError("build_feedback_table_from_wm: w and m must have the same length")
     n = len(m)
     if n == 0:
-        return
+        return np.zeros(0, dtype=FEEDBACK_ROW_DTYPE)
     fb = np.zeros(n, dtype=FEEDBACK_ROW_DTYPE)
     fb["frame_index"] = np.arange(n, dtype=np.uint32)
     if trial_start_frame is not None and 0 < trial_start_frame < n:
@@ -40,6 +39,20 @@ def write_feedback_series(
     fb["motor_fb"] = m
     fb["light_fb"] = w
     fb["sound_fb"] = 0.0
+    return fb
+
+
+def write_feedback_series(
+    db_path: Optional[Path],
+    key: TrialKey,
+    w: np.ndarray,
+    m: np.ndarray,
+    trial_start_frame: Optional[int] = None,
+) -> None:
+    """Write legacy W/M feedback series into the unified feedback table."""
+    fb = build_feedback_table_from_wm(w, m, trial_start_frame=trial_start_frame)
+    if len(fb) == 0:
+        return
     with open_db(db_path, "a") as h5:
         core_write_feedback_table(h5[key.path()], fb)
 

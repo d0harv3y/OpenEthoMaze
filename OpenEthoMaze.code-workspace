@@ -11,6 +11,18 @@
 		},
 		{
 			"path": "../../Documents/work/sack"
+		},
+		{
+			"path": "../../.agents"
+		},
+		{
+			"path": "../excel"
+		},
+		{
+			"path": "../archive/IMPRESS"
+		},
+		{
+			"path": "../../Documents/work/vocab"
 		}
 	],
 	"settings": {}

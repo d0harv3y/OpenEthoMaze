@@ -15,6 +15,7 @@ from maze.kpms.behavior_ethogram.stimulus_mi import (
     global_quantile_bin_edges,
     occupancy_mi,
     parse_ordinal_suffix,
+    run_group_mi_excess_tests,
     run_group_mi_tests,
     run_group_mi_tests_sliced,
     run_group_mi_when_tests,
@@ -141,6 +142,8 @@ def test_run_group_mi_tests_mann_whitney() -> None:
             "stim_var": "duty",
             "mi_type": "occupancy",
             "mi_mm": "0.5",
+            "null_circ_mean": "0.4",
+            "excess": "0.1",
         },
         {
             "animal_id": "2",
@@ -151,12 +154,66 @@ def test_run_group_mi_tests_mann_whitney() -> None:
             "stim_var": "duty",
             "mi_type": "occupancy",
             "mi_mm": "0.1",
+            "null_circ_mean": "0.05",
+            "excess": "0.05",
         },
     ]
     out = run_group_mi_tests(rows)
     sex_tests = [r for r in out if r["factor"] == "sex"]
     assert len(sex_tests) == 1
     assert sex_tests[0]["test"] == "mannwhitneyu"
+
+
+def test_run_group_mi_excess_tests_uses_excess_column() -> None:
+    rows = [
+        {
+            "animal_id": "1",
+            "sex": "F",
+            "strain": "wt",
+            "tx": "n/a",
+            "phase": "run",
+            "stim_var": "duty",
+            "mi_type": "occupancy",
+            "mi_mm": "0.5",
+            "null_circ_mean": "0.4",
+            "excess": "0.2",
+        },
+        {
+            "animal_id": "2",
+            "sex": "M",
+            "strain": "wt",
+            "tx": "n/a",
+            "phase": "run",
+            "stim_var": "duty",
+            "mi_type": "occupancy",
+            "mi_mm": "0.5",
+            "null_circ_mean": "0.45",
+            "excess": "0.05",
+        },
+    ]
+    out = run_group_mi_excess_tests(rows)
+    sex_tests = [r for r in out if r["factor"] == "sex"]
+    assert len(sex_tests) == 1
+    assert sex_tests[0]["median_a"] == pytest.approx(0.2)
+    assert sex_tests[0]["median_b"] == pytest.approx(0.05)
+
+
+def test_compute_animal_mi_emits_excess() -> None:
+    rows = [
+        _bout_row(
+            bout_index=str(i),
+            raw_syllable_id=str(i % 4),
+            bout_mean_duty=f"{0.1 + i * 0.1:.2f}",
+            bout_mean_dist_px=f"{100 + i * 10}.0",
+            bout_primary_state="run",
+        )
+        for i in range(8)
+    ]
+    edges = compute_global_bin_edges(rows, n_bins=4)
+    results = compute_animal_mi(rows, edges=edges, n_perm=20, rng=np.random.default_rng(0))
+    run_occ = [r for r in results if r.phase == "run" and r.stim_var == "duty" and r.mi_type == "occupancy"]
+    assert run_occ
+    assert all(np.isfinite(r.excess) for r in run_occ)
 
 
 def test_parse_ordinal_suffix() -> None:
@@ -285,6 +342,34 @@ def test_run_group_mi_when_tests_primary_cells_only() -> None:
     assert all(r["mi_type"] == "occupancy" for r in out)
     assert all(r["metric"] in ("slope_vs_trial_ord", "early_late_delta") for r in out)
     assert not any(r["phase"] == "iti" for r in out)
+    assert all("q_bh" in r for r in out)
+    assert all(np.isfinite(float(r["q_bh"])) for r in out)
+
+
+def test_run_group_mi_when_tests_bh_exploratory_with_trial_nulls() -> None:
+    summary_rows = [
+        {
+            "animal_id": f"{i}",
+            "sex": "F" if i < 5 else "M",
+            "strain": "wt",
+            "tx": "n/a",
+            "phase": "run",
+            "stim_var": "duty",
+            "mi_type": "occupancy",
+            "slope_vs_trial_ord": float(i) * 0.1,
+            "early_late_delta": float(i) * 0.05,
+            "slope_vs_excess": float(i) * 0.02,
+            "early_late_delta_excess": float(i) * 0.01,
+        }
+        for i in range(10)
+    ]
+    out = run_group_mi_when_tests(summary_rows, trial_nulls=True)
+    raw = [r for r in out if r["metric"] in ("slope_vs_trial_ord", "early_late_delta")]
+    primary = [r for r in out if r["metric"] in ("slope_vs_excess", "early_late_delta_excess")]
+    assert raw
+    assert primary
+    assert all(not np.isfinite(float(r["q_bh"])) for r in raw)
+    assert all(np.isfinite(float(r["q_bh"])) for r in primary)
 
 
 def test_compute_per_trial_mi_with_nulls_populates_excess() -> None:

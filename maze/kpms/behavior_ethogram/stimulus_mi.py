@@ -9,7 +9,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
-from typing import Iterator, Literal, Mapping, Sequence
+from typing import Callable, Iterator, Literal, Mapping, Sequence
 
 import numpy as np
 from scipy import stats
@@ -39,7 +39,7 @@ from .stimulus_mi_contract import (
     SLICE_FACTORS,
     STIM_PHASES,
     STIM_VARS,
-    TRIAL_NULL_N_PERM,
+    DEFAULT_NULL_N_PERM,
     WHEN_TEST_METRICS,
 )
 
@@ -74,6 +74,7 @@ class AnimalMiResult:
     null_circ_p: float
     null_perm_mean: float
     null_perm_p: float
+    excess: float
     iti_control_flag: int
 
 
@@ -501,6 +502,11 @@ def compute_animal_mi(
                     iti_flag = 0
                     if phase == "iti" and np.isfinite(null_circ_p) and mi_mm > null_circ_mean and null_circ_p < 0.05:
                         iti_flag = 1
+                    excess = (
+                        float(mi_mm - null_circ_mean)
+                        if np.isfinite(null_circ_mean)
+                        else float("nan")
+                    )
                     results.append(
                         AnimalMiResult(
                             animal_id=animal_id,
@@ -519,6 +525,7 @@ def compute_animal_mi(
                             null_circ_p=null_circ_p,
                             null_perm_mean=null_perm_mean,
                             null_perm_p=null_perm_p,
+                            excess=excess,
                             iti_control_flag=iti_flag,
                         )
                     )
@@ -543,6 +550,7 @@ def animal_mi_to_row(result: AnimalMiResult) -> dict[str, object]:
         "null_circ_p": result.null_circ_p,
         "null_perm_mean": result.null_perm_mean,
         "null_perm_p": result.null_perm_p,
+        "excess": result.excess,
         "iti_control_flag": result.iti_control_flag,
     }
 
@@ -571,8 +579,24 @@ def _factor_value(row: Mapping[str, str], factor: str) -> str:
     return str(row.get(factor, "")).strip()
 
 
-def run_group_mi_tests(mi_rows: Sequence[Mapping[str, str]]) -> list[dict[str, object]]:
-    """Mann-Whitney (2 levels) or Kruskal (>2) on per-animal ``mi_mm`` distributions."""
+def _row_mi_mm(row: Mapping[str, str]) -> float:
+    return float(row["mi_mm"])
+
+
+def _row_excess(row: Mapping[str, str]) -> float:
+    raw = str(row.get("excess", "")).strip()
+    if raw:
+        return float(raw)
+    return float(row["mi_mm"]) - float(row["null_circ_mean"])
+
+
+def run_group_mi_tests(
+    mi_rows: Sequence[Mapping[str, str]],
+    *,
+    value_fn: Callable[[Mapping[str, str]], float] | None = None,
+) -> list[dict[str, object]]:
+    """Mann-Whitney (2 levels) or Kruskal (>2) on per-animal MI scalars."""
+    extract = value_fn or _row_mi_mm
     grouped: dict[tuple[str, str, str], list[Mapping[str, str]]] = defaultdict(list)
     for row in mi_rows:
         key = (str(row["phase"]), str(row["stim_var"]), str(row["mi_type"]))
@@ -586,7 +610,10 @@ def run_group_mi_tests(mi_rows: Sequence[Mapping[str, str]]) -> list[dict[str, o
                 level = _factor_value(row, factor)
                 if not level:
                     continue
-                val = float(row["mi_mm"])
+                try:
+                    val = extract(row)
+                except (KeyError, TypeError, ValueError):
+                    continue
                 if not np.isfinite(val):
                     continue
                 by_level[level].append(val)
@@ -639,6 +666,11 @@ def run_group_mi_tests(mi_rows: Sequence[Mapping[str, str]]) -> list[dict[str, o
     return out
 
 
+def run_group_mi_excess_tests(mi_rows: Sequence[Mapping[str, str]]) -> list[dict[str, object]]:
+    """Mann-Whitney/Kruskal on per-animal ``excess`` (= ``mi_mm - null_circ_mean``)."""
+    return run_group_mi_tests(mi_rows, value_fn=_row_excess)
+
+
 def write_group_mi_tests_csv(path: Path | str, rows: Sequence[Mapping[str, object]]) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -647,6 +679,10 @@ def write_group_mi_tests_csv(path: Path | str, rows: Sequence[Mapping[str, objec
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
+
+
+def write_group_mi_excess_tests_csv(path: Path | str, rows: Sequence[Mapping[str, object]]) -> None:
+    write_group_mi_tests_csv(path, rows)
 
 
 _ORD_SUFFIX_RE = re.compile(r"(\d+)\s*$")
@@ -827,7 +863,7 @@ def compute_per_trial_mi(
     *,
     edges: StimulusBinEdges,
     trial_nulls: bool = False,
-    n_perm: int = TRIAL_NULL_N_PERM,
+    n_perm: int = DEFAULT_NULL_N_PERM,
     min_run_bouts: int | None = None,
     min_h_stim: float | None = None,
     rng: np.random.Generator | None = None,
@@ -1184,12 +1220,55 @@ def _active_when_metrics(trial_nulls: bool) -> tuple[str, ...]:
     return ("slope_vs_trial_ord", "early_late_delta")
 
 
+def _when_metric_bh_family(metric: str, *, trial_nulls: bool) -> str | None:
+    """Map when-test metric to BH family (B=slope, C=career delta); exploratory metrics → None."""
+    if trial_nulls:
+        if metric == "slope_vs_excess":
+            return FDR_FAMILY_SLOPE
+        if metric == "early_late_delta_excess":
+            return FDR_FAMILY_CAREER_DELTA
+        return None
+    if metric == "slope_vs_trial_ord":
+        return FDR_FAMILY_SLOPE
+    if metric == "early_late_delta":
+        return FDR_FAMILY_CAREER_DELTA
+    return None
+
+
+def _is_exploratory_when_metric(metric: str, *, trial_nulls: bool) -> bool:
+    if not trial_nulls:
+        return False
+    return metric in ("slope_vs_trial_ord", "early_late_delta")
+
+
+def _apply_bh_when_test_families(rows: list[dict[str, object]]) -> None:
+    """Benjamini–Hochberg q_bh within slope (B) and career-delta (C) families."""
+    for family in (FDR_FAMILY_SLOPE, FDR_FAMILY_CAREER_DELTA):
+        family_rows = [
+            r
+            for r in rows
+            if r.get("_bh_family") == family
+            and not r.get("_exploratory")
+            and np.isfinite(float(r["p"]))
+        ]
+        if not family_rows:
+            continue
+        q_vals = _benjamini_hochberg([float(r["p"]) for r in family_rows])
+        for row, q in zip(family_rows, q_vals, strict=True):
+            row["q_bh"] = q
+
+
 def run_group_mi_when_tests(
     summary_rows: Sequence[Mapping[str, object]],
     *,
     trial_nulls: bool = False,
 ) -> list[dict[str, object]]:
-    """Mann-Whitney/Kruskal on animal-level when metrics (primary cells only)."""
+    """Mann-Whitney/Kruskal on animal-level when metrics (primary cells only).
+
+    BH-FDR ``q_bh`` is computed within family **B** (slope) and **C** (career early−late
+    delta), matching ``group_mi_sliced_tests``. With ``trial_nulls``, primary endpoints
+    are excess metrics; raw ``mi_mm`` trajectory metrics are exploratory (``q_bh`` blank).
+    """
     metrics = _active_when_metrics(trial_nulls)
     grouped: dict[tuple[str, str, str], list[Mapping[str, object]]] = defaultdict(list)
     for row in summary_rows:
@@ -1237,7 +1316,10 @@ def run_group_mi_when_tests(
                             "median_b": float(np.median(vals_b)),
                             "stat": float(stat),
                             "p": float(p),
+                            "q_bh": float("nan"),
                             "test": "mannwhitneyu",
+                            "_bh_family": _when_metric_bh_family(metric, trial_nulls=trial_nulls),
+                            "_exploratory": _is_exploratory_when_metric(metric, trial_nulls=trial_nulls),
                         }
                     )
                 else:
@@ -1259,9 +1341,13 @@ def run_group_mi_when_tests(
                             "median_b": float("nan"),
                             "stat": float(stat),
                             "p": float(p),
+                            "q_bh": float("nan"),
                             "test": "kruskal",
+                            "_bh_family": _when_metric_bh_family(metric, trial_nulls=trial_nulls),
+                            "_exploratory": _is_exploratory_when_metric(metric, trial_nulls=trial_nulls),
                         }
                     )
+    _apply_bh_when_test_families(out)
     return out
 
 

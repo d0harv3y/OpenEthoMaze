@@ -56,6 +56,8 @@ QC_IMAGE_PREVIEW_MAX_DIM = 256
 
 IN_RANGE_POINT_NAME = "in-range"
 HYBRID_POINT_NAME = "spot_hybrid"
+# Long-format metric suffix for run-band values truncated at first exit-zone frame.
+TO_EXIT_METRIC_SUFFIX = "_to_exit"
 AMBIULATION_POINT_NAMES = ("spot", "centroid", "in-range", HYBRID_POINT_NAME)
 
 

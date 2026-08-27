@@ -221,6 +221,10 @@ def group_mi_tests_csv(stimulus_mi: Path | str) -> Path:
     return Path(stimulus_mi) / "group_mi_tests.csv"
 
 
+def group_mi_excess_tests_csv(stimulus_mi: Path | str) -> Path:
+    return Path(stimulus_mi) / "group_mi_excess_tests.csv"
+
+
 def stimulus_bin_edges_json(stimulus_mi: Path | str) -> Path:
     return Path(stimulus_mi) / "stimulus_bin_edges.json"
 

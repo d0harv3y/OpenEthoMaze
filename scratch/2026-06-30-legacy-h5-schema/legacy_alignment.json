@@ -1,0 +1,283 @@
+{
+  "h5": "C:\\Users\\admin\\Documents\\work\\sack\\vast_results_legacy.h5",
+  "root_keys_sample": [
+    "1",
+    "2",
+    "2058",
+    "2059",
+    "2060",
+    "2061",
+    "2164",
+    "2165",
+    "2166",
+    "2167",
+    "2168",
+    "2169",
+    "2314",
+    "2315",
+    "2382"
+  ],
+  "n_root_children": 161,
+  "trials": [
+    {
+      "path": "3243/S01/T01",
+      "attrs": {
+        "analysis_completed_at": "2026-06-26T23:09:29Z",
+        "analysis_duration_s": "120.02398753117207",
+        "arena_center_x_px": "212.0",
+        "arena_center_y_px": "150.0",
+        "arena_radius_px": "146.0",
+        "arena_type": "circular",
+        "color": "Green/low/dim",
+        "duration_s": "130.041",
+        "exit_number": "3",
+        "exit_x": "142.92319535872338",
+        "exit_y": "129.23924205412223",
+        "exit_zone_radius_cm": "12.5",
+        "filter_frames_no_animal": "1",
+        "fps": "27.75278565990726",
+        "h5_fps": "27.75278565990726",
+        "h5_n_frames": "3610",
+        "input_h5_path": "E:\\videos\\vibration maze\\ELE data\\VAST_ELE_Female_C1_VAST.hdf5",
+        "jump_filter_lookahead_frames": "3",
+        "max_movement_per_frame_cm": "15.0",
+        "min_confident_nodes_per_frame": "3",
+        "min_movement_bout_duration_frames": "4",
+        "min_movement_bout_duration_s": "0.149812734082397",
+        "min_node_confidence_threshold": "0.55",
+        "min_valid_frame_run_length": "5",
+        "movement_entry_debounce_frames": "3",
+        "movement_exit_debounce_frames": "3",
+        "movement_inter_bout_interval_frames": "4",
+        "movement_speed_median_window_frames": "3",
+        "movement_start_threshold": "0.009428090415820635",
+        "movement_start_threshold_m_per_frame": "0.009428090415820635",
+        "movement_stop_threshold": "0.0047140452079103175",
+        "movement_stop_threshold_m_per_frame": "0.0047140452079103175",
+        "n_frames": "3609",
+        "pipeline_version": "maze_v0.10",
+        "pose_overwrite_policy": "keep_live",
+        "pose_persist_status": "Pose: imported from \u20263243_S01T01.predictions.slp (8 nodes, 3609 frames)",
+        "primary_trajectory": "spot_hybrid",
+        "px_per_cm": "2.405668",
+        "roi_old": "X=212,Y=150,R=146,pxcm=2.405668",
+        "sleap_path": "E:\\videos\\vibration maze\\ELE data\\VAST_ELE_Female_C1_VAST_mov\\3243_S01T01.predictions.slp",
+        "stage": "VAST",
+        "task_metrics_status": "ok",
+        "timestamp": "2026-03-16T17:43:21",
+        "trace_apply_smoothing": "1",
+        "trace_confidence_threshold": "0.55",
+        "trace_interpolate_low_conf": "1",
+        "trace_interpolate_nans": "1",
+        "trace_max_gap_frames": "15",
+        "trace_smoothing_window": "3",
+        "trial_start_frame": "278",
+        "video_n_frames": "3609",
+        "video_path": "E:\\videos\\vibration maze\\ELE data\\VAST_ELE_Female_C1_VAST_mov\\3243_S01T01.avi"
+      },
+      "children": {
+        "ambulation_metrics": {
+          "kind": "group",
+          "keys": [
+            "centroid",
+            "in-range",
+            "spot",
+            "spot_hybrid"
+          ]
+        },
+        "feedback": {
+          "kind": "group",
+          "keys": [
+            "table"
+          ]
+        },
+        "qc_images": {
+          "kind": "group",
+          "keys": [
+            "composite_iti_wait",
+            "composite_run"
+          ]
+        },
+        "tracking": {
+          "kind": "group",
+          "keys": [
+            "anatomical"
+          ]
+        }
+      },
+      "ambulation_metrics": {
+        "centroid": {
+          "keys": [
+            "movement_bouts",
+            "summary",
+            "xy"
+          ],
+          "xy": {
+            "n_rows": 3609,
+            "dtype_names": [
+              "frame_index",
+              "t_s",
+              "x",
+              "y",
+              "dist_to_exit_px",
+              "trial_state",
+              "region_code",
+              "valid",
+              "is_moving"
+            ],
+            "matches_XY_ROW_DTYPE": true,
+            "frame_index": {
+              "min": 0,
+              "max": 3608,
+              "strictly_increasing": true,
+              "equals_row_index": true
+            },
+            "trial_state_counts": {
+              "iti_wait": 278,
+              "run": 3331
+            },
+            "is_moving_frac": 0.19534497090606817
+          }
+        },
+        "in-range": {
+          "keys": [
+            "movement_bouts",
+            "summary",
+            "xy"
+          ],
+          "xy": {
+            "n_rows": 3609,
+            "dtype_names": [
+              "frame_index",
+              "t_s",
+              "x",
+              "y",
+              "dist_to_exit_px",
+              "trial_state",
+              "region_code",
+              "valid",
+              "is_moving"
+            ],
+            "matches_XY_ROW_DTYPE": true,
+            "frame_index": {
+              "min": 0,
+              "max": 3608,
+              "strictly_increasing": true,
+              "equals_row_index": true
+            },
+            "trial_state_counts": {
+              "iti_wait": 278,
+              "run": 3331
+            },
+            "is_moving_frac": 0.18980326960376837
+          }
+        },
+        "spot": {
+          "keys": [
+            "movement_bouts",
+            "summary",
+            "xy"
+          ],
+          "xy": {
+            "n_rows": 3609,
+            "dtype_names": [
+              "frame_index",
+              "t_s",
+              "x",
+              "y",
+              "dist_to_exit_px",
+              "trial_state",
+              "region_code",
+              "valid",
+              "is_moving"
+            ],
+            "matches_XY_ROW_DTYPE": true,
+            "frame_index": {
+              "min": 0,
+              "max": 3608,
+              "strictly_increasing": true,
+              "equals_row_index": true
+            },
+            "trial_state_counts": {
+              "iti_wait": 278,
+              "run": 3331
+            },
+            "is_moving_frac": 0.23579939041285675
+          }
+        },
+        "spot_hybrid": {
+          "keys": [
+            "movement_bouts",
+            "summary",
+            "xy"
+          ],
+          "xy": {
+            "n_rows": 3609,
+            "dtype_names": [
+              "frame_index",
+              "t_s",
+              "x",
+              "y",
+              "dist_to_exit_px",
+              "trial_state",
+              "region_code",
+              "valid",
+              "is_moving"
+            ],
+            "matches_XY_ROW_DTYPE": true,
+            "frame_index": {
+              "min": 0,
+              "max": 3608,
+              "strictly_increasing": true,
+              "equals_row_index": true
+            },
+            "trial_state_counts": {
+              "iti_wait": 278,
+              "run": 3331
+            },
+            "is_moving_frac": 0.23857024106400665
+          }
+        }
+      },
+      "tracking": {
+        "anatomical": [
+          "frame_index",
+          "score",
+          "valid",
+          "xy"
+        ]
+      }
+    }
+  ],
+  "alignment_probes": [
+    {
+      "trial_key": "/3243/S01/T01",
+      "kpms_recording_key": "3243-S01-T01",
+      "fps": 27.75278565990726,
+      "px_per_cm": 2.405668,
+      "point": "spot_hybrid",
+      "legacy_frame_index": {
+        "len": 3609,
+        "min": 0,
+        "max": 3608,
+        "row_eq_index": true
+      },
+      "legacy_speed_mps": {
+        "p50": 0.07084816370610639,
+        "p95": 0.48276041253354296,
+        "max": 1.6232104471353692
+      },
+      "kpms_alignment": {
+        "n_kpms_rows": 3497,
+        "src_idx_min": 0,
+        "src_idx_max": 3608,
+        "src_idx_strictly_increasing": true
+      },
+      "join": {
+        "method": "speed[src_idx] where src_idx = frame_index column",
+        "n_matched": 3497,
+        "speed_p50_at_kpms_rows": 0.07572680515458409
+      }
+    }
+  ]
+}

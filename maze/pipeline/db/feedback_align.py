@@ -11,7 +11,10 @@ import numpy as np
 from maze.core.h5_layout import read_feedback_table, resolve_ambulation_metrics_group, write_feedback_table
 from maze.core.schema import FEEDBACK_ROW_DTYPE, XY_ROW_DTYPE
 from maze.pipeline.db._shared import open_db
+from maze.pipeline.db.feedback import build_feedback_table_from_wm
 from maze.pipeline.db.trial_key import TrialKey
+from maze.pipeline.io.input_h5_loader import load_trial_data
+from maze.pipeline.video_paths import resolve_input_h5_path
 
 _DEFAULT_XY_POINT = "spot"
 _RUN_RELATIVE_LEN_TOLERANCE = 2
@@ -153,6 +156,112 @@ def align_feedback_for_trial(
         if path not in h5:
             return False
         return align_feedback_group(h5[path], xy_point=xy_point)
+
+
+def feedback_table_from_source_wm(
+    xy: np.ndarray,
+    w: np.ndarray,
+    m: np.ndarray,
+    *,
+    trial_start_frame: int,
+) -> np.ndarray:
+    """Build feedback aligned to ``xy`` from full-length source W/M arrays."""
+    source = build_feedback_table_from_wm(w, m, trial_start_frame=trial_start_frame)
+    if len(source) == 0:
+        return _blank_feedback_table(xy)
+    return _reindex_feedback_by_frame_index(source, xy)
+
+
+def feedback_has_missing_source_values(feedback: np.ndarray) -> bool:
+    """True when motor or light feedback contains NaN (typical after run-only expand)."""
+    if feedback is None or len(feedback) == 0:
+        return False
+    motor = np.asarray(feedback["motor_fb"], dtype=np.float64)
+    light = np.asarray(feedback["light_fb"], dtype=np.float64)
+    return bool(np.isnan(motor).any() or np.isnan(light).any())
+
+
+def backfill_feedback_group(
+    g_trial: h5py.Group,
+    key: TrialKey,
+    *,
+    xy_point: str = _DEFAULT_XY_POINT,
+    overwrite: bool = False,
+) -> str:
+    """
+    Rewrite ``feedback/table`` from source input H5 W/M when available.
+
+    Returns a status token: ``backfilled``, ``skipped``, ``missing_xy``,
+    ``missing_feedback``, ``missing_source``, ``missing_wm``, ``no_nan``.
+    """
+    xy = read_primary_xy_table(g_trial, xy_point=xy_point)
+    if xy is None or len(xy) == 0:
+        return "missing_xy"
+    existing = read_feedback_table(g_trial)
+    if existing is None or len(existing) == 0:
+        return "missing_feedback"
+    if not overwrite and not feedback_has_missing_source_values(existing):
+        return "no_nan"
+    raw_path = g_trial.attrs.get("input_h5_path")
+    if raw_path is None:
+        return "missing_source"
+    if isinstance(raw_path, (bytes, np.bytes_)):
+        raw_path = raw_path.decode("utf-8", errors="replace")
+    resolved = resolve_input_h5_path(str(raw_path))
+    if resolved is None or not resolved.is_file():
+        return "missing_source"
+    try:
+        trial_data = load_trial_data(resolved, key.animal_id, key.session, key.trial)
+    except (KeyError, ValueError, OSError):
+        return "missing_wm"
+    run_start = int(g_trial.attrs.get("trial_start_frame", 0) or 0)
+    backfilled = feedback_table_from_source_wm(
+        xy,
+        trial_data.w,
+        trial_data.m,
+        trial_start_frame=run_start,
+    )
+    write_feedback_table(g_trial, backfilled)
+    return "backfilled"
+
+
+def backfill_feedback_h5(
+    db_path: Path | str,
+    *,
+    keys: Optional[list[TrialKey]] = None,
+    xy_point: str = _DEFAULT_XY_POINT,
+    overwrite: bool = False,
+) -> dict[str, int]:
+    """Backfill feedback from source input H5 for all (or selected) trials."""
+    from maze.pipeline.db.trial_groups import list_trials
+
+    db = Path(db_path)
+    trial_keys = keys if keys is not None else list_trials(db)
+    stats = {
+        "seen": 0,
+        "backfilled": 0,
+        "skipped": 0,
+        "missing_xy": 0,
+        "missing_feedback": 0,
+        "missing_source": 0,
+        "missing_wm": 0,
+        "no_nan": 0,
+    }
+    with open_db(db, "a") as h5:
+        for key in trial_keys:
+            stats["seen"] += 1
+            path = key.path().lstrip("/")
+            if path not in h5:
+                stats["skipped"] += 1
+                continue
+            status = backfill_feedback_group(
+                h5[path],
+                key,
+                xy_point=xy_point,
+                overwrite=overwrite,
+            )
+            stats[status] += 1
+    return stats
 
 
 def align_feedback_h5(

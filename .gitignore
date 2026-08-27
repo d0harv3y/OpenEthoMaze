@@ -6,8 +6,9 @@
 outputs/
 inputmap/
 logs/
-scratch/
+#scratch/
 my_todo*.txt
+teach/
 
 # Python bytecode / extensions
 __pycache__/

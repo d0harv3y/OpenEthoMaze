@@ -1,0 +1,107 @@
+{
+  "h5": "C:\\Users\\admin\\Documents\\work\\sack\\test2\\kpms_tracking.h5",
+  "root_keys_sample": [
+    "1",
+    "2",
+    "32",
+    "3243",
+    "3244",
+    "3245",
+    "3246",
+    "32494",
+    "3250",
+    "3252",
+    "3253",
+    "32571",
+    "32581",
+    "3260",
+    "3261"
+  ],
+  "n_root_children": 51,
+  "trials": [
+    {
+      "path": "1/S01/T01",
+      "attrs": {
+        "exit_number": "3",
+        "input_h5_path": "E:\\vast_analysis\\test\\kpms_tracking.h5",
+        "sleap_path": "E:\\videos\\vibration maze\\ELE data\\VAST_test_mov\\1_S01T01.predictions.slp",
+        "video_path": "E:\\videos\\vibration maze\\ELE data\\VAST_test_mov\\1_S01T01.avi"
+      },
+      "children": {
+        "ambulation_metrics": {
+          "kind": "group",
+          "keys": []
+        },
+        "qc_images": {
+          "kind": "group",
+          "keys": []
+        },
+        "tracking": {
+          "kind": "group",
+          "keys": [
+            "anatomical",
+            "blob"
+          ]
+        }
+      },
+      "ambulation_metrics": {},
+      "tracking": {
+        "anatomical": [
+          "frame_index",
+          "score",
+          "valid",
+          "xy"
+        ],
+        "blob": [
+          "frame_index",
+          "heading_rad",
+          "score",
+          "valid",
+          "xy"
+        ]
+      }
+    },
+    {
+      "path": "1/S01/T02",
+      "attrs": {
+        "exit_number": "2",
+        "input_h5_path": "E:\\vast_analysis\\test\\kpms_tracking.h5",
+        "sleap_path": "E:\\videos\\vibration maze\\ELE data\\VAST_test_mov\\1_S01T02.predictions.slp",
+        "video_path": "E:\\videos\\vibration maze\\ELE data\\VAST_test_mov\\1_S01T02.avi"
+      },
+      "children": {
+        "ambulation_metrics": {
+          "kind": "group",
+          "keys": []
+        },
+        "qc_images": {
+          "kind": "group",
+          "keys": []
+        },
+        "tracking": {
+          "kind": "group",
+          "keys": [
+            "anatomical",
+            "blob"
+          ]
+        }
+      },
+      "ambulation_metrics": {},
+      "tracking": {
+        "anatomical": [
+          "frame_index",
+          "score",
+          "valid",
+          "xy"
+        ],
+        "blob": [
+          "frame_index",
+          "heading_rad",
+          "score",
+          "valid",
+          "xy"
+        ]
+      }
+    }
+  ]
+}

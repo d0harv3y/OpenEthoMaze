@@ -50,6 +50,11 @@ def remap_video_path(path: Path | str, remaps: Sequence[tuple[str, str]] | None 
     return p
 
 
+def resolve_input_h5_path(path: Path | str | None) -> Path | None:
+    """Resolve a stored ``input_h5_path`` attr on this machine (same prefix remaps as video)."""
+    return resolve_video_path(path)
+
+
 def resolve_video_path(path: Path | str | None) -> Path | None:
     """
     Return a path that exists on this machine, applying prefix remaps when needed.

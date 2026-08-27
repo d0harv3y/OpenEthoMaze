@@ -45,6 +45,10 @@ def test_fit_run_config_from_args() -> None:
         force_new = True
         pose_stream = "blob"
         float32 = True
+        stage1_kappa = None
+        stage2_kappa = None
+        num_states = None
+        conf_threshold = None
 
     cfg = fit_run_config_from_args(Args())  # type: ignore[arg-type]
     assert cfg.project_dir == Path("/proj")
@@ -53,6 +57,7 @@ def test_fit_run_config_from_args() -> None:
     assert cfg.use_float32 is True
     assert cfg.enrich_from_treatment_labels is False
     assert cfg.balance_columns == ("sex", "phase")
+    assert cfg.fit.seed == 7
     assert resolve_kpms_project_dir(cfg.project_dir, cfg.pose_stream) == Path(
         "/proj/blob"
     )
@@ -92,6 +97,8 @@ def test_fit_cli_pose_stream_help() -> None:
     assert proc.returncode == 0
     assert "--pose-stream" in proc.stdout
     assert "--float32" in proc.stdout
+    assert "--stage2-kappa" in proc.stdout
+    assert "--conf-threshold" in proc.stdout
     assert "fused" in proc.stdout
 
 

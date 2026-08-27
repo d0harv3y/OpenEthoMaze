@@ -1,0 +1,737 @@
+{
+  "generated_at": "2026-06-16T11:11:30+00:00",
+  "n_models": 15,
+  "n_incomplete_fit": 0,
+  "n_with_issues": 0,
+  "models": [
+    {
+      "model_id": "anatomical/seed_005",
+      "model_dir": "E:\\vast_analysis\\test\\anatomical\\seed_005",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\anatomical_seed_005.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 846112320
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 27741968
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3044
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45760
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 5941664
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [
+        "Explicit out-of-memory message",
+        "JAX XLA runtime error",
+        "Traceback frames: File \"C:\\Users\\d0harv3y\\code\\OpenEthoMaze\\.venv\\Lib\\site-packages\\jax\\_src\\array.py\", line 644, in _value"
+      ],
+      "log_clues": [
+        "Explicit out-of-memory message",
+        "JAX XLA runtime error",
+        "Traceback frames: File \"C:\\Users\\d0harv3y\\code\\OpenEthoMaze\\.venv\\Lib\\site-packages\\jax\\_src\\array.py\", line 644, in _value"
+      ],
+      "checkpoint_iter": null,
+      "median_bouts_results": 56.0,
+      "median_bouts_apply": 40.5,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:29+00:00"
+    },
+    {
+      "model_id": "anatomical/seed_013",
+      "model_dir": "E:\\vast_analysis\\test\\anatomical\\seed_013",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\anatomical_seed_013.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 871916864
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 29033568
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3087
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45739
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 3480664
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [],
+      "log_clues": [],
+      "checkpoint_iter": null,
+      "median_bouts_results": 54.0,
+      "median_bouts_apply": 53.0,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:29+00:00"
+    },
+    {
+      "model_id": "anatomical/seed_042",
+      "model_dir": "E:\\vast_analysis\\test\\anatomical\\seed_042",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\anatomical_seed_042.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 846112320
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 27857960
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3047
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45784
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 4401752
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [],
+      "log_clues": [],
+      "checkpoint_iter": null,
+      "median_bouts_results": 57.0,
+      "median_bouts_apply": 56.0,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:29+00:00"
+    },
+    {
+      "model_id": "anatomical/seed_067",
+      "model_dir": "E:\\vast_analysis\\test\\anatomical\\seed_067",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\anatomical_seed_067.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 872604320
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 29107056
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3047
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45798
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 69044832
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [
+        "Explicit out-of-memory message",
+        "JAX XLA runtime error",
+        "Traceback frames: File \"C:\\Users\\d0harv3y\\code\\OpenEthoMaze\\.venv\\Lib\\site-packages\\jax\\_src\\array.py\", line 644, in _value"
+      ],
+      "log_clues": [
+        "Explicit out-of-memory message",
+        "JAX XLA runtime error",
+        "Traceback frames: File \"C:\\Users\\d0harv3y\\code\\OpenEthoMaze\\.venv\\Lib\\site-packages\\jax\\_src\\array.py\", line 644, in _value"
+      ],
+      "checkpoint_iter": null,
+      "median_bouts_results": 47.0,
+      "median_bouts_apply": 47.5,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:29+00:00"
+    },
+    {
+      "model_id": "anatomical/seed_111",
+      "model_dir": "E:\\vast_analysis\\test\\anatomical\\seed_111",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\anatomical_seed_111.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 885432608
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 28537672
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3050
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45771
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 68985664
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [],
+      "log_clues": [],
+      "checkpoint_iter": null,
+      "median_bouts_results": 47.5,
+      "median_bouts_apply": 53.0,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:30+00:00"
+    },
+    {
+      "model_id": "blob/seed_005",
+      "model_dir": "E:\\vast_analysis\\test\\blob\\seed_005",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\blob_seed_005.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 849128256
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 28118184
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3002
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45760
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 5855712
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [],
+      "log_clues": [],
+      "checkpoint_iter": null,
+      "median_bouts_results": 68.0,
+      "median_bouts_apply": 68.0,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:30+00:00"
+    },
+    {
+      "model_id": "blob/seed_013",
+      "model_dir": "E:\\vast_analysis\\test\\blob\\seed_013",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\blob_seed_013.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 888825536
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 29470184
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3005
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45739
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 4320856
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [],
+      "log_clues": [],
+      "checkpoint_iter": null,
+      "median_bouts_results": 65.0,
+      "median_bouts_apply": 88.0,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:30+00:00"
+    },
+    {
+      "model_id": "blob/seed_042",
+      "model_dir": "E:\\vast_analysis\\test\\blob\\seed_042",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\blob_seed_042.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 852492056
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 28396192
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3005
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45784
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 5855712
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [],
+      "log_clues": [],
+      "checkpoint_iter": null,
+      "median_bouts_results": 72.0,
+      "median_bouts_apply": 70.0,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:30+00:00"
+    },
+    {
+      "model_id": "blob/seed_067",
+      "model_dir": "E:\\vast_analysis\\test\\blob\\seed_067",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\blob_seed_067.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 875716000
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 29560352
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3005
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45798
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 5855712
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [],
+      "log_clues": [],
+      "checkpoint_iter": null,
+      "median_bouts_results": 69.0,
+      "median_bouts_apply": 68.0,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:30+00:00"
+    },
+    {
+      "model_id": "blob/seed_111",
+      "model_dir": "E:\\vast_analysis\\test\\blob\\seed_111",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\blob_seed_111.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 885674960
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 28852800
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3008
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45771
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 3115224
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [],
+      "log_clues": [],
+      "checkpoint_iter": null,
+      "median_bouts_results": 62.5,
+      "median_bouts_apply": 83.5,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:30+00:00"
+    },
+    {
+      "model_id": "fused/seed_005",
+      "model_dir": "E:\\vast_analysis\\test\\fused\\seed_005",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\fused_seed_005.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 1393214592
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 28129424
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3009
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45760
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 3799320
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [],
+      "log_clues": [],
+      "checkpoint_iter": null,
+      "median_bouts_results": 115.0,
+      "median_bouts_apply": 137.0,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:30+00:00"
+    },
+    {
+      "model_id": "fused/seed_013",
+      "model_dir": "E:\\vast_analysis\\test\\fused\\seed_013",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\fused_seed_013.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 1458348032
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 29499048
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3012
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45739
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 5340952
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [],
+      "log_clues": [],
+      "checkpoint_iter": null,
+      "median_bouts_results": 119.0,
+      "median_bouts_apply": 135.0,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:30+00:00"
+    },
+    {
+      "model_id": "fused/seed_042",
+      "model_dir": "E:\\vast_analysis\\test\\fused\\seed_042",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\fused_seed_042.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 1448959448
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 28449048
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3012
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45784
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 5340952
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [],
+      "log_clues": [],
+      "checkpoint_iter": null,
+      "median_bouts_results": 114.5,
+      "median_bouts_apply": 124.0,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:30+00:00"
+    },
+    {
+      "model_id": "fused/seed_067",
+      "model_dir": "E:\\vast_analysis\\test\\fused\\seed_067",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\fused_seed_067.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 1436825056
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 29583008
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3012
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45798
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 3799320
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [
+        "Explicit out-of-memory message",
+        "JAX XLA runtime error",
+        "Traceback frames: File \"C:\\Users\\d0harv3y\\code\\OpenEthoMaze\\.venv\\Lib\\site-packages\\jax\\_src\\array.py\", line 644, in _value"
+      ],
+      "log_clues": [
+        "Explicit out-of-memory message",
+        "JAX XLA runtime error",
+        "Traceback frames: File \"C:\\Users\\d0harv3y\\code\\OpenEthoMaze\\.venv\\Lib\\site-packages\\jax\\_src\\array.py\", line 644, in _value"
+      ],
+      "checkpoint_iter": null,
+      "median_bouts_results": 110.0,
+      "median_bouts_apply": 141.0,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:30+00:00"
+    },
+    {
+      "model_id": "fused/seed_111",
+      "model_dir": "E:\\vast_analysis\\test\\fused\\seed_111",
+      "log_path": "E:\\vast_analysis\\test\\fit_logs\\fused_seed_111.log",
+      "fit_complete": true,
+      "apply_present": true,
+      "artifacts": [
+        {
+          "name": "checkpoint.h5",
+          "present": true,
+          "size_bytes": 1455165056
+        },
+        {
+          "name": "results.h5",
+          "present": true,
+          "size_bytes": 28891080
+        },
+        {
+          "name": "fit_summary.json",
+          "present": true,
+          "size_bytes": 3015
+        },
+        {
+          "name": "selected_trials.csv",
+          "present": true,
+          "size_bytes": 45771
+        },
+        {
+          "name": "results_apply.h5",
+          "present": true,
+          "size_bytes": 5340952
+        },
+        {
+          "name": "apply_summary.json",
+          "present": false,
+          "size_bytes": null
+        }
+      ],
+      "issues": [],
+      "clues": [],
+      "log_clues": [],
+      "checkpoint_iter": null,
+      "median_bouts_results": 102.5,
+      "median_bouts_apply": 116.5,
+      "n_fit_trials_selected": 160,
+      "diagnosed_at": "2026-06-16T11:11:30+00:00"
+    }
+  ]
+}

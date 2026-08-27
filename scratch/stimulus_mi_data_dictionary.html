@@ -1,0 +1,716 @@
+<!DOCTYPE html><html><head><meta charset=utf-8>
+<style>
+body { font-family: Segoe UI, sans-serif; margin: 2em; max-width: 1100px; }
+table { border-collapse: collapse; margin: 1em 0; }
+th, td { border: 1px solid #ccc; padding: 6px 10px; vertical-align: top; }
+th { background: #f3f3f3; }
+code, pre { background: #f6f8fa; font-family: Consolas, monospace; }
+</style></head><body><h1>Stimulus MI — data dictionary</h1>
+<p>Schemas: <strong><code>stimulus_join_v1</code></strong>, <strong><code>stimulus_mi_v1</code></strong>.<br />
+Authority: <a href="../maze/kpms/behavior_ethogram/stimulus_join_contract.py"><code>stimulus_join_contract.py</code></a>, <a href="../maze/kpms/behavior_ethogram/stimulus_mi_contract.py"><code>stimulus_mi_contract.py</code></a>.<br />
+Pipeline overview: <a href="stimulus_mi_contract.md"><code>stimulus_mi_contract.md</code></a>.</p>
+<p><strong>Cohort path (this run):</strong><br />
+<code>&lt;kpms_root&gt;/behavior_ethogram/stimulus_mi/</code> under <code>gerstner_vast_fit</code>.<br />
+Command that produced the full set:<br />
+<code>uv run maze-compute-stimulus-mi --kpms-root … --per-trial --sliced-tests --trial-nulls</code></p>
+<p><strong>Confound (all MI tables):</strong> delivered duty is a deterministic function of distance-to-exit; mutual information <em>I</em> conflates stimulus response with goal proximity.</p>
+<p><strong>What <em>I</em> is:</strong></p>
+<pre><code>I(syll; stim_bin) = D_KL( P(joint) || P(syll) P(stim) )
+                  = H(syll) − H(syll | stim)
+</code></pre>
+<p>Units: bits (log₂). Not KL between the two marginals alone.</p>
+<hr />
+<h2>Artifact map</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Grain</th>
+<th>Rows (this run)</th>
+<th>CLI flags</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>stimulus_bout_features.csv</code></td>
+<td>1 bout</td>
+<td>~199k</td>
+<td><code>maze-join-stimulus-bouts</code></td>
+</tr>
+<tr>
+<td><code>stimulus_bin_edges.json</code></td>
+<td>cohort codebook</td>
+<td>1 object</td>
+<td>written once / reused</td>
+</tr>
+<tr>
+<td><code>mi_per_animal.csv</code></td>
+<td>animal × phase × stim × mi_type</td>
+<td>328 (= 41×2×2×2)</td>
+<td>always</td>
+</tr>
+<tr>
+<td><code>group_mi_tests.csv</code></td>
+<td>marginal group test</td>
+<td>24</td>
+<td>always</td>
+</tr>
+<tr>
+<td><code>mi_per_trial.csv</code></td>
+<td>animal × trial × …</td>
+<td>14701</td>
+<td><code>--per-trial</code></td>
+</tr>
+<tr>
+<td><code>mi_trial_animal_summaries.csv</code></td>
+<td>animal × phase × stim × mi_type</td>
+<td>328</td>
+<td><code>--per-trial</code></td>
+</tr>
+<tr>
+<td><code>group_mi_when_tests.csv</code></td>
+<td>marginal when-metric test</td>
+<td>12 or 24</td>
+<td><code>--per-trial</code> (± <code>--trial-nulls</code>)</td>
+</tr>
+<tr>
+<td><code>group_mi_sliced_tests.csv</code></td>
+<td>sliced simple-effect test</td>
+<td>192 or 336</td>
+<td><code>--sliced-tests</code></td>
+</tr>
+<tr>
+<td><code>join_stimulus_bouts_summary.json</code></td>
+<td>run metadata</td>
+<td>1</td>
+<td>join</td>
+</tr>
+<tr>
+<td><code>compute_stimulus_mi_summary.json</code></td>
+<td>run metadata</td>
+<td>1</td>
+<td>compute</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>Shared vocab (slice keys)</h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Allowed values</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>phase</code> <strong>(MI tables)</strong></td>
+<td><code>run</code>, <code>iti</code></td>
+<td>From bout majority state: <code>run</code> vs <code>iti_wait</code> (mapped to <code>iti</code>). <strong>Not</strong> the manifest column also named <code>phase</code>.</td>
+</tr>
+<tr>
+<td><code>stim_var</code></td>
+<td><code>duty</code>, <code>dist</code></td>
+<td>Stimulus scalar → global bins</td>
+</tr>
+<tr>
+<td><code>mi_type</code></td>
+<td><code>occupancy</code>, <code>transition</code></td>
+<td><code>I(syll; stim)</code> vs <code>I(next; stim | current)</code></td>
+</tr>
+<tr>
+<td><code>sex</code></td>
+<td><code>F</code>, <code>M</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>strain</code></td>
+<td><code>wt</code>, <code>tg</code></td>
+<td>Genotype; group tests label factor <code>genotype</code></td>
+</tr>
+<tr>
+<td><code>tx</code></td>
+<td><code>RBSF-1</code>, <code>n/a</code> (blank→<code>n/a</code>)</td>
+<td>Treatment</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Primary analysis cells</strong> (when-tests + sliced-tests):<br />
+<code>phase=run</code> ∧ <code>mi_type=occupancy</code> ∧ <code>stim_var ∈ {duty, dist}</code>.</p>
+<hr />
+<h2>1. <code>stimulus_bout_features.csv</code></h2>
+<p>One row = one syllable <strong>bout</strong> with mean stimulus over its kpMS rows.</p>
+<h3>Identity / strata</h3>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>stream</code></td>
+<td>str</td>
+<td>Pose stream (e.g. <code>anatomical</code>)</td>
+</tr>
+<tr>
+<td><code>seed</code></td>
+<td>str</td>
+<td>kpMS apply / fit id</td>
+</tr>
+<tr>
+<td><code>trial_key</code></td>
+<td>str</td>
+<td>Unique trial id (e.g. <code>3245-S01-T01</code>)</td>
+</tr>
+<tr>
+<td><code>animal_id</code></td>
+<td>str</td>
+<td>Subject</td>
+</tr>
+<tr>
+<td><code>session</code></td>
+<td>str</td>
+<td>Session label (<code>S01</code>…<code>S05</code>)</td>
+</tr>
+<tr>
+<td><code>trial</code></td>
+<td>str</td>
+<td>Trial within session (<code>T01</code>…)</td>
+</tr>
+<tr>
+<td><code>phase</code></td>
+<td>str</td>
+<td><strong>Manifest</strong> phase (here: <code>experimental</code>) — not MI <code>run</code>/<code>iti</code></td>
+</tr>
+<tr>
+<td><code>exit_number</code></td>
+<td>str/int</td>
+<td>Exit id from manifest</td>
+</tr>
+<tr>
+<td><code>sex</code>, <code>strain</code>, <code>tx</code></td>
+<td>str</td>
+<td>Strata</td>
+</tr>
+<tr>
+<td><code>experiment</code></td>
+<td>str</td>
+<td>e.g. <code>VASTcont</code>, <code>VASTalt</code></td>
+</tr>
+<tr>
+<td><code>drug</code>, <code>cohort</code>, <code>researcher</code></td>
+<td>str</td>
+<td>Manifest labels (may be blank)</td>
+</tr>
+<tr>
+<td><code>is_habituation</code></td>
+<td>0/1</td>
+<td>Habituation trial flag</td>
+</tr>
+<tr>
+<td><code>raw_syllable_id</code></td>
+<td>int</td>
+<td>kpMS syllable id for this bout</td>
+</tr>
+<tr>
+<td><code>bout_index</code></td>
+<td>int</td>
+<td>0-based bout index within trial</td>
+</tr>
+<tr>
+<td><code>row_start</code></td>
+<td>int</td>
+<td>Inclusive kpMS row index</td>
+</tr>
+<tr>
+<td><code>row_end_exclusive</code></td>
+<td>int</td>
+<td>Exclusive end row</td>
+</tr>
+<tr>
+<td><code>bout_frames</code></td>
+<td>int</td>
+<td><code>row_end_exclusive - row_start</code></td>
+</tr>
+<tr>
+<td><code>bout_duration_s</code></td>
+<td>float</td>
+<td>Duration (s)</td>
+</tr>
+<tr>
+<td><code>bout_primary_state</code></td>
+<td>str</td>
+<td>Majority legacy trial state in bout (<code>run</code>, <code>iti_wait</code>, …)</td>
+</tr>
+</tbody>
+</table>
+<h3>Stimulus scalars</h3>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Units</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bout_mean_duty</code></td>
+<td>PWM units (cohort ~0–227; <strong>not</strong> strictly 0–1)</td>
+<td>Mean <code>feedback/table.motor_fb</code> over bout rows</td>
+</tr>
+<tr>
+<td><code>bout_mean_dist_px</code></td>
+<td>px</td>
+<td>Mean <code>xy.dist_to_exit_px</code> over bout rows</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>2. <code>stimulus_bin_edges.json</code></h2>
+<p>Global stimulus codebook. Interior edges define bins via <code>numpy.digitize</code> (left-closed / right-open style as in <code>assign_bins</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>n_bins</code></td>
+<td>Declared bin count (this cohort: <strong>5</strong> for both after manual edit)</td>
+</tr>
+<tr>
+<td><code>duty_edges</code></td>
+<td>Length <code>n_bins+1</code>; first/last ±∞. This cohort: −∞, <strong>40</strong>, 50, 64, 74, ∞</td>
+</tr>
+<tr>
+<td><code>dist_edges</code></td>
+<td>Same. This cohort: −∞, <strong>80</strong>, 111.14…, 170.36…, 202.41…, ∞</td>
+</tr>
+<tr>
+<td><code>edge_notes</code></td>
+<td>Optional human notes on manual splits</td>
+</tr>
+</tbody>
+</table>
+<p>Duty/dist may be asymmetric if edited by hand; MI still uses whatever edges are loaded.</p>
+<hr />
+<h2>3. <code>mi_per_animal.csv</code></h2>
+<p>One row = one animal’s <strong>pooled</strong> MI for one <code>(phase, stim_var, mi_type)</code> cell (all that animal’s trials pooled).</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Units</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>animal_id</code>, <code>sex</code>, <code>strain</code>, <code>tx</code></td>
+<td></td>
+<td>Strata</td>
+</tr>
+<tr>
+<td><code>phase</code>, <code>stim_var</code>, <code>mi_type</code></td>
+<td></td>
+<td>Slice keys (MI <code>phase</code>)</td>
+</tr>
+<tr>
+<td><code>n_bouts</code></td>
+<td>count</td>
+<td>Bouts in this cell</td>
+</tr>
+<tr>
+<td><code>H_stim</code></td>
+<td>bits</td>
+<td>Marginal entropy of stim bins</td>
+</tr>
+<tr>
+<td><code>H_syll</code></td>
+<td>bits</td>
+<td>Marginal entropy of syllables (or next-syll for transition setup)</td>
+</tr>
+<tr>
+<td><code>mi_raw</code></td>
+<td>bits</td>
+<td>Plug-in / MLE MI (upward biased)</td>
+</tr>
+<tr>
+<td><code>mi_mm</code></td>
+<td>bits</td>
+<td>Miller–Madow corrected MI (<strong>primary pooled endpoint</strong>)</td>
+</tr>
+<tr>
+<td><code>null_circ_mean</code></td>
+<td>bits</td>
+<td>Mean MI under circular within-trial stim shifts</td>
+</tr>
+<tr>
+<td><code>null_circ_p</code></td>
+<td>[0,1]</td>
+<td>Right-tail p vs circular null (primary)</td>
+</tr>
+<tr>
+<td><code>null_perm_mean</code></td>
+<td>bits</td>
+<td>Mean under bin-label permutation</td>
+</tr>
+<tr>
+<td><code>null_perm_p</code></td>
+<td>[0,1]</td>
+<td>Right-tail p vs permutation (loose)</td>
+</tr>
+<tr>
+<td><code>iti_control_flag</code></td>
+<td>0/1</td>
+<td>1 if <code>phase=iti</code> and <code>mi_mm</code> clears circular null — treat as warning (esp. <code>stim_var=dist</code>)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>4. <code>group_mi_tests.csv</code></h2>
+<p>Marginal Mann–Whitney (2 levels) or Kruskal (&gt;2) on <strong>per-animal <code>mi_mm</code></strong>. One scalar per animal → no trial pseudoreplication.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>factor</code></td>
+<td><code>sex</code>, <code>genotype</code> (=strain), or <code>tx</code></td>
+</tr>
+<tr>
+<td><code>level_a</code>, <code>level_b</code></td>
+<td>Compared levels (<code>(all)</code> if Kruskal)</td>
+</tr>
+<tr>
+<td><code>phase</code>, <code>stim_var</code>, <code>mi_type</code></td>
+<td>Full factorial (includes iti)</td>
+</tr>
+<tr>
+<td><code>n_a</code>, <code>n_b</code></td>
+<td>Animals per arm</td>
+</tr>
+<tr>
+<td><code>median_a</code>, <code>median_b</code></td>
+<td>Median <code>mi_mm</code></td>
+</tr>
+<tr>
+<td><code>stat</code>, <code>p</code></td>
+<td>Test statistic and p-value</td>
+</tr>
+<tr>
+<td><code>test</code></td>
+<td><code>mannwhitneyu</code> or <code>kruskal</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>5. <code>mi_per_trial.csv</code> (<code>--per-trial</code>)</h2>
+<p>One row = MI for one trial in one <code>(phase, stim_var, mi_type)</code> cell. Full factorial.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Units</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>animal_id</code>, <code>sex</code>, <code>strain</code>, <code>tx</code></td>
+<td></td>
+<td>Strata</td>
+</tr>
+<tr>
+<td><code>session</code>, <code>trial</code>, <code>trial_key</code></td>
+<td></td>
+<td>Trial identity</td>
+</tr>
+<tr>
+<td><code>trial_ord</code></td>
+<td>int ≥0</td>
+<td>Career order within animal (parsed numeric session/trial suffixes)</td>
+</tr>
+<tr>
+<td><code>cum_run_bouts</code></td>
+<td>count</td>
+<td>Cumulative run-phase bouts through this trial (inclusive)</td>
+</tr>
+<tr>
+<td><code>phase</code>, <code>stim_var</code>, <code>mi_type</code></td>
+<td></td>
+<td>Slice keys</td>
+</tr>
+<tr>
+<td><code>n_bouts</code>, <code>H_stim</code>, <code>H_syll</code>, <code>mi_raw</code>, <code>mi_mm</code></td>
+<td></td>
+<td>Same semantics as pooled, trial-local</td>
+</tr>
+<tr>
+<td><code>null_circ_mean</code>, <code>null_circ_p</code></td>
+<td></td>
+<td>Filled only with <code>--trial-nulls</code> (circular, <code>n_perm=200</code>); else empty/NaN</td>
+</tr>
+<tr>
+<td><code>excess</code></td>
+<td>bits</td>
+<td><code>mi_mm − null_circ_mean</code> when nulls on; else empty/NaN</td>
+</tr>
+</tbody>
+</table>
+<p>Optional eligibility gates (off by default): <code>--min-run-bouts</code>, <code>--min-h-stim</code>.</p>
+<hr />
+<h2>6. <code>mi_trial_animal_summaries.csv</code></h2>
+<p>One row = trajectory summaries for one animal × <code>(phase, stim_var, mi_type)</code> from that animal’s trial rows.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Units</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>animal_id</code>, <code>sex</code>, <code>strain</code>, <code>tx</code></td>
+<td></td>
+<td>Strata</td>
+</tr>
+<tr>
+<td><code>phase</code>, <code>stim_var</code>, <code>mi_type</code></td>
+<td></td>
+<td>Slice keys</td>
+</tr>
+<tr>
+<td><code>n_trials</code></td>
+<td>count</td>
+<td>Trials contributing</td>
+</tr>
+<tr>
+<td><code>mean_mi_mm</code>, <code>median_mi_mm</code></td>
+<td>bits</td>
+<td>Across trials (trial MI is upward-biased vs pooled — prefer slopes/deltas for “when”)</td>
+</tr>
+<tr>
+<td><code>mean_n_bouts</code>, <code>mean_H_stim</code></td>
+<td></td>
+<td>Diagnostics</td>
+</tr>
+<tr>
+<td><code>slope_vs_trial_ord</code></td>
+<td>bits/trial</td>
+<td>OLS: <code>mi_mm ~ trial_ord</code></td>
+</tr>
+<tr>
+<td><code>early_late_delta</code></td>
+<td>bits</td>
+<td>Career: mean(first <strong>k=3</strong>) − mean(last <strong>k=3</strong>); needs N ≥ 6; <strong>+ ⇒ stronger early</strong></td>
+</tr>
+<tr>
+<td><code>slope_vs_excess</code></td>
+<td>bits/trial</td>
+<td>OLS of excess ~ <code>trial_ord</code> (<code>--trial-nulls</code>)</td>
+</tr>
+<tr>
+<td><code>early_late_delta_excess</code></td>
+<td>bits</td>
+<td>Career early−late on excess (<code>--trial-nulls</code>)</td>
+</tr>
+<tr>
+<td><code>null_clear_fraction</code></td>
+<td>[0,1]</td>
+<td>Fraction of trials with <code>null_circ_p &lt; 0.05</code> (<code>--trial-nulls</code>)</td>
+</tr>
+<tr>
+<td><code>early_late_delta_within_session</code></td>
+<td>bits</td>
+<td>Mean of per-session early−late (k=3, N_sess ≥ 6)</td>
+</tr>
+<tr>
+<td><code>early_late_delta_within_session_excess</code></td>
+<td>bits</td>
+<td>Excess twin (<code>--trial-nulls</code>)</td>
+</tr>
+<tr>
+<td><code>n_sessions_used</code></td>
+<td>count</td>
+<td>Sessions that contributed a within-session delta</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>7. <code>group_mi_when_tests.csv</code></h2>
+<p>Marginal group tests on <strong>when-metrics</strong>, <strong>primary cells only</strong> (<code>run</code> × occupancy × duty|dist).</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>factor</code>, <code>level_a</code>, <code>level_b</code></td>
+<td>Same as §4</td>
+</tr>
+<tr>
+<td><code>phase</code>, <code>stim_var</code>, <code>mi_type</code></td>
+<td>Primary cells</td>
+</tr>
+<tr>
+<td><code>metric</code></td>
+<td>Which summary column was tested (see below)</td>
+</tr>
+<tr>
+<td><code>n_a</code>, <code>n_b</code>, <code>median_a</code>, <code>median_b</code>, <code>stat</code>, <code>p</code>, <code>test</code></td>
+<td>Same as §4</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>metric</code> values</strong></p>
+<table>
+<thead>
+<tr>
+<th>Without <code>--trial-nulls</code></th>
+<th>With <code>--trial-nulls</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>slope_vs_trial_ord</code></td>
+<td>those + <code>slope_vs_excess</code></td>
+</tr>
+<tr>
+<td><code>early_late_delta</code></td>
+<td>+ <code>early_late_delta_excess</code></td>
+</tr>
+<tr>
+<td><em>(within-session not in this table’s metric list by default — see summaries / sliced)</em></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>Row count this run: <strong>12</strong> (no nulls) or <strong>24</strong> (with nulls).</p>
+<hr />
+<h2>8. <code>group_mi_sliced_tests.csv</code> (<code>--sliced-tests</code>)</h2>
+<p>One-hold and two-hold <strong>simple effects</strong> on primary cells. Arm omitted if n &lt; 5.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fdr_family</code></td>
+<td><code>A</code> / <code>B</code> / <code>C</code> / <code>D</code> (see below)</td>
+</tr>
+<tr>
+<td><code>hold_sex</code>, <code>hold_strain</code>, <code>hold_tx</code></td>
+<td>Held-fixed strata; <strong>blank = not held</strong></td>
+</tr>
+<tr>
+<td><code>contrast_factor</code></td>
+<td><code>sex</code>, <code>genotype</code>, or <code>tx</code></td>
+</tr>
+<tr>
+<td><code>level_a</code>, <code>level_b</code></td>
+<td>Levels compared within the slice</td>
+</tr>
+<tr>
+<td><code>phase</code>, <code>stim_var</code>, <code>mi_type</code></td>
+<td>Primary cells</td>
+</tr>
+<tr>
+<td><code>metric</code></td>
+<td>Endpoint tested</td>
+</tr>
+<tr>
+<td><code>n_a</code>, <code>n_b</code>, <code>median_a</code>, <code>median_b</code>, <code>stat</code>, <code>p</code></td>
+<td>Test</td>
+</tr>
+<tr>
+<td><code>q_bh</code></td>
+<td>Benjamini–Hochberg q <strong>within</strong> <code>fdr_family</code>; blank for exploratory rows</td>
+</tr>
+<tr>
+<td><code>test</code></td>
+<td>Usually <code>mannwhitneyu</code></td>
+</tr>
+</tbody>
+</table>
+<h3>FDR families</h3>
+<table>
+<thead>
+<tr>
+<th>Family</th>
+<th>Endpoint in family (with <code>--trial-nulls</code>)</th>
+<th>Without nulls</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A</strong></td>
+<td>pooled <code>mi_mm</code> (from <code>mi_per_animal</code>)</td>
+<td>same</td>
+</tr>
+<tr>
+<td><strong>B</strong></td>
+<td><code>slope_vs_excess</code></td>
+<td><code>slope_vs_trial_ord</code></td>
+</tr>
+<tr>
+<td><strong>C</strong></td>
+<td><code>early_late_delta_excess</code> (career)</td>
+<td><code>early_late_delta</code></td>
+</tr>
+<tr>
+<td><strong>D</strong></td>
+<td><code>early_late_delta_within_session_excess</code></td>
+<td><code>early_late_delta_within_session</code></td>
+</tr>
+</tbody>
+</table>
+<p>When <code>--trial-nulls</code> is on, <strong>raw</strong> slope/delta metrics are still emitted with <code>p</code> but <strong><code>q_bh</code> empty</strong> (exploratory; ~43% of rows in the nulls run).</p>
+<p><strong>Hold depth</strong></p>
+<ul>
+<li><strong>One-hold:</strong> exactly one of <code>hold_*</code> filled (e.g. genotype contrast with <code>hold_sex=M</code>).</li>
+<li><strong>Two-hold:</strong> two filled (e.g. genotype with <code>hold_sex=M</code> and <code>hold_tx=RBSF-1</code>).</li>
+</ul>
+<p>This run: <strong>192</strong> rows without nulls, <strong>336</strong> with nulls.</p>
+<hr />
+<h2>9. Summary JSON sidecars</h2>
+<h3><code>join_stimulus_bouts_summary.json</code></h3>
+<p>Join coverage: input/output row counts, trials seen/joined/skipped, experiment filter, paths, confound note.</p>
+<h3><code>compute_stimulus_mi_summary.json</code></h3>
+<p>Compute coverage: <code>n_animals</code>, <code>n_mi_rows</code>, <code>n_group_tests</code>, <code>n_iti_control_flags</code>, <code>iti_flagged[]</code>, paths, <code>per_trial</code>, <code>trial_nulls</code>, <code>n_trial_mi_rows</code>, <code>n_trial_animal_summaries</code>, <code>n_when_group_tests</code>, <code>n_sliced_group_tests</code>, confound note.</p>
+<hr />
+<h2>Reading order (recommended)</h2>
+<ol>
+<li><code>stimulus_bin_edges.json</code> — codebook  </li>
+<li><code>mi_per_animal.csv</code> + <code>group_mi_tests.csv</code> — is coupling present? marginal strata?  </li>
+<li>Quarantine <code>iti_control_flag</code> / iti×dist  </li>
+<li><code>mi_trial_animal_summaries.csv</code> + <code>group_mi_when_tests.csv</code> — does coupling <strong>change</strong> over career?  </li>
+<li><code>group_mi_sliced_tests.csv</code> — conditional simple effects; prefer <code>q_bh</code> within family over raw <code>p</code>  </li>
+<li><code>mi_per_trial.csv</code> — only for trajectory plots / QC  </li>
+</ol>
+<hr />
+<h2>Related plans</h2>
+<ul>
+<li><a href="../.cursor/plans/stimulus_syllable_mi_a29cf8bb.plan.md">stimulus_syllable_mi</a> — original pooled pilot  </li>
+<li><a href="../.cursor/plans/stimulus_mi_when_coupling.plan.md">stimulus_mi_when_coupling</a> — trial / ordinal  </li>
+<li><a href="../.cursor/plans/stimulus_mi_sliced_factorial.plan.md">stimulus_mi_sliced_factorial</a> — slices + within-session  </li>
+<li><a href="adr/0006-stimulus-mi-trial-trajectory-not-mixed.md">ADR-0006</a></li>
+</ul></body></html>

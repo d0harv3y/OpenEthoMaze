@@ -24,6 +24,7 @@ MI_PER_ANIMAL_FIELDS: tuple[str, ...] = (
     "null_circ_p",
     "null_perm_mean",
     "null_perm_p",
+    "excess",
     "iti_control_flag",
 )
 
@@ -43,6 +44,8 @@ GROUP_MI_TEST_FIELDS: tuple[str, ...] = (
     "test",
 )
 
+GROUP_MI_EXCESS_TEST_FIELDS: tuple[str, ...] = GROUP_MI_TEST_FIELDS
+
 STIM_PHASES: tuple[str, ...] = ("run", "iti")
 STIM_VARS: tuple[str, ...] = ("duty", "dist")
 MI_TYPES: tuple[str, ...] = ("occupancy", "transition")
@@ -50,7 +53,8 @@ GROUP_FACTORS: tuple[str, ...] = ("sex", "genotype", "tx")
 
 EARLY_LATE_K: int = 3
 MIN_TRIALS_FOR_EARLY_LATE: int = 6
-TRIAL_NULL_N_PERM: int = 200
+DEFAULT_NULL_N_PERM: int = 1000
+TRIAL_NULL_N_PERM: int = DEFAULT_NULL_N_PERM
 NULL_CLEAR_ALPHA: float = 0.05
 
 MI_PER_TRIAL_FIELDS: tuple[str, ...] = (
@@ -113,6 +117,7 @@ GROUP_MI_WHEN_TEST_FIELDS: tuple[str, ...] = (
     "median_b",
     "stat",
     "p",
+    "q_bh",
     "test",
 )
 

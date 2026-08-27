@@ -21,8 +21,9 @@ import numpy as np
 
 from maze.core.schema import NODE_SUMMARY_DTYPE
 from maze.pipeline.db import list_trials, open_db
-from maze.pipeline.defaults import HYBRID_POINT_NAME, get_config_snapshot
+from maze.pipeline.defaults import HYBRID_POINT_NAME, TO_EXIT_METRIC_SUFFIX, get_config_snapshot
 from maze.pipeline.exports.csv_trials import METRIC_MAPPING
+from maze.pipeline.metrics.to_exit_truncation import TO_EXIT_SKIP_METRICS, to_exit_metric_name
 from maze.pipeline.paths import OUTPUT_H5
 
 # ---------------------------------------------------------------------------
@@ -201,7 +202,8 @@ _TRIAL_SUMMARY_IDENTITY_COLUMNS: tuple[tuple[str, str, str, str], ...] = (
         "metric",
         "text",
         "",
-        "Metric identifier in long format (NODE_SUMMARY field name or mapped trial-level name).",
+        "Metric identifier in long format (NODE_SUMMARY field name, trial-level name, or "
+        f"``{{name}}{TO_EXIT_METRIC_SUFFIX}`` for experimental run metrics truncated at first exit).",
     ),
     (
         "value",
@@ -218,7 +220,11 @@ _NODE_METRIC_HELP: dict[str, str] = {
     "time_moving_s": "Time classified as moving within the band (seconds).",
     "time_immobile_s": "Time classified as immobile within the band (seconds).",
     "n_movement_bouts": "Count of movement bouts detected in the band.",
-    "latency_to_exit_s": "Latency to first exit-zone entry in the band (seconds).",
+    "latency_to_exit_s": (
+        "Latency to first exit-zone entry in the band (seconds). For experimental VAST, "
+        "this is the designed stop time; use with ``trial_duration_s_to_exit`` (∼ latency + 1/fps) "
+        "rather than a redundant ``latency_to_exit_s_to_exit`` metric."
+    ),
     "time_in_exit_zone_s": "Time spent inside the exit zone in the band (seconds).",
     "time_in_exit_zone_fraction": "Fraction of band time in the exit zone.",
     "mean_distance_to_exit_cm": "Mean distance to exit hole / zone centerline (cm).",
@@ -232,9 +238,20 @@ _NODE_METRIC_HELP: dict[str, str] = {
 }
 
 _TRIAL_LEVEL_METRIC_HELP: dict[str, str] = {
-    "trial_duration_s": "Analysis window duration (seconds); prefers ``analysis_duration_s`` on the trial group.",
+    "trial_duration_s": (
+        "Analysis window duration (seconds); prefers ``analysis_duration_s`` on the trial group "
+        "(full run band)."
+    ),
     "n_feedback_error_bouts": "Count of incongruent feedback bouts (from feedback subgroup attrs).",
     "feedback_error_duration_s": "Total duration of incongruent feedback (seconds).",
+}
+
+_TO_EXIT_TRIAL_LEVEL_HELP: dict[str, str] = {
+    to_exit_metric_name("trial_duration_s"): (
+        "Duration of the run window truncated at first exit-zone frame (inclusive), seconds. "
+        "Experimental trials only; omitted when exit never reached. Equals "
+        "``latency_to_exit_s + 1/fps`` (do not emit a separate ``latency_to_exit_s_to_exit``)."
+    ),
 }
 
 
@@ -389,6 +406,9 @@ def _base_rows() -> list[dict[str, str]]:
                 "unless export is run with include_mistrials=True. "
                 f"Per-band metrics are read from ambulation_metrics/{HYBRID_POINT_NAME}/summary "
                 "when present. "
+                f"For experimental trials that reach the exit, additional run-band rows use "
+                f"metric names suffixed with ``{TO_EXIT_METRIC_SUFFIX}`` (same trajectory_source): "
+                "recomputed on the hybrid trajectory truncated at the first exit-zone frame. "
                 "Representative movement/trace/analysis-window parameters from this HDF5 "
                 "(or code defaults if the file is missing / has no completed analysis) "
                 "are recorded only on this meta row in analysis_parameters_context."
@@ -425,6 +445,29 @@ def _base_rows() -> list[dict[str, str]]:
                 "analysis_parameters_context": "",
             }
         )
+    for name in NODE_SUMMARY_DTYPE.names:
+        if str(name) in TO_EXIT_SKIP_METRICS:
+            continue
+        suffixed = to_exit_metric_name(str(name))
+        base_help = _NODE_METRIC_HELP.get(
+            str(name),
+            "Structured summary field from NODE_SUMMARY_DTYPE / banded summary table.",
+        )
+        rows.append(
+            {
+                "section": "long_metric",
+                "csv_column": "metric / value",
+                "metric_name": suffixed,
+                "trial_state_scope": "run only (experimental; omitted if exit never reached)",
+                "value_type": "number",
+                "units": _metric_units(str(name)),
+                "description": (
+                    f"{base_help} Truncated at first exit-zone frame "
+                    f"(metric suffix ``{TO_EXIT_METRIC_SUFFIX}``)."
+                ),
+                "analysis_parameters_context": "",
+            }
+        )
     for export_name in METRIC_MAPPING:
         rows.append(
             {
@@ -438,6 +481,19 @@ def _base_rows() -> list[dict[str, str]]:
                     export_name,
                     "Trial-level metric mapped in METRIC_MAPPING in csv_trials.py.",
                 ),
+                "analysis_parameters_context": "",
+            }
+        )
+    for export_name, desc in _TO_EXIT_TRIAL_LEVEL_HELP.items():
+        rows.append(
+            {
+                "section": "trial_level_metric",
+                "csv_column": "metric / value",
+                "metric_name": export_name,
+                "trial_state_scope": "run only (experimental; omitted if exit never reached)",
+                "value_type": "number",
+                "units": _metric_units("trial_duration_s"),
+                "description": desc,
                 "analysis_parameters_context": "",
             }
         )

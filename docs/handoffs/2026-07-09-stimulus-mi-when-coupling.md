@@ -26,6 +26,10 @@ See plan table. Especially: no mixed model; primary when-tests = run×duty|dist�
 
 User edited duty bin edges (inserted 40) and is re-running `maze-compute-stimulus-mi` on the pooled path — orthogonal to when-coupling implementation.
 
+## Status note (same day)
+
+`--per-trial` / `--trial-nulls` already ran on the gerstner cohort. Follow-on grill closed for **sliced tests + within-session early/late**: [`.cursor/plans/stimulus_mi_sliced_factorial.plan.md`](../../.cursor/plans/stimulus_mi_sliced_factorial.plan.md), handoff [`2026-07-09-stimulus-mi-sliced-tests.md`](2026-07-09-stimulus-mi-sliced-tests.md).
+
 ## First build step when asked
 
-Extend `stimulus_mi.py` / `maze-compute-stimulus-mi` with `--per-trial` (no nulls first); emit `mi_per_trial.csv` + summaries; then `--trial-nulls` and `group_mi_when_tests.csv`.
+Implement within-session delta on summaries, then `--sliced-tests` → `group_mi_sliced_tests.csv` per sliced-factorial plan.

@@ -13,6 +13,11 @@ from ...core.h5_layout import TASK_DATA_GROUP, resolve_ambulation_metrics_group
 from ...core.tasks import ARENA_TYPE_CIRCULAR, normalize_arena_type
 from ...core.schema import NODE_SUMMARY_DTYPE
 from ..defaults import HYBRID_POINT_NAME
+from ..metrics.to_exit_truncation import (
+    TO_EXIT_SKIP_METRICS,
+    compute_hybrid_to_exit_summary_for_trial,
+    to_exit_metric_name,
+)
 from ..paths import OUTPUT_H5
 from ..db import (
     TrialKey,
@@ -20,6 +25,7 @@ from ..db import (
     open_db,
     read_arena_type,
     read_animal_label,
+    read_trial_settings,
 )
 
 
@@ -137,6 +143,56 @@ def _append_hybrid_summary_metric_rows(
                     "value": _format_value(value),
                 }
             )
+
+
+def _append_hybrid_to_exit_metric_rows(
+    rows: list[dict[str, Any]],
+    base_row: dict[str, Any],
+    db_path: Path,
+    key: TrialKey,
+    g_trial: Any,
+) -> None:
+    """Emit experimental-only ``*_to_exit`` run metrics (same trajectory_source)."""
+    if key.phase != "experimental":
+        return
+    try:
+        settings, _fps, _timing = read_trial_settings(db_path, key)
+    except Exception as e:
+        print(f"  Warning: to-exit settings unreadable for {key.path()}: {e}")
+        return
+    try:
+        summary = compute_hybrid_to_exit_summary_for_trial(g_trial, settings)
+    except Exception as e:
+        print(f"  Warning: to-exit metrics failed for {key.path()}: {e}")
+        return
+    if summary is None:
+        return
+    trunc_base = {
+        **base_row,
+        "trial_state": "run",
+    }
+    for field in NODE_SUMMARY_DTYPE.names:
+        if str(field) in TO_EXIT_SKIP_METRICS:
+            continue
+        value = summary.get(field)
+        if not _is_valid_value(value):
+            continue
+        rows.append(
+            {
+                **trunc_base,
+                "metric": to_exit_metric_name(str(field)),
+                "value": _format_value(value),
+            }
+        )
+    duration = summary.get("trial_duration_s")
+    if _is_valid_value(duration):
+        rows.append(
+            {
+                **trunc_base,
+                "metric": to_exit_metric_name("trial_duration_s"),
+                "value": _format_value(duration),
+            }
+        )
 
 
 def _format_session(key: TrialKey) -> str:
@@ -277,7 +333,10 @@ def export_trial_summary(
 
     Output columns include trajectory_source, trial_state, metric, value.
     Per-point metrics come from ambulation_metrics/spot_hybrid/summary (iti_wait and run).
-    Trial-level metrics use trial_state run.
+    Experimental trials that reach the exit also emit ``*_to_exit`` run metrics
+    (same ``trajectory_source``, metrics recomputed on the hybrid track truncated
+    at first exit-zone frame).
+    Trial-level full-window metrics (analysis duration / feedback) keep unsuffixed names.
 
     Rows are only emitted for metrics that have valid data. Trials without
     processed data (no SLEAP tracking) will not have metric rows in the output.
@@ -356,6 +415,7 @@ def export_trial_summary(
         with open_db(db_path, "r") as h5:
             g_trial = h5[key.path()]
             _append_hybrid_summary_metric_rows(rows, base_row, g_trial)
+            _append_hybrid_to_exit_metric_rows(rows, base_row, db_path, key, g_trial)
 
         # Trial-level metrics (analysis window / feedback); attribute to run band
         for output_metric, db_field in METRIC_MAPPING.items():
@@ -611,6 +671,7 @@ def export_all_for_dbs(
                 task_rows = summary_rows_by_task.setdefault(task_name, [])
                 g_trial = h5[key.path()]
                 _append_hybrid_summary_metric_rows(task_rows, base_row, g_trial)
+                _append_hybrid_to_exit_metric_rows(task_rows, base_row, db_path, key, g_trial)
                 for output_metric, db_field in METRIC_MAPPING.items():
                     value = metrics.get(db_field)
                     if not _is_valid_value(value):

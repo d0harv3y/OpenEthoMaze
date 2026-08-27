@@ -126,6 +126,8 @@ class KpmsPreprocessConfig:
     db_path: Path | None = None
     #: Pose stream: anatomical (A), blob (B), fused (C = A∥B).
     pose_stream: PoseStream = "anatomical"
+    #: Minimum keypoint confidence for frame retention (must match fit/apply).
+    conf_threshold: float = _KPMS_CONF_THRESHOLD
 
 
 def _effective_db_path(cfg: KpmsPreprocessConfig) -> Path:
@@ -186,7 +188,9 @@ def build_kpms_inputs(
         else:
             xy, cf = arr_xy[keep], arr_conf[keep]
 
-        finalized = finalize_kpms_recording_tensors(xy, cf, cfg)
+        finalized = finalize_kpms_recording_tensors(
+            xy, cf, cfg, conf_threshold=cfg.conf_threshold
+        )
         if finalized is None:
             skipped.append(f"{trial_key}:too_short_after_filter")
             continue
