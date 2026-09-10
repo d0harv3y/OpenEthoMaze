@@ -169,7 +169,7 @@ One-hold and two-hold simple-effect Mann–Whitney tests on primary cells (`run 
 | `fdr_family` | A, B, C, or D |
 | `hold_sex`, `hold_strain`, `hold_condition` | Strata held fixed (blank = not held) |
 | `contrast_factor`, `level_a`, `level_b` | Simple effect contrast |
-| `phase`, `stim_var`, `mi_type`, `metric` | Slice keys |
+| `interval`, `stim_var`, `mi_type`, `metric` | Slice keys |
 | `n_a`, `n_b`, `median_a`, `median_b`, `stat`, `p`, `q_bh`, `test` | Test output |
 
 When `--trial-nulls` is on, raw slope/delta metrics are also emitted with `p` but **no** `q_bh` (exploratory).
