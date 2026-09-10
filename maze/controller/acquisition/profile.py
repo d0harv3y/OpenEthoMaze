@@ -132,7 +132,7 @@ def _stimulus_from_dict(data: Dict[str, Any]) -> StimulusConfig:
 def _animal_to_dict(animal: AnimalInfo) -> Dict[str, Any]:
     return {
         "animal_id": animal.animal_id,
-        "tx": animal.tx,
+        "condition": animal.condition,
         "strain": animal.strain,
         "sex": animal.sex,
         "drug": animal.drug,
@@ -145,7 +145,7 @@ def _animal_to_dict(animal: AnimalInfo) -> Dict[str, Any]:
 def _animal_from_dict(data: Dict[str, Any]) -> AnimalInfo:
     return AnimalInfo(
         animal_id=str(data.get("animal_id", "")),
-        tx=data.get("tx"),
+        condition=data.get("condition"),
         strain=data.get("strain"),
         sex=data.get("sex"),
         drug=data.get("drug"),

@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument("--token-tiers-csv", type=Path, default=None)
     ap.add_argument("--bout-csv", type=Path, default=None)
-    ap.add_argument("--phase", choices=("run", "iti"), default="run")
+    ap.add_argument("--phase", choices=("run", "wait"), default="run")
     ap.add_argument("--blocks", type=str, default="1-3,4-6,7-9")
     ap.add_argument("--fps", type=float, default=30.0)
     args = ap.parse_args(argv)
@@ -158,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
         if sub.empty:
             continue
 
-        for (session, tx, sex, strain), group in sub.groupby(["session", "tx", "sex", "strain"], dropna=False):
+        for (session, tx, sex, strain), group in sub.groupby(["session", "condition", "sex", "strain"], dropna=False):
             trial_seconds: list[tuple[np.ndarray, np.ndarray]] = []
             for _, row in group.iterrows():
                 key = f"{row['animal_id']}_{row['session']}_{row['trial']}"
@@ -183,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
             strip = render_tier_ethogram_strip(mode)
             rel = export_relpath(
                 session=str(session),
-                tx=str(tx),
+                condition=str(tx),
                 strain=str(strain),
                 sex=str(sex),
                 block=block,
@@ -194,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
             summary_rows.append(
                 {
                     "session": str(session),
-                    "tx": str(tx),
+                    "condition": str(tx),
                     "sex": str(sex),
                     "strain": str(strain),
                     "block": block,

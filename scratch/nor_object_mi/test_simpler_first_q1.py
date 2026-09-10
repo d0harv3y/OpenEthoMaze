@@ -19,22 +19,22 @@ def test_delta_prox_known_case() -> None:
             {
                 "animal_id": "a1",
                 "sex": "F",
-                "tx": "noSD",
-                "phase_layer": "NOR_TX",
-                "condition_layer": "novel_obj",
+                "condition": "noSD",
+                "session": "NOR_TX",
+                "trial": "nvl_obj",
                 "bout_frames": frames,
                 "bout_mean_dist_fam_m": fam,
                 "bout_mean_dist_nvl_m": nvl,
             }
         )
-    # identical_obj must be ignored
+    # id_obj must be ignored
     rows.append(
         {
             "animal_id": "a1",
             "sex": "F",
-            "tx": "noSD",
-            "phase_layer": "NOR_TX",
-            "condition_layer": "identical_obj",
+            "condition": "noSD",
+            "session": "NOR_TX",
+            "trial": "id_obj",
             "bout_frames": 1000,
             "bout_mean_dist_fam_m": 9.0,
             "bout_mean_dist_nvl_m": 9.0,
@@ -50,7 +50,7 @@ def test_judge_q1_miss_when_ns() -> None:
     animals = pd.DataFrame(
         {
             "sex": ["F"] * 6 + ["M"] * 6,
-            "tx": (["noSD", "GHSD", "RBSD"] * 4),
+            "condition": (["noSD", "GHSD", "RBSD"] * 4),
             "delta_prox": [0.01] * 12,
         }
     )

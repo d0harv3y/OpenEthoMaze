@@ -110,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
         cohort = filter_cohort(nor_h5)
         (out / "cohort_filter.json").write_text(json.dumps(cohort, indent=2), encoding="utf-8")
         kept = set(cohort["kept_ids"])  # type: ignore[arg-type]
-        sessions = list(iter_nor_sessions(nor_h5, kept_ids=kept, phase_layer=None))
+        sessions = list(iter_nor_sessions(nor_h5, kept_ids=kept, session=None))
         print(f"sessions={len(sessions)} node={args.node}", flush=True)
         move_rows, still_rows, summary = build_ambulation_kinematics_bout_rows(
             nor_h5,

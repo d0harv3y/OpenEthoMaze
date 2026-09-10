@@ -24,7 +24,7 @@ def _p_text(p: float) -> str:
     return f"p = {p:.3f}"
 
 
-def make_figure(rows: list[dict[str, str]], *, out_stem: Path, phase_layer: str, dpi: int = 300) -> None:
+def make_figure(rows: list[dict[str, str]], *, out_stem: Path, session: str, dpi: int = 300) -> None:
     ink, mute, accent = "#1a1a1a", "#6b6b6b", "#2f5d8a"
     locus_order = [("any", "nearest"), ("a", "locus A"), ("b", "locus B")]
 
@@ -83,7 +83,7 @@ def make_figure(rows: list[dict[str, str]], *, out_stem: Path, phase_layer: str,
 
     axes[0].set_ylabel("excess MI (bits)")
     fig.suptitle(
-        f"Presence boost: nearest vs independent loci — {phase_layer}",
+        f"Presence boost: nearest vs independent loci — {session}",
         fontsize=11,
         fontweight="bold",
         color=ink,
@@ -123,10 +123,10 @@ def main() -> int:
     args = ap.parse_args()
     out = args.out_stem or (args.delta_csv.parent / "fig_presence_loci_independent")
     rows = _load(args.delta_csv)
-    phase = args.phase_layer
+    phase = args.session
     if rows:
-        phase = str(rows[0].get("phase_layer") or phase)
-    make_figure(rows, out_stem=out, phase_layer=phase)
+        phase = str(rows[0].get("session") or phase)
+    make_figure(rows, out_stem=out, session=phase)
     return 0
 
 

@@ -26,8 +26,8 @@ def test_load_pause_mi_nvl_from_delta(tmp_path: Path) -> None:
         {
             "animal_id": ["1", "1"],
             "sex": ["F", "F"],
-            "tx": ["noSD", "noSD"],
-            "phase_layer": ["NOR_TX", "NOR_TX"],
+            "condition": ["noSD", "noSD"],
+            "session": ["NOR_TX", "NOR_TX"],
             "mi_label": ["pause_binary", "full_alphabet"],
             "mi_mm_nvl": [0.12, 0.30],
             "mi_mm_fam": [0.08, 0.20],
@@ -46,8 +46,8 @@ def test_join_dr_pause_mi_inner() -> None:
         {
             "animal_id": ["1", "2"],
             "sex": ["F", "M"],
-            "tx": ["noSD", "GHSD"],
-            "phase_layer": ["NOR_TX", "NOR_TX"],
+            "condition": ["noSD", "GHSD"],
+            "session": ["NOR_TX", "NOR_TX"],
             "dr_exclusive": [0.2, -0.1],
             "n_models": [21, 21],
         }
@@ -56,8 +56,8 @@ def test_join_dr_pause_mi_inner() -> None:
         {
             "animal_id": ["1", "3"],
             "sex": ["F", "F"],
-            "tx": ["noSD", "noSD"],
-            "phase_layer": ["NOR_TX", "NOR_TX"],
+            "condition": ["noSD", "noSD"],
+            "session": ["NOR_TX", "NOR_TX"],
             PAUSE_MI_COL: [0.15, 0.05],
             "n_models": [1, 1],
         }
@@ -75,8 +75,8 @@ def test_info_lattice_runs_on_toy_joined() -> None:
             {
                 "animal_id": str(3000 + i),
                 "sex": "F" if i % 2 == 0 else "M",
-                "tx": "noSD" if i % 3 else "GHSD",
-                "phase_layer": "NOR_TX",
+                "condition": "noSD" if i % 3 else "GHSD",
+                "session": "NOR_TX",
                 "dr_exclusive": rng.uniform(-0.5, 0.5),
                 PAUSE_MI_COL: rng.uniform(0.0, 0.4),
             }

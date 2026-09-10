@@ -246,7 +246,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--balance-by",
         type=str,
-        default="sex,tx,phase,strain",
+        default="sex,condition,strain",
     )
     p.add_argument("--include-habituation", action="store_true")
     p.add_argument("--exclude-experimental", action="store_true")

@@ -33,13 +33,13 @@ def test_session_mask_table_frac_and_shannon() -> None:
     labeled = pd.DataFrame(
         {
             "animal_id": ["a"] * 3,
-            "phase_layer": ["NOR_BL"] * 3,
-            "condition_layer": ["novel_obj"] * 3,
+            "session": ["NOR_BL"] * 3,
+            "trial": ["nvl_obj"] * 3,
             "mask": ["still_near", "still_near", "move_far"],
             "raw_syllable_id": [1, 2, 1],
             "bout_frames": [10.0, 10.0, 20.0],
             "sex": ["F"] * 3,
-            "tx": ["noSD"] * 3,
+            "condition": ["noSD"] * 3,
             "model": ["m"] * 3,
         }
     )
@@ -66,7 +66,7 @@ def test_gate_hits_tx_specific_requires_novel_fdr_and_miss() -> None:
                         "sex": sex,
                         "mask": mask,
                         "metric": metric,
-                        "condition_layer": "novel_obj",
+                        "trial": "nvl_obj",
                         "contrast": "tx_minus_bl_by_tx",
                         "test": "welch_anova",
                         "p": 1e-6 if hit else 0.4,
@@ -74,13 +74,13 @@ def test_gate_hits_tx_specific_requires_novel_fdr_and_miss() -> None:
                         "hit_fdr05": hit,
                     }
                 )
-                for cond in ("identical_obj", "no_obj"):
+                for cond in ("id_obj", "no_obj"):
                     rows.append(
                         {
                             "sex": sex,
                             "mask": mask,
                             "metric": metric,
-                            "condition_layer": cond,
+                            "trial": cond,
                             "contrast": "tx_minus_bl_by_tx",
                             "test": "welch_anova",
                             "p": 0.4,
@@ -92,7 +92,7 @@ def test_gate_hits_tx_specific_requires_novel_fdr_and_miss() -> None:
                         "sex": sex,
                         "mask": mask,
                         "metric": bl,
-                        "condition_layer": "novel_obj",
+                        "trial": "nvl_obj",
                         "contrast": "bl_level_by_tx",
                         "test": "welch_anova",
                         "p": 0.4,
@@ -112,16 +112,16 @@ def test_hunt_bh_is_within_sex() -> None:
     txs = ("noSD", "GHSD", "RBSD")
     for sex in ("F", "M"):
         for aid_i in range(6):
-            tx = txs[aid_i % 3]
-            for cond in ("novel_obj", "identical_obj", "no_obj"):
+            condition = txs[aid_i % 3]
+            for cond in ("nvl_obj", "id_obj", "no_obj"):
                 for mask in MASKS:
                     bl = 0.25
                     bump = 0.0
                     if (
                         sex == "F"
-                        and cond == "novel_obj"
+                        and cond == "nvl_obj"
                         and mask == "still_near"
-                        and tx == "RBSD"
+                        and condition == "RBSD"
                     ):
                         bump = 0.4
                     noise = float(rng.normal(0, 0.01))
@@ -129,8 +129,8 @@ def test_hunt_bh_is_within_sex() -> None:
                         {
                             "animal_id": f"{sex}{aid_i}",
                             "sex": sex,
-                            "tx": tx,
-                            "condition_layer": cond,
+                            "condition": condition,
+                            "trial": cond,
                             "mask": mask,
                             "frac_mask_bl": bl,
                             "frac_mask_tx": bl + bump + noise,
@@ -159,11 +159,11 @@ def test_paired_inner_join_bl_tx() -> None:
     sess = pd.DataFrame(
         {
             "animal_id": ["a", "a", "a", "a"],
-            "phase_layer": ["NOR_BL", "NOR_TX", "NOR_BL", "NOR_TX"],
-            "condition_layer": ["novel_obj"] * 4,
+            "session": ["NOR_BL", "NOR_TX", "NOR_BL", "NOR_TX"],
+            "trial": ["nvl_obj"] * 4,
             "mask": ["still_near", "still_near", "move_far", "move_far"],
             "sex": ["F"] * 4,
-            "tx": ["noSD"] * 4,
+            "condition": ["noSD"] * 4,
             "frac_mask": [0.1, 0.2, 0.3, 0.4],
             "shannon_bits": [1.0, 1.5, 2.0, 2.1],
         }

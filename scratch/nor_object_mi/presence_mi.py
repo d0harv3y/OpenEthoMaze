@@ -1,4 +1,4 @@
-"""Object-presence MI: excess_I(dist_any) on identical_obj vs no_obj."""
+"""Object-presence MI: excess_I(dist_any) on id_obj vs no_obj."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from maze.kpms.behavior_ethogram.stimulus_mi import (
     occupancy_mi,
 )
 
-PRESENCE_CONDITIONS: tuple[str, ...] = ("identical_obj", "no_obj")
+PRESENCE_CONDITIONS: tuple[str, ...] = ("id_obj", "no_obj")
 _FIELD = "bout_mean_dist_any_m"
 
 
@@ -30,7 +30,7 @@ def fit_dist_any_bin_edges(
     vals: list[float] = []
     by_cond: dict[str, int] = defaultdict(int)
     for r in rows:
-        cond = str(r.get("condition_layer", ""))
+        cond = str(r.get("trial", ""))
         if cond not in PRESENCE_CONDITIONS:
             continue
         by_cond[cond] += 1
@@ -43,7 +43,7 @@ def fit_dist_any_bin_edges(
         "fit": {
             "policy": "shared_dist_any_presence",
             "source_field": _FIELD,
-            "condition_layers": list(PRESENCE_CONDITIONS),
+            "trials": list(PRESENCE_CONDITIONS),
             "n_bout_rows_by_condition": dict(by_cond),
             "n_bins": n_bins,
             "n_values": len(vals),
@@ -115,7 +115,7 @@ def _streams(
     rows: Sequence[Mapping[str, object]],
     *,
     animal_id: str,
-    condition_layer: str,
+    trial: str,
     edges: np.ndarray,
     field: str = _FIELD,
 ) -> dict[str, tuple[np.ndarray, np.ndarray]]:
@@ -123,7 +123,7 @@ def _streams(
     for row in rows:
         if str(row["animal_id"]) != animal_id:
             continue
-        if str(row.get("condition_layer", "")) != condition_layer:
+        if str(row.get("trial", "")) != trial:
             continue
         val = float(row[field])
         if not np.isfinite(val):
@@ -146,7 +146,7 @@ def compute_presence_mi(
     seed: int = 42,
     bin_edges_payload: Mapping[str, object] | None = None,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]], list[dict[str, object]], dict[str, object]]:
-    """Per-animal excess_I(dist_any) for identical_obj vs no_obj; paired Δ_presence."""
+    """Per-animal excess_I(dist_any) for id_obj vs no_obj; paired Δ_presence."""
     if bin_edges_payload is None:
         edges, bin_edges_payload = fit_dist_any_bin_edges(rows, n_bins=n_bins)
     else:
@@ -162,7 +162,7 @@ def compute_presence_mi(
     for aid in animals:
         m = meta[aid]
         for cond in PRESENCE_CONDITIONS:
-            streams = _streams(rows, animal_id=aid, condition_layer=cond, edges=edges, field=_FIELD)
+            streams = _streams(rows, animal_id=aid, trial=cond, edges=edges, field=_FIELD)
             if not streams:
                 continue
             mi_raw, mi_mm, h_syll, h_stim, n_bouts = _pooled_occupancy(streams)
@@ -173,11 +173,11 @@ def compute_presence_mi(
                 {
                     "animal_id": aid,
                     "sex": m["sex"],
-                    "tx": m["tx"],
+                    "condition": m["condition"],
                     "cohort": m["cohort"],
-                    "phase_layer": m["phase_layer"],
-                    "condition_layer": cond,
-                    "object_presence": "present" if cond == "identical_obj" else "absent",
+                    "session": m["session"],
+                    "trial": cond,
+                    "object_presence": "present" if cond == "id_obj" else "absent",
                     "stim_var": "dist_any",
                     "locus": "any",
                     "mi_type": "occupancy",
@@ -194,21 +194,21 @@ def compute_presence_mi(
 
     by_animal: dict[str, dict[str, Mapping[str, object]]] = defaultdict(dict)
     for row in mi_rows:
-        by_animal[str(row["animal_id"])][str(row["condition_layer"])] = row
+        by_animal[str(row["animal_id"])][str(row["trial"])] = row
 
     delta_rows: list[dict[str, object]] = []
     for aid, cmap in sorted(by_animal.items()):
-        if "identical_obj" not in cmap or "no_obj" not in cmap:
+        if "id_obj" not in cmap or "no_obj" not in cmap:
             continue
-        present = cmap["identical_obj"]
+        present = cmap["id_obj"]
         absent = cmap["no_obj"]
         delta_rows.append(
             {
                 "animal_id": aid,
                 "sex": present["sex"],
-                "tx": present["tx"],
+                "condition": present["condition"],
                 "cohort": present["cohort"],
-                "phase_layer": present["phase_layer"],
+                "session": present["session"],
                 "locus": "any",
                 "excess_present": present["excess"],
                 "excess_absent": absent["excess"],
@@ -238,7 +238,7 @@ def compute_presence_loci_mi(
     seed: int = 42,
     bin_edges_payload: Mapping[str, object] | None = None,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]], list[dict[str, object]], dict[str, object]]:
-    """Per-animal×locus excess_I for identical_obj vs no_obj (spatial A/B).
+    """Per-animal×locus excess_I for id_obj vs no_obj (spatial A/B).
 
     Also emits the nearest-locus (``dist_any``) rows for side-by-side comparison
     when those bout fields are present.
@@ -261,7 +261,7 @@ def compute_presence_loci_mi(
         for locus, field in stims:
             for cond in PRESENCE_CONDITIONS:
                 streams = _streams(
-                    rows, animal_id=aid, condition_layer=cond, edges=edges, field=field
+                    rows, animal_id=aid, trial=cond, edges=edges, field=field
                 )
                 if not streams:
                     continue
@@ -273,11 +273,11 @@ def compute_presence_loci_mi(
                     {
                         "animal_id": aid,
                         "sex": m["sex"],
-                        "tx": m["tx"],
+                        "condition": m["condition"],
                         "cohort": m["cohort"],
-                        "phase_layer": m["phase_layer"],
-                        "condition_layer": cond,
-                        "object_presence": "present" if cond == "identical_obj" else "absent",
+                        "session": m["session"],
+                        "trial": cond,
+                        "object_presence": "present" if cond == "id_obj" else "absent",
                         "stim_var": f"dist_locus_{locus}" if locus != "any" else "dist_any",
                         "locus": locus,
                         "mi_type": "occupancy",
@@ -294,21 +294,21 @@ def compute_presence_loci_mi(
 
     by_key: dict[tuple[str, str], dict[str, Mapping[str, object]]] = defaultdict(dict)
     for row in mi_rows:
-        by_key[(str(row["animal_id"]), str(row["locus"]))][str(row["condition_layer"])] = row
+        by_key[(str(row["animal_id"]), str(row["locus"]))][str(row["trial"])] = row
 
     delta_rows: list[dict[str, object]] = []
     for (aid, locus), cmap in sorted(by_key.items()):
-        if "identical_obj" not in cmap or "no_obj" not in cmap:
+        if "id_obj" not in cmap or "no_obj" not in cmap:
             continue
-        present = cmap["identical_obj"]
+        present = cmap["id_obj"]
         absent = cmap["no_obj"]
         delta_rows.append(
             {
                 "animal_id": aid,
                 "sex": present["sex"],
-                "tx": present["tx"],
+                "condition": present["condition"],
                 "cohort": present["cohort"],
-                "phase_layer": present["phase_layer"],
+                "session": present["session"],
                 "locus": locus,
                 "stim_var": present["stim_var"],
                 "excess_present": present["excess"],
@@ -408,7 +408,7 @@ def _group_tests_presence(delta_rows: Sequence[Mapping[str, object]]) -> list[di
                 "metric": "delta_excess_present_minus_absent",
             }
         )
-        if factor == "tx":
+        if factor == "condition":
             for i, a in enumerate(levels):
                 for b in levels[i + 1 :]:
                     va, vb = by_level[a], by_level[b]
@@ -430,9 +430,9 @@ def _group_tests_presence(delta_rows: Sequence[Mapping[str, object]]) -> list[di
                         }
                     )
 
-    _factor_tests(delta_rows, factor="tx", sex_stratum="all")
+    _factor_tests(delta_rows, factor="condition", sex_stratum="all")
     _factor_tests(delta_rows, factor="sex", sex_stratum="all")
     for sex in sorted({str(r.get("sex", "")) for r in delta_rows if r.get("sex")}):
         subset = [r for r in delta_rows if str(r.get("sex", "")) == sex]
-        _factor_tests(subset, factor="tx", sex_stratum=sex)
+        _factor_tests(subset, factor="condition", sex_stratum=sex)
     return out

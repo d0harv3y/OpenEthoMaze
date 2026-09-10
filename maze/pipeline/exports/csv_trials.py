@@ -384,7 +384,7 @@ def export_trial_summary(
         sex = labels.get("sex", "")
         researcher = labels.get("researcher", "")
         drug = labels.get("drug", "")
-        treatment = labels.get("tx", "")
+        treatment = labels.get("condition", "")
 
         # Format session with appropriate prefix
         session = _format_session(key)
@@ -647,7 +647,7 @@ def export_all_for_dbs(
                 sex = labels.get("sex", "")
                 researcher = labels.get("researcher", "")
                 drug = labels.get("drug", "")
-                treatment = labels.get("tx", "")
+                treatment = labels.get("condition", "")
                 session = _format_session(key)
                 trial_str = key.trial
                 if include_mistrials and (metrics.get("mistrial_reason") or "").strip():

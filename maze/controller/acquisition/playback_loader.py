@@ -219,8 +219,8 @@ def _hydrate_ram_from_sidecar(
     _apply_loaded_identity(
         config, animal_id=row.animal_id, num_trials=max(1, _parse_trial_index(row.trial_key) + 1)
     )
-    if row.tx:
-        config.session.animals[0].tx = row.tx
+    if row.condition:
+        config.session.animals[0].condition = row.condition
     if row.sex:
         config.session.animals[0].sex = row.sex
 

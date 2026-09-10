@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 
 from nor_object_mi.simpler_first_presence import (
-    TX_STRATUM_ALL,
-    TX_STRATUM_CONTROL,
+    CONDITION_STRATUM_ALL,
+    CONDITION_STRATUM_CONTROL,
     _paired_delta_table,
     across_model_dispersion,
     across_model_dispersion_by_ss,
@@ -35,9 +35,9 @@ def test_across_model_dispersion_iqr_and_commensurate_flag() -> None:
                 "model": f"paramscan_s1-1e8_s2-1e5_ss-50_r{i}",
                 "animal_id": "a0",
                 "sex": "F",
-                "tx": "noSD",
-                "step": "no_obj->identical",
-                "phase_layer": "NOR_TX",
+                "condition": "noSD",
+                "step": "no_obj->id_obj",
+                "session": "NOR_TX",
                 "delta_frac_near": d,
                 "delta_mean_dist_any_m": 0.0,
                 "delta_richness": float(i),
@@ -54,7 +54,7 @@ def test_across_model_dispersion_iqr_and_commensurate_flag() -> None:
     summary = across_model_dispersion_summary(disp)
     assert len(summary) == 4
     by_sex = across_model_dispersion_summary(
-        disp, group_keys=("sex", "phase_layer", "step", "metric")
+        disp, group_keys=("sex", "session", "step", "metric")
     )
     assert set(by_sex["sex"]) == {"F"}
     assert int(by_sex["n_animals"].iloc[0]) == 1
@@ -69,9 +69,9 @@ def test_dispersion_summary_by_sex_splits_n_animals() -> None:
                     "model": f"m{i}",
                     "animal_id": animal,
                     "sex": sex,
-                    "tx": "noSD",
-                    "step": "no_obj->identical",
-                    "phase_layer": "NOR_TX",
+                    "condition": "noSD",
+                    "step": "no_obj->id_obj",
+                    "session": "NOR_TX",
                     "delta_frac_near": d,
                     "delta_mean_dist_any_m": 0.0,
                     "delta_richness": 0.0,
@@ -80,7 +80,7 @@ def test_dispersion_summary_by_sex_splits_n_animals() -> None:
             )
     disp = across_model_dispersion(pd.DataFrame(rows))
     by_sex = across_model_dispersion_summary(
-        disp, group_keys=("sex", "phase_layer", "step", "metric")
+        disp, group_keys=("sex", "session", "step", "metric")
     )
     fr = by_sex[by_sex["metric"] == "delta_frac_near"]
     assert set(fr["sex"]) == {"F", "M"}
@@ -97,9 +97,9 @@ def test_across_model_dispersion_accepts_phase_paired_keys() -> None:
                 "model": f"m{i}",
                 "animal_id": "a0",
                 "sex": "F",
-                "tx": "noSD",
-                "phase_step": "BL->TX",
-                "condition_layer": "novel_obj",
+                "condition": "noSD",
+                "session_step": "BL->TX",
+                "trial": "nvl_obj",
                 "delta_frac_near": d,
                 "delta_mean_dist_any_m": 0.0,
                 "delta_richness": 0.0,
@@ -108,12 +108,12 @@ def test_across_model_dispersion_accepts_phase_paired_keys() -> None:
         )
     disp = across_model_dispersion(
         pd.DataFrame(rows),
-        keys=("animal_id", "sex", "tx", "phase_step", "condition_layer"),
+        keys=("animal_id", "sex", "condition", "session_step", "trial"),
     )
     fr = disp[disp["metric"] == "delta_frac_near"].iloc[0]
     assert abs(float(fr["iqr"]) - 0.10) < 1e-12
     summ = across_model_dispersion_summary(
-        disp, group_keys=("condition_layer", "phase_step", "metric")
+        disp, group_keys=("trial", "session_step", "metric")
     )
     assert len(summ) == 4
     assert "median_of_iqr" in summ.columns
@@ -128,9 +128,9 @@ def test_across_model_dispersion_by_ss_marks_within_ss() -> None:
                     "model": f"paramscan_s1-1e8_s2-1e5_ss-{ss}_r{i}",
                     "animal_id": "a0",
                     "sex": "F",
-                    "tx": "noSD",
-                    "step": "no_obj->identical",
-                    "phase_layer": "NOR_TX",
+                    "condition": "noSD",
+                    "step": "no_obj->id_obj",
+                    "session": "NOR_TX",
                     "delta_frac_near": d,
                     "delta_mean_dist_any_m": 0.0,
                     "delta_richness": 1.0,
@@ -151,9 +151,9 @@ def test_animal_median_across_models_identity() -> None:
                     "model": model,
                     "animal_id": f"a{i}",
                     "sex": "F",
-                    "tx": "noSD",
-                    "step": "no_obj->identical",
-                    "phase_layer": "NOR_TX",
+                    "condition": "noSD",
+                    "step": "no_obj->id_obj",
+                    "session": "NOR_TX",
                     "delta_frac_near": d,
                     "delta_mean_dist_any_m": 0.0,
                     "delta_richness": 0.0,
@@ -174,9 +174,9 @@ def test_consensus_wilcoxon_on_median_hits_positive_shift() -> None:
             {
                 "animal_id": f"a{i}",
                 "sex": "F" if i < 10 else "M",
-                "tx": "noSD",
-                "step": "no_obj->identical",
-                "phase_layer": "NOR_TX",
+                "condition": "noSD",
+                "step": "no_obj->id_obj",
+                "session": "NOR_TX",
                 "delta_frac_near": 0.12,
                 "delta_mean_dist_any_m": 0.0,
                 "delta_richness": 0.0,
@@ -189,7 +189,7 @@ def test_consensus_wilcoxon_on_median_hits_positive_shift() -> None:
         (tests["test"] == "wilcoxon_signed_rank")
         & (tests["sex"] == "all")
         & (tests["metric"] == "frac_near")
-        & (tests["tx_stratum"] == TX_STRATUM_ALL)
+        & (tests["tx_stratum"] == CONDITION_STRATUM_ALL)
     ]
     assert len(wx) == 1
     assert float(wx["p"].iloc[0]) < 0.05
@@ -199,15 +199,15 @@ def test_consensus_wilcoxon_on_median_hits_positive_shift() -> None:
 def test_consensus_kruskal_metric_is_delta_star() -> None:
     rows = []
     for i in range(18):
-        tx = ("noSD", "GHSD", "RBSD")[i % 3]
+        condition = ("noSD", "GHSD", "RBSD")[i % 3]
         rows.append(
             {
                 "animal_id": f"a{i}",
                 "sex": "F" if i < 9 else "M",
-                "tx": tx,
-                "step": "no_obj->identical",
-                "phase_layer": "NOR_TX",
-                "delta_frac_near": 0.10 if tx == "noSD" else 0.0,
+                "condition": condition,
+                "step": "no_obj->id_obj",
+                "session": "NOR_TX",
+                "delta_frac_near": 0.10 if condition == "noSD" else 0.0,
                 "delta_mean_dist_any_m": 0.0,
                 "delta_richness": 0.0,
                 "delta_shannon_bits": 0.0,
@@ -224,15 +224,15 @@ def test_noSD_wilcoxon_within_sex_not_pooled() -> None:
     """Control-arm n is noSD only; pooled F includes treated animals."""
     rows = []
     for i in range(12):
-        tx = "noSD" if i < 6 else "GHSD"
+        condition = "noSD" if i < 6 else "GHSD"
         rows.append(
             {
                 "animal_id": f"a{i}",
                 "sex": "F",
-                "tx": tx,
-                "step": "no_obj->identical",
-                "phase_layer": "NOR_TX",
-                "delta_frac_near": 0.20 if tx == "noSD" else -0.20,
+                "condition": condition,
+                "step": "no_obj->id_obj",
+                "session": "NOR_TX",
+                "delta_frac_near": 0.20 if condition == "noSD" else -0.20,
                 "delta_mean_dist_any_m": 0.0,
                 "delta_richness": 0.0,
                 "delta_shannon_bits": 0.0,
@@ -244,13 +244,13 @@ def test_noSD_wilcoxon_within_sex_not_pooled() -> None:
         (tests["test"] == "wilcoxon_signed_rank")
         & (tests["sex"] == "F")
         & (tests["metric"] == "frac_near")
-        & (tests["tx_stratum"] == TX_STRATUM_ALL)
+        & (tests["tx_stratum"] == CONDITION_STRATUM_ALL)
     ]
     ctrl = tests[
         (tests["test"] == "wilcoxon_signed_rank")
         & (tests["sex"] == "F")
         & (tests["metric"] == "frac_near")
-        & (tests["tx_stratum"] == TX_STRATUM_CONTROL)
+        & (tests["tx_stratum"] == CONDITION_STRATUM_CONTROL)
     ]
     assert len(pooled) == 1 and len(ctrl) == 1
     assert int(pooled["n"].iloc[0]) == 12
@@ -261,24 +261,24 @@ def test_noSD_wilcoxon_within_sex_not_pooled() -> None:
 def test_agreement_table_stays_sex_all_pooled() -> None:
     rows = [
         {
-            "phase_layer": "NOR_TX",
-            "step": "no_obj->identical",
+            "session": "NOR_TX",
+            "step": "no_obj->id_obj",
             "sex": "all",
             "metric": "frac_near",
             "test": "wilcoxon_signed_rank",
             "hit_p05": True,
             "median_delta": 0.1,
-            "tx_stratum": TX_STRATUM_ALL,
+            "tx_stratum": CONDITION_STRATUM_ALL,
         },
         {
-            "phase_layer": "NOR_TX",
-            "step": "no_obj->identical",
+            "session": "NOR_TX",
+            "step": "no_obj->id_obj",
             "sex": "F",
             "metric": "frac_near",
             "test": "wilcoxon_signed_rank",
             "hit_p05": True,
             "median_delta": 0.2,
-            "tx_stratum": TX_STRATUM_CONTROL,
+            "tx_stratum": CONDITION_STRATUM_CONTROL,
         },
     ]
     agr = agreement_table(pd.DataFrame(rows))
@@ -296,29 +296,29 @@ def test_paired_delta_and_bc() -> None:
     rows = []
     for cond, frames_by_syll, dist in (
         ("no_obj", {1: 80, 2: 20}, 0.20),
-        ("identical_obj", {1: 20, 2: 80}, 0.05),
-        ("novel_obj", {1: 20, 2: 80}, 0.05),
+        ("id_obj", {1: 20, 2: 80}, 0.05),
+        ("nvl_obj", {1: 20, 2: 80}, 0.05),
     ):
         for sid, fr in frames_by_syll.items():
             rows.append(
                 {
                     "animal_id": "a1",
                     "sex": "F",
-                    "tx": "noSD",
-                    "phase_layer": "NOR_TX",
-                    "condition_layer": cond,
+                    "condition": "noSD",
+                    "session": "NOR_TX",
+                    "trial": cond,
                     "raw_syllable_id": sid,
                     "bout_frames": fr,
                     "bout_mean_dist_any_m": dist,
                 }
             )
-    ac = build_animal_condition_table(pd.DataFrame(rows), phase_layer="NOR_TX", r_m=0.10)
-    assert set(ac["condition_layer"]) == {"no_obj", "identical_obj", "novel_obj"}
+    ac = build_animal_condition_table(pd.DataFrame(rows), session="NOR_TX", r_m=0.10)
+    assert set(ac["trial"]) == {"no_obj", "id_obj", "nvl_obj"}
     dtab = _paired_delta_table(
         ac,
-        step="no_obj->identical",
+        step="no_obj->id_obj",
         left="no_obj",
-        right="identical_obj",
+        right="id_obj",
         metrics=("frac_near", "shannon_bits", "richness", "mean_dist_any_m"),
     )
     assert len(dtab) == 1

@@ -38,12 +38,12 @@ try:
         is_sleap_nn_available,
         planned_slp_output_path,
     )
-    from maze.pipeline.io.file_discovery import TREATMENT_LABELS_HEADER
-    from maze.pipeline.treatment_labels_csv import (
-        TreatmentLabelsCsvError,
-        create_treatment_labels_csv,
-        open_treatment_labels_in_system_editor,
-        validate_treatment_labels_csv,
+    from maze.pipeline.io.file_discovery import CONDITION_LABELS_HEADER
+    from maze.pipeline.condition_labels_csv import (
+        ConditionLabelsCsvError,
+        create_condition_labels_csv,
+        open_condition_labels_in_system_editor,
+        validate_condition_labels_csv,
     )
     from maze.pipeline.trial_filters import (
         GUI_DEFAULT_PREFILTER_MODE,
@@ -75,10 +75,10 @@ def _default_discovery_dirs_text(config: "AcquisitionConfig") -> str:
     return "; ".join(str(p) for p in DATA_DIRS)
 
 
-def _default_treatment_labels_path(config: "AcquisitionConfig") -> Path:
-    from maze.pipeline.controller_discovery import default_treatment_labels_path
+def _default_condition_labels_path(config: "AcquisitionConfig") -> Path:
+    from maze.pipeline.controller_discovery import default_condition_labels_path
 
-    return default_treatment_labels_path(config)
+    return default_condition_labels_path(config)
 
 
 def _parse_filter_list(raw: str) -> Optional[list[str]]:
@@ -331,7 +331,7 @@ if HAS_QT:
         v.addWidget(hint)
         form = QFormLayout()
         h5_edit = QLineEdit(str(_default_h5_path(config)))
-        lbl_edit = QLineEdit(str(_default_treatment_labels_path(config)))
+        lbl_edit = QLineEdit(str(_default_condition_labels_path(config)))
 
         dirs_edit = QLineEdit(_default_discovery_dirs_text(config))
         dirs_edit.setPlaceholderText(
@@ -353,7 +353,7 @@ if HAS_QT:
 
         def browse_lbl() -> None:
             start = str(Path(lbl_edit.text()).parent)
-            p, _ = QFileDialog.getOpenFileName(dlg, "Treatment labels", start, "CSV (*.csv)")
+            p, _ = QFileDialog.getOpenFileName(dlg, "Condition labels", start, "CSV (*.csv)")
             if p:
                 lbl_edit.setText(p)
 
@@ -382,14 +382,14 @@ if HAS_QT:
         lbl_h.addWidget(QPushButton("Browse…", clicked=browse_lbl))
         def _labels_path_from_field() -> Path:
             raw = lbl_edit.text().strip()
-            return Path(raw) if raw else _default_treatment_labels_path(config)
+            return Path(raw) if raw else _default_condition_labels_path(config)
 
         def on_create_labels() -> None:
             path = _labels_path_from_field()
             if path.exists():
                 ans = QMessageBox.question(
                     dlg,
-                    "Treatment labels",
+                    "Condition labels",
                     f"{path} already exists. Overwrite with an empty template?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
@@ -400,36 +400,36 @@ if HAS_QT:
             else:
                 overwrite = False
             try:
-                create_treatment_labels_csv(path, overwrite=overwrite)
+                create_condition_labels_csv(path, overwrite=overwrite)
                 lbl_edit.setText(str(path))
-                log.appendPlainText(f"Created treatment labels template → {path}\n")
-                log.appendPlainText(f"Header: {','.join(TREATMENT_LABELS_HEADER)}\n")
+                log.appendPlainText(f"Created condition labels template → {path}\n")
+                log.appendPlainText(f"Header: {','.join(CONDITION_LABELS_HEADER)}\n")
                 QMessageBox.information(
                     dlg,
-                    "Treatment labels",
+                    "Condition labels",
                     f"Created {path}. Use “Open in editor…” to fill rows, then Sync.",
                 )
-            except TreatmentLabelsCsvError as e:
-                QMessageBox.warning(dlg, "Treatment labels", str(e))
+            except ConditionLabelsCsvError as e:
+                QMessageBox.warning(dlg, "Condition labels", str(e))
 
         def on_open_labels() -> None:
             path = _labels_path_from_field()
             try:
-                open_treatment_labels_in_system_editor(path)
+                open_condition_labels_in_system_editor(path)
                 log.appendPlainText(f"Opened in system editor: {path}\n")
-            except TreatmentLabelsCsvError as e:
-                QMessageBox.warning(dlg, "Treatment labels", str(e))
+            except ConditionLabelsCsvError as e:
+                QMessageBox.warning(dlg, "Condition labels", str(e))
 
         create_lbl_btn = QPushButton("Create new…", clicked=on_create_labels)
         create_lbl_btn.setToolTip(
-            "Create an empty treatment_labels.csv with the canonical header. "
+            "Create an empty condition_labels.csv with the canonical header. "
             "Does not call /orm/discover — edit rows manually or use merge on Sync."
         )
         open_lbl_btn = QPushButton("Open in editor…", clicked=on_open_labels)
         open_lbl_btn.setToolTip("Open the CSV in your default spreadsheet/editor (validates header first).")
         lbl_h.addWidget(create_lbl_btn)
         lbl_h.addWidget(open_lbl_btn)
-        form.addRow("Treatment labels CSV:", lbl_row)
+        form.addRow("Condition labels CSV:", lbl_row)
 
         dirs_row = QWidget()
         dirs_h = QHBoxLayout(dirs_row)
@@ -469,7 +469,7 @@ if HAS_QT:
                         log.appendPlainText(f"  {key}: {len(trials)} sources\n")
                 else:
                     log.appendPlainText("No duplicate trial keys.\n")
-                log.appendPlainText(f"CSV header: {TREATMENT_LABELS_HEADER}\n")
+                log.appendPlainText(f"CSV header: {CONDITION_LABELS_HEADER}\n")
             except Exception as e:
                 log.appendPlainText(traceback.format_exc())
                 QMessageBox.warning(dlg, "Discovery", str(e))
@@ -481,11 +481,11 @@ if HAS_QT:
                 dbp = Path(h5_edit.text().strip())
                 lp = Path(lbl_edit.text().strip()) if lbl_edit.text().strip() else None
                 if lp is not None:
-                    validate_treatment_labels_csv(lp)
+                    validate_condition_labels_csv(lp)
                 dd = _parse_data_dirs_text(dirs_edit.text())
                 _, dups = sync_discovery_into_h5(
                     dbp,
-                    treatment_labels_path=lp,
+                    condition_labels_path=lp,
                     merge_new_label_ids=merge_cb.isChecked(),
                     data_dirs=dd,
                 )
@@ -493,7 +493,7 @@ if HAS_QT:
                 if dups:
                     log.appendPlainText(f"Note: {len(dups)} duplicate keys in discovery.\n")
                 QMessageBox.information(dlg, "Discovery", "Sync completed.")
-            except TreatmentLabelsCsvError as e:
+            except ConditionLabelsCsvError as e:
                 QMessageBox.warning(dlg, "Discovery", str(e))
             except Exception as e:
                 log.appendPlainText(traceback.format_exc())

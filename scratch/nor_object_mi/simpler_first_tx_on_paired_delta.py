@@ -34,10 +34,10 @@ from nor_object_mi.simpler_first_da import (  # noqa: E402
 )
 from nor_object_mi.simpler_first_phase_paired import PHASE_STEPS  # noqa: E402
 from nor_object_mi.simpler_first_presence import (  # noqa: E402
-    CONDS,
+    TRIALS,
     GRAINS,
     NEAR_R_M,
-    PHASES,
+    SESSIONS,
     STEPS,
     WEIGHTINGS,
     build_animal_condition_table,
@@ -91,7 +91,7 @@ def discover_models(art_root: Path) -> list[str]:
             p.name
             for p in root.glob("paramscan_*")
             if p.is_dir()
-            and any((p / tag / "ladder_bout_features.csv").exists() for _, tag in PHASES)
+            and any((p / tag / "ladder_bout_features.csv").exists() for _, tag in SESSIONS)
         )
 
     models = _scan(art_root)
@@ -118,14 +118,14 @@ def load_animal_condition_all_phases(
     weighting: str = "frame_share",
 ) -> pd.DataFrame:
     parts: list[pd.DataFrame] = []
-    for phase, tag in PHASES:
+    for phase, tag in SESSIONS:
         bout_csv = art / tag / "ladder_bout_features.csv"
         if not bout_csv.exists():
             continue
         bouts = pd.read_csv(bout_csv)
         parts.append(
             build_animal_condition_table(
-                bouts, phase_layer=phase, r_m=r_m, grain=grain, weighting=weighting
+                bouts, session=phase, r_m=r_m, grain=grain, weighting=weighting
             )
         )
     if not parts:
@@ -148,7 +148,7 @@ def _stage_b_rows_from_animal_delta(
     animals = pd.DataFrame(
         {
             "sex": dtab["sex"].to_numpy(),
-            "tx": dtab["tx"].to_numpy(),
+            "condition": dtab["condition"].to_numpy(),
             value_col: pd.to_numeric(dtab[value_col], errors="coerce").to_numpy(dtype=np.float64),
         }
     )
@@ -170,8 +170,8 @@ def _stage_b_rows_from_animal_delta(
             "median_GHSD": r["median_GHSD"],
             "median_RBSD": r["median_RBSD"],
         }
-        for tx in ("noSD", "GHSD", "RBSD"):
-            key = f"mean_{tx}"
+        for condition in ("noSD", "GHSD", "RBSD"):
+            key = f"mean_{condition}"
             if key in r.index:
                 rec[key] = r[key]
         rows.append(rec)
@@ -226,18 +226,18 @@ def run_condition_da(
     da_delta_parts: list[pd.DataFrame] = []
     if ac.empty:
         return pd.DataFrame(), pd.DataFrame()
-    for phase in [p for p, _ in PHASES]:
-        sub = ac[ac["phase_layer"] == phase]
+    for phase in [p for p, _ in SESSIONS]:
+        sub = ac[ac["session"] == phase]
         if sub.empty:
             continue
         for step, left, right in STEPS:
             da_dtab = paired_da_deltas(
-                sub, step=step, left=left, right=right, pair_col="condition_layer"
+                sub, step=step, left=left, right=right, pair_col="trial"
             )
             if da_dtab.empty:
                 continue
             dtab = da_dtab.copy()
-            dtab["phase_layer"] = phase
+            dtab["session"] = phase
             dtab["grain"] = grain
             dtab["weighting"] = weighting
             dtab["axis"] = "condition_within_phase"
@@ -249,7 +249,7 @@ def run_condition_da(
             if da_tests.empty:
                 continue
             da_tests = apply_bh_grouped(da_tests, ("sex",))
-            da_tests.insert(0, "phase_layer", phase)
+            da_tests.insert(0, "session", phase)
             da_tests.insert(1, "step", step)
             da_tests.insert(2, "left", left)
             da_tests.insert(3, "right", right)
@@ -272,19 +272,19 @@ def run_phase_da(
     da_delta_parts: list[pd.DataFrame] = []
     if ac.empty:
         return pd.DataFrame(), pd.DataFrame()
-    for cond in CONDS:
-        sub = ac[ac["condition_layer"] == cond]
+    for cond in TRIALS:
+        sub = ac[ac["trial"] == cond]
         if sub.empty:
             continue
         for step, left, right in PHASE_STEPS:
             da_dtab = paired_da_deltas(
-                sub, step=step, left=left, right=right, pair_col="phase_layer"
+                sub, step=step, left=left, right=right, pair_col="session"
             )
             if da_dtab.empty:
                 continue
             dtab = da_dtab.copy()
-            dtab["condition_layer"] = cond
-            dtab["phase_step"] = step
+            dtab["trial"] = cond
+            dtab["session_step"] = step
             dtab["grain"] = grain
             dtab["weighting"] = weighting
             dtab["axis"] = "phase_within_condition"
@@ -296,8 +296,8 @@ def run_phase_da(
             if da_tests.empty:
                 continue
             da_tests = apply_bh_grouped(da_tests, ("sex",))
-            da_tests.insert(0, "condition_layer", cond)
-            da_tests.insert(1, "phase_step", step)
+            da_tests.insert(0, "trial", cond)
+            da_tests.insert(1, "session_step", step)
             da_tests.insert(2, "left", left)
             da_tests.insert(3, "right", right)
             da_tests.insert(4, "grain", grain)
@@ -600,7 +600,7 @@ def main(argv: list[str] | None = None) -> int:
                         sc_f_c,
                         sc_n_c,
                         value_cols=value_cols,
-                        hold_col="phase_layer",
+                        hold_col="session",
                         step_col="step",
                         axis="condition_within_phase",
                         weighting=weighting,
@@ -610,8 +610,8 @@ def main(argv: list[str] | None = None) -> int:
                         sc_f_p,
                         sc_n_p,
                         value_cols=value_cols,
-                        hold_col="condition_layer",
-                        step_col="phase_step",
+                        hold_col="trial",
+                        step_col="session_step",
                         axis="phase_within_condition",
                         weighting=weighting,
                         stage_b=stage_b,
@@ -632,11 +632,11 @@ def main(argv: list[str] | None = None) -> int:
                 if key_f in da_d_cache and key_n in da_d_cache:
                     da_f_c, da_f_p = da_d_cache[key_f]
                     da_n_c, da_n_p = da_d_cache[key_n]
-                    # phase_step column: DA phase deltas use step + phase_step
+                    # session_step column: DA phase deltas use step + session_step
                     for side, hold, step, axis, bkey, dkey in (
                         (
                             (da_f_c, da_n_c),
-                            "phase_layer",
+                            "session",
                             "step",
                             "condition_within_phase",
                             "gc_da_cond",
@@ -644,20 +644,20 @@ def main(argv: list[str] | None = None) -> int:
                         ),
                         (
                             (da_f_p, da_n_p),
-                            "condition_layer",
-                            "phase_step",
+                            "trial",
+                            "session_step",
                             "phase_within_condition",
                             "gc_da_phase",
                             "gc_da_phase_d",
                         ),
                     ):
                         left_d, right_d = side
-                        if "phase_step" not in left_d.columns and step == "phase_step":
+                        if "session_step" not in left_d.columns and step == "session_step":
                             left_d = left_d.copy()
                             right_d = right_d.copy()
                             if "step" in left_d.columns:
-                                left_d["phase_step"] = left_d["step"]
-                                right_d["phase_step"] = right_d["step"]
+                                left_d["session_step"] = left_d["step"]
+                                right_d["session_step"] = right_d["step"]
                         t, d = grain_contrast_da_deltas(
                             left_d,
                             right_d,
@@ -702,7 +702,7 @@ def main(argv: list[str] | None = None) -> int:
                 arm_pairwise_contrasts(
                     sc_cond_d,
                     value_col=col,
-                    group_cols=("model", "grain", "weighting", "phase_layer", "step"),
+                    group_cols=("model", "grain", "weighting", "session", "step"),
                     stage_b=stage_b,
                 )
             )
@@ -713,7 +713,7 @@ def main(argv: list[str] | None = None) -> int:
                 arm_pairwise_contrasts(
                     sc_phase_d,
                     value_col=col,
-                    group_cols=("model", "grain", "weighting", "condition_layer", "phase_step"),
+                    group_cols=("model", "grain", "weighting", "trial", "session_step"),
                     stage_b=stage_b,
                 )
             )
@@ -730,7 +730,7 @@ def main(argv: list[str] | None = None) -> int:
     cons_cond = consensus_animal_stage_b(
         sc_cond_d,
         value_cols=value_cols_c,
-        hold_col="phase_layer",
+        hold_col="session",
         step_col="step",
         axis="condition_within_phase",
         stage_b=stage_b,
@@ -738,8 +738,8 @@ def main(argv: list[str] | None = None) -> int:
     cons_phase = consensus_animal_stage_b(
         sc_phase_d,
         value_cols=value_cols_p,
-        hold_col="condition_layer",
-        step_col="phase_step",
+        hold_col="trial",
+        step_col="session_step",
         axis="phase_within_condition",
         stage_b=stage_b,
     ) if value_cols_p else pd.DataFrame()
@@ -814,12 +814,12 @@ def main(argv: list[str] | None = None) -> int:
                 legacy.unlink()
 
     # Agreement: include weighting in DA group if present
-    agree_da_c = agreement_da(da_cond, hold_col="phase_layer", step_col="step")
-    agree_da_p = agreement_da(da_phase, hold_col="condition_layer", step_col="phase_step")
-    agree_sc_c = agreement_scalar(sc_cond, hold_col="phase_layer", step_col="step")
-    agree_sc_p = agreement_scalar(sc_phase, hold_col="condition_layer", step_col="phase_step")
-    agree_sh_c = agreement_scalar(sh_cond, hold_col="phase_layer", step_col="step")
-    agree_sh_p = agreement_scalar(sh_phase, hold_col="condition_layer", step_col="phase_step")
+    agree_da_c = agreement_da(da_cond, hold_col="session", step_col="step")
+    agree_da_p = agreement_da(da_phase, hold_col="trial", step_col="session_step")
+    agree_sc_c = agreement_scalar(sc_cond, hold_col="session", step_col="step")
+    agree_sc_p = agreement_scalar(sc_phase, hold_col="trial", step_col="session_step")
+    agree_sh_c = agreement_scalar(sh_cond, hold_col="session", step_col="step")
+    agree_sh_p = agreement_scalar(sh_phase, hold_col="trial", step_col="session_step")
     for df, path in (
         (agree_da_c, paths["da_condition_agree"]),
         (agree_da_p, paths["da_phase_agree"]),
@@ -842,7 +842,7 @@ def main(argv: list[str] | None = None) -> int:
         "r_m": float(args.r_m),
         "n_perm": int(args.n_perm),
         "condition_steps": list(CONDITION_STEPS),
-        "phase_steps": [s for s, _a, _b in PHASE_STEPS],
+        "session_steps": [s for s, _a, _b in PHASE_STEPS],
         "composition_metrics": list(COMPOSITION_METRICS),
         "engagement_metrics": list(ENGAGEMENT_METRICS),
         "bc_metric": BC_METRIC,

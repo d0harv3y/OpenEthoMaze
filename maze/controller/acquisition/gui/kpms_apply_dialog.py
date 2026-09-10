@@ -168,7 +168,7 @@ if HAS_KPMS_APPLY_DIALOG:
 
         incl_hab = QCheckBox("Include habituation trials")
         excl_exp = QCheckBox("Exclude experimental trials")
-        enrich_cb = QCheckBox("Enrich blank sex/tx from treatment_labels.csv")
+        enrich_cb = QCheckBox("Enrich blank sex/tx from condition_labels.csv")
         enrich_cb.setChecked(True)
         reindex_cb = QCheckBox("Reindex syllables before load")
         reindex_cb.setChecked(True)
@@ -232,7 +232,7 @@ if HAS_KPMS_APPLY_DIALOG:
                 trials=_parse_optional_filter(trial_edit.text()),
                 include_habituation=incl_hab.isChecked(),
                 exclude_experimental=excl_exp.isChecked(),
-                enrich_from_treatment_labels=enrich_cb.isChecked(),
+                enrich_from_condition_labels=enrich_cb.isChecked(),
                 num_iters=int(num_iters.value()),
                 reindex_syllables_before_load=reindex_cb.isChecked(),
                 overwrite_results=overwrite_cb.isChecked(),

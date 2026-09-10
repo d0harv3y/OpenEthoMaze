@@ -24,7 +24,7 @@ def _streams(
     rows: Sequence[Mapping[str, object]],
     *,
     animal_id: str,
-    condition_layer: str,
+    trial: str,
     field: str,
     edges: np.ndarray,
     symbol_field: str = "raw_syllable_id",
@@ -34,7 +34,7 @@ def _streams(
     for row in rows:
         if str(row["animal_id"]) != animal_id:
             continue
-        if str(row.get("condition_layer", "")) != condition_layer:
+        if str(row.get("trial", "")) != trial:
             continue
         val = float(row[field])
         if not np.isfinite(val):
@@ -59,7 +59,7 @@ def compute_ladder_mi(
     symbol_field: str = "raw_syllable_id",
     order_field: str = "bout_index",
 ) -> tuple[list[dict[str, object]], list[dict[str, object]], dict[str, object]]:
-    """Excess MI for hist A/B under no_obj & identical, and fam/nvl under novel_obj.
+    """Excess MI for hist A/B under no_obj & identical, and fam/nvl under nvl_obj.
 
     Also emits per-animal ladder rows with fam-side / nvl-side remapping from the
     novel session's ``nvl_nearest_hist_locus`` tag.
@@ -79,10 +79,10 @@ def compute_ladder_mi(
     for r in rows:
         meta.setdefault(str(r["animal_id"]), r)
 
-    # animal → nvl-nearest hist locus (from novel_obj rows)
+    # animal → nvl-nearest hist locus (from nvl_obj rows)
     nvl_side: dict[str, str] = {}
     for r in rows:
-        if str(r.get("condition_layer", "")) != "novel_obj":
+        if str(r.get("trial", "")) != "nvl_obj":
             continue
         tag = str(r.get("nvl_nearest_hist_locus", "") or "")
         if tag in {"a", "b"}:
@@ -91,10 +91,10 @@ def compute_ladder_mi(
     jobs: list[tuple[str, str, str, str]] = [
         ("no_obj", STIM_HIST_A, "bout_mean_dist_locus_a_m", "hist_a"),
         ("no_obj", STIM_HIST_B, "bout_mean_dist_locus_b_m", "hist_b"),
-        ("identical_obj", STIM_HIST_A, "bout_mean_dist_locus_a_m", "hist_a"),
-        ("identical_obj", STIM_HIST_B, "bout_mean_dist_locus_b_m", "hist_b"),
-        ("novel_obj", STIM_FAM, "bout_mean_dist_fam_m", "fam"),
-        ("novel_obj", STIM_NVL, "bout_mean_dist_nvl_m", "nvl"),
+        ("id_obj", STIM_HIST_A, "bout_mean_dist_locus_a_m", "hist_a"),
+        ("id_obj", STIM_HIST_B, "bout_mean_dist_locus_b_m", "hist_b"),
+        ("nvl_obj", STIM_FAM, "bout_mean_dist_fam_m", "fam"),
+        ("nvl_obj", STIM_NVL, "bout_mean_dist_nvl_m", "nvl"),
     ]
 
     rng = np.random.default_rng(seed)
@@ -105,7 +105,7 @@ def compute_ladder_mi(
             streams = _streams(
                 rows,
                 animal_id=aid,
-                condition_layer=cond,
+                trial=cond,
                 field=field,
                 edges=edges,
                 symbol_field=symbol_field,
@@ -121,10 +121,10 @@ def compute_ladder_mi(
                 {
                     "animal_id": aid,
                     "sex": m["sex"],
-                    "tx": m["tx"],
+                    "condition": m["condition"],
                     "cohort": m["cohort"],
-                    "phase_layer": m["phase_layer"],
-                    "condition_layer": cond,
+                    "session": m["session"],
+                    "trial": cond,
                     "stim_var": stim_var,
                     "channel": channel,
                     "n_bouts": n_bouts,
@@ -140,7 +140,7 @@ def compute_ladder_mi(
 
     by: dict[tuple[str, str, str], Mapping[str, object]] = {}
     for row in mi_rows:
-        by[(str(row["animal_id"]), str(row["condition_layer"]), str(row["channel"]))] = row
+        by[(str(row["animal_id"]), str(row["trial"]), str(row["channel"]))] = row
 
     ladder_rows: list[dict[str, object]] = []
     for aid in animals:
@@ -162,32 +162,32 @@ def compute_ladder_mi(
             {
                 "animal_id": aid,
                 "sex": m["sex"],
-                "tx": m["tx"],
+                "condition": m["condition"],
                 "cohort": m["cohort"],
-                "phase_layer": m["phase_layer"],
+                "session": m["session"],
                 "nvl_nearest_hist_locus": side_nvl,
                 "fam_nearest_hist_locus": side_fam,
                 # Panel A (fam ladder)
                 "excess_no_obj_fam_side": _ex("no_obj", fam_hist),
-                "excess_identical_fam_side": _ex("identical_obj", fam_hist),
-                "excess_fam_obj": _ex("novel_obj", "fam"),
+                "excess_identical_fam_side": _ex("id_obj", fam_hist),
+                "excess_fam_obj": _ex("nvl_obj", "fam"),
                 # Panel B (nvl ladder)
                 "excess_no_obj_nvl_side": _ex("no_obj", nvl_hist),
-                "excess_identical_nvl_side": _ex("identical_obj", nvl_hist),
-                "excess_nvl_obj": _ex("novel_obj", "nvl"),
+                "excess_identical_nvl_side": _ex("id_obj", nvl_hist),
+                "excess_nvl_obj": _ex("nvl_obj", "nvl"),
             }
         )
 
     return mi_rows, ladder_rows, dict(bin_edges_payload)
 
 
-_TX_ORDER = ("noSD", "GHSD", "RBSD")
+_CONDITION_ORDER = ("noSD", "GHSD", "RBSD")
 _SEX_ORDER = ("F", "M")
 _LADDER_STEPS: tuple[tuple[str, str, str, str], ...] = (
-    ("fam", "no_obj->identical", "excess_no_obj_fam_side", "excess_identical_fam_side"),
+    ("fam", "no_obj->id_obj", "excess_no_obj_fam_side", "excess_identical_fam_side"),
     ("fam", "identical->fam_obj", "excess_identical_fam_side", "excess_fam_obj"),
     ("fam", "no_obj->fam_obj", "excess_no_obj_fam_side", "excess_fam_obj"),
-    ("nvl", "no_obj->identical", "excess_no_obj_nvl_side", "excess_identical_nvl_side"),
+    ("nvl", "no_obj->id_obj", "excess_no_obj_nvl_side", "excess_identical_nvl_side"),
     ("nvl", "identical->nvl_obj", "excess_identical_nvl_side", "excess_nvl_obj"),
     ("nvl", "no_obj->nvl_obj", "excess_no_obj_nvl_side", "excess_nvl_obj"),
 )
@@ -333,25 +333,25 @@ def ladder_within_sex_tx_kruskal_long(
             for r in ladder_rows:
                 if str(r.get("sex", "")) != sex:
                     continue
-                tx = str(r.get("tx", ""))
-                if tx not in _TX_ORDER:
+                condition = str(r.get("condition", ""))
+                if condition not in _CONDITION_ORDER:
                     continue
                 a = float(r[left_k])
                 b = float(r[right_k])
                 if np.isfinite(a) and np.isfinite(b):
-                    by_tx[tx].append(b - a)
-            n_by_tx = {t: len(by_tx[t]) for t in _TX_ORDER}
+                    by_tx[condition].append(b - a)
+            n_by_tx = {t: len(by_tx[t]) for t in _CONDITION_ORDER}
             med_by_tx = {
-                t: (float(np.median(by_tx[t])) if by_tx[t] else float("nan")) for t in _TX_ORDER
+                t: (float(np.median(by_tx[t])) if by_tx[t] else float("nan")) for t in _CONDITION_ORDER
             }
-            samples = [by_tx[t] for t in _TX_ORDER]
+            samples = [by_tx[t] for t in _CONDITION_ORDER]
             if any(len(s) < 2 for s in samples):
                 stat = float("nan")
                 p = float("nan")
             else:
                 stat_v, p_v = stats.kruskal(*samples)
                 stat, p = float(stat_v), float(p_v)
-            all_d = np.concatenate([np.asarray(by_tx[t], dtype=np.float64) for t in _TX_ORDER if by_tx[t]])
+            all_d = np.concatenate([np.asarray(by_tx[t], dtype=np.float64) for t in _CONDITION_ORDER if by_tx[t]])
             out.append(
                 {
                     "panel": panel,

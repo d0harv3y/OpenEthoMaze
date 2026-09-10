@@ -8,7 +8,7 @@ not a question — they occur always. The join is:
 - unweighted bout-mean P(move|bout) vs session P(move) (duration structure)
 - median bout duration among majority-move vs majority-still bouts
 
-Grain: animal × phase × novel_obj (locked kpMS model).
+Grain: animal × phase × nvl_obj (locked kpMS model).
 """
 
 from __future__ import annotations
@@ -148,17 +148,17 @@ def occupancy_from_frame_counts(counts: pd.DataFrame) -> pd.DataFrame:
     """Session×syllable occupancy from summed move/still frames."""
     if counts.empty:
         return pd.DataFrame()
-    keys = ["animal_id", "raw_session", "phase_layer"]
+    keys = ["animal_id", "raw_session", "session"]
     if "model" in counts.columns:
         keys = ["model", *keys]
-    if "condition_layer" in counts.columns:
-        keys = [*keys, "condition_layer"]
+    if "trial" in counts.columns:
+        keys = [*keys, "trial"]
     df = counts.copy()
     df["animal_id"] = df["animal_id"].astype(str)
     sess = df.groupby(keys, sort=False).agg(
         n_move_session=("n_move_frames", "sum"),
         n_still_session=("n_still_frames", "sum"),
-        tx=("tx", "first"),
+        condition=("condition", "first"),
         sex=("sex", "first"),
     )
     labeled = sess["n_move_session"] + sess["n_still_session"]
@@ -167,7 +167,7 @@ def occupancy_from_frame_counts(counts: pd.DataFrame) -> pd.DataFrame:
     by = df.groupby(syll_keys, sort=False).agg(
         n_move_frames=("n_move_frames", "sum"),
         n_still_frames=("n_still_frames", "sum"),
-        tx=("tx", "first"),
+        condition=("condition", "first"),
         sex=("sex", "first"),
     )
     out = by.reset_index().merge(
@@ -324,7 +324,7 @@ def occupancy_from_bouts(bouts: pd.DataFrame) -> pd.DataFrame:
     df = bouts.copy()
     df["animal_id"] = df["animal_id"].astype(str)
     parts: list[pd.DataFrame] = []
-    keys = ["animal_id", "raw_session", "phase_layer"]
+    keys = ["animal_id", "raw_session", "session"]
     for key, g in df.groupby(keys, sort=False):
         occ = occupancy_by_syllable(g)
         if occ.empty:
@@ -332,12 +332,12 @@ def occupancy_from_bouts(bouts: pd.DataFrame) -> pd.DataFrame:
         aid, sess, phase = key
         occ.insert(0, "animal_id", str(aid))
         occ.insert(1, "raw_session", sess)
-        occ.insert(2, "phase_layer", phase)
-        occ["tx"] = g["tx"].iloc[0]
+        occ.insert(2, "session", phase)
+        occ["condition"] = g["condition"].iloc[0]
         occ["sex"] = g["sex"].iloc[0]
         occ["model"] = g["model"].iloc[0]
-        if "condition_layer" in g.columns:
-            occ["condition_layer"] = g["condition_layer"].iloc[0]
+        if "trial" in g.columns:
+            occ["trial"] = g["trial"].iloc[0]
         parts.append(occ)
     if not parts:
         return pd.DataFrame()

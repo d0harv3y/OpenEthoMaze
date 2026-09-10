@@ -1,6 +1,6 @@
 """Q1: within-sex Kruskal on novelty proximity (Δ_prox) for one locked cell.
 
-Grain: animal × NOR_TX × novel_obj; frame-weighted bout-mean distances.
+Grain: animal × NOR_TX × nvl_obj; frame-weighted bout-mean distances.
 Not a composition-ladder operation (no COUNT / UNCERTAINTY / INFO).
 """
 
@@ -15,13 +15,13 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-TX_ORDER = ("noSD", "GHSD", "RBSD")
+CONDITION_ORDER = ("noSD", "GHSD", "RBSD")
 SEX_ORDER = ("F", "M")
-TX_COLORS = {"noSD": "#4c78a8", "GHSD": "#f58518", "RBSD": "#54a24b"}
+CONDITION_COLORS = {"noSD": "#4c78a8", "GHSD": "#f58518", "RBSD": "#54a24b"}
 
 LOCKED = {
-    "phase_layer": "NOR_TX",
-    "condition_layer": "novel_obj",
+    "session": "NOR_TX",
+    "trial": "nvl_obj",
     "model": "paramscan_s1-1e8_s2-1e5_ss-50",
     "cleanup": "raw",
     "question": "q1_delta_prox_tx",
@@ -40,16 +40,16 @@ def weighted_mean(values: np.ndarray, weights: np.ndarray) -> float:
 def animal_delta_prox(
     bouts: pd.DataFrame,
     *,
-    phase_layer: str | None = None,
-    condition_layer: str | None = None,
+    session: str | None = None,
+    trial: str | None = None,
 ) -> pd.DataFrame:
     """One row per animal: frame-weighted d_fam, d_nvl, Δ_prox, pref."""
     need = (
         "animal_id",
         "sex",
-        "tx",
-        "phase_layer",
-        "condition_layer",
+        "condition",
+        "session",
+        "trial",
         "bout_frames",
         "bout_mean_dist_fam_m",
         "bout_mean_dist_nvl_m",
@@ -58,9 +58,9 @@ def animal_delta_prox(
     if missing:
         raise ValueError(f"bout table missing columns: {missing}")
 
-    phase = phase_layer or str(LOCKED["phase_layer"])
-    cond = condition_layer or str(LOCKED["condition_layer"])
-    sub = bouts[(bouts["phase_layer"] == phase) & (bouts["condition_layer"] == cond)].copy()
+    phase = session or str(LOCKED["session"])
+    cond = trial or str(LOCKED["trial"])
+    sub = bouts[(bouts["session"] == phase) & (bouts["trial"] == cond)].copy()
     rows: list[dict[str, object]] = []
     for aid, g in sub.groupby("animal_id", sort=True):
         w = g["bout_frames"].to_numpy(dtype=np.float64)
@@ -73,13 +73,13 @@ def animal_delta_prox(
             float(np.sum((d_nvl[ok] < d_fam[ok]) * w[ok]) / np.sum(w[ok])) if np.any(ok) else float("nan")
         )
         sex = str(g["sex"].iloc[0])
-        tx = str(g["tx"].iloc[0])
+        condition = str(g["condition"].iloc[0])
         rows.append(
             {
                 "animal_id": str(aid),
                 "sex": sex,
-                "tx": tx,
-                "phase_layer": phase,
+                "condition": condition,
+                "session": phase,
                 "n_bouts": int(len(g)),
                 "n_frames": int(np.nansum(w)),
                 "d_fam_m": d_fam_w,
@@ -95,11 +95,11 @@ def _tx_samples_within_sex(
     animals: pd.DataFrame, *, metric: str, sex: str
 ) -> dict[str, np.ndarray]:
     by_tx: dict[str, np.ndarray] = {}
-    for tx in TX_ORDER:
+    for condition in CONDITION_ORDER:
         vals = animals.loc[
-            (animals["sex"] == sex) & (animals["tx"] == tx), metric
+            (animals["sex"] == sex) & (animals["condition"] == condition), metric
         ].to_numpy(dtype=np.float64)
-        by_tx[tx] = vals[np.isfinite(vals)]
+        by_tx[condition] = vals[np.isfinite(vals)]
     return by_tx
 
 
@@ -108,7 +108,7 @@ def kruskal_within_sex(animals: pd.DataFrame, *, metric: str = "delta_prox") -> 
     out: list[dict[str, object]] = []
     for sex in SEX_ORDER:
         by_tx = _tx_samples_within_sex(animals, metric=metric, sex=sex)
-        samples = [by_tx[t] for t in TX_ORDER]
+        samples = [by_tx[t] for t in CONDITION_ORDER]
         n_ok = all(s.size >= 2 for s in samples)
         if n_ok:
             stat, p = stats.kruskal(*samples)
@@ -123,11 +123,11 @@ def kruskal_within_sex(animals: pd.DataFrame, *, metric: str = "delta_prox") -> 
             "p": p_f,
             "n": int(sum(s.size for s in samples)),
         }
-        for tx in TX_ORDER:
-            v = by_tx[tx]
-            row[f"n_{tx}"] = int(v.size)
-            row[f"median_{tx}"] = float(np.median(v)) if v.size else float("nan")
-            row[f"mean_{tx}"] = float(np.mean(v)) if v.size else float("nan")
+        for condition in CONDITION_ORDER:
+            v = by_tx[condition]
+            row[f"n_{condition}"] = int(v.size)
+            row[f"median_{condition}"] = float(np.median(v)) if v.size else float("nan")
+            row[f"mean_{condition}"] = float(np.mean(v)) if v.size else float("nan")
         out.append(row)
     return pd.DataFrame(out)
 
@@ -147,7 +147,7 @@ def anova_within_sex(animals: pd.DataFrame, *, metric: str = "delta_prox") -> pd
     out: list[dict[str, object]] = []
     for sex in SEX_ORDER:
         by_tx = _tx_samples_within_sex(animals, metric=metric, sex=sex)
-        samples = [by_tx[t] for t in TX_ORDER]
+        samples = [by_tx[t] for t in CONDITION_ORDER]
         n_ok = all(s.size >= 2 for s in samples)
         if n_ok:
             vars_ = [float(np.var(s, ddof=1)) for s in samples]
@@ -169,11 +169,11 @@ def anova_within_sex(animals: pd.DataFrame, *, metric: str = "delta_prox") -> pd
             "p": p_f,
             "n": int(sum(s.size for s in samples)),
         }
-        for tx in TX_ORDER:
-            v = by_tx[tx]
-            row[f"n_{tx}"] = int(v.size)
-            row[f"median_{tx}"] = float(np.median(v)) if v.size else float("nan")
-            row[f"mean_{tx}"] = float(np.mean(v)) if v.size else float("nan")
+        for condition in CONDITION_ORDER:
+            v = by_tx[condition]
+            row[f"n_{condition}"] = int(v.size)
+            row[f"median_{condition}"] = float(np.median(v)) if v.size else float("nan")
+            row[f"mean_{condition}"] = float(np.mean(v)) if v.size else float("nan")
         out.append(row)
     return pd.DataFrame(out)
 
@@ -183,8 +183,8 @@ def judge_q1(tests: pd.DataFrame) -> dict[str, object]:
     hits: list[str] = []
     for _, r in tests.iterrows():
         p = float(r["p"]) if pd.notna(r["p"]) else float("nan")
-        ns = [int(r[f"n_{t}"]) for t in TX_ORDER]
-        meds = [float(r[f"median_{t}"]) for t in TX_ORDER]
+        ns = [int(r[f"n_{t}"]) for t in CONDITION_ORDER]
+        meds = [float(r[f"median_{t}"]) for t in CONDITION_ORDER]
         readable = all(n >= 2 for n in ns) and all(np.isfinite(meds))
         if readable and np.isfinite(p) and p < 0.05:
             hits.append(str(r["sex"]))
@@ -213,15 +213,15 @@ def fig_delta_prox(animals: pd.DataFrame, tests: pd.DataFrame, out: Path) -> Non
     p_map = {str(r["sex"]): r["p"] for _, r in tests.iterrows()}
     for ax, sex in zip(axes, SEX_ORDER):
         sub = animals[animals["sex"] == sex]
-        for i, tx in enumerate(TX_ORDER):
-            y = sub.loc[sub["tx"] == tx, "delta_prox"].to_numpy(dtype=np.float64)
+        for i, tx in enumerate(CONDITION_ORDER):
+            y = sub.loc[sub["condition"] == tx, "delta_prox"].to_numpy(dtype=np.float64)
             y = y[np.isfinite(y)]
             jitter = (np.arange(y.size) - (y.size - 1) / 2) * 0.02
             ax.scatter(
                 np.full(y.size, i) + jitter,
                 y,
                 s=22,
-                color=TX_COLORS[tx],
+                color=CONDITION_COLORS[tx],
                 edgecolors="white",
                 linewidths=0.4,
                 zorder=2,
@@ -229,19 +229,19 @@ def fig_delta_prox(animals: pd.DataFrame, tests: pd.DataFrame, out: Path) -> Non
             if y.size:
                 ax.plot([i - 0.22, i + 0.22], [np.median(y)] * 2, color="#222", lw=1.8, zorder=3)
         ax.axhline(0.0, color="#bbbbbb", lw=0.7, ls="--", zorder=0)
-        ax.set_xticks(range(len(TX_ORDER)))
-        ax.set_xticklabels(list(TX_ORDER))
+        ax.set_xticks(range(len(CONDITION_ORDER)))
+        ax.set_xticklabels(list(CONDITION_ORDER))
         p = p_map.get(sex, float("nan"))
         ptxt = "n/a" if p != p else f"p={p:.3g}"
         ax.set_title(f"{sex}  Kruskal {ptxt}")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
     axes[0].set_ylabel("Δ_prox (m)  d_fam − d_nvl")
-    fig.suptitle("Q1 novelty proximity · NOR_TX · novel_obj · raw · pilot model", fontsize=10)
+    fig.suptitle("Q1 novelty proximity · NOR_TX · nvl_obj · raw · pilot model", fontsize=10)
     fig.text(
         0.01,
         0.01,
-        "Grain: animal × novel_obj window · frame-weighted bout-mean spot distances · >0 closer to novel",
+        "Grain: animal × nvl_obj window · frame-weighted bout-mean spot distances · >0 closer to novel",
         fontsize=7,
         color="#555",
     )
@@ -290,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--out-dir",
         type=Path,
-        default=root / "_nor_object_mi" / "simpler_first_NOR_TX_novel_obj",
+        default=root / "_nor_object_mi" / "simpler_first_NOR_TX_nvl_obj",
     )
     args = ap.parse_args(argv)
     summary = run_q1(args.bout_csv, args.out_dir)

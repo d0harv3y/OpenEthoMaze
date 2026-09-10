@@ -50,7 +50,7 @@ def make_figure(rows: list[dict[str, str]], *, out_stem: Path, dpi: int = 300) -
 
     for ax, phase in zip(axes, phases):
         sub = sorted(
-            [r for r in ok if r.get("phase_layer") == phase],
+            [r for r in ok if r.get("session") == phase],
             key=lambda r: _f(r, "median_delta") or -1e9,
         )
         if not sub:

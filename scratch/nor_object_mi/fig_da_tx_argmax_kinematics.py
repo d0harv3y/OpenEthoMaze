@@ -38,8 +38,8 @@ DEFAULT_SIG = Path(
     r"\_nor_object_mi\simpler_first_syllable_signatures"
 )
 STEPS = (
-    ("no_obj->identical", "presence"),
-    ("identical->novel", "novelty"),
+    ("no_obj->id_obj", "presence"),
+    ("id_obj->nvl_obj", "novelty"),
 )
 WINNER_CSV = "tx_pooled_argmax_syllable.csv"
 
@@ -51,7 +51,7 @@ def _as_bool(s: pd.Series) -> pd.Series:
 
 
 def tx_argmax_table(tests: pd.DataFrame, proto: pd.DataFrame) -> pd.DataFrame:
-    t = tests[tests["phase_layer"] == "NOR_TX"].copy()
+    t = tests[tests["session"] == "NOR_TX"].copy()
     t["median_delta_p"] = pd.to_numeric(t["median_delta_p"], errors="coerce")
     t["hit"] = _as_bool(t["hit_fdr05"])
     rows: list[dict[str, object]] = []
@@ -65,7 +65,7 @@ def tx_argmax_table(tests: pd.DataFrame, proto: pd.DataFrame) -> pd.DataFrame:
         rows.append(
             {
                 "model": str(model),
-                "phase_layer": "NOR_TX",
+                "session": "NOR_TX",
                 "step": str(step),
                 "raw_syllable_id": int(a["raw_syllable_id"]),
                 "median_delta_p": d1,
@@ -95,7 +95,7 @@ def tx_argmax_table(tests: pd.DataFrame, proto: pd.DataFrame) -> pd.DataFrame:
 def fig_argmax_kinematics(winners: pd.DataFrame, proto: pd.DataFrame, out: Path, *, dest: str) -> None:
     apply_style(dest=dest)
     # One row per model (presence and novelty share the id)
-    w = winners[winners["step"] == "identical->novel"].copy()
+    w = winners[winners["step"] == "id_obj->nvl_obj"].copy()
     fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_DOUBLE, constrained_layout=True)
     axes[0].scatter(
         proto["syllable_mean_duration_s"],

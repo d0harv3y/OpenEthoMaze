@@ -54,7 +54,7 @@ def _manifest(
     *,
     trial_key: str = "3245_S04_T06",
     session: str = "S04",
-    tx: str = "veh",
+    condition: str = "veh",
     sex: str = "M",
     strain: str = "C57",
 ) -> TrialManifest:
@@ -66,15 +66,16 @@ def _manifest(
         kpms_recording_key=trial_key,
         sex=sex,
         strain=strain,
-        tx=tx,
+        condition=condition,
     )
 
 
-def test_bout_in_phase_run_and_iti() -> None:
+def test_bout_in_phase_run_and_wait() -> None:
     assert bout_in_phase("run", "run") is True
-    assert bout_in_phase("iti", "run") is False
-    assert bout_in_phase("iti", "iti") is True
-    assert bout_in_phase("run", "iti") is False
+    assert bout_in_phase("wait", "run") is False
+    assert bout_in_phase("wait", "wait") is True
+    assert bout_in_phase("iti", "wait") is True  # fine state still non-run
+    assert bout_in_phase("run", "wait") is False
     assert bout_in_phase("", "run") is True
 
 
@@ -100,7 +101,7 @@ def test_aggregate_occupancy_pooled_and_by_session() -> None:
         "3246_S05_T06": _manifest(
             trial_key="3246_S05_T06",
             session="S05",
-            tx="veh",
+            condition="veh",
             sex="M",
             strain="C57",
         ),

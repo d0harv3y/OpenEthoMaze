@@ -25,9 +25,9 @@ def test_composition_ignores_other_conditions() -> None:
             {
                 "animal_id": "a",
                 "sex": "F",
-                "tx": "noSD",
-                "phase_layer": "NOR_TX",
-                "condition_layer": "novel_obj",
+                "condition": "noSD",
+                "session": "NOR_TX",
+                "trial": "nvl_obj",
                 "raw_syllable_id": sid,
                 "bout_frames": frames,
             }
@@ -36,9 +36,9 @@ def test_composition_ignores_other_conditions() -> None:
         {
             "animal_id": "a",
             "sex": "F",
-            "tx": "noSD",
-            "phase_layer": "NOR_TX",
-            "condition_layer": "identical_obj",
+            "condition": "noSD",
+            "session": "NOR_TX",
+            "trial": "id_obj",
             "raw_syllable_id": 99,
             "bout_frames": 1000,
         }

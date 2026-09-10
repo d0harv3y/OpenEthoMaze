@@ -34,39 +34,39 @@ def _bouts_tx_sex_shift() -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     for i in range(9):
         sex = "F"
-        tx = ("noSD", "GHSD", "RBSD")[i % 3]
+        condition = ("noSD", "GHSD", "RBSD")[i % 3]
         aid = f"f{i}"
-        if tx == "noSD":
+        if condition == "noSD":
             left, right = {1: 90, 2: 10}, {1: 10, 2: 90}
         else:
             left = right = {1: 50, 2: 50}
-        for cond, frames in (("no_obj", left), ("identical_obj", right), ("novel_obj", right)):
+        for cond, frames in (("no_obj", left), ("id_obj", right), ("nvl_obj", right)):
             for sid, fr in frames.items():
                 rows.append(
                     {
                         "animal_id": aid,
                         "sex": sex,
-                        "tx": tx,
-                        "phase_layer": "NOR_TX",
-                        "condition_layer": cond,
+                        "condition": condition,
+                        "session": "NOR_TX",
+                        "trial": cond,
                         "raw_syllable_id": sid,
                         "bout_frames": fr,
                         "bout_mean_dist_any_m": 0.20,
                     }
                 )
     for i in range(9):
-        tx = ("noSD", "GHSD", "RBSD")[i % 3]
+        condition = ("noSD", "GHSD", "RBSD")[i % 3]
         aid = f"m{i}"
         frames = {1: 50, 2: 50}
-        for cond in ("no_obj", "identical_obj", "novel_obj"):
+        for cond in ("no_obj", "id_obj", "nvl_obj"):
             for sid, fr in frames.items():
                 rows.append(
                     {
                         "animal_id": aid,
                         "sex": "M",
-                        "tx": tx,
-                        "phase_layer": "NOR_TX",
-                        "condition_layer": cond,
+                        "condition": condition,
+                        "session": "NOR_TX",
+                        "trial": cond,
                         "raw_syllable_id": sid,
                         "bout_frames": fr,
                         "bout_mean_dist_any_m": 0.20,
@@ -78,13 +78,13 @@ def _bouts_tx_sex_shift() -> pd.DataFrame:
 def test_da_tx_kruskal_detects_sex_specific_tx_effect() -> None:
     from nor_object_mi.simpler_first_da import paired_da_deltas
 
-    ac = build_animal_condition_table(_bouts_tx_sex_shift(), phase_layer="NOR_TX")
+    ac = build_animal_condition_table(_bouts_tx_sex_shift(), session="NOR_TX")
     dtab = paired_da_deltas(
         ac,
-        step="no_obj->identical",
+        step="no_obj->id_obj",
         left="no_obj",
-        right="identical_obj",
-        pair_col="condition_layer",
+        right="id_obj",
+        pair_col="trial",
     )
     tests = da_tx_kruskal_from_deltas(dtab, question="Q1")
     # apply BH within sex
@@ -108,13 +108,13 @@ def test_da_tx_anova_detects_sex_specific_tx_effect() -> None:
     from nor_object_mi.simpler_first_da import apply_bh_grouped, paired_da_deltas
     from nor_object_mi.simpler_first_tx_on_paired_delta import da_tx_stage_b_from_deltas
 
-    ac = build_animal_condition_table(_bouts_tx_sex_shift(), phase_layer="NOR_TX")
+    ac = build_animal_condition_table(_bouts_tx_sex_shift(), session="NOR_TX")
     dtab = paired_da_deltas(
         ac,
-        step="no_obj->identical",
+        step="no_obj->id_obj",
         left="no_obj",
-        right="identical_obj",
-        pair_col="condition_layer",
+        right="id_obj",
+        pair_col="trial",
     )
     rng = np.random.default_rng(0)
     dtab = dtab.copy()
@@ -136,7 +136,7 @@ def test_da_tx_anova_detects_sex_specific_tx_effect() -> None:
 def test_near_grain_empty_when_all_far() -> None:
     bouts = _bouts_tx_sex_shift()
     ac_near = build_animal_condition_table(
-        bouts, phase_layer="NOR_TX", grain="near_0p10"
+        bouts, session="NOR_TX", grain="near_0p10"
     )
     assert (ac_near["n_near_frames"] == 0).all()
     assert ac_near["shannon_bits"].isna().all()
@@ -147,27 +147,27 @@ def test_near_grain_uses_near_bouts_only() -> None:
     rows = []
     for cond, d_any, frames_by_syll in (
         ("no_obj", 0.05, {1: 100}),
-        ("identical_obj", 0.05, {2: 100}),
-        ("novel_obj", 0.20, {1: 100}),  # far — excluded from near composition
+        ("id_obj", 0.05, {2: 100}),
+        ("nvl_obj", 0.20, {1: 100}),  # far — excluded from near composition
     ):
         for sid, fr in frames_by_syll.items():
             rows.append(
                 {
                     "animal_id": "a1",
                     "sex": "F",
-                    "tx": "noSD",
-                    "phase_layer": "NOR_TX",
-                    "condition_layer": cond,
+                    "condition": "noSD",
+                    "session": "NOR_TX",
+                    "trial": cond,
                     "raw_syllable_id": sid,
                     "bout_frames": fr,
                     "bout_mean_dist_any_m": d_any,
                 }
             )
     ac = build_animal_condition_table(
-        pd.DataFrame(rows), phase_layer="NOR_TX", grain="near_0p10"
+        pd.DataFrame(rows), session="NOR_TX", grain="near_0p10"
     )
-    no_obj = ac[ac["condition_layer"] == "no_obj"].iloc[0]
-    novel = ac[ac["condition_layer"] == "novel_obj"].iloc[0]
+    no_obj = ac[ac["trial"] == "no_obj"].iloc[0]
+    novel = ac[ac["trial"] == "nvl_obj"].iloc[0]
     counts = {int(k): float(v) for k, v in dict(no_obj["counts"]).items()}
     assert counts == {1: 100.0}
     assert not novel["counts"]
@@ -180,22 +180,22 @@ def test_shannon_bh_family_size_three_within_phase() -> None:
 
     rows = []
     for step, p in (
-        ("no_obj->identical", 0.01),
-        ("identical->novel", 0.80),
-        ("no_obj->novel", 0.90),
+        ("no_obj->id_obj", 0.01),
+        ("id_obj->nvl_obj", 0.80),
+        ("no_obj->nvl_obj", 0.90),
     ):
         rows.append(
             {
-                "phase_layer": "NOR_TX",
+                "session": "NOR_TX",
                 "step": step,
                 "sex": "F",
                 "p": p,
             }
         )
-    out = apply_bh_grouped(pd.DataFrame(rows), ("sex", "phase_layer"))
-    q_hit = float(out.loc[out["step"] == "no_obj->identical", "q_bh"].iloc[0])
+    out = apply_bh_grouped(pd.DataFrame(rows), ("sex", "session"))
+    q_hit = float(out.loc[out["step"] == "no_obj->id_obj", "q_bh"].iloc[0])
     assert abs(q_hit - 0.03) < 1e-12  # 0.01 * 3 / 1
-    assert bool(out.loc[out["step"] == "no_obj->identical", "hit_fdr05"].iloc[0])
+    assert bool(out.loc[out["step"] == "no_obj->id_obj", "hit_fdr05"].iloc[0])
 
 
 def test_agreement_da_uses_alphabet_frac() -> None:
@@ -212,8 +212,8 @@ def test_agreement_da_uses_alphabet_frac() -> None:
                     "model": model,
                     "grain": "full_session",
                     "sex": "F",
-                    "phase_layer": "NOR_TX",
-                    "step": "no_obj->identical",
+                    "session": "NOR_TX",
+                    "step": "no_obj->id_obj",
                     "raw_syllable_id": sid,
                     "hit_fdr05": True,
                 }
@@ -225,20 +225,20 @@ def test_agreement_da_uses_alphabet_frac() -> None:
                     "model": model,
                     "grain": "full_session",
                     "sex": "F",
-                    "phase_layer": "NOR_TX",
-                    "step": "no_obj->identical",
+                    "session": "NOR_TX",
+                    "step": "no_obj->id_obj",
                     "raw_syllable_id": 99,
                     "hit_fdr05": False,
                 }
             )
-    agree = agreement_da(pd.DataFrame(rows), hold_col="phase_layer", step_col="step")
+    agree = agreement_da(pd.DataFrame(rows), hold_col="session", step_col="step")
     assert len(agree) == 1
     assert int(agree["n_model_consensus_hit"].iloc[0]) == 2
     assert abs(float(agree["frac_model_consensus_hit"].iloc[0]) - 2 / 3) < 1e-12
 
 
 def test_run_condition_axis_smoke() -> None:
-    ac = build_animal_condition_table(_bouts_tx_sex_shift(), phase_layer="NOR_TX")
+    ac = build_animal_condition_table(_bouts_tx_sex_shift(), session="NOR_TX")
     da, sc, da_d, sc_d = run_condition_axis(ac, grain="full_session")
     assert not da.empty
     assert set(da["sex"]) <= {"F", "M"}
@@ -249,7 +249,7 @@ def test_run_condition_axis_smoke() -> None:
     assert "delta_richness" in set(sc["metric"])
     assert "braycurtis" in set(sc["metric"])
     assert not da_d.empty
-    assert {"animal_id", "delta_p", "raw_syllable_id", "tx", "sex"} <= set(da_d.columns)
+    assert {"animal_id", "delta_p", "raw_syllable_id", "condition", "sex"} <= set(da_d.columns)
     assert not sc_d.empty
     assert "delta_shannon_bits" in sc_d.columns
 
@@ -261,9 +261,9 @@ def test_bout_count_weighting_differs_from_frame_share() -> None:
         {
             "animal_id": "a1",
             "sex": "F",
-            "tx": "noSD",
-            "phase_layer": "NOR_TX",
-            "condition_layer": "no_obj",
+            "condition": "noSD",
+            "session": "NOR_TX",
+            "trial": "no_obj",
             "raw_syllable_id": 1,
             "bout_frames": 90,
             "bout_mean_dist_any_m": 0.2,
@@ -274,9 +274,9 @@ def test_bout_count_weighting_differs_from_frame_share() -> None:
             {
                 "animal_id": "a1",
                 "sex": "F",
-                "tx": "noSD",
-                "phase_layer": "NOR_TX",
-                "condition_layer": "no_obj",
+                "condition": "noSD",
+                "session": "NOR_TX",
+                "trial": "no_obj",
                 "raw_syllable_id": 2,
                 "bout_frames": 1,
                 "bout_mean_dist_any_m": 0.2,
@@ -284,7 +284,7 @@ def test_bout_count_weighting_differs_from_frame_share() -> None:
         )
     bouts = pd.DataFrame(rows)
     # pad other conditions
-    for cond in ("identical_obj", "novel_obj"):
+    for cond in ("id_obj", "nvl_obj"):
         for sid, fr in ((1, 50), (2, 50)):
             bouts = pd.concat(
                 [
@@ -294,9 +294,9 @@ def test_bout_count_weighting_differs_from_frame_share() -> None:
                             {
                                 "animal_id": "a1",
                                 "sex": "F",
-                                "tx": "noSD",
-                                "phase_layer": "NOR_TX",
-                                "condition_layer": cond,
+                                "condition": "noSD",
+                                "session": "NOR_TX",
+                                "trial": cond,
                                 "raw_syllable_id": sid,
                                 "bout_frames": fr,
                                 "bout_mean_dist_any_m": 0.2,
@@ -306,9 +306,9 @@ def test_bout_count_weighting_differs_from_frame_share() -> None:
                 ],
                 ignore_index=True,
             )
-    frame = build_animal_condition_table(bouts, phase_layer="NOR_TX", weighting="frame_share")
-    bout = build_animal_condition_table(bouts, phase_layer="NOR_TX", weighting="bout_count")
-    cf = frame[frame["condition_layer"] == "no_obj"].iloc[0]["counts"]
-    cb = bout[bout["condition_layer"] == "no_obj"].iloc[0]["counts"]
+    frame = build_animal_condition_table(bouts, session="NOR_TX", weighting="frame_share")
+    bout = build_animal_condition_table(bouts, session="NOR_TX", weighting="bout_count")
+    cf = frame[frame["trial"] == "no_obj"].iloc[0]["counts"]
+    cb = bout[bout["trial"] == "no_obj"].iloc[0]["counts"]
     assert float(cf[1]) == 90.0 and float(cf[2]) == 9.0
     assert float(cb[1]) == 1.0 and float(cb[2]) == 9.0

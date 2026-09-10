@@ -1,7 +1,7 @@
 """Session-grain Pearson among two segmenters' summaries (not lagged CCF).
 
 Same frame index, two partitions: hysteresis move|still vs kpMS syllable RLE.
-Grain: animal × phase × novel_obj. Heatmap is D; Pearson r/p live in the table.
+Grain: animal × phase × nvl_obj. Heatmap is D; Pearson r/p live in the table.
 """
 
 from __future__ import annotations
@@ -113,7 +113,7 @@ def session_bout_summary(
             columns=[
                 "animal_id",
                 "raw_session",
-                "phase_layer",
+                "session",
                 "n_bouts",
                 "median_duration_s",
                 "speed_mps",
@@ -121,7 +121,7 @@ def session_bout_summary(
         )
     df = bouts.copy()
     df["animal_id"] = df["animal_id"].astype(str)
-    keys = ["animal_id", "raw_session", "phase_layer"]
+    keys = ["animal_id", "raw_session", "session"]
     rows: list[dict[str, object]] = []
     for key, g in df.groupby(keys, sort=False):
         aid, sess, phase = key
@@ -132,7 +132,7 @@ def session_bout_summary(
             {
                 "animal_id": str(aid),
                 "raw_session": sess,
-                "phase_layer": phase,
+                "session": phase,
                 "n_bouts": int(len(g)),
                 "median_duration_s": float(np.nanmedian(dur.to_numpy(dtype=np.float64)))
                 if dur.notna().any()
@@ -158,19 +158,19 @@ def session_syllable_summary(bouts: pd.DataFrame) -> pd.DataFrame:
     df = bouts.copy()
     df["animal_id"] = df["animal_id"].astype(str)
     extra_rows: list[dict[str, object]] = []
-    for key, g in df.groupby(["animal_id", "raw_session", "phase_layer"], sort=False):
+    for key, g in df.groupby(["animal_id", "raw_session", "session"], sort=False):
         aid, sess, phase = key
         extra_rows.append(
             {
                 "animal_id": str(aid),
                 "raw_session": sess,
-                "phase_layer": phase,
+                "session": phase,
                 "n_syllable_ids": int(g["raw_syllable_id"].nunique()),
                 "shannon_syll_bits": shannon_bits(g["raw_syllable_id"].to_numpy()),
             }
         )
     extra = pd.DataFrame(extra_rows)
-    return base.merge(extra, on=["animal_id", "raw_session", "phase_layer"], how="left")
+    return base.merge(extra, on=["animal_id", "raw_session", "session"], how="left")
 
 
 def join_session_features(
@@ -213,7 +213,7 @@ def join_session_features(
             "speed_mps": "speed_still_mps",
         }
     )
-    keys = ["animal_id", "raw_session", "phase_layer"]
+    keys = ["animal_id", "raw_session", "session"]
     ov = ov.drop(columns=[c for c in ("n_syllable_ids",) if c in ov.columns])
     out = ov.merge(sy, on=keys, how="inner")
     out = out.merge(mv, on=keys, how="inner")
@@ -250,7 +250,7 @@ def pearson_long(
         for j, b in enumerate(columns):
             rows.append(
                 {
-                    "phase_layer": phase,
+                    "session": phase,
                     "feature_i": a,
                     "feature_j": b,
                     "block_i": BLOCKS[block_index(a)][0],

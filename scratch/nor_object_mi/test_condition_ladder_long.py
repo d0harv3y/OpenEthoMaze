@@ -6,15 +6,15 @@ from nor_object_mi.condition_ladder import ladder_tests_long, ladder_wilcoxon_st
 from nor_object_mi.restack_condition_ladder_long import parse_out_dir_name
 
 
-def _animal(aid: str, sex: str, tx: str, *, d_fam: float) -> dict:
+def _animal(aid: str, sex: str, condition: str, *, d_fam: float) -> dict:
     # Construct ladder row where identical->fam_obj Δ = d_fam
     base = 0.1
     return {
         "animal_id": aid,
         "sex": sex,
-        "tx": tx,
+        "condition": condition,
         "cohort": "c",
-        "phase_layer": "NOR_TX",
+        "session": "NOR_TX",
         "nvl_nearest_hist_locus": "a",
         "fam_nearest_hist_locus": "b",
         "excess_no_obj_fam_side": base,
@@ -28,7 +28,7 @@ def _animal(aid: str, sex: str, tx: str, *, d_fam: float) -> dict:
 
 def test_parse_out_dir_names() -> None:
     assert parse_out_dir_name("condition_ladder") == {
-        "phase_layer": "NOR_TX",
+        "session": "NOR_TX",
         "symbol_kind": "syllable",
         "pattern_len": 1,
         "cleanup": "raw",
@@ -36,7 +36,7 @@ def test_parse_out_dir_names() -> None:
     }
     assert parse_out_dir_name("condition_ladder_NOR_BL_clean")["cleanup"] == "clean"
     assert parse_out_dir_name("condition_ladder_ngram_n2_top50_clean") == {
-        "phase_layer": "NOR_TX",
+        "session": "NOR_TX",
         "symbol_kind": "ngram",
         "pattern_len": 2,
         "cleanup": "clean",

@@ -60,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
         (out_dir / "cohort_filter.json").write_text(json.dumps(cohort, indent=2), encoding="utf-8")
         kept = set(cohort["kept_ids"])  # type: ignore[arg-type]
         sessions = list(
-            iter_joined_sessions(nor_h5, kpms_h5, kept_ids=kept, phase_layer=args.phase_layer)
+            iter_joined_sessions(nor_h5, kpms_h5, kept_ids=kept, session=args.session)
         )
         bout_rows, bout_summary = build_ladder_bout_rows(
             nor_h5,
@@ -94,10 +94,10 @@ def main(argv: list[str] | None = None) -> int:
             [
                 "animal_id",
                 "sex",
-                "tx",
+                "condition",
                 "cohort",
-                "phase_layer",
-                "condition_layer",
+                "session",
+                "trial",
                 "stim_var",
                 "channel",
                 "n_bouts",
@@ -114,9 +114,9 @@ def main(argv: list[str] | None = None) -> int:
         ladder_fields = [
             "animal_id",
             "sex",
-            "tx",
+            "condition",
             "cohort",
-            "phase_layer",
+            "session",
             "nvl_nearest_hist_locus",
             "fam_nearest_hist_locus",
             "excess_no_obj_fam_side",
@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
         tags = summarize_side_tags(ladder_rows)
         summary = {
             "status": "ok",
-            "phase_layer": args.phase_layer,
+            "session": args.session,
             "question": "condition ladder on hist-tagged fam/nvl sides",
             "n_perm": args.n_perm,
             "seed": args.seed,
@@ -161,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(
                 {
                     "status": "ok",
-                    "phase_layer": args.phase_layer,
+                    "session": args.session,
                     "n_ladder_animals": len(ladder_rows),
                     **tags,
                     "step_tests": steps,

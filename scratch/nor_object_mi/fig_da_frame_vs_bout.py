@@ -26,8 +26,8 @@ from nor_object_mi._pub_style import (  # noqa: E402
     FIGSIZE_DOUBLE,
     INK,
     MUTE,
-    PHASE_SHORT,
-    PHASES,
+    SESSION_SHORT,
+    SESSIONS,
     apply_style,
     fig_footnote,
     save_png,
@@ -56,12 +56,12 @@ DEFAULT_BOUT = Path(
 
 
 def join_weightings(frame_dir: Path, bout_dir: Path) -> pd.DataFrame:
-    cols = ["model", "phase_layer", "step", "raw_syllable_id", "median_delta_p", "hit_fdr05"]
+    cols = ["model", "session", "step", "raw_syllable_id", "median_delta_p", "hit_fdr05"]
     fr = pd.read_csv(frame_dir / "da_syllable_tests_long.csv", usecols=cols)
     bt = pd.read_csv(bout_dir / "da_syllable_tests_long.csv", usecols=cols)
     fr = fr.rename(columns={"median_delta_p": "delta_p_frame", "hit_fdr05": "hit_frame"})
     bt = bt.rename(columns={"median_delta_p": "delta_p_bout", "hit_fdr05": "hit_bout"})
-    keys = ["model", "phase_layer", "step", "raw_syllable_id"]
+    keys = ["model", "session", "step", "raw_syllable_id"]
     return fr.merge(bt, on=keys, how="inner")
 
 
@@ -88,7 +88,7 @@ def fig_frame_vs_bout(
     apply_style(dest=dest)
     ts = type_scale(dest)
     step_lab = dict(VOLCANO_STEPS).get(step, step)
-    sub = joined[(joined["phase_layer"] == phase) & (joined["step"] == step)].copy()
+    sub = joined[(joined["session"] == phase) & (joined["step"] == step)].copy()
     fig, ax = plt.subplots(figsize=FIGSIZE_DOUBLE, constrained_layout=True)
     cols = colors_for_cluster_ids(sub["cluster_id"], cluster_lookup)
     ax.scatter(
@@ -122,7 +122,7 @@ def fig_frame_vs_bout(
     ax.set_xlabel("Δp frame_share (median across animals)")
     ax.set_ylabel("Δp bout_count (median across animals)")
     ax.set_title(
-        f"{PHASE_SHORT[phase]} · {step_lab} · frame vs bout Δp",
+        f"{SESSION_SHORT[phase]} · {step_lab} · frame vs bout Δp",
         loc="left",
         fontweight="bold",
         color=INK,
@@ -164,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
     joined = attach_clusters(join_weightings(args.frame_dir, args.bout_dir), args.sig_dir)
     joined.to_csv(args.bout_dir / "da_frame_vs_bout_joined.csv", index=False)
     lookup, _ids, _listed = load_cluster_lookup(args.sig_dir)
-    for phase in PHASES:
+    for phase in SESSIONS:
         for step, _lab in VOLCANO_STEPS:
             fig_frame_vs_bout(
                 joined, out, phase=phase, step=step, dest=args.dest, cluster_lookup=lookup

@@ -10,14 +10,14 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from nor_object_mi._pub_style import PHASES, SEX_ORDER, TX_ORDER
+from nor_object_mi._pub_style import SESSIONS, SEX_ORDER, CONDITION_ORDER
 from nor_object_mi.simpler_first_da import apply_bh
 
-STEPS = ("no_obj->identical", "identical->novel", "no_obj->novel")
+STEPS = ("no_obj->id_obj", "id_obj->nvl_obj", "no_obj->nvl_obj")
 STEP_LAB = {
-    "no_obj->identical": "presence",
-    "identical->novel": "novelty",
-    "no_obj->novel": "span",
+    "no_obj->id_obj": "presence",
+    "id_obj->nvl_obj": "novelty",
+    "no_obj->nvl_obj": "span",
 }
 
 
@@ -39,7 +39,7 @@ def _iqr(v: np.ndarray) -> float:
 
 def animal_median_delta_p(mapped: pd.DataFrame) -> pd.DataFrame:
     """One row per animal × phase × step: median Δp and across-model IQR (salt)."""
-    keys = ["animal_id", "sex", "tx", "phase_layer", "step"]
+    keys = ["animal_id", "sex", "condition", "session", "step"]
     rows: list[dict[str, object]] = []
     for key_vals, g in mapped.groupby(keys, sort=True):
         key_map = dict(zip(keys, key_vals if isinstance(key_vals, tuple) else (key_vals,)))
@@ -57,18 +57,18 @@ def animal_median_delta_p(mapped: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def kruskal_tx(animals: pd.DataFrame, *, col: str = "delta_p") -> dict[str, object]:
+def kruskal_condition(animals: pd.DataFrame, *, col: str = "delta_p") -> dict[str, object]:
     """k-group rank test of Δp across tx (caller's sex filter)."""
     samples = []
     med: dict[str, float] = {}
     ns: dict[str, int] = {}
-    for tx in TX_ORDER:
-        v = pd.to_numeric(animals.loc[animals["tx"] == tx, col], errors="coerce")
+    for condition in CONDITION_ORDER:
+        v = pd.to_numeric(animals.loc[animals["condition"] == condition, col], errors="coerce")
         v = v.to_numpy(dtype=np.float64)
         v = v[np.isfinite(v)]
         samples.append(v)
-        ns[tx] = int(v.size)
-        med[tx] = float(np.median(v)) if v.size else float("nan")
+        ns[condition] = int(v.size)
+        med[condition] = float(np.median(v)) if v.size else float("nan")
     ok = all(s.size >= 2 for s in samples)
     if ok:
         stat, p = stats.kruskal(*samples)
@@ -80,33 +80,33 @@ def kruskal_tx(animals: pd.DataFrame, *, col: str = "delta_p") -> dict[str, obje
         "stat": stat_f,
         "p": p_f,
         "n": int(sum(ns.values())),
-        **{f"n_{t}": ns[t] for t in TX_ORDER},
-        **{f"median_{t}": med[t] for t in TX_ORDER},
+        **{f"n_{t}": ns[t] for t in CONDITION_ORDER},
+        **{f"median_{t}": med[t] for t in CONDITION_ORDER},
     }
 
 
-def kruskal_by_phase_step(med: pd.DataFrame) -> pd.DataFrame:
+def kruskal_by_session_step(med: pd.DataFrame) -> pd.DataFrame:
     """Kruskal Δp ~ tx inside each phase × step; BH family = those cells (sex pooled)."""
     rows: list[dict[str, object]] = []
-    for phase in PHASES:
+    for phase in SESSIONS:
         for step in STEPS:
-            g = med[(med["phase_layer"] == phase) & (med["step"] == step)]
-            rec = kruskal_tx(g)
-            rows.append({"phase_layer": phase, "step": step, "sex": "all", **rec})
+            g = med[(med["session"] == phase) & (med["step"] == step)]
+            rec = kruskal_condition(g)
+            rows.append({"session": phase, "step": step, "sex": "all", **rec})
     return apply_bh(pd.DataFrame(rows))
 
 
-def kruskal_by_phase_step_sex(med: pd.DataFrame) -> pd.DataFrame:
+def kruskal_by_session_step_sex(med: pd.DataFrame) -> pd.DataFrame:
     """Kruskal Δp ~ tx inside each phase × step × sex; BH family = those cells."""
     rows: list[dict[str, object]] = []
-    for phase in PHASES:
+    for phase in SESSIONS:
         for step in STEPS:
             for sex in SEX_ORDER:
                 g = med[
-                    (med["phase_layer"] == phase)
+                    (med["session"] == phase)
                     & (med["step"] == step)
                     & (med["sex"] == sex)
                 ]
-                rec = kruskal_tx(g)
-                rows.append({"phase_layer": phase, "step": step, "sex": sex, **rec})
+                rec = kruskal_condition(g)
+                rows.append({"session": phase, "step": step, "sex": sex, **rec})
     return apply_bh(pd.DataFrame(rows))

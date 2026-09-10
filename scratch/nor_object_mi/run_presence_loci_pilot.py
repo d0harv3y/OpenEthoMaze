@@ -56,21 +56,21 @@ def main(argv: list[str] | None = None) -> int:
         kept = set(cohort["kept_ids"])  # type: ignore[arg-type]
 
         sessions = list(
-            iter_joined_sessions(nor_h5, kpms_h5, kept_ids=kept, phase_layer=args.phase_layer)
+            iter_joined_sessions(nor_h5, kpms_h5, kept_ids=kept, session=args.session)
         )
         join_rows = [
             {
                 "kpms_key": s.kpms_key,
                 "animal_id": s.animal_id,
                 "raw_session": s.raw_session,
-                "phase_layer": s.phase_layer,
-                "condition_layer": s.condition_layer,
-                "tx": s.tx,
+                "session": s.session,
+                "trial": s.trial,
+                "condition": s.condition,
                 "sex": s.sex,
                 "cohort": s.cohort,
             }
             for s in sessions
-            if s.condition_layer in {"identical_obj", "no_obj"}
+            if s.trial in {"id_obj", "no_obj"}
         ]
         _write_csv(
             out_dir / "session_join.csv",
@@ -78,9 +78,9 @@ def main(argv: list[str] | None = None) -> int:
                 "kpms_key",
                 "animal_id",
                 "raw_session",
-                "phase_layer",
-                "condition_layer",
-                "tx",
+                "session",
+                "trial",
+                "condition",
                 "sex",
                 "cohort",
             ],
@@ -117,10 +117,10 @@ def main(argv: list[str] | None = None) -> int:
         mi_fields = [
             "animal_id",
             "sex",
-            "tx",
+            "condition",
             "cohort",
-            "phase_layer",
-            "condition_layer",
+            "session",
+            "trial",
             "object_presence",
             "stim_var",
             "locus",
@@ -139,9 +139,9 @@ def main(argv: list[str] | None = None) -> int:
         delta_fields = [
             "animal_id",
             "sex",
-            "tx",
+            "condition",
             "cohort",
-            "phase_layer",
+            "session",
             "locus",
             "stim_var",
             "excess_present",
@@ -195,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         summary = {
             "status": "ok",
             "question": "excess_I per spatial locus A/B (+ nearest) with vs without object presence",
-            "phase_layer": args.phase_layer,
+            "session": args.session,
             "locus_label_policy": "spatial_2means_x_order",
             "n_bins": args.n_bins,
             "n_perm": args.n_perm,
@@ -210,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
             },
         }
         (out_dir / "run_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-        print(json.dumps({"status": "ok", "phase_layer": args.phase_layer, "by_locus": by_locus}, indent=2))
+        print(json.dumps({"status": "ok", "session": args.session, "by_locus": by_locus}, indent=2))
     return 0
 
 

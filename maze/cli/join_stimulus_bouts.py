@@ -140,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
         experiments=_parse_csv_list(args.experiment) or ("VASTcont", "VASTalt"),
         drop_strains=_parse_csv_list(args.drop_strain) or ("?", ""),
         drop_blank_sex=bool(args.drop_blank_sex),
-        tx_values=_parse_csv_list(args.tx) if args.tx else None,
+        condition_values=_parse_csv_list(args.condition) if args.condition else None,
     )
     bout_rows = filter_bout_rows(read_bout_table_csv(bout_csv), join_filter)
     if not bout_rows:

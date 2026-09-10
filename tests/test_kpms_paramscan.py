@@ -53,7 +53,7 @@ def test_fit_run_config_hyperparams_from_args() -> None:
         random_seed = 42
         include_habituation = True
         exclude_experimental = False
-        balance_by = "sex,tx,phase,strain"
+        balance_by = "sex,condition,strain"
         no_enrich_labels = False
         force_new = True
         pose_stream = "anatomical"

@@ -24,8 +24,8 @@ if str(_SCRATCH) not in sys.path:
 from nor_object_mi._pub_style import (  # noqa: E402
     FIGSIZE_DOUBLE,
     INK,
-    PHASE_SHORT,
-    PHASES,
+    SESSION_SHORT,
+    SESSIONS,
     SEX_ORDER,
     apply_style,
     fig_footnote,
@@ -42,13 +42,13 @@ NLP_VMAX = 4.0
 SEX_LAB = {"F": "Female", "M": "Male"}
 
 FOOT_CLASSIC = (
-    "Grain: animal × phase × novel_obj. Kruskal–Wallis on classic investigation "
+    "Grain: animal × phase × nvl_obj. Kruskal–Wallis on classic investigation "
     "DR by tx, within sex. Color is −log₁₀(p), clipped at 4 for display (not a "
     "new hit rule). Hit is uncorrected p < 0.05. Not Wilcoxon vs 0; not DA; "
     "not FDR across cells. Source slice: kruskal_classic_dr.csv."
 )
 FOOT_PROX = (
-    "Grain: animal × phase × novel_obj. Kruskal–Wallis on exclusive object-prox "
+    "Grain: animal × phase × nvl_obj. Kruskal–Wallis on exclusive object-prox "
     "DR (spot occupancy, animal median across 21 kpMS models) by tx, within sex. "
     "Color is −log₁₀(p), clipped at 4 for display. Hit is uncorrected p < 0.05. "
     "Not Wilcoxon vs 0; not DA; ids are not portable. Source slice: "
@@ -89,10 +89,10 @@ def _heatmap(
     im = None
     for ax, sex, letter in zip(axes, SEX_ORDER, ("A", "B")):
         sub = tests[tests["sex"] == sex]
-        pmat = np.full((len(PHASES), 1), np.nan)
-        nmat = np.full((len(PHASES), 1), np.nan)
-        for i, ph in enumerate(PHASES):
-            cell = sub[sub["phase_layer"] == ph]
+        pmat = np.full((len(SESSIONS), 1), np.nan)
+        nmat = np.full((len(SESSIONS), 1), np.nan)
+        for i, ph in enumerate(SESSIONS):
+            cell = sub[sub["session"] == ph]
             if len(cell) == 1:
                 pmat[i, 0] = float(cell["p"].iloc[0])
                 nmat[i, 0] = float(cell["n"].iloc[0])
@@ -100,8 +100,8 @@ def _heatmap(
         im = ax.imshow(nlp, cmap="viridis", vmin=0.0, vmax=NLP_VMAX, aspect="auto")
         ax.set_xticks([0])
         ax.set_xticklabels(["DR"])
-        ax.set_yticks(range(len(PHASES)))
-        ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+        ax.set_yticks(range(len(SESSIONS)))
+        ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
         ax.set_title(f"{letter}  {SEX_LAB[sex]}", loc="left", fontweight="bold", color=INK)
         for i in range(pmat.shape[0]):
             p = pmat[i, 0]

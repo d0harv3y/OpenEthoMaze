@@ -35,9 +35,9 @@ from .stimulus_mi_contract import (
     MIN_TRIALS_FOR_EARLY_LATE,
     NULL_CLEAR_ALPHA,
     PRIMARY_WHEN_MI_TYPE,
-    PRIMARY_WHEN_PHASE,
+    PRIMARY_WHEN_INTERVAL,
     SLICE_FACTORS,
-    STIM_PHASES,
+    STIM_INTERVALS,
     STIM_VARS,
     DEFAULT_NULL_N_PERM,
     WHEN_TEST_METRICS,
@@ -46,7 +46,7 @@ from .stimulus_mi_contract import (
 LN2 = np.log(2.0)
 MiType = Literal["occupancy", "transition"]
 StimVar = Literal["duty", "dist"]
-PhaseName = Literal["run", "iti"]
+PhaseName = Literal["run", "wait"]
 
 
 @dataclass(frozen=True)
@@ -61,8 +61,8 @@ class AnimalMiResult:
     animal_id: str
     sex: str
     strain: str
-    tx: str
-    phase: str
+    condition: str
+    interval: str
     stim_var: str
     mi_type: str
     n_bouts: int
@@ -75,7 +75,7 @@ class AnimalMiResult:
     null_perm_mean: float
     null_perm_p: float
     excess: float
-    iti_control_flag: int
+    wait_control_flag: int
 
 
 def _entropy_bits(counts: np.ndarray) -> float:
@@ -474,9 +474,9 @@ def compute_animal_mi(
             continue
         sex = str(animal_rows[0].get("sex", ""))
         strain = str(animal_rows[0].get("strain", ""))
-        tx = str(animal_rows[0].get("tx", ""))
-        for phase in STIM_PHASES:
-            phase_rows = [r for r in animal_rows if bout_in_phase(str(r.get("bout_primary_state", "")), phase)]  # type: ignore[arg-type]
+        tx = str(animal_rows[0].get("condition", ""))
+        for interval in STIM_INTERVALS:
+            phase_rows = [r for r in animal_rows if bout_in_phase(str(r.get("bout_primary_state", "")), interval)]  # type: ignore[arg-type]
             if not phase_rows:
                 continue
             for stim_var in STIM_VARS:
@@ -500,7 +500,7 @@ def compute_animal_mi(
                             streams_t, observed_mm=mi_mm, n_perm=n_perm, rng=gen
                         )
                     iti_flag = 0
-                    if phase == "iti" and np.isfinite(null_circ_p) and mi_mm > null_circ_mean and null_circ_p < 0.05:
+                    if interval == "wait" and np.isfinite(null_circ_p) and mi_mm > null_circ_mean and null_circ_p < 0.05:
                         iti_flag = 1
                     excess = (
                         float(mi_mm - null_circ_mean)
@@ -512,8 +512,8 @@ def compute_animal_mi(
                             animal_id=animal_id,
                             sex=sex,
                             strain=strain,
-                            tx=tx,
-                            phase=phase,
+                            condition=tx,
+                            interval=interval,
                             stim_var=stim_var,
                             mi_type=mi_type,
                             n_bouts=n_bouts,
@@ -526,7 +526,7 @@ def compute_animal_mi(
                             null_perm_mean=null_perm_mean,
                             null_perm_p=null_perm_p,
                             excess=excess,
-                            iti_control_flag=iti_flag,
+                            wait_control_flag=iti_flag,
                         )
                     )
     return results
@@ -537,8 +537,8 @@ def animal_mi_to_row(result: AnimalMiResult) -> dict[str, object]:
         "animal_id": result.animal_id,
         "sex": result.sex,
         "strain": result.strain,
-        "tx": result.tx,
-        "phase": result.phase,
+        "condition": result.condition,
+        "interval": result.interval,
         "stim_var": result.stim_var,
         "mi_type": result.mi_type,
         "n_bouts": result.n_bouts,
@@ -551,7 +551,7 @@ def animal_mi_to_row(result: AnimalMiResult) -> dict[str, object]:
         "null_perm_mean": result.null_perm_mean,
         "null_perm_p": result.null_perm_p,
         "excess": result.excess,
-        "iti_control_flag": result.iti_control_flag,
+        "wait_control_flag": result.wait_control_flag,
     }
 
 
@@ -599,11 +599,11 @@ def run_group_mi_tests(
     extract = value_fn or _row_mi_mm
     grouped: dict[tuple[str, str, str], list[Mapping[str, str]]] = defaultdict(list)
     for row in mi_rows:
-        key = (str(row["phase"]), str(row["stim_var"]), str(row["mi_type"]))
+        key = (str(row["interval"]), str(row["stim_var"]), str(row["mi_type"]))
         grouped[key].append(row)
 
     out: list[dict[str, object]] = []
-    for (phase, stim_var, mi_type), subset in sorted(grouped.items()):
+    for (interval, stim_var, mi_type), subset in sorted(grouped.items()):
         for factor in GROUP_FACTORS:
             by_level: dict[str, list[float]] = defaultdict(list)
             for row in subset:
@@ -630,7 +630,7 @@ def run_group_mi_tests(
                         "factor": factor,
                         "level_a": a,
                         "level_b": b,
-                        "phase": phase,
+                        "interval": interval,
                         "stim_var": stim_var,
                         "mi_type": mi_type,
                         "n_a": len(vals_a),
@@ -651,7 +651,7 @@ def run_group_mi_tests(
                         "factor": factor,
                         "level_a": "(all)",
                         "level_b": "",
-                        "phase": phase,
+                        "interval": interval,
                         "stim_var": stim_var,
                         "mi_type": mi_type,
                         "n_a": len(all_vals),
@@ -756,13 +756,13 @@ class TrialMiResult:
     animal_id: str
     sex: str
     strain: str
-    tx: str
+    condition: str
     session: str
     trial: str
     trial_key: str
     trial_ord: int
     cum_run_bouts: int
-    phase: str
+    interval: str
     stim_var: str
     mi_type: str
     n_bouts: int
@@ -882,10 +882,10 @@ def compute_per_trial_mi(
         cum_run = cum_run_bouts_for_animal(animal_rows, trial_order)
         sex = str(animal_rows[0].get("sex", ""))
         strain = str(animal_rows[0].get("strain", ""))
-        tx = str(animal_rows[0].get("tx", ""))
+        tx = str(animal_rows[0].get("condition", ""))
 
-        for phase in STIM_PHASES:
-            phase_rows = [r for r in animal_rows if bout_in_phase(str(r.get("bout_primary_state", "")), phase)]  # type: ignore[arg-type]
+        for interval in STIM_INTERVALS:
+            phase_rows = [r for r in animal_rows if bout_in_phase(str(r.get("bout_primary_state", "")), interval)]  # type: ignore[arg-type]
             if not phase_rows:
                 continue
             for stim_var in STIM_VARS:
@@ -947,13 +947,13 @@ def compute_per_trial_mi(
                                 animal_id=animal_id,
                                 sex=sex,
                                 strain=strain,
-                                tx=tx,
+                                condition=tx,
                                 session=entry.session,
                                 trial=entry.trial,
                                 trial_key=entry.trial_key,
                                 trial_ord=entry.trial_ord,
                                 cum_run_bouts=cum_bouts,
-                                phase=phase,
+                                interval=interval,
                                 stim_var=stim_var,
                                 mi_type=mi_type,
                                 n_bouts=n_bouts,
@@ -974,13 +974,13 @@ def trial_mi_to_row(result: TrialMiResult) -> dict[str, object]:
         "animal_id": result.animal_id,
         "sex": result.sex,
         "strain": result.strain,
-        "tx": result.tx,
+        "condition": result.condition,
         "session": result.session,
         "trial": result.trial,
         "trial_key": result.trial_key,
         "trial_ord": result.trial_ord,
         "cum_run_bouts": result.cum_run_bouts,
-        "phase": result.phase,
+        "interval": result.interval,
         "stim_var": result.stim_var,
         "mi_type": result.mi_type,
         "n_bouts": result.n_bouts,
@@ -1078,8 +1078,8 @@ class TrialAnimalSummary:
     animal_id: str
     sex: str
     strain: str
-    tx: str
-    phase: str
+    condition: str
+    interval: str
     stim_var: str
     mi_type: str
     n_trials: int
@@ -1105,11 +1105,11 @@ def compute_trial_animal_summaries(
     """Animal-level slope and early−late delta from per-trial MI trajectories."""
     grouped: dict[tuple[str, str, str, str, str, str, str], list[TrialMiResult]] = defaultdict(list)
     for row in trial_rows:
-        key = (row.animal_id, row.sex, row.strain, row.tx, row.phase, row.stim_var, row.mi_type)
+        key = (row.animal_id, row.sex, row.strain, row.condition, row.interval, row.stim_var, row.mi_type)
         grouped[key].append(row)
 
     summaries: list[TrialAnimalSummary] = []
-    for (animal_id, sex, strain, tx, phase, stim_var, mi_type), subset in sorted(grouped.items()):
+    for (animal_id, sex, strain, tx, interval, stim_var, mi_type), subset in sorted(grouped.items()):
         subset_sorted = sorted(subset, key=lambda r: r.trial_ord)
         trial_ords = [float(r.trial_ord) for r in subset_sorted]
         mi_vals = [r.mi_mm for r in subset_sorted]
@@ -1147,8 +1147,8 @@ def compute_trial_animal_summaries(
                 animal_id=animal_id,
                 sex=sex,
                 strain=strain,
-                tx=tx,
-                phase=phase,
+                condition=tx,
+                interval=interval,
                 stim_var=stim_var,
                 mi_type=mi_type,
                 n_trials=len(subset_sorted),
@@ -1174,8 +1174,8 @@ def trial_animal_summary_to_row(summary: TrialAnimalSummary) -> dict[str, object
         "animal_id": summary.animal_id,
         "sex": summary.sex,
         "strain": summary.strain,
-        "tx": summary.tx,
-        "phase": summary.phase,
+        "condition": summary.condition,
+        "interval": summary.interval,
         "stim_var": summary.stim_var,
         "mi_type": summary.mi_type,
         "n_trials": summary.n_trials,
@@ -1210,8 +1210,8 @@ def write_mi_trial_animal_summaries_csv(
                 writer.writerow(row)
 
 
-def _is_primary_when_cell(phase: str, stim_var: str, mi_type: str) -> bool:
-    return phase == PRIMARY_WHEN_PHASE and stim_var in STIM_VARS and mi_type == PRIMARY_WHEN_MI_TYPE
+def _is_primary_when_cell(interval: str, stim_var: str, mi_type: str) -> bool:
+    return interval == PRIMARY_WHEN_INTERVAL and stim_var in STIM_VARS and mi_type == PRIMARY_WHEN_MI_TYPE
 
 
 def _active_when_metrics(trial_nulls: bool) -> tuple[str, ...]:
@@ -1272,16 +1272,16 @@ def run_group_mi_when_tests(
     metrics = _active_when_metrics(trial_nulls)
     grouped: dict[tuple[str, str, str], list[Mapping[str, object]]] = defaultdict(list)
     for row in summary_rows:
-        phase = str(row["phase"])
+        interval = str(row["interval"])
         stim_var = str(row["stim_var"])
         mi_type = str(row["mi_type"])
-        if not _is_primary_when_cell(phase, stim_var, mi_type):
+        if not _is_primary_when_cell(interval, stim_var, mi_type):
             continue
-        key = (phase, stim_var, mi_type)
+        key = (interval, stim_var, mi_type)
         grouped[key].append(row)
 
     out: list[dict[str, object]] = []
-    for (phase, stim_var, mi_type), subset in sorted(grouped.items()):
+    for (interval, stim_var, mi_type), subset in sorted(grouped.items()):
         for metric in metrics:
             for factor in GROUP_FACTORS:
                 by_level: dict[str, list[float]] = defaultdict(list)
@@ -1306,7 +1306,7 @@ def run_group_mi_when_tests(
                             "factor": factor,
                             "level_a": a,
                             "level_b": b,
-                            "phase": phase,
+                            "interval": interval,
                             "stim_var": stim_var,
                             "mi_type": mi_type,
                             "metric": metric,
@@ -1331,7 +1331,7 @@ def run_group_mi_when_tests(
                             "factor": factor,
                             "level_a": "(all)",
                             "level_b": "",
-                            "phase": phase,
+                            "interval": interval,
                             "stim_var": stim_var,
                             "mi_type": mi_type,
                             "metric": metric,
@@ -1373,7 +1373,7 @@ def _hold_columns(hold: Mapping[str, str]) -> dict[str, str]:
     return {
         "hold_sex": hold.get("sex", ""),
         "hold_strain": hold.get("genotype", ""),
-        "hold_tx": hold.get("tx", ""),
+        "hold_condition": hold.get("condition", ""),
     }
 
 
@@ -1434,7 +1434,7 @@ def _mann_whitney_slice_row(
     spec: SliceSpec,
     *,
     metric: str,
-    phase: str,
+    interval: str,
     stim_var: str,
     mi_type: str,
     fdr_family: str,
@@ -1461,7 +1461,7 @@ def _mann_whitney_slice_row(
         "contrast_factor": spec.contrast_factor,
         "level_a": spec.level_a,
         "level_b": spec.level_b,
-        "phase": phase,
+        "interval": interval,
         "stim_var": stim_var,
         "mi_type": mi_type,
         "metric": metric,
@@ -1531,12 +1531,12 @@ def _primary_animal_rows(
 ) -> dict[tuple[str, str, str], list[Mapping[str, object]]]:
     grouped: dict[tuple[str, str, str], list[Mapping[str, object]]] = defaultdict(list)
     for row in pooled_rows:
-        phase = str(row["phase"])
+        interval = str(row["interval"])
         stim_var = str(row["stim_var"])
         mi_type = str(row["mi_type"])
-        if not _is_primary_when_cell(phase, stim_var, mi_type):
+        if not _is_primary_when_cell(interval, stim_var, mi_type):
             continue
-        grouped[(phase, stim_var, mi_type)].append(row)
+        grouped[(interval, stim_var, mi_type)].append(row)
     return grouped
 
 
@@ -1559,14 +1559,14 @@ def run_group_mi_tests_sliced(
         else:
             source_by_cell = summary_primary
 
-        for (phase, stim_var, mi_type), subset in sorted(source_by_cell.items()):
+        for (interval, stim_var, mi_type), subset in sorted(source_by_cell.items()):
             levels = _levels_by_factor(subset)
             for spec in _iter_slice_specs(levels):
                 row = _mann_whitney_slice_row(
                     subset,
                     spec,
                     metric=primary_metric,
-                    phase=phase,
+                    interval=interval,
                     stim_var=stim_var,
                     mi_type=mi_type,
                     fdr_family=family,
@@ -1578,7 +1578,7 @@ def run_group_mi_tests_sliced(
                         subset,
                         spec,
                         metric=exploratory_metric,
-                        phase=phase,
+                        interval=interval,
                         stim_var=stim_var,
                         mi_type=mi_type,
                         fdr_family=family,

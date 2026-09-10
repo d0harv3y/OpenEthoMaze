@@ -37,20 +37,20 @@ from nor_object_mi.segmenter_pearson import (  # noqa: E402
     LITMUS_B,
     block_edges,
 )
-from nor_object_mi.simpler_first_protocol_prologue import PHASES  # noqa: E402
+from nor_object_mi.simpler_first_protocol_prologue import SESSIONS  # noqa: E402
 
 DEFAULT_RUN = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_segmenter_pearson"
 )
-PHASE_SHORT = {
+SESSION_SHORT = {
     "NOR_BL": "BL",
     "NOR_TX": "TX",
     "NOR_REC3hr": "REC3",
     "NOR_REC11hr": "REC11",
 }
 FOOT = (
-    "Grain: animal × phase × novel_obj (locked ss-50). Pearson r of session "
+    "Grain: animal × phase × nvl_obj (locked ss-50). Pearson r of session "
     "summaries (not lagged CCF). Blocks: locomotor partition, syllable partition, "
     "interval join, kinematics. Black box = speed litmus (syllable-bout vs "
     "movement-bout frame-weighted mean m/s). Diagonal is self-correlation. "
@@ -60,7 +60,7 @@ FOOT = (
 
 
 def _r_matrix(long: pd.DataFrame, phase: str) -> np.ndarray:
-    sub = long[long["phase_layer"] == phase]
+    sub = long[long["session"] == phase]
     k = len(FEATURES)
     mat = np.full((k, k), np.nan)
     idx = {f: i for i, f in enumerate(FEATURES)}
@@ -80,7 +80,7 @@ def fig_phase_heatmaps(long: pd.DataFrame, stem: Path, *, dest: str) -> None:
     ia = FEATURES.index(LITMUS_A)
     ib = FEATURES.index(LITMUS_B)
     im = None
-    for i, ph in enumerate(PHASES):
+    for i, ph in enumerate(SESSIONS):
         ax = axes[i // 2][i % 2]
         mat = _r_matrix(long, ph)
         im = ax.imshow(mat, cmap="RdBu_r", vmin=-1.0, vmax=1.0, origin="upper")
@@ -88,7 +88,7 @@ def fig_phase_heatmaps(long: pd.DataFrame, stem: Path, *, dest: str) -> None:
         ax.set_yticks(range(k))
         ax.set_xticklabels(labels, rotation=70, ha="right", fontsize=ts["cell"])
         ax.set_yticklabels(labels, fontsize=ts["cell"])
-        ax.set_title(PHASE_SHORT.get(ph, ph), loc="left", fontweight="bold", color=INK)
+        ax.set_title(SESSION_SHORT.get(ph, ph), loc="left", fontweight="bold", color=INK)
         for e in block_edges():
             ax.axhline(e, color=INK, lw=0.8, zorder=4)
             ax.axvline(e, color=INK, lw=0.8, zorder=4)
@@ -119,7 +119,7 @@ def fig_phase_heatmaps(long: pd.DataFrame, stem: Path, *, dest: str) -> None:
                     fontsize=max(5.0, ts["cell"] - 3.5),
                     color=text_on_cmap(v, cmap="RdBu_r", vmin=-1.0, vmax=1.0),
                 )
-        n = int(long.loc[long["phase_layer"] == ph, "n"].median())
+        n = int(long.loc[long["session"] == ph, "n"].median())
         ax.text(
             0.0,
             1.02,

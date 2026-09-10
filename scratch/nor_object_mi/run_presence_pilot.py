@@ -1,4 +1,4 @@
-"""CLI: object-presence MI pilot (identical_obj vs no_obj pseudo-loci)."""
+"""CLI: object-presence MI pilot (id_obj vs no_obj pseudo-loci)."""
 
 from __future__ import annotations
 
@@ -62,21 +62,21 @@ def main(argv: list[str] | None = None) -> int:
         kept = set(cohort["kept_ids"])  # type: ignore[arg-type]
 
         sessions = list(
-            iter_joined_sessions(nor_h5, kpms_h5, kept_ids=kept, phase_layer=args.phase_layer)
+            iter_joined_sessions(nor_h5, kpms_h5, kept_ids=kept, session=args.session)
         )
         join_rows = [
             {
                 "kpms_key": s.kpms_key,
                 "animal_id": s.animal_id,
                 "raw_session": s.raw_session,
-                "phase_layer": s.phase_layer,
-                "condition_layer": s.condition_layer,
-                "tx": s.tx,
+                "session": s.session,
+                "trial": s.trial,
+                "condition": s.condition,
                 "sex": s.sex,
                 "cohort": s.cohort,
             }
             for s in sessions
-            if s.condition_layer in {"identical_obj", "no_obj"}
+            if s.trial in {"id_obj", "no_obj"}
         ]
         _write_csv(
             out_dir / "session_join.csv",
@@ -84,9 +84,9 @@ def main(argv: list[str] | None = None) -> int:
                 "kpms_key",
                 "animal_id",
                 "raw_session",
-                "phase_layer",
-                "condition_layer",
-                "tx",
+                "session",
+                "trial",
+                "condition",
                 "sex",
                 "cohort",
             ],
@@ -128,10 +128,10 @@ def main(argv: list[str] | None = None) -> int:
         mi_fields = [
             "animal_id",
             "sex",
-            "tx",
+            "condition",
             "cohort",
-            "phase_layer",
-            "condition_layer",
+            "session",
+            "trial",
             "object_presence",
             "stim_var",
             "mi_type",
@@ -149,9 +149,9 @@ def main(argv: list[str] | None = None) -> int:
         delta_fields = [
             "animal_id",
             "sex",
-            "tx",
+            "condition",
             "cohort",
-            "phase_layer",
+            "session",
             "excess_present",
             "excess_absent",
             "delta_excess_present_minus_absent",
@@ -191,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
         summary = {
             "status": "ok",
             "question": "excess_I(dist_any) with vs without object presence",
-            "phase_layer": args.phase_layer,
+            "session": args.session,
             "dist_any": "nearest of two loci; no_obj uses animal×phase pseudo-loci from id+nvl centers",
             "n_bins": args.n_bins,
             "n_perm": args.n_perm,
@@ -216,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
                     "n_delta_animals": len(delta_rows),
                     "median_excess_by_presence": excess_medians,
                     "median_delta_present_minus_absent": delta_median,
-                    "group_tests": [g for g in group_tests if g.get("factor") in {"presence_paired", "tx", "sex"}][
+                    "group_tests": [g for g in group_tests if g.get("factor") in {"presence_paired", "condition", "sex"}][
                         :8
                     ],
                 },

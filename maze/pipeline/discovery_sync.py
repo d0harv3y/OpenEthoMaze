@@ -1,4 +1,4 @@
-"""Push file discovery + treatment labels into a target results H5 (GUI / batch)."""
+"""Push file discovery + condition labels into a target results H5 (GUI / batch)."""
 
 from __future__ import annotations
 
@@ -14,21 +14,21 @@ from .db import (
 )
 from .io.file_discovery import DiscoveryResult
 from .run_provenance import provenance_run, sha256_file
-from .treatment_labels_csv import validate_treatment_labels_csv
+from .condition_labels_csv import validate_condition_labels_csv
 from .video_paths import video_path_for_storage
 from .sources.legacy_vast import (
-    apply_treatment_labels,
+    apply_condition_labels,
     check_duplicates,
     discover_trials,
-    load_treatment_labels,
-    update_treatment_labels_from_discovery,
+    load_condition_labels,
+    update_condition_labels_from_discovery,
 )
 
 
 def sync_discovery_into_h5(
     db_path: Path,
     *,
-    treatment_labels_path: Optional[Path] = None,
+    condition_labels_path: Optional[Path] = None,
     merge_new_label_ids: bool = False,
     data_dirs: Optional[Sequence[Path]] = None,
 ) -> tuple[DiscoveryResult, list[Any]]:
@@ -42,7 +42,7 @@ def sync_discovery_into_h5(
     db_path = Path(db_path)
     prov_inputs = {
         "db_path": str(db_path),
-        "treatment_labels_path": str(treatment_labels_path) if treatment_labels_path else None,
+        "condition_labels_path": str(condition_labels_path) if condition_labels_path else None,
         "merge_new_label_ids": merge_new_label_ids,
         "data_dirs": [str(Path(d)) for d in data_dirs] if data_dirs else None,
     }
@@ -58,13 +58,13 @@ def sync_discovery_into_h5(
             exclude_h5_paths=[db_path],
             controller_results_h5=db_path,
         )
-        tpath = Path(treatment_labels_path) if treatment_labels_path else None
+        tpath = Path(condition_labels_path) if condition_labels_path else None
         if tpath is not None:
-            validate_treatment_labels_csv(tpath)
+            validate_condition_labels_csv(tpath)
         if merge_new_label_ids and tpath is not None:
-            update_treatment_labels_from_discovery(result, tpath)
-        labels = load_treatment_labels(tpath)
-        apply_treatment_labels(result, labels)
+            update_condition_labels_from_discovery(result, tpath)
+        labels = load_condition_labels(tpath)
+        apply_condition_labels(result, labels)
         duplicates = check_duplicates(result)
 
         for trial in result.trials:
@@ -97,7 +97,7 @@ def sync_discovery_into_h5(
                 strain=trial.strain,
                 experiment=trial.experiment,
                 sex=trial.sex,
-                tx=trial.tx,
+                condition=trial.condition,
                 researcher=trial.researcher,
                 drug=trial.drug,
                 notes=notes,
@@ -110,5 +110,5 @@ def sync_discovery_into_h5(
             "n_input_h5_files": len(result.input_h5_files),
         }
         if tpath is not None and tpath.is_file():
-            prov["outputs"]["treatment_labels_sha256"] = sha256_file(tpath)
+            prov["outputs"]["condition_labels_sha256"] = sha256_file(tpath)
         return result, duplicates

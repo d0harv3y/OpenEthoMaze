@@ -11,9 +11,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-TX_ORDER = ("noSD", "GHSD", "RBSD")
+CONDITION_ORDER = ("noSD", "GHSD", "RBSD")
 SEX_ORDER = ("F", "M")
-TX_COLOR = {
+CONDITION_COLOR = {
     "noSD": "#1b9e77",
     "GHSD": "#d95f02",
     "RBSD": "#7570b3",
@@ -70,8 +70,8 @@ RCPARAMS = {**_BASE_RC, "font.size": _PAPER_TYPE["font.size"]}
 _DEST = "slides"
 _TYPE = _SLIDES_TYPE
 
-PHASES = ("NOR_BL", "NOR_TX", "NOR_REC3hr", "NOR_REC11hr")
-PHASE_SHORT = {
+SESSIONS = ("NOR_BL", "NOR_TX", "NOR_REC3hr", "NOR_REC11hr")
+SESSION_SHORT = {
     "NOR_BL": "BL",
     "NOR_TX": "TX",
     "NOR_REC3hr": "REC3",
@@ -123,6 +123,58 @@ def p_text(p: float) -> str:
     return f"p = {p:.3f}"
 
 
+def wrap_lines(text: str, *, width: int = 42) -> str:
+    """Insert newlines for multi-line axis / suptitles."""
+    parts: list[str] = []
+    for paragraph in text.split("\n"):
+        paragraph = " ".join(paragraph.split())
+        if paragraph:
+            parts.append(
+                textwrap.fill(paragraph, width=width, break_long_words=False, break_on_hyphens=False)
+            )
+    return "\n".join(parts)
+
+
+def set_wrapped_title(ax, text: str, *, width: int = 38, **kwargs) -> None:
+    ax.set_title(wrap_lines(text, width=width), **kwargs)
+
+
+def tex_bf(text: str) -> str:
+    """Matplotlib mathtext bold segment (underscore-safe)."""
+    escaped = text.replace("\\", "\\\\").replace("_", r"\_")
+    return rf"$\bf{{{escaped}}}$"
+
+
+def fig_suptitle_emph(
+    fig: plt.Figure,
+    *,
+    before: str,
+    emph: str,
+    after: str = "",
+    subtitle: str = "",
+    subtitle_emph: str = "",
+    subtitle_after: str = "",
+    fontsize: float = 10,
+    width: int = 52,
+    color: str = INK,
+    wrap: bool = True,
+) -> None:
+    """Suptitle with bold ``emph``; optional second line with ``subtitle_emph`` bold."""
+    line1 = before + tex_bf(emph) + after
+    if subtitle_emph:
+        line2 = tex_bf(subtitle_emph) + subtitle_after
+    else:
+        line2 = subtitle
+    full = line1 if not line2 else f"{line1}\n{line2}"
+    text = wrap_lines(full, width=width) if wrap else full
+    fig.suptitle(
+        text,
+        fontsize=fontsize,
+        fontweight="normal",
+        color=color,
+    )
+
+
 def fig_footnote(
     fig: plt.Figure,
     text: str,
@@ -143,12 +195,12 @@ def fig_footnote(
     fig.text(0.0, y, wrapped, fontsize=pt, color=color, ha="left", va="top")
 
 
-def tx_sex_legend_handles(*, dest: str = "slides") -> list:
+def condition_sex_legend_handles(*, dest: str = "slides") -> list:
     """Color = tx, shape = sex. Caller places them with `fig_legend_and_footnote`."""
     ms = 8 if dest == "slides" else 6
     return [
-        Line2D([0], [0], marker="o", color="none", markerfacecolor=TX_COLOR[t], markersize=ms, label=t)
-        for t in TX_ORDER
+        Line2D([0], [0], marker="o", color="none", markerfacecolor=CONDITION_COLOR[t], markersize=ms, label=t)
+        for t in CONDITION_ORDER
     ] + [
         Line2D(
             [0],

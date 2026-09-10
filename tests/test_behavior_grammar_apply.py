@@ -59,7 +59,7 @@ def test_rules_from_curated_candidates_builds_doc(tmp_path) -> None:
     header = ",".join(CANDIDATE_SEQUENCE_FIELDS)
     path.write_text(
         f"{header}\n"
-        '"[3, 7]",2,5,2,,,,,0,groom,ignore,2026-06-30T00:00:00+00:00,t1,\n',
+        '"[3, 7]",2,5,2,,,,,,,,,0,groom,ignore,2026-06-30T00:00:00+00:00,t1,,\n',
         encoding="utf-8",
     )
     doc = rules_from_curated_candidates(path, fit_id="seed_042")

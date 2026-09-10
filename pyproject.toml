@@ -152,6 +152,8 @@ min_confidence = 80
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Frozen ethogram-phase tests need scripts not on path; do not collect.
+norecursedirs = [".*", "archive", "build", "dist"]
 # "tests" on path so pytest_plugins can load controller.local_service.fixtures (see root conftest.py).
 # Do not use tests.* — a dependency installs a top-level "tests" package in site-packages.
 pythonpath = ["tests", "."]

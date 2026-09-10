@@ -1,7 +1,7 @@
 """Occupancy × DA lollipop join (locked kpMS).
 
 Occupancy is computed in every condition. DA hits are labeled with occupancy
-in the step destination (`right`: identical_obj or novel_obj).
+in the step destination (`right`: id_obj or nvl_obj).
 
 Regen (OpenEthoMaze repo root):
   uv run python scratch/nor_object_mi/simpler_first_occupancy_lollipop_join.py
@@ -55,8 +55,8 @@ def _info_md() -> str:
 For the locked kpMS model, label each syllable by locomotor **occupancy**
 (frame P(move | id) − session P(move); one-sample t, BH within phase ×
 condition). Join those labels onto DA lollipop FDR hits using occupancy in
-the DA step's **destination** condition (`identical_obj` for presence,
-`novel_obj` for novelty/span).
+the DA step's **destination** condition (`id_obj` for presence,
+`nvl_obj` for novelty/span).
 
 ## What this is not
 
@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
         "n_occupancy_rows": int(len(occ)),
         "n_occupancy_tests": int(len(tests)),
         "n_join_rows": int(len(joined)),
-        "not": ["tx", "investigation", "same_contrast_as_DA"],
+        "not": ["condition", "investigation", "same_contrast_as_DA"],
     }
     (out / "run_summary.json").write_text(json.dumps(blob, indent=2), encoding="utf-8")
     (out / "INFO_occupancy_da_join.md").write_text(_info_md(), encoding="utf-8")

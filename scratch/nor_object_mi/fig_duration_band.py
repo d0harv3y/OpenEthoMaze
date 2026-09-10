@@ -113,7 +113,7 @@ def join_band(
         how="left",
     )
     w = winners[
-        (winners["phase_layer"] == "NOR_TX") & (winners["step"] == "identical->novel")
+        (winners["session"] == "NOR_TX") & (winners["step"] == "id_obj->nvl_obj")
     ][["model", "raw_syllable_id", "cluster_id", "median_delta_p", "hit_fdr05"]].rename(
         columns={
             "raw_syllable_id": "da_raw_syllable_id",

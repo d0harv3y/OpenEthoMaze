@@ -51,22 +51,22 @@ def edges_from_json(payload: Mapping[str, object], stim: StimVar | None = None) 
     raise KeyError("bin_edges payload needs 'dist' (or legacy dist_fam/dist_nvl)")
 
 
-_EDGE_FIT_CONDITIONS: frozenset[str] = frozenset({"novel_obj", "identical_obj"})
+_EDGE_FIT_CONDITIONS: frozenset[str] = frozenset({"nvl_obj", "id_obj"})
 
 
 def pool_any_object_bout_distances(rows: Sequence[Mapping[str, object]]) -> list[float]:
     """Finite bout-mean distances to any real object (novel + identical; skip no_obj).
 
     Each two-object bout contributes exactly two distances:
-    - ``novel_obj`` → fam + nvl (role-labeled)
-    - ``identical_obj`` → obj_a + obj_b (sorted object ids)
+    - ``nvl_obj`` → fam + nvl (role-labeled)
+    - ``id_obj`` → obj_a + obj_b (sorted object ids)
     """
     vals: list[float] = []
     for r in rows:
-        cond = str(r.get("condition_layer", ""))
-        if cond == "novel_obj":
+        cond = str(r.get("trial", ""))
+        if cond == "nvl_obj":
             fields = ("bout_mean_dist_fam_m", "bout_mean_dist_nvl_m")
-        elif cond == "identical_obj":
+        elif cond == "id_obj":
             fields = ("bout_mean_dist_obj_a_m", "bout_mean_dist_obj_b_m")
         else:
             continue
@@ -91,7 +91,7 @@ def fit_shared_dist_bin_edges(
     json_edges = [None if not np.isfinite(e) else float(e) for e in edges]
     by_cond: dict[str, int] = {}
     for r in rows:
-        cond = str(r.get("condition_layer", ""))
+        cond = str(r.get("trial", ""))
         if cond in _EDGE_FIT_CONDITIONS:
             by_cond[cond] = by_cond.get(cond, 0) + 1
     payload: dict[str, object] = {
@@ -101,10 +101,10 @@ def fit_shared_dist_bin_edges(
         "fit": {
             "policy": "shared_any_object",
             "source_fields_by_condition": {
-                "novel_obj": ["bout_mean_dist_fam_m", "bout_mean_dist_nvl_m"],
-                "identical_obj": ["bout_mean_dist_obj_a_m", "bout_mean_dist_obj_b_m"],
+                "nvl_obj": ["bout_mean_dist_fam_m", "bout_mean_dist_nvl_m"],
+                "id_obj": ["bout_mean_dist_obj_a_m", "bout_mean_dist_obj_b_m"],
             },
-            "condition_layers": sorted(_EDGE_FIT_CONDITIONS),
+            "trials": sorted(_EDGE_FIT_CONDITIONS),
             "n_bout_rows_by_condition": by_cond,
             "n_bins": n_bins,
             "n_values": len(vals),
@@ -149,7 +149,7 @@ def _streams_for_animal_field(
     for row in rows:
         if str(row["animal_id"]) != animal_id:
             continue
-        if str(row.get("condition_layer", "")) != "novel_obj":
+        if str(row.get("trial", "")) != "nvl_obj":
             continue
         val = float(row[field])
         if not np.isfinite(val):
@@ -241,9 +241,9 @@ def compute_pilot_mi(
                 {
                     "animal_id": aid,
                     "sex": meta["sex"],
-                    "tx": meta["tx"],
+                    "condition": meta["condition"],
                     "cohort": meta["cohort"],
-                    "phase_layer": meta["phase_layer"],
+                    "session": meta["session"],
                     "stim_var": stim,
                     "mi_type": "occupancy",
                     "n_bouts": n_bouts,
@@ -272,9 +272,9 @@ def compute_pilot_mi(
             {
                 "animal_id": aid,
                 "sex": fam["sex"],
-                "tx": fam["tx"],
+                "condition": fam["condition"],
                 "cohort": fam["cohort"],
-                "phase_layer": fam["phase_layer"],
+                "session": fam["session"],
                 "excess_fam": fam["excess"],
                 "excess_nvl": nvl["excess"],
                 "delta_excess_nvl_minus_fam": float(nvl["excess"]) - float(fam["excess"]),  # type: ignore[arg-type]
@@ -371,7 +371,7 @@ def _factor_tests_on_subset(
             test="kruskal",
         )
     )
-    if factor == "tx":
+    if factor == "condition":
         for i, a in enumerate(levels):
             for b in levels[i + 1 :]:
                 va, vb = by_level[a], by_level[b]
@@ -398,19 +398,19 @@ def _group_tests_delta(delta_rows: Sequence[Mapping[str, object]]) -> list[dict[
     """Pooled and sex-stratified group tests on novelty Δ."""
     out: list[dict[str, object]] = []
     # Pooled (sexes combined)
-    out.extend(_factor_tests_on_subset(delta_rows, factor="tx", sex_stratum="all"))
+    out.extend(_factor_tests_on_subset(delta_rows, factor="condition", sex_stratum="all"))
     out.extend(_factor_tests_on_subset(delta_rows, factor="sex", sex_stratum="all"))
     # Within each sex: treatment contrasts
     sexes = sorted({str(r.get("sex", "") or "") for r in delta_rows if str(r.get("sex", "") or "")})
     for sex in sexes:
         subset = [r for r in delta_rows if str(r.get("sex", "")) == sex]
-        out.extend(_factor_tests_on_subset(subset, factor="tx", sex_stratum=sex))
-    # Within each tx: sex contrast (explicit 2×3 cell structure)
-    txs = sorted({str(r.get("tx", "") or "") for r in delta_rows if str(r.get("tx", "") or "")})
-    for tx in txs:
-        subset = [r for r in delta_rows if str(r.get("tx", "")) == tx]
+        out.extend(_factor_tests_on_subset(subset, factor="condition", sex_stratum=sex))
+    # Within each condition: sex contrast (explicit 2×3 cell structure)
+    txs = sorted({str(r.get("condition", "") or "") for r in delta_rows if str(r.get("condition", "") or "")})
+    for condition in txs:
+        subset = [r for r in delta_rows if str(r.get("condition", "")) == tx]
         # reuse sex_stratum field to label the tx cell; factor remains sex
-        cell_tests = _factor_tests_on_subset(subset, factor="sex", sex_stratum=f"tx={tx}")
+        cell_tests = _factor_tests_on_subset(subset, factor="sex", sex_stratum=f"condition={tx}")
         out.extend(cell_tests)
     return out
 
@@ -431,7 +431,7 @@ def compute_novelty_loci_mi(
     seed: int = 42,
     bin_edges_payload: Mapping[str, object] | None = None,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]], list[dict[str, object]], dict[str, object]]:
-    """Novelty fam/nvl MI plus fixed historical locus A/B on ``novel_obj``.
+    """Novelty fam/nvl MI plus fixed historical locus A/B on ``nvl_obj``.
 
     Contrasts per animal:
     - ``delta_excess_nvl_minus_fam`` (role; session object centers)
@@ -468,9 +468,9 @@ def compute_novelty_loci_mi(
                 {
                     "animal_id": aid,
                     "sex": meta["sex"],
-                    "tx": meta["tx"],
+                    "condition": meta["condition"],
                     "cohort": meta["cohort"],
-                    "phase_layer": meta["phase_layer"],
+                    "session": meta["session"],
                     "stim_var": stim_var,
                     "mi_type": "occupancy",
                     "n_bouts": n_bouts,
@@ -505,7 +505,7 @@ def compute_novelty_loci_mi(
             str(r.get("nvl_nearest_hist_locus", "") or "")
             for r in rows
             if str(r["animal_id"]) == aid
-            and str(r.get("condition_layer", "")) == "novel_obj"
+            and str(r.get("trial", "")) == "nvl_obj"
             and str(r.get("nvl_nearest_hist_locus", "") or "") in {"a", "b"}
         ]
         nvl_side = tags[0] if tags else ""
@@ -524,9 +524,9 @@ def compute_novelty_loci_mi(
             {
                 "animal_id": aid,
                 "sex": fam["sex"],
-                "tx": fam["tx"],
+                "condition": fam["condition"],
                 "cohort": fam["cohort"],
-                "phase_layer": fam["phase_layer"],
+                "session": fam["session"],
                 "nvl_nearest_hist_locus": nvl_side,
                 "excess_fam": fam["excess"],
                 "excess_nvl": nvl["excess"],

@@ -19,13 +19,13 @@ def test_subset_config_from_fit_run() -> None:
         manifest_csv=Path("/data/trial_manifest.csv"),
         max_trials=50,
         exclude_experimental=True,
-        balance_columns=("sex", "tx"),
+        balance_columns=("sex", "condition"),
     )
     sub = subset_config_from_fit_run(cfg)
     assert sub.manifest_csv == Path("/data/trial_manifest.csv")
     assert sub.max_trials == 50
     assert sub.include_experimental is False
-    assert sub.balance_columns == ("sex", "tx")
+    assert sub.balance_columns == ("sex", "condition")
 
 
 def test_fit_run_config_from_args() -> None:
@@ -55,7 +55,7 @@ def test_fit_run_config_from_args() -> None:
     assert cfg.pose_stream == "blob"
     assert cfg.force_new is True
     assert cfg.use_float32 is True
-    assert cfg.enrich_from_treatment_labels is False
+    assert cfg.enrich_from_condition_labels is False
     assert cfg.balance_columns == ("sex", "phase")
     assert cfg.fit.seed == 7
     assert resolve_kpms_project_dir(cfg.project_dir, cfg.pose_stream) == Path(
@@ -122,6 +122,7 @@ def test_apply_run_config_from_args_pose_stream() -> None:
         no_overwrite_results = False
         quiet = False
         pose_stream = "fused"
+        apply_chunk_size = None
 
     cfg = apply_run_config_from_args(Args())  # type: ignore[arg-type]
     assert cfg.pose_stream == "fused"

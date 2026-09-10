@@ -149,8 +149,8 @@ def import_legacy_ram_work_items(
             if item.animal_id and item.animal_id not in seen_animals:
                 seen_animals.add(item.animal_id)
                 sex = (item.metadata.get("sex") or "").strip() or None
-                tx = (item.metadata.get("tx") or "").strip() or None
-                write_animal_label(path, item.animal_id, sex=sex, tx=tx)
+                tx = (item.metadata.get("condition") or "").strip() or None
+                write_animal_label(path, item.animal_id, sex=sex, condition=tx)
 
             out.n_imported += 1
         except Exception as e:

@@ -12,9 +12,9 @@ def test_gate_keeps_only_any_lt_r() -> None:
         {
             "animal_id": "a",
             "sex": "F",
-            "tx": "noSD",
-            "phase_layer": "NOR_TX",
-            "condition_layer": "novel_obj",
+            "condition": "noSD",
+            "session": "NOR_TX",
+            "trial": "nvl_obj",
             "bout_frames": 10,
             "bout_mean_dist_any_m": 0.05,
             "bout_mean_dist_fam_m": 0.20,
@@ -24,9 +24,9 @@ def test_gate_keeps_only_any_lt_r() -> None:
         {
             "animal_id": "a",
             "sex": "F",
-            "tx": "noSD",
-            "phase_layer": "NOR_TX",
-            "condition_layer": "novel_obj",
+            "condition": "noSD",
+            "session": "NOR_TX",
+            "trial": "nvl_obj",
             "bout_frames": 10,
             "bout_mean_dist_any_m": 0.20,
             "bout_mean_dist_fam_m": 0.20,
@@ -34,7 +34,7 @@ def test_gate_keeps_only_any_lt_r() -> None:
             "raw_syllable_id": 2,
         },
     ]
-    sess, near = gate_near_any(pd.DataFrame(rows), phase_layer="NOR_TX", r_m=0.10)
+    sess, near = gate_near_any(pd.DataFrame(rows), session="NOR_TX", r_m=0.10)
     assert len(sess) == 2
     assert len(near) == 1
     assert float(near.iloc[0]["bout_mean_dist_any_m"]) == 0.05
@@ -46,9 +46,9 @@ def test_pref_among_near_known() -> None:
         {
             "animal_id": "a",
             "sex": "F",
-            "tx": "noSD",
-            "phase_layer": "NOR_TX",
-            "condition_layer": "novel_obj",
+            "condition": "noSD",
+            "session": "NOR_TX",
+            "trial": "nvl_obj",
             "bout_frames": 40,
             "bout_mean_dist_any_m": 0.05,
             "bout_mean_dist_fam_m": 0.30,
@@ -58,9 +58,9 @@ def test_pref_among_near_known() -> None:
         {
             "animal_id": "a",
             "sex": "F",
-            "tx": "noSD",
-            "phase_layer": "NOR_TX",
-            "condition_layer": "novel_obj",
+            "condition": "noSD",
+            "session": "NOR_TX",
+            "trial": "nvl_obj",
             "bout_frames": 60,
             "bout_mean_dist_any_m": 0.40,
             "bout_mean_dist_fam_m": 0.10,
@@ -69,8 +69,8 @@ def test_pref_among_near_known() -> None:
         },
     ]
     df = pd.DataFrame(rows)
-    sess, near = gate_near_any(df, phase_layer="NOR_TX", r_m=0.10)
-    out = animal_near_q1(sess, near, phase_layer="NOR_TX", min_near_frames=10)
+    sess, near = gate_near_any(df, session="NOR_TX", r_m=0.10)
+    out = animal_near_q1(sess, near, session="NOR_TX", min_near_frames=10)
     assert len(out) == 1
     assert int(out.loc[0, "n_near_frames"]) == 40
     assert abs(float(out.loc[0, "frac_near"]) - 0.4) < 1e-12

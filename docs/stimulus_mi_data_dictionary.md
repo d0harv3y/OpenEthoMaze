@@ -8,7 +8,7 @@ Pipeline overview: [`stimulus_mi_contract.md`](stimulus_mi_contract.md).
 
 - **KL** / **D_KL** — Kullback–Leibler divergence; **H(·)** — Shannon entropy
 - **kpMS** — keypoint-MoSeq (per-frame pose syllable rows)
-- **ITI** / **`iti`** — inter-trial interval (`iti_wait` bouts, mapped to `iti` in MI tables)
+- **ITI** / **`iti`** — inter-trial interval (`wait` bouts, mapped to `iti` in MI tables)
 - **MLE** — maximum-likelihood estimate; **OLS** — ordinary least squares (linear regression)
 - **FDR** — false discovery rate; **BH** — Benjamini–Hochberg correction
 - **PWM** — pulse-width modulation; **px** — pixels
@@ -22,7 +22,7 @@ Pipeline overview: [`stimulus_mi_contract.md`](stimulus_mi_contract.md).
 Command that produced the full set:  
 `uv run maze-compute-stimulus-mi --kpms-root … --per-trial --sliced-tests --trial-nulls`
 
-**Confound (all MI tables):** delivered duty is a deterministic function of distance-to-exit; mutual information *I* conflates stimulus response with goal proximity. **ITI control:** use `iti × duty` as the clean negative control; `iti × dist` may clear the null because distance varies systematically during `iti_wait` (exit opposite start) — see [contract § Confound](stimulus_mi_contract.md#confound-report-in-all-outputs).
+**Confound (all MI tables):** delivered duty is a deterministic function of distance-to-exit; mutual information *I* conflates stimulus response with goal proximity. **ITI control:** use `iti × duty` as the clean negative control; `iti × dist` may clear the null because distance varies systematically during `wait` (exit opposite start) — see [contract § Confound](stimulus_mi_contract.md#confound-report-in-all-outputs).
 
 **What *I* is:**
 
@@ -57,7 +57,7 @@ Units: bits (log₂). Not KL divergence between the two marginals alone.
 
 | Field | Allowed values | Meaning |
 |-------|----------------|---------|
-| `phase` **(MI tables)** | `run`, `iti` | From bout majority state: `run` vs `iti_wait` (mapped to `iti`). **Not** the manifest column also named `phase`. |
+| `phase` **(MI tables)** | `run`, `iti` | From bout majority state: `run` vs `wait` (mapped to `iti`). **Not** the manifest column also named `phase`. |
 | `stim_var` | `duty`, `dist` | Stimulus scalar → global bins |
 | `mi_type` | `occupancy`, `transition` | `I(syll; stim)` vs `I(next; stim | current)` |
 | `sex` | `F`, `M` | |
@@ -65,7 +65,7 @@ Units: bits (log₂). Not KL divergence between the two marginals alone.
 | `tx` | `RBSF-1`, `n/a` (blank→`n/a`) | Treatment |
 
 **Primary analysis cells** (when-tests + sliced-tests):  
-`phase=run` ∧ `mi_type=occupancy` ∧ `stim_var ∈ {duty, dist}`.
+`interval=run` ∧ `mi_type=occupancy` ∧ `stim_var ∈ {duty, dist}`.
 
 ---
 
@@ -95,7 +95,7 @@ One row = one syllable **bout** with mean stimulus over its kpMS rows.
 | `row_end_exclusive` | int | Exclusive end row |
 | `bout_frames` | int | `row_end_exclusive - row_start` |
 | `bout_duration_s` | float | Duration (s) |
-| `bout_primary_state` | str | Majority legacy trial state in bout (`run`, `iti_wait`, …) |
+| `bout_primary_state` | str | Majority legacy trial state in bout (`run`, `wait`, …) |
 
 ### Stimulus scalars
 
@@ -139,7 +139,7 @@ One row = one animal’s **pooled** MI for one `(phase, stim_var, mi_type)` cell
 | `null_perm_mean` | bits | Mean under bin-label permutation |
 | `null_perm_p` | [0,1] | Right-tail p vs permutation (loose) |
 | `excess` | bits | `mi_mm − null_circ_mean` |
-| `iti_control_flag` | 0/1 | 1 if `phase=iti` and `mi_mm` clears circular null — treat as warning (esp. `stim_var=dist`) |
+| `wait_control_flag` | 0/1 | 1 if `interval=iti` and `mi_mm` clears circular null — treat as warning (esp. `stim_var=dist`) |
 
 ---
 
@@ -275,7 +275,7 @@ Join coverage: input/output row counts, trials seen/joined/skipped, experiment f
 
 ### `compute_stimulus_mi_summary.json`
 
-Compute coverage: `n_animals`, `n_mi_rows`, `n_group_tests`, `n_iti_control_flags`, `iti_flagged[]`, paths, `per_trial`, `trial_nulls`, `n_trial_mi_rows`, `n_trial_animal_summaries`, `n_when_group_tests`, `n_sliced_group_tests`, confound note.
+Compute coverage: `n_animals`, `n_mi_rows`, `n_group_tests`, `n_wait_control_flags`, `iti_flagged[]`, paths, `per_trial`, `trial_nulls`, `n_trial_mi_rows`, `n_trial_animal_summaries`, `n_when_group_tests`, `n_sliced_group_tests`, confound note.
 
 ---
 
@@ -283,7 +283,7 @@ Compute coverage: `n_animals`, `n_mi_rows`, `n_group_tests`, `n_iti_control_flag
 
 1. `stimulus_bin_edges.json` — codebook  
 2. `mi_per_animal.csv` + `group_mi_tests.csv` + `group_mi_excess_tests.csv` — is coupling present? marginal strata?  
-3. Quarantine `iti_control_flag` / iti×dist  
+3. Quarantine `wait_control_flag` / iti×dist  
 4. `mi_trial_animal_summaries.csv` + `group_mi_when_tests.csv` — does coupling **change** over career?  
 5. `group_mi_sliced_tests.csv` — conditional simple effects; prefer `q_bh` within family over raw `p`  
 6. `mi_per_trial.csv` — only for trajectory plots / QC (quality control)  

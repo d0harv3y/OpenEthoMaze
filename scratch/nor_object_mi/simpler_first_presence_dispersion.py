@@ -121,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             eng[
                 [
-                    "phase_layer",
+                    "session",
                     "step",
                     "metric",
                     "median_of_median",

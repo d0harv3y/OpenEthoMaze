@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Iterator
+from typing import Any, Iterator
 
 import h5py
 
@@ -20,11 +20,19 @@ class JoinedSession:
     kpms_key: str
     animal_id: str
     raw_session: str
-    phase_layer: str
-    condition_layer: str
-    tx: str
+    session: str
+    trial: str
+    condition: str
     sex: str
     cohort: str
+
+
+def _h5_attr(node: Any, *names: str) -> str:
+    """Read first present attr among *names* (live name first, then legacy)."""
+    for name in names:
+        if name in node.attrs:
+            return str(node.attrs.get(name) or "")
+    return ""
 
 
 def parse_kpms_group(
@@ -54,14 +62,15 @@ def parse_kpms_group(
     elif kind == "NO OBJ":
         raw = f"{nor_n}_no_obj"
     else:
-        raise ValueError(f"unhandled condition token {kind!r} in {filename!r}")
+        raise ValueError(f"unhandled trial token {kind!r} in {filename!r}")
     return animal_id, raw
 
 
 def filter_cohort(nor_h5: h5py.File) -> dict[str, object]:
-    """Keep animal groups with non-blank tx/sex; record drops.
+    """Keep animal groups with non-blank condition/sex; record drops.
 
     Returns a JSON-serializable summary with kept/dropped IDs and counts.
+    On-disk NOR H5 may still use legacy attr ``tx`` until re-export.
     """
     kept: list[str] = []
     dropped_blank: list[dict[str, str]] = []
@@ -76,13 +85,13 @@ def filter_cohort(nor_h5: h5py.File) -> dict[str, object]:
         if not has_nor:
             dropped_non_animal.append(str(key))
             continue
-        tx = str(node.attrs.get("tx", "") or "").strip()
+        condition = _h5_attr(node, "condition", "tx").strip()
         sex = str(node.attrs.get("sex", "") or "").strip()
-        if not tx or not sex:
+        if not condition or not sex:
             dropped_blank.append(
                 {
                     "animal_id": str(key),
-                    "tx": tx,
+                    "condition": condition,
                     "sex": sex,
                     "cohort": str(node.attrs.get("cohort", "") or ""),
                 }
@@ -93,7 +102,7 @@ def filter_cohort(nor_h5: h5py.File) -> dict[str, object]:
     return {
         "n_kept": len(kept),
         "kept_ids": kept,
-        "n_dropped_blank_tx_or_sex": len(dropped_blank),
+        "n_dropped_blank_condition_or_sex": len(dropped_blank),
         "dropped_blank": dropped_blank,
         "n_dropped_non_animal": len(dropped_non_animal),
         "dropped_non_animal_ids": dropped_non_animal,
@@ -105,7 +114,7 @@ def iter_joined_sessions(
     kpms_h5: h5py.File,
     *,
     kept_ids: set[str],
-    phase_layer: str | None = "NOR_TX",
+    session: str | None = "NOR_TX",
 ) -> Iterator[JoinedSession]:
     """Yield joined sessions present in both HDF5s for kept animals."""
     for kpms_key in sorted(kpms_h5.keys()):
@@ -118,17 +127,17 @@ def iter_joined_sessions(
         if animal_id not in nor_h5 or raw_session not in nor_h5[animal_id]:
             continue
         sg = nor_h5[animal_id][raw_session]
-        pl = str(sg.attrs.get("phase_layer", "") or "")
-        if phase_layer is not None and pl != phase_layer:
+        pl = _h5_attr(sg, "session", "phase_layer")
+        if session is not None and pl != session:
             continue
         ag = nor_h5[animal_id]
         yield JoinedSession(
             kpms_key=str(kpms_key),
             animal_id=animal_id,
             raw_session=raw_session,
-            phase_layer=pl,
-            condition_layer=str(sg.attrs.get("condition_layer", "") or ""),
-            tx=str(ag.attrs.get("tx", "") or ""),
+            session=pl,
+            trial=_h5_attr(sg, "trial", "condition_layer"),
+            condition=_h5_attr(ag, "condition", "tx"),
             sex=str(ag.attrs.get("sex", "") or ""),
             cohort=str(ag.attrs.get("cohort", "") or ""),
         )
@@ -138,7 +147,7 @@ def iter_nor_sessions(
     nor_h5: h5py.File,
     *,
     kept_ids: set[str],
-    phase_layer: str | None = None,
+    session: str | None = None,
 ) -> Iterator[JoinedSession]:
     """Yield NOR sessions for kept animals (no kpMS join)."""
     for animal_id in sorted(kept_ids):
@@ -151,8 +160,8 @@ def iter_nor_sessions(
             sg = ag[raw_session]
             if not isinstance(sg, h5py.Group):
                 continue
-            pl = str(sg.attrs.get("phase_layer", "") or "")
-            if phase_layer is not None and pl != phase_layer:
+            pl = _h5_attr(sg, "session", "phase_layer")
+            if session is not None and pl != session:
                 continue
             if not (pl.startswith("NOR") or str(raw_session).startswith("NOR")):
                 continue
@@ -160,9 +169,9 @@ def iter_nor_sessions(
                 kpms_key="",
                 animal_id=str(animal_id),
                 raw_session=str(raw_session),
-                phase_layer=pl,
-                condition_layer=str(sg.attrs.get("condition_layer", "") or ""),
-                tx=str(ag.attrs.get("tx", "") or ""),
+                session=pl,
+                trial=_h5_attr(sg, "trial", "condition_layer"),
+                condition=_h5_attr(ag, "condition", "tx"),
                 sex=str(ag.attrs.get("sex", "") or ""),
                 cohort=str(ag.attrs.get("cohort", "") or ""),
             )

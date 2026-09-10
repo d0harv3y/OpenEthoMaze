@@ -37,7 +37,7 @@ from maze.pipeline.viz.block_dwell_average import (
 
 SUMMARY_FIELDS = (
     "session",
-    "tx",
+    "condition",
     "sex",
     "strain",
     "block",
@@ -71,7 +71,7 @@ def _load_manifest_rows(
         & (df["researcher"].astype(str) == researcher)
     )
     sub = df.loc[mask].copy()
-    for col in ("sex", "strain", "tx"):
+    for col in ("sex", "strain", "condition"):
         sub = sub[sub[col].notna()]
         sub = sub[sub[col].astype(str).str.strip() != ""]
         sub = sub[sub[col].astype(str) != "?"]
@@ -121,9 +121,9 @@ def run_average_block_dwell_plots(
                 continue
             if trial in trials:
                 if group_by_session:
-                    key = (str(row.session), str(row.tx), str(row.sex), str(row.strain), block)
+                    key = (str(row.session), str(row.condition), str(row.sex), str(row.strain), block)
                 else:
-                    key = (str(row.tx), str(row.sex), str(row.strain), block)
+                    key = (str(row.condition), str(row.sex), str(row.strain), block)
                 groups[key].append((int(row.animal_id), str(row.session), trial))
 
     with open_db(db_path, "r") as h5_file:
@@ -170,7 +170,7 @@ def run_average_block_dwell_plots(
             summary_rows.append(
                 {
                     "session": session,
-                    "tx": tx,
+                    "condition": tx,
                     "sex": sex,
                     "strain": strain,
                     "block": block,

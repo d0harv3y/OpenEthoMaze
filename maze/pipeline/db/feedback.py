@@ -32,7 +32,7 @@ def build_feedback_table_from_wm(
     fb = np.zeros(n, dtype=FEEDBACK_ROW_DTYPE)
     fb["frame_index"] = np.arange(n, dtype=np.uint32)
     if trial_start_frame is not None and 0 < trial_start_frame < n:
-        fb["trial_state"][:trial_start_frame] = b"iti_wait"
+        fb["trial_state"][:trial_start_frame] = b"wait"
         fb["trial_state"][trial_start_frame:] = b"run"
     else:
         fb["trial_state"] = b"run"

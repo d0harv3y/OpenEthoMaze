@@ -36,7 +36,7 @@ class StimulusJoinFilterConfig:
     experiments: tuple[str, ...] = ("VASTcont", "VASTalt")
     drop_strains: tuple[str, ...] = ("?", "")
     drop_blank_sex: bool = True
-    tx_values: tuple[str, ...] | None = None
+    condition_values: tuple[str, ...] | None = None
     allowed_strains: frozenset[str] = ALLOWED_GENOTYPE_STRAINS
 
 
@@ -107,8 +107,8 @@ def filter_bout_rows(rows: Sequence[Mapping[str, str]], cfg: StimulusJoinFilterC
         sex = _normalize_label(row.get("sex", ""))
         if cfg.drop_blank_sex and not sex:
             continue
-        tx = _normalize_label(row.get("tx", ""))
-        if cfg.tx_values is not None and tx not in cfg.tx_values:
+        tx = _normalize_label(row.get("condition", ""))
+        if cfg.condition_values is not None and tx not in cfg.condition_values:
             continue
         out.append(dict(row))
     return out

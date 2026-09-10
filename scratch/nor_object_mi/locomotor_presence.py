@@ -2,7 +2,7 @@
 
 Not kpMS. Categories are movement vs immobile spans from NOR ambulation
 hysteresis. Grain: animal × phase × condition. Protocol: one-sample t of
-paired Δ vs 0 within sex (txs pooled). Primary step: no_obj → identical_obj.
+paired Δ vs 0 within sex (txs pooled). Primary step: no_obj → id_obj.
 """
 
 from __future__ import annotations
@@ -12,10 +12,10 @@ import pandas as pd
 
 from nor_object_mi.simpler_first_da import apply_bh
 from nor_object_mi.simpler_first_presence import NEAR_R_M, STEPS
-from nor_object_mi.simpler_first_protocol_prologue import PHASES, ttest_one_sample
+from nor_object_mi.simpler_first_protocol_prologue import SESSIONS, ttest_one_sample
 from nor_object_mi.simpler_first_q1 import SEX_ORDER, anova_within_sex, weighted_mean
 
-PRIMARY_STEP = "no_obj->identical"
+PRIMARY_STEP = "no_obj->id_obj"
 PRIMARY_METRICS = (
     "p_move",
     "median_move_duration_s",
@@ -46,7 +46,7 @@ def _clock_session_scalars(df: pd.DataFrame, *, r_m: float) -> pd.DataFrame:
     g["_frames"] = frames
     dist = pd.to_numeric(g["bout_mean_dist_any_m"], errors="coerce")
     g["_near"] = np.isfinite(dist.to_numpy()) & (dist.to_numpy() < float(r_m))
-    keys = ["animal_id", "phase_layer", "condition_layer"]
+    keys = ["animal_id", "session", "trial"]
     rows: list[dict[str, object]] = []
     for key, sub in g.groupby(keys, sort=False):
         aid, phase, cond = key
@@ -56,8 +56,8 @@ def _clock_session_scalars(df: pd.DataFrame, *, r_m: float) -> pd.DataFrame:
         n_near = float(np.nansum(near_w)) if near_w.size else 0.0
         rec: dict[str, object] = {
             "animal_id": str(aid),
-            "phase_layer": phase,
-            "condition_layer": cond,
+            "session": phase,
+            "trial": cond,
             "n_bouts": int(len(sub)),
             "n_frames": n_frames,
             "n_near_frames": n_near,
@@ -74,7 +74,7 @@ def _clock_session_scalars(df: pd.DataFrame, *, r_m: float) -> pd.DataFrame:
             ),
             "frac_near": (n_near / n_frames) if n_frames > 0 else float("nan"),
         }
-        for c in ("sex", "tx"):
+        for c in ("sex", "condition"):
             if c in sub.columns:
                 rec[c] = sub[c].iloc[0]
         rows.append(rec)
@@ -92,7 +92,7 @@ def session_locomotor_table(
     st = _clock_session_scalars(still, r_m=r_m)
     if mv.empty and st.empty:
         return pd.DataFrame()
-    keys = ["animal_id", "phase_layer", "condition_layer"]
+    keys = ["animal_id", "session", "trial"]
     m = mv.rename(
         columns={
             "n_bouts": "n_move_bouts",
@@ -120,7 +120,7 @@ def session_locomotor_table(
         out["sex"] = out["sex"].fillna(out["sex_stillmeta"])
         out = out.drop(columns=["sex_stillmeta"])
     if "tx_stillmeta" in out.columns:
-        out["tx"] = out["tx"].fillna(out["tx_stillmeta"])
+        out["condition"] = out["condition"].fillna(out["tx_stillmeta"])
         out = out.drop(columns=["tx_stillmeta"])
     for c in (
         "n_move_bouts",
@@ -152,24 +152,24 @@ def paired_step_deltas(sessions: pd.DataFrame) -> pd.DataFrame:
     if sessions.empty:
         return pd.DataFrame()
     metrics = [c for c in SESSION_METRICS if c in sessions.columns]
-    for phase in PHASES:
-        ac = sessions[sessions["phase_layer"] == phase]
+    for phase in SESSIONS:
+        ac = sessions[sessions["session"] == phase]
         if ac.empty:
             continue
         for step, left, right in STEPS:
-            L = ac[ac["condition_layer"] == left].set_index("animal_id")
-            R = ac[ac["condition_layer"] == right].set_index("animal_id")
+            L = ac[ac["trial"] == left].set_index("animal_id")
+            R = ac[ac["trial"] == right].set_index("animal_id")
             common = sorted(set(L.index.astype(str)) & set(R.index.astype(str)))
             recs: list[dict[str, object]] = []
             for aid in common:
                 row: dict[str, object] = {
                     "animal_id": aid,
-                    "phase_layer": phase,
+                    "session": phase,
                     "step": step,
                     "left": left,
                     "right": right,
                     "sex": str(L.loc[aid, "sex"]),
-                    "tx": str(L.loc[aid, "tx"]),
+                    "condition": str(L.loc[aid, "condition"]),
                 }
                 for m in metrics:
                     a = float(L.loc[aid, m])
@@ -199,8 +199,8 @@ def hunt_tests(paired: pd.DataFrame) -> pd.DataFrame:
     for step, _l, _r in STEPS:
         fam = "primary" if step == PRIMARY_STEP else "companion"
         metrics = PRIMARY_METRICS if fam == "primary" else PRIMARY_METRICS[:3]
-        for phase in PHASES:
-            g = paired[(paired["step"] == step) & (paired["phase_layer"] == phase)]
+        for phase in SESSIONS:
+            g = paired[(paired["step"] == step) & (paired["session"] == phase)]
             if g.empty:
                 continue
             for metric in metrics:
@@ -213,7 +213,7 @@ def hunt_tests(paired: pd.DataFrame) -> pd.DataFrame:
                     rows.append(
                         {
                             "sex": sex,
-                            "phase_layer": phase,
+                            "session": phase,
                             "step": step,
                             "metric": metric,
                             "p": rec["p"],
@@ -228,7 +228,7 @@ def hunt_tests(paired: pd.DataFrame) -> pd.DataFrame:
                     )
             if step == PRIMARY_STEP and "delta_p_move" in g.columns:
                 an = anova_within_sex(
-                    g[["animal_id", "sex", "tx", "delta_p_move"]].rename(
+                    g[["animal_id", "sex", "condition", "delta_p_move"]].rename(
                         columns={"delta_p_move": "delta_p_move"}
                     ),
                     metric="delta_p_move",
@@ -237,7 +237,7 @@ def hunt_tests(paired: pd.DataFrame) -> pd.DataFrame:
                     rows.append(
                         {
                             "sex": rec["sex"],
-                            "phase_layer": phase,
+                            "session": phase,
                             "step": step,
                             "metric": "delta_p_move",
                             "p": rec["p"],
@@ -258,7 +258,7 @@ def hunt_tests(paired: pd.DataFrame) -> pd.DataFrame:
     tests["hit_fdr05"] = False
     tests = tests.reset_index(drop=True)
     prim = tests["family"].astype(str) == "primary"
-    for _, g in tests.loc[prim].groupby(["sex", "phase_layer"], sort=False):
+    for _, g in tests.loc[prim].groupby(["sex", "session"], sort=False):
         bh = apply_bh(g, p_col="p", q_col="q_bh")
         tests.loc[g.index, "q_bh"] = bh["q_bh"].to_numpy()
         tests.loc[g.index, "hit_fdr05"] = bh["hit_fdr05"].to_numpy()

@@ -15,12 +15,12 @@ from scipy import stats
 from nor_object_mi.simpler_first_da import apply_bh_grouped
 from nor_object_mi.simpler_first_phase_paired import PHASE_STEPS
 from nor_object_mi.simpler_first_presence import (
-    CONDS,
-    PHASES,
+    TRIALS,
+    SESSIONS,
     STEPS,
     _paired_delta_table,
 )
-from nor_object_mi.simpler_first_q1 import SEX_ORDER, TX_ORDER, anova_within_sex, kruskal_within_sex
+from nor_object_mi.simpler_first_q1 import SEX_ORDER, CONDITION_ORDER, anova_within_sex, kruskal_within_sex
 from nor_object_mi.simpler_first_q2 import permanova_braycurtis
 
 # Composition / COUNT / UNCERTAINTY paired Δs (depend on grain + weighting)
@@ -59,7 +59,7 @@ def _stage_b_rows(
     animals = pd.DataFrame(
         {
             "sex": dtab["sex"].to_numpy(),
-            "tx": dtab["tx"].to_numpy(),
+            "condition": dtab["condition"].to_numpy(),
             value_col: pd.to_numeric(dtab[value_col], errors="coerce").to_numpy(dtype=np.float64),
         }
     )
@@ -81,8 +81,8 @@ def _stage_b_rows(
             "median_GHSD": r["median_GHSD"],
             "median_RBSD": r["median_RBSD"],
         }
-        for tx in TX_ORDER:
-            key = f"mean_{tx}"
+        for condition in CONDITION_ORDER:
+            key = f"mean_{condition}"
             if key in r.index:
                 rec[key] = r[key]
         rows.append(rec)
@@ -128,8 +128,8 @@ def run_condition_scalars(
     metrics = scalar_metrics_for_cell(grain=grain, weighting=weighting)
     if ac.empty:
         return pd.DataFrame(), pd.DataFrame()
-    for phase in [p for p, _ in PHASES]:
-        sub = ac[ac["phase_layer"] == phase]
+    for phase in [p for p, _ in SESSIONS]:
+        sub = ac[ac["session"] == phase]
         if sub.empty:
             continue
         phase_rows: list[dict[str, object]] = []
@@ -140,12 +140,12 @@ def run_condition_scalars(
                 left=left,
                 right=right,
                 metrics=metrics,
-                pair_col="condition_layer",
+                pair_col="trial",
             )
             if scal.empty:
                 continue
             scal = scal.copy()
-            scal["phase_layer"] = phase
+            scal["session"] = phase
             scal["grain"] = grain
             scal["weighting"] = weighting
             scal["axis"] = "condition_within_phase"
@@ -160,7 +160,7 @@ def run_condition_scalars(
                 ):
                     phase_rows.append(
                         {
-                            "phase_layer": phase,
+                            "session": phase,
                             "step": step,
                             "left": left,
                             "right": right,
@@ -179,7 +179,7 @@ def run_condition_scalars(
             ):
                 phase_rows.append(
                     {
-                        "phase_layer": phase,
+                        "session": phase,
                         "step": step,
                         "left": left,
                         "right": right,
@@ -192,7 +192,7 @@ def run_condition_scalars(
         if phase_rows:
             sh_df = pd.DataFrame(phase_rows)
             # Smaller family: steps within phase × sex × metric (size 3)
-            sh_df = apply_bh_grouped(sh_df, ("sex", "phase_layer", "metric"))
+            sh_df = apply_bh_grouped(sh_df, ("sex", "session", "metric"))
             test_parts.append(sh_df)
     tests = pd.concat(test_parts, ignore_index=True) if test_parts else pd.DataFrame()
     deltas = pd.concat(delta_parts, ignore_index=True) if delta_parts else pd.DataFrame()
@@ -212,8 +212,8 @@ def run_phase_scalars(
     metrics = scalar_metrics_for_cell(grain=grain, weighting=weighting)
     if ac.empty:
         return pd.DataFrame(), pd.DataFrame()
-    for cond in CONDS:
-        sub = ac[ac["condition_layer"] == cond]
+    for cond in TRIALS:
+        sub = ac[ac["trial"] == cond]
         if sub.empty:
             continue
         cond_rows: list[dict[str, object]] = []
@@ -224,13 +224,13 @@ def run_phase_scalars(
                 left=left,
                 right=right,
                 metrics=metrics,
-                pair_col="phase_layer",
+                pair_col="session",
             )
             if scal.empty:
                 continue
             scal = scal.copy()
-            scal["condition_layer"] = cond
-            scal["phase_step"] = step
+            scal["trial"] = cond
+            scal["session_step"] = step
             scal["grain"] = grain
             scal["weighting"] = weighting
             scal["axis"] = "phase_within_condition"
@@ -245,8 +245,8 @@ def run_phase_scalars(
                 ):
                     cond_rows.append(
                         {
-                            "condition_layer": cond,
-                            "phase_step": step,
+                            "trial": cond,
+                            "session_step": step,
                             "left": left,
                             "right": right,
                             "grain": grain,
@@ -264,8 +264,8 @@ def run_phase_scalars(
             ):
                 cond_rows.append(
                     {
-                        "condition_layer": cond,
-                        "phase_step": step,
+                        "trial": cond,
+                        "session_step": step,
                         "left": left,
                         "right": right,
                         "grain": grain,
@@ -276,7 +276,7 @@ def run_phase_scalars(
                 )
         if cond_rows:
             sh_df = pd.DataFrame(cond_rows)
-            sh_df = apply_bh_grouped(sh_df, ("sex", "condition_layer", "metric"))
+            sh_df = apply_bh_grouped(sh_df, ("sex", "trial", "metric"))
             test_parts.append(sh_df)
     tests = pd.concat(test_parts, ignore_index=True) if test_parts else pd.DataFrame()
     deltas = pd.concat(delta_parts, ignore_index=True) if delta_parts else pd.DataFrame()
@@ -294,7 +294,7 @@ def arm_pairwise_contrasts(
 
     Rank twin: Mann–Whitney. Mean twin (``stage_b='anova'``): Welch t-test.
     """
-    need = set(group_cols) | {"sex", "tx", value_col}
+    need = set(group_cols) | {"sex", "condition", value_col}
     if deltas.empty or any(c not in deltas.columns for c in need):
         return pd.DataFrame()
     use_welch = stage_b == "anova"
@@ -305,9 +305,9 @@ def arm_pairwise_contrasts(
             gkeys = (gkeys,)
         meta = dict(zip(keys, gkeys))
         by_tx = {
-            tx: pd.to_numeric(g.loc[g["tx"] == tx, value_col], errors="coerce")
+            condition: pd.to_numeric(g.loc[g["condition"] == tx, value_col], errors="coerce")
             .to_numpy(dtype=np.float64)
-            for tx in TX_ORDER
+            for condition in CONDITION_ORDER
         }
         for a, b, label in ARM_PAIRS:
             va = by_tx[a]
@@ -366,13 +366,13 @@ def consensus_animal_stage_b(
     stage_b: str = "kruskal",
 ) -> pd.DataFrame:
     """Median Δ across models per animal, then one within-sex Stage-B by tx."""
-    need = {"model", "animal_id", "sex", "tx", "grain", "weighting", hold_col, step_col}
+    need = {"model", "animal_id", "sex", "condition", "grain", "weighting", hold_col, step_col}
     if deltas.empty or any(c not in deltas.columns for c in need):
         return pd.DataFrame()
     present = [c for c in value_cols if c in deltas.columns]
     if not present:
         return pd.DataFrame()
-    keys = ["animal_id", "sex", "tx", "grain", "weighting", hold_col, step_col]
+    keys = ["animal_id", "sex", "condition", "grain", "weighting", hold_col, step_col]
     med = deltas.groupby(keys, as_index=False)[present].median(numeric_only=True)
     n_mod = deltas.groupby(keys)["model"].nunique()
     med["n_models"] = med.set_index(keys).index.map(n_mod)
@@ -458,7 +458,7 @@ def _counts_to_matrix(
             {
                 "animal_id": str(r["animal_id"]),
                 "sex": str(r["sex"]),
-                "tx": str(r["tx"]),
+                "condition": str(r["condition"]),
             }
         )
     if not maps:
@@ -494,9 +494,9 @@ def permanova_endpoint_by_tx(
     rows: list[dict[str, object]] = []
     if ac.empty:
         return pd.DataFrame()
-    for phase in [p for p, _ in PHASES]:
-        for cond in CONDS:
-            sub = ac[(ac["phase_layer"] == phase) & (ac["condition_layer"] == cond)]
+    for phase in [p for p, _ in SESSIONS]:
+        for cond in TRIALS:
+            sub = ac[(ac["session"] == phase) & (ac["trial"] == cond)]
             if sub.empty:
                 continue
             meta, P, _syll = _counts_to_matrix(sub)
@@ -506,7 +506,7 @@ def permanova_endpoint_by_tx(
                 mask = meta["sex"].to_numpy() == sex
                 if int(mask.sum()) < 4:
                     continue
-                groups = meta.loc[mask, "tx"].to_numpy()
+                groups = meta.loc[mask, "condition"].to_numpy()
                 rec = permanova_braycurtis(
                     P[mask],
                     groups,
@@ -515,22 +515,22 @@ def permanova_endpoint_by_tx(
                 )
                 rows.append(
                     {
-                        "phase_layer": phase,
-                        "condition_layer": cond,
+                        "session": phase,
+                        "trial": cond,
                         "grain": grain,
                         "weighting": weighting,
                         "sex": sex,
                         "question": "permanova_endpoint_tx",
                         "metric": "braycurtis_composition",
                         **{k: rec[k] for k in ("test", "distance", "F", "p", "n", "n_perm")},
-                        **{f"n_{tx}": int(np.sum(groups == tx)) for tx in TX_ORDER},
+                        **{f"n_{condition}": int(np.sum(groups == condition)) for condition in CONDITION_ORDER},
                     }
                 )
     out = pd.DataFrame(rows)
     if out.empty:
         return out
     # Smaller family analogue: conditions within phase × sex (size 3)
-    return apply_bh_grouped(out, ("sex", "phase_layer", "grain", "weighting"))
+    return apply_bh_grouped(out, ("sex", "session", "grain", "weighting"))
 
 
 def grain_contrast_scalar_deltas(
@@ -547,7 +547,7 @@ def grain_contrast_scalar_deltas(
     """near − full on the same paired Δ, then Stage-B by tx (smaller BH families)."""
     if deltas_full.empty or deltas_near.empty:
         return pd.DataFrame(), pd.DataFrame()
-    keys = ["animal_id", "sex", "tx", hold_col, step_col]
+    keys = ["animal_id", "sex", "condition", hold_col, step_col]
     present = [c for c in value_cols if c in deltas_full.columns and c in deltas_near.columns]
     if not present:
         return pd.DataFrame(), pd.DataFrame()
@@ -604,7 +604,7 @@ def grain_contrast_da_deltas(
     """near − full on Δp_k, then within-sex Stage-B by tx + BH across syllables."""
     if da_full.empty or da_near.empty:
         return pd.DataFrame(), pd.DataFrame()
-    keys = ["animal_id", "sex", "tx", hold_col, step_col, "raw_syllable_id"]
+    keys = ["animal_id", "sex", "condition", hold_col, step_col, "raw_syllable_id"]
     for df, name in ((da_full, "full"), (da_near, "near")):
         missing = [c for c in keys + ["delta_p"] if c not in df.columns]
         if missing:

@@ -31,10 +31,10 @@ def default_discovery_data_dirs(config: "AcquisitionConfig") -> Optional[list[Pa
     return [Path(out)]
 
 
-def default_treatment_labels_path(config: "AcquisitionConfig") -> Path:
-    """Prefer ``<output_dir>/treatment_labels.csv``; else repo ``inputs/treatment_labels.csv``."""
+def default_condition_labels_path(config: "AcquisitionConfig") -> Path:
+    """Prefer ``<output_dir>/condition_labels.csv``; else repo ``inputs/condition_labels.csv``."""
     out = (config.output_dir or "").strip()
     if out:
-        return Path(out) / "treatment_labels.csv"
+        return Path(out) / "condition_labels.csv"
     repo_root = Path(__file__).resolve().parents[2]
-    return repo_root / "inputs" / "treatment_labels.csv"
+    return repo_root / "inputs" / "condition_labels.csv"

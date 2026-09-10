@@ -1,6 +1,6 @@
 """Grid movies for the TX pooled DA argmax syllable (cluster_id 13).
 
-One 4x6 crowd movie per paramscan model, sampled from NOR_TX / novel_obj
+One 4x6 crowd movie per paramscan model, sampled from NOR_TX / nvl_obj
 sessions. raw_syllable_id is model-local; labels include cluster_id.
 
 Regen (OpenEthoMaze repo root; needs --extra kpms)::
@@ -38,9 +38,9 @@ DEFAULT_NOR = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\my_NOR_res
 DEFAULT_VIDEO_ROOT = Path(r"C:\Users\admin\Documents\work\sack\datas\impress")
 KPMS_PREFIX = "D:-nor vids-"
 WINNER_CSV = "tx_pooled_argmax_syllable.csv"
-NOVELTY_STEP = "identical->novel"
+NOVELTY_STEP = "id_obj->nvl_obj"
 PHASE = "NOR_TX"
-CONDITION = "novel_obj"
+CONDITION = "nvl_obj"
 N_BODY = 8
 WINDOW_SIZE = 384
 ROWS = 4
@@ -77,7 +77,7 @@ Crowd movies (keypoint-MoSeq grid) of the **NOR_TX** pooled DA winner
 ## Grain
 
 One MP4 per **model**. Cells = sampled bouts of that model's `raw_syllable_id`
-on `phase_layer=NOR_TX` and `condition_layer=novel_obj`.
+on `session=NOR_TX` and `trial=nvl_obj`.
 
 `raw_syllable_id` is **not** portable across models. The shared claim is
 HDBSCAN `cluster_id=13` (pause/still-like kinematics).
@@ -86,7 +86,7 @@ HDBSCAN `cluster_id=13` (pause/still-like kinematics).
 
 | Source | Role |
 |--------|------|
-| `tx_pooled_argmax_syllable.csv` | winner id (novelty step `identical->novel`) |
+| `tx_pooled_argmax_syllable.csv` | winner id (novelty step `id_obj->nvl_obj`) |
 | `paramscan_*/results.h5` | syllable, centroid, heading |
 | `my_NOR_results.h5` | join + cohort filter |
 | `impress/standard format/**/*.mp4` | video tiles |
@@ -101,7 +101,7 @@ Not a shared syllable label. Not occupancy DA itself. Not keypoints-only.
 
 def _winners_novelty(da_dir: Path) -> pd.DataFrame:
     w = pd.read_csv(da_dir / WINNER_CSV)
-    sub = w[(w["phase_layer"] == PHASE) & (w["step"] == NOVELTY_STEP)].copy()
+    sub = w[(w["session"] == PHASE) & (w["step"] == NOVELTY_STEP)].copy()
     if sub.empty:
         raise SystemExit(f"no novelty TX winners in {da_dir / WINNER_CSV}")
     return sub.sort_values("model")
@@ -232,9 +232,9 @@ def main(argv: list[str] | None = None) -> int:
                 sessions = [
                     s
                     for s in iter_joined_sessions(
-                        nor_h5, kpms_h5, kept_ids=kept, phase_layer=PHASE
+                        nor_h5, kpms_h5, kept_ids=kept, session=PHASE
                     )
-                    if s.condition_layer == CONDITION
+                    if s.trial == CONDITION
                 ]
             keys = [s.kpms_key for s in sessions]
             video_paths: dict[str, str] = {}

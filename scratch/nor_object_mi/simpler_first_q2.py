@@ -1,6 +1,6 @@
-"""Q2: syllable composition in the locked novel_obj window (COUNT / UNCERTAINTY / DIFFERENCE).
+"""Q2: syllable composition in the locked nvl_obj window (COUNT / UNCERTAINTY / DIFFERENCE).
 
-Grain: animal × NOR_TX × novel_obj; pool bout frames by raw_syllable_id.
+Grain: animal × NOR_TX × nvl_obj; pool bout frames by raw_syllable_id.
 PERMANOVA is analogy-only (syllable domain + this grain). No CLR / PCoA / UniFrac.
 skbio is not in the env; permutation PERMANOVA uses SciPy Bray–Curtis + Anderson 2001.
 """
@@ -24,8 +24,8 @@ if str(_SCRATCH) not in sys.path:
 from nor_object_mi.simpler_first_q1 import (
     LOCKED,
     SEX_ORDER,
-    TX_COLORS,
-    TX_ORDER,
+    CONDITION_COLORS,
+    CONDITION_ORDER,
     kruskal_within_sex,
 )
 
@@ -46,13 +46,13 @@ def shannon_bits(p: np.ndarray) -> float:
 def compositions_from_bouts(
     bouts: pd.DataFrame,
     *,
-    phase_layer: str | None = None,
-    condition_layer: str | None = None,
+    session: str | None = None,
+    trial: str | None = None,
 ) -> tuple[pd.DataFrame, np.ndarray, np.ndarray]:
     """Return (animal table, P n×K frame-share matrix, syllable ids)."""
-    phase = phase_layer or str(LOCKED["phase_layer"])
-    cond = condition_layer or str(LOCKED["condition_layer"])
-    sub = bouts[(bouts["phase_layer"] == phase) & (bouts["condition_layer"] == cond)].copy()
+    phase = session or str(LOCKED["session"])
+    cond = trial or str(LOCKED["trial"])
+    sub = bouts[(bouts["session"] == phase) & (bouts["trial"] == cond)].copy()
     if sub.empty:
         raise ValueError(f"no {cond} bouts for phase {phase}")
     syll_ids = np.sort(sub["raw_syllable_id"].astype(np.int64).unique())
@@ -68,8 +68,8 @@ def compositions_from_bouts(
             {
                 "animal_id": str(aid),
                 "sex": str(g["sex"].iloc[0]),
-                "tx": str(g["tx"].iloc[0]),
-                "phase_layer": phase,
+                "condition": str(g["condition"].iloc[0]),
+                "session": phase,
                 "n_frames": int(tot),
                 "richness": richness,
                 "shannon_bits": shannon_bits(p),
@@ -151,12 +151,12 @@ def permanova_within_sex(meta: pd.DataFrame, P: np.ndarray) -> pd.DataFrame:
     for sex in SEX_ORDER:
         mask = (meta["sex"].to_numpy() == sex)
         sub_p = P[mask]
-        groups = meta.loc[mask, "tx"].to_numpy()
+        groups = meta.loc[mask, "condition"].to_numpy()
         rec = permanova_braycurtis(sub_p, groups)
         rec["sex"] = sex
         rec["metric"] = "braycurtis_composition"
-        for tx in TX_ORDER:
-            rec[f"n_{tx}"] = int(np.sum(groups == tx))
+        for condition in CONDITION_ORDER:
+            rec[f"n_{condition}"] = int(np.sum(groups == condition))
         rows.append(rec)
     return pd.DataFrame(rows)
 
@@ -170,7 +170,7 @@ def judge_q2(
         out: list[str] = []
         for _, r in df.iterrows():
             p = float(r["p"]) if pd.notna(r["p"]) else float("nan")
-            ns = [int(r[f"n_{t}"]) for t in TX_ORDER]
+            ns = [int(r[f"n_{t}"]) for t in CONDITION_ORDER]
             if all(n >= 2 for n in ns) and np.isfinite(p) and p < 0.05:
                 out.append(str(r["sex"]))
         return out
@@ -205,23 +205,23 @@ def fig_q2(meta: pd.DataFrame, tests: pd.DataFrame, out: Path) -> None:
         for col_i, sex in enumerate(SEX_ORDER):
             ax = axes[row_i, col_i]
             sub = meta[meta["sex"] == sex]
-            for i, tx in enumerate(TX_ORDER):
-                y = sub.loc[sub["tx"] == tx, metric].to_numpy(dtype=np.float64)
+            for i, tx in enumerate(CONDITION_ORDER):
+                y = sub.loc[sub["condition"] == tx, metric].to_numpy(dtype=np.float64)
                 y = y[np.isfinite(y)]
                 jitter = (np.arange(y.size) - (y.size - 1) / 2) * 0.02
                 ax.scatter(
                     np.full(y.size, i) + jitter,
                     y,
                     s=22,
-                    color=TX_COLORS[tx],
+                    color=CONDITION_COLORS[tx],
                     edgecolors="white",
                     linewidths=0.4,
                     zorder=2,
                 )
                 if y.size:
                     ax.plot([i - 0.22, i + 0.22], [np.median(y)] * 2, color="#222", lw=1.8, zorder=3)
-            ax.set_xticks(range(len(TX_ORDER)))
-            ax.set_xticklabels(list(TX_ORDER))
+            ax.set_xticks(range(len(CONDITION_ORDER)))
+            ax.set_xticklabels(list(CONDITION_ORDER))
             p = p_map.get(sex, float("nan"))
             ptxt = "n/a" if p != p else f"p={p:.3g}"
             ax.set_title(f"{sex}  Kruskal {ptxt}", fontsize=9)
@@ -229,11 +229,11 @@ def fig_q2(meta: pd.DataFrame, tests: pd.DataFrame, out: Path) -> None:
                 ax.set_ylabel(ylab)
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
-    fig.suptitle("Q2 syllable composition · NOR_TX · novel_obj · raw · pilot model", fontsize=10)
+    fig.suptitle("Q2 syllable composition · NOR_TX · nvl_obj · raw · pilot model", fontsize=10)
     fig.text(
         0.01,
         0.01,
-        "Grain: animal × novel_obj · frame-share composition · PERMANOVA is analogy-only (see run_summary)",
+        "Grain: animal × nvl_obj · frame-share composition · PERMANOVA is analogy-only (see run_summary)",
         fontsize=7,
         color="#555",
     )
@@ -261,14 +261,14 @@ def run_q2(bout_csv: Path, out_dir: Path) -> dict[str, object]:
         syllable_id=syll_ids,
         animal_id=meta["animal_id"].to_numpy(),
         sex=meta["sex"].to_numpy(),
-        tx=meta["tx"].to_numpy(),
+        condition=meta["condition"].to_numpy(),
     )
     fig_q2(meta, tests, out_dir / "fig_q2_composition_scalars")
     summary = {
         "status": "ok",
-        **{k: LOCKED[k] for k in ("phase_layer", "condition_layer", "model", "cleanup")},
+        **{k: LOCKED[k] for k in ("session", "trial", "model", "cleanup")},
         "question": "q2_syllable_composition_tx",
-        "grain": "animal × NOR_TX × novel_obj; bout_frames pooled by raw_syllable_id",
+        "grain": "animal × NOR_TX × nvl_obj; bout_frames pooled by raw_syllable_id",
         "bout_csv": str(bout_csv),
         "n_animals": int(len(meta)),
         "n_syllables_in_union": int(syll_ids.size),
@@ -307,7 +307,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--out-dir",
         type=Path,
-        default=root / "_nor_object_mi" / "simpler_first_NOR_TX_novel_obj",
+        default=root / "_nor_object_mi" / "simpler_first_NOR_TX_nvl_obj",
     )
     args = ap.parse_args(argv)
     summary = run_q2(args.bout_csv, args.out_dir)

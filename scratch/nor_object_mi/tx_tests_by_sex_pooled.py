@@ -25,12 +25,12 @@ def _tx_tests(
 ) -> list[dict[str, object]]:
     by_tx: dict[str, list[float]] = defaultdict(list)
     for r in rows:
-        tx = str(r.get("tx", "") or "")
-        if not tx:
+        condition = str(r.get("condition", "") or "")
+        if not condition:
             continue
         val = float(r[Metric])
         if np.isfinite(val):
-            by_tx[tx].append(val)
+            by_tx[condition].append(val)
     levels = sorted(by_tx)
     out: list[dict[str, object]] = []
     if len(levels) < 2:
@@ -42,7 +42,7 @@ def _tx_tests(
         out.append(
             {
                 "sex_stratum": sex_stratum,
-                "factor": "tx",
+                "factor": "condition",
                 "level_a": a,
                 "level_b": b,
                 "n_a": len(by_tx[a]),
@@ -60,7 +60,7 @@ def _tx_tests(
     out.append(
         {
             "sex_stratum": sex_stratum,
-            "factor": "tx",
+            "factor": "condition",
             "level_a": "|".join(levels),
             "level_b": "",
             "n_a": len(all_vals),
@@ -78,7 +78,7 @@ def _tx_tests(
             out.append(
                 {
                     "sex_stratum": sex_stratum,
-                    "factor": "tx",
+                    "factor": "condition",
                     "level_a": a,
                     "level_b": b,
                     "n_a": len(by_tx[a]),
@@ -114,15 +114,15 @@ def _run_by_sex(rows: list[dict[str, object]], *, phase_label: str) -> list[dict
 def _cell_table(rows: list[dict[str, object]], *, phase_label: str) -> list[dict[str, object]]:
     cells: dict[tuple[str, str], list[float]] = defaultdict(list)
     for r in rows:
-        cells[(str(r["sex"]), str(r["tx"]))].append(float(r[Metric]))
+        cells[(str(r["sex"]), str(r["condition"]))].append(float(r[Metric]))
     out = []
-    for (sex, tx), vals in sorted(cells.items()):
+    for (sex, condition), vals in sorted(cells.items()):
         arr = np.asarray(vals, dtype=np.float64)
         out.append(
             {
                 "phase": phase_label,
                 "sex": sex,
-                "tx": tx,
+                "condition": condition,
                 "n": len(arr),
                 "median_delta": float(np.median(arr)),
                 "mean_delta": float(np.mean(arr)),
@@ -157,7 +157,7 @@ def main() -> int:
         {
             "animal_id": aid,
             "sex": tx_map[aid]["sex"],
-            "tx": tx_map[aid]["tx"],
+            "condition": tx_map[aid]["condition"],
             Metric: float(tx_map[aid][Metric]),
         }
         for aid in shared
@@ -166,7 +166,7 @@ def main() -> int:
         {
             "animal_id": aid,
             "sex": bl_map[aid]["sex"],
-            "tx": bl_map[aid]["tx"],
+            "condition": bl_map[aid]["condition"],
             Metric: float(bl_map[aid][Metric]),
         }
         for aid in shared
@@ -179,7 +179,7 @@ def main() -> int:
             {
                 "animal_id": aid,
                 "sex": tx_map[aid]["sex"],
-                "tx": tx_map[aid]["tx"],
+                "condition": tx_map[aid]["condition"],
                 "delta_tx": d_tx,
                 "delta_bl": d_bl,
                 Metric: 0.5 * (d_tx + d_bl),
@@ -217,14 +217,14 @@ def main() -> int:
         for row in tests:
             w.writerow(row)
 
-    cell_fields = ["phase", "sex", "tx", "n", "median_delta", "mean_delta"]
+    cell_fields = ["phase", "sex", "condition", "n", "median_delta", "mean_delta"]
     with (args.out_dir / "delta_cells_by_sex_tx.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cell_fields)
         w.writeheader()
         for row in cells:
             w.writerow(row)
 
-    pool_fields = ["animal_id", "sex", "tx", "delta_bl", "delta_tx", Metric]
+    pool_fields = ["animal_id", "sex", "condition", "delta_bl", "delta_tx", Metric]
     with (args.out_dir / "delta_bl_tx_mean_per_animal.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=pool_fields)
         w.writeheader()
@@ -252,7 +252,7 @@ def main() -> int:
         if row["phase"] != "BL_TX_mean":
             continue
         print(
-            f"  {row['sex']}|{row['tx']}: n={row['n']} median={float(row['median_delta']):+.4f}"
+            f"  {row['sex']}|{row['condition']}: n={row['n']} median={float(row['median_delta']):+.4f}"
         )
     print(f"wrote {args.out_dir}")
     return 0

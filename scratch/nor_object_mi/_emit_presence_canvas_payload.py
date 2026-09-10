@@ -27,14 +27,14 @@ def main() -> None:
 
     cells: dict[str, list[float]] = defaultdict(list)
     for r, d in zip(rows, delta):
-        cells[f"{r['sex']}|{r['tx']}"].append(float(d))
+        cells[f"{r['sex']}|{r['condition']}"].append(float(d))
 
     # scatter subsample for paired panel (all points is fine at 144)
     paired = [
         {
             "id": r["animal_id"],
             "sex": r["sex"],
-            "tx": r["tx"],
+            "condition": r["condition"],
             "absent": round(float(r["excess_absent"]), 4),
             "present": round(float(r["excess_present"]), 4),
             "delta": round(float(r["delta_excess_present_minus_absent"]), 4),

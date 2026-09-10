@@ -1,4 +1,4 @@
-"""Figure: fam/nvl condition ladders; sex=shape, tx=color; within-sex tx tests."""
+"""Figure: fam/nvl condition ladders; sex=shape, condition=color; within-sex tx tests."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ import numpy as np
 from matplotlib.lines import Line2D
 from scipy import stats
 
-TX_ORDER = ("noSD", "GHSD", "RBSD")
+CONDITION_ORDER = ("noSD", "GHSD", "RBSD")
 SEX_ORDER = ("F", "M")
 # High-contrast, colorblind-friendlier triad (not gray-on-blue-brown)
-TX_COLOR = {
+CONDITION_COLOR = {
     "noSD": "#1b9e77",  # teal
     "GHSD": "#d95f02",  # orange
     "RBSD": "#7570b3",  # purple
@@ -50,19 +50,19 @@ def _within_sex_tx_kruskal(
         for r in rows:
             if str(r.get("sex", "")) != sex:
                 continue
-            tx = str(r.get("tx", ""))
-            if tx not in TX_ORDER:
+            condition = str(r.get("condition", ""))
+            if condition not in CONDITION_ORDER:
                 continue
             a = float(r[left_key])
             b = float(r[right_key])
             if np.isfinite(a) and np.isfinite(b):
-                by_tx[tx].append(b - a)
-        samples = [by_tx[t] for t in TX_ORDER if len(by_tx[t]) >= 1]
+                by_tx[condition].append(b - a)
+        samples = [by_tx[t] for t in CONDITION_ORDER if len(by_tx[t]) >= 1]
         if len(samples) < 2 or any(len(s) < 2 for s in samples):
             out.append(
                 {
                     "sex": sex,
-                    "n_by_tx": {t: len(by_tx[t]) for t in TX_ORDER},
+                    "n_by_tx": {t: len(by_tx[t]) for t in CONDITION_ORDER},
                     "stat": float("nan"),
                     "p": float("nan"),
                     "test": "kruskal",
@@ -70,12 +70,12 @@ def _within_sex_tx_kruskal(
             )
             continue
         # require all three tx with n>=2 when possible
-        samples = [by_tx[t] for t in TX_ORDER]
+        samples = [by_tx[t] for t in CONDITION_ORDER]
         if any(len(s) < 2 for s in samples):
             out.append(
                 {
                     "sex": sex,
-                    "n_by_tx": {t: len(by_tx[t]) for t in TX_ORDER},
+                    "n_by_tx": {t: len(by_tx[t]) for t in CONDITION_ORDER},
                     "stat": float("nan"),
                     "p": float("nan"),
                     "test": "kruskal",
@@ -86,11 +86,11 @@ def _within_sex_tx_kruskal(
         out.append(
             {
                 "sex": sex,
-                "n_by_tx": {t: len(by_tx[t]) for t in TX_ORDER},
+                "n_by_tx": {t: len(by_tx[t]) for t in CONDITION_ORDER},
                 "stat": float(stat),
                 "p": float(p),
                 "test": "kruskal",
-                "median_delta_by_tx": {t: float(np.median(by_tx[t])) for t in TX_ORDER},
+                "median_delta_by_tx": {t: float(np.median(by_tx[t])) for t in CONDITION_ORDER},
             }
         )
     return out
@@ -127,9 +127,9 @@ def _ladder_panel(
     # points: color=tx, shape=sex
     for i, r in enumerate(rows):
         sex = str(r.get("sex", ""))
-        tx = str(r.get("tx", ""))
+        condition = str(r.get("condition", ""))
         marker = SEX_MARKER.get(sex, "o")
-        color = TX_COLOR.get(tx, "#888888")
+        color = CONDITION_COLOR.get(condition, "#888888")
         for j in range(3):
             ax.scatter(
                 xs[j][i],
@@ -196,7 +196,7 @@ def _ladder_panel(
 
     # return rows for CSV export
     export: list[dict[str, object]] = []
-    for step_name, tests in (("no_obj->identical", tx_no_id), ("identical->role_nvl", tx_id_obj)):
+    for step_name, tests in (("no_obj->id_obj", tx_no_id), ("identical->role_nvl", tx_id_obj)):
         for t in tests:
             export.append(
                 {
@@ -214,7 +214,7 @@ def _ladder_panel(
     return export
 
 
-def make_figure(rows: list[dict[str, str]], *, out_stem: Path, phase_layer: str, dpi: int = 300) -> None:
+def make_figure(rows: list[dict[str, str]], *, out_stem: Path, session: str, dpi: int = 300) -> None:
     ink, mute = "#1a1a1a", "#6b6b6b"
     n_a = sum(1 for r in rows if r.get("nvl_nearest_hist_locus") == "a")
     n_b = sum(1 for r in rows if r.get("nvl_nearest_hist_locus") == "b")
@@ -243,7 +243,7 @@ def make_figure(rows: list[dict[str, str]], *, out_stem: Path, phase_layer: str,
         ax0,
         rows,
         keys=("excess_no_obj_fam_side", "excess_identical_fam_side", "excess_fam_obj"),
-        labels=("no object", "identical", "fam object"),
+        labels=("no object", "id_obj", "fam object"),
         title="A  Fam-side ladder",
         ink=ink,
     )
@@ -252,18 +252,18 @@ def make_figure(rows: list[dict[str, str]], *, out_stem: Path, phase_layer: str,
         ax1,
         rows,
         keys=("excess_no_obj_nvl_side", "excess_identical_nvl_side", "excess_nvl_obj"),
-        labels=("no object", "identical", "nvl object"),
+        labels=("no object", "id_obj", "nvl object"),
         title="B  Nvl-side ladder",
         ink=ink,
     )
 
     # Counts for legends (animals in this figure)
     n_sex = {s: sum(1 for r in rows if str(r.get("sex", "")) == s) for s in SEX_ORDER}
-    n_tx = {t: sum(1 for r in rows if str(r.get("tx", "")) == t) for t in TX_ORDER}
+    n_tx = {t: sum(1 for r in rows if str(r.get("condition", "")) == t) for t in CONDITION_ORDER}
     n_sex_tx = {
-        (s, t): sum(1 for r in rows if str(r.get("sex", "")) == s and str(r.get("tx", "")) == t)
+        (s, t): sum(1 for r in rows if str(r.get("sex", "")) == s and str(r.get("condition", "")) == t)
         for s in SEX_ORDER
-        for t in TX_ORDER
+        for t in CONDITION_ORDER
     }
 
     sex_handles = [
@@ -285,17 +285,17 @@ def make_figure(rows: list[dict[str, str]], *, out_stem: Path, phase_layer: str,
             [0],
             marker="o",
             color="none",
-            markerfacecolor=TX_COLOR[t],
+            markerfacecolor=CONDITION_COLOR[t],
             markeredgecolor="white",
             markersize=7,
             label=f"{t} (n={n_tx[t]})",
         )
-        for t in TX_ORDER
+        for t in CONDITION_ORDER
     ]
     # Legends live in a dedicated column — never overlap scatter
     leg_tx = ax_leg.legend(
         handles=tx_handles,
-        title="tx",
+        title="condition",
         frameon=False,
         loc="upper left",
         fontsize=7,
@@ -313,10 +313,10 @@ def make_figure(rows: list[dict[str, str]], *, out_stem: Path, phase_layer: str,
         borderaxespad=0.0,
     )
 
-    cell_f = "  ".join(f"{t}={n_sex_tx[('F', t)]}" for t in TX_ORDER)
-    cell_m = "  ".join(f"{t}={n_sex_tx[('M', t)]}" for t in TX_ORDER)
+    cell_f = "  ".join(f"{t}={n_sex_tx[('F', t)]}" for t in CONDITION_ORDER)
+    cell_m = "  ".join(f"{t}={n_sex_tx[('M', t)]}" for t in CONDITION_ORDER)
     fig.suptitle(
-        f"Condition ladder by hist-tagged side — {phase_layer}\n"
+        f"Condition ladder by hist-tagged side — {session}\n"
         "marker shape = sex · marker color = treatment",
         fontsize=11,
         fontweight="bold",
@@ -370,9 +370,9 @@ def main() -> int:
     ap.add_argument("--out-stem", type=Path, default=None)
     args = ap.parse_args()
     rows = _load(args.ladder_csv)
-    phase = str(rows[0]["phase_layer"]) if rows else "NOR_TX"
+    phase = str(rows[0]["session"]) if rows else "NOR_TX"
     out = args.out_stem or (args.ladder_csv.parent / "fig_condition_ladder")
-    make_figure(rows, out_stem=out, phase_layer=phase)
+    make_figure(rows, out_stem=out, session=phase)
     return 0
 
 

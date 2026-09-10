@@ -26,18 +26,18 @@ from nor_object_mi._pub_style import (  # noqa: E402
     FIGSIZE_SLIDES,
     INK,
     MUTE,
-    PHASE_SHORT,
-    PHASES,
+    SESSION_SHORT,
+    SESSIONS,
     SEX_ORDER,
-    TX_COLOR,
-    TX_ORDER,
+    CONDITION_COLOR,
+    CONDITION_ORDER,
     apply_style,
     fig_footnote,
     fig_legend_and_footnote,
     panel_stats_box,
     save_pdf_png,
     text_on_cmap,
-    tx_sex_legend_handles,
+    condition_sex_legend_handles,
     type_scale,
 )
 from nor_object_mi.info_dr_pause_delta import (  # noqa: E402
@@ -65,7 +65,7 @@ def _read_spec(run_dir: Path, y_metric: str | None) -> YMetricSpec:
 
 def _foot_scatter(spec: YMetricSpec, *, dest: str) -> str:
     y_desc = (
-        f"binary pause presence on novel_obj (median p_k > 0 across models)"
+        f"binary pause presence on nvl_obj (median p_k > 0 across models)"
         if spec.binary
         else getattr(
             spec,
@@ -74,7 +74,7 @@ def _foot_scatter(spec: YMetricSpec, *, dest: str) -> str:
         )
     )
     long = (
-        "Grain: animal × phase × novel_obj. Each point is one animal: object-prox "
+        "Grain: animal × phase × nvl_obj. Each point is one animal: object-prox "
         f"exclusive DR vs cluster-13 {y_desc}. Color = tx; rows = sex (F / M). "
         "Stats inset: Miller–Madow MI (mi_mm_bits), permutation p on Y shuffle within cell, "
         "Spearman ρ. Between-animal INFO — not within-bout stim↔syll MI. BH family = "
@@ -86,7 +86,7 @@ def _foot_scatter(spec: YMetricSpec, *, dest: str) -> str:
 
 def _foot_heat(spec: YMetricSpec, *, dest: str) -> str:
     long = (
-        "Grain: animal × phase × novel_obj; sex-stratified INFO cells. "
+        "Grain: animal × phase × nvl_obj; sex-stratified INFO cells. "
         f"Y = {spec.label}. Left: I(DR; Y) in bits (mi_mm_bits). "
         "Right: Spearman ρ. * = BH q < 0.05 on permutation p (8-cell family). "
         "Third panel: −log₁₀(perm p). Not DA."
@@ -117,7 +117,7 @@ def _as_bool(s: object) -> bool:
 
 
 def _cell_tests(tests: pd.DataFrame, *, phase: str, sex: str) -> pd.Series | None:
-    row = tests[(tests["phase_layer"] == phase) & (tests["sex"] == sex)]
+    row = tests[(tests["session"] == phase) & (tests["sex"] == sex)]
     if len(row) != 1:
         return None
     return row.iloc[0]
@@ -136,12 +136,12 @@ def _scatter_panel(
 ) -> None:
     x = panel[DR_COL].to_numpy(dtype=np.float64)
     y = panel[spec.y_col].to_numpy(dtype=np.float64)
-    tx = panel["tx"].to_numpy()
+    tx = panel["condition"].to_numpy()
     ok = np.isfinite(x) & np.isfinite(y)
     x, y, tx = x[ok], y[ok], tx[ok]
     jitter_x = rng.normal(0.0, 0.012, size=x.size)
     jitter_y = rng.normal(0.0, 0.06 if spec.binary else 0.004, size=y.size)
-    for t in TX_ORDER:
+    for t in CONDITION_ORDER:
         m = tx == t
         if not np.any(m):
             continue
@@ -149,7 +149,7 @@ def _scatter_panel(
             x[m] + jitter_x[m],
             y[m] + jitter_y[m],
             s=ts["scatter"],
-            c=TX_COLOR[t],
+            c=CONDITION_COLOR[t],
             alpha=0.78,
             edgecolors="none",
             zorder=3,
@@ -205,9 +205,9 @@ def fig_scatter(
     else:
         fig, axes = plt.subplots(2, 4, figsize=(7.6, 5.6), layout="constrained")
     for r, sex in enumerate(SEX_ORDER):
-        for c, ph in enumerate(PHASES):
+        for c, ph in enumerate(SESSIONS):
             ax = axes[r, c]
-            panel = joined[(joined["phase_layer"] == ph) & (joined["sex"] == sex)]
+            panel = joined[(joined["session"] == ph) & (joined["sex"] == sex)]
             rec = _cell_tests(tests, phase=ph, sex=sex)
             _scatter_panel(
                 ax,
@@ -217,7 +217,7 @@ def fig_scatter(
                 rng=rng,
                 ts=ts,
                 show_ylabel=(c == 0),
-                title=f"{PHASE_SHORT[ph]} · {sex}",
+                title=f"{SESSION_SHORT[ph]} · {sex}",
             )
     fig.suptitle(
         f"INFO: object-prox DR vs {spec.label}",
@@ -228,7 +228,7 @@ def fig_scatter(
     )
     fig_legend_and_footnote(
         fig,
-        [h for h in tx_sex_legend_handles(dest=dest) if h.get_label() in TX_ORDER],
+        [h for h in condition_sex_legend_handles(dest=dest) if h.get_label() in CONDITION_ORDER],
         _foot_scatter(spec, dest=dest),
         dest=dest,
     )
@@ -237,8 +237,8 @@ def fig_scatter(
 
 
 def _metric_mat(tests: pd.DataFrame, col: str) -> np.ndarray:
-    mat = np.full((len(PHASES), len(SEX_ORDER)), np.nan)
-    for i, ph in enumerate(PHASES):
+    mat = np.full((len(SESSIONS), len(SEX_ORDER)), np.nan)
+    for i, ph in enumerate(SESSIONS):
         for j, sex in enumerate(SEX_ORDER):
             rec = _cell_tests(tests, phase=ph, sex=sex)
             if rec is not None and col in rec.index:
@@ -247,8 +247,8 @@ def _metric_mat(tests: pd.DataFrame, col: str) -> np.ndarray:
 
 
 def _hit_mat(tests: pd.DataFrame) -> np.ndarray:
-    mat = np.zeros((len(PHASES), len(SEX_ORDER)), dtype=bool)
-    for i, ph in enumerate(PHASES):
+    mat = np.zeros((len(SESSIONS), len(SEX_ORDER)), dtype=bool)
+    for i, ph in enumerate(SESSIONS):
         for j, sex in enumerate(SEX_ORDER):
             rec = _cell_tests(tests, phase=ph, sex=sex)
             if rec is not None and "hit_fdr05" in rec.index:
@@ -271,8 +271,8 @@ def _draw_phase_sex_heatmap(
     im = ax.imshow(mat, cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto")
     ax.set_xticks(range(len(SEX_ORDER)))
     ax.set_xticklabels(SEX_ORDER, fontsize=ts["annotation"])
-    ax.set_yticks(range(len(PHASES)))
-    ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES], fontsize=ts["annotation"])
+    ax.set_yticks(range(len(SESSIONS)))
+    ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS], fontsize=ts["annotation"])
     ax.set_title(title, loc="left", fontweight="bold", color=INK)
     for i in range(mat.shape[0]):
         for j in range(mat.shape[1]):

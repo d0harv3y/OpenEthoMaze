@@ -1,7 +1,7 @@
 """Q1 + Q2 across NOR phases (BL / TX / REC3hr / REC11hr) on the pilot model.
 
 Hope pattern: tx Kruskal / PERMANOVA quiet at baseline; possible hits at TX or recovery.
-Same grain: animal × novel_obj window; raw bouts; within-sex tests.
+Same grain: animal × nvl_obj window; raw bouts; within-sex tests.
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ from nor_object_mi.simpler_first_q2 import (  # noqa: E402
     permanova_within_sex,
 )
 
-# User shorthand NOR_REC3 / NOR_REC11 → stored phase_layer names
-PHASES: tuple[tuple[str, str], ...] = (
+# User shorthand NOR_REC3 / NOR_REC11 → stored session names
+SESSIONS: tuple[tuple[str, str], ...] = (
     ("NOR_BL", "condition_ladder_NOR_BL"),
     ("NOR_TX", "condition_ladder"),
     ("NOR_REC3hr", "condition_ladder_NOR_REC3hr"),
@@ -40,7 +40,7 @@ PHASES: tuple[tuple[str, str], ...] = (
 
 def _row_from_kruskal(phase: str, question: str, metric: str, r: pd.Series) -> dict[str, object]:
     return {
-        "phase_layer": phase,
+        "session": phase,
         "question": question,
         "metric": metric,
         "operation": {
@@ -70,7 +70,7 @@ def run_phase(bout_csv: Path, phase: str) -> tuple[list[dict[str, object]], dict
     long_rows: list[dict[str, object]] = []
 
     # Q1
-    animals = animal_delta_prox(bouts, phase_layer=phase, condition_layer="novel_obj")
+    animals = animal_delta_prox(bouts, session=phase, trial="nvl_obj")
     k1 = kruskal_within_sex(animals, metric="delta_prox")
     v1 = judge_q1(k1)
     for _, r in k1.iterrows():
@@ -78,7 +78,7 @@ def run_phase(bout_csv: Path, phase: str) -> tuple[list[dict[str, object]], dict
 
     # Q2
     meta, P, syll_ids = compositions_from_bouts(
-        bouts, phase_layer=phase, condition_layer="novel_obj"
+        bouts, session=phase, trial="nvl_obj"
     )
     k_rich = kruskal_within_sex(meta, metric="richness")
     k_h = kruskal_within_sex(meta, metric="shannon_bits")
@@ -91,7 +91,7 @@ def run_phase(bout_csv: Path, phase: str) -> tuple[list[dict[str, object]], dict
     for _, r in perm.iterrows():
         long_rows.append(
             {
-                "phase_layer": phase,
+                "session": phase,
                 "question": "q2",
                 "metric": "braycurtis_composition",
                 "operation": "DIFFERENCE+TEST analogy-only",
@@ -114,7 +114,7 @@ def run_phase(bout_csv: Path, phase: str) -> tuple[list[dict[str, object]], dict
 
     hope = "baseline_should_be_quiet" if phase == "NOR_BL" else "tx_or_recovery_may_hit"
     summary = {
-        "phase_layer": phase,
+        "session": phase,
         "bout_csv": str(bout_csv),
         "n_animals_q1": int(len(animals)),
         "n_animals_q2": int(len(meta)),
@@ -154,11 +154,11 @@ def main(argv: list[str] | None = None) -> int:
 
     all_rows: list[dict[str, object]] = []
     summaries: list[dict[str, object]] = []
-    for phase, tag in PHASES:
+    for phase, tag in SESSIONS:
         bout_csv = art / tag / "ladder_bout_features.csv"
         if not bout_csv.exists():
             summaries.append(
-                {"phase_layer": phase, "status": "missing_bout_csv", "bout_csv": str(bout_csv)}
+                {"session": phase, "status": "missing_bout_csv", "bout_csv": str(bout_csv)}
             )
             print(f"MISSING {phase}: {bout_csv}", flush=True)
             continue
@@ -173,8 +173,8 @@ def main(argv: list[str] | None = None) -> int:
     summary = {
         "model": args.model,
         "cleanup": "raw",
-        "condition_layer": "novel_obj",
-        "phases": [p for p, _ in PHASES],
+        "trial": "nvl_obj",
+        "phases": [p for p, _ in SESSIONS],
         "n_test_rows": int(len(long_df)),
         "per_phase": summaries,
         "path": str(long_path),
@@ -186,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     if not long_df.empty:
         show = long_df.copy()
         show["p"] = show["p"].map(lambda x: f"{float(x):.3g}" if pd.notna(x) and x != "" else "")
-        cols = ["phase_layer", "question", "metric", "sex", "test", "p", "hit_p05"]
+        cols = ["session", "question", "metric", "sex", "test", "p", "hit_p05"]
         print(show[cols].to_string(index=False))
     print(json.dumps({"path": str(long_path), "per_phase": summaries}, indent=2))
     return 0

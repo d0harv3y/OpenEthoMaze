@@ -1,6 +1,6 @@
 """Per-object 0.10 m proximity windows (object-prox) and NOR discrimination ratio (DR).
 
-Grain: animal × phase × novel_obj (full session; spot bout-means).
+Grain: animal × phase × nvl_obj (full session; spot bout-means).
 
 Each object's prox window is gated independently:
     near_fam ⇔ bout_mean_dist_fam_m < r
@@ -35,8 +35,8 @@ from nor_object_mi.simpler_first_presence import wilcoxon_paired  # noqa: E402
 from nor_object_mi.simpler_first_q1 import LOCKED, SEX_ORDER, kruskal_within_sex  # noqa: E402
 
 NEAR_R_M = 0.10
-CONDITION = "novel_obj"
-PHASES: tuple[tuple[str, str], ...] = (
+CONDITION = "nvl_obj"
+SESSIONS: tuple[tuple[str, str], ...] = (
     ("NOR_BL", "condition_ladder_NOR_BL"),
     ("NOR_TX", "condition_ladder"),
     ("NOR_REC3hr", "condition_ladder_NOR_REC3hr"),
@@ -70,17 +70,17 @@ def tag_object_prox(bouts: pd.DataFrame, *, r_m: float = NEAR_R_M) -> pd.DataFra
 def animal_object_prox_metrics(
     bouts: pd.DataFrame,
     *,
-    phase_layer: str,
+    session: str,
     r_m: float = NEAR_R_M,
-    condition_layer: str = CONDITION,
+    trial: str = CONDITION,
 ) -> pd.DataFrame:
     """One row per animal: per-object occupancy, overlap, inclusive/exclusive DR."""
     need = (
         "animal_id",
         "sex",
-        "tx",
-        "phase_layer",
-        "condition_layer",
+        "condition",
+        "session",
+        "trial",
         "bout_frames",
         "bout_mean_dist_fam_m",
         "bout_mean_dist_nvl_m",
@@ -89,7 +89,7 @@ def animal_object_prox_metrics(
     if missing:
         raise ValueError(f"bout table missing columns: {missing}")
 
-    sub = bouts[(bouts["phase_layer"] == phase_layer) & (bouts["condition_layer"] == condition_layer)].copy()
+    sub = bouts[(bouts["session"] == session) & (bouts["trial"] == trial)].copy()
     if sub.empty:
         return sub.iloc[0:0].copy()
     sub["animal_id"] = sub["animal_id"].astype(str)
@@ -110,8 +110,8 @@ def animal_object_prox_metrics(
             {
                 "animal_id": str(aid),
                 "sex": str(g["sex"].iloc[0]),
-                "tx": str(g["tx"].iloc[0]),
-                "phase_layer": phase_layer,
+                "condition": str(g["condition"].iloc[0]),
+                "session": session,
                 "n_sess_frames": int(n_sess),
                 "n_fam_frames": int(n_fam),
                 "n_nvl_frames": int(n_nvl),
@@ -158,7 +158,7 @@ def _test_rows(
         res = wilcoxon_paired(d)
         rows.append(
             {
-                "phase_layer": phase,
+                "session": phase,
                 "question": "object_prox_dr",
                 "metric": metric,
                 "grain": grain,
@@ -179,7 +179,7 @@ def _test_rows(
         for _, r in tests.iterrows():
             rows.append(
                 {
-                    "phase_layer": phase,
+                    "session": phase,
                     "question": "object_prox_dr_tx",
                     "metric": metric,
                     "grain": grain,
@@ -211,15 +211,15 @@ def _test_rows(
 def _spacing_audit(
     bouts: pd.DataFrame,
     *,
-    phase_layer: str,
-    condition_layer: str,
+    session: str,
+    trial: str,
     r_m: float = NEAR_R_M,
 ) -> dict[str, object]:
     """Triangle inequality: d_fam + d_nvl ≥ object–object distance.
 
     If every bout has d_fam + d_nvl ≥ 2r, the r-windows cannot overlap.
     """
-    sub = bouts[(bouts["phase_layer"] == phase_layer) & (bouts["condition_layer"] == condition_layer)]
+    sub = bouts[(bouts["session"] == session) & (bouts["trial"] == trial)]
     s = pd.to_numeric(sub["bout_mean_dist_fam_m"], errors="coerce") + pd.to_numeric(sub["bout_mean_dist_nvl_m"], errors="coerce")
     s = s[np.isfinite(s.to_numpy(dtype=np.float64))]
     if s.empty:
@@ -243,15 +243,15 @@ def run_phase(
     r_m: float = NEAR_R_M,
 ) -> tuple[pd.DataFrame, list[dict[str, object]], dict[str, object]]:
     bouts = pd.read_csv(bout_csv)
-    animals = animal_object_prox_metrics(bouts, phase_layer=phase, r_m=r_m)
+    animals = animal_object_prox_metrics(bouts, session=phase, r_m=r_m)
     audit = _overlap_audit(animals)
-    spacing = _spacing_audit(bouts, phase_layer=phase, condition_layer=CONDITION, r_m=r_m)
+    spacing = _spacing_audit(bouts, session=phase, trial=CONDITION, r_m=r_m)
     tests = _test_rows(animals, phase=phase, r_m=r_m)
     wx_excl = next(r for r in tests if r["metric"] == "dr_exclusive" and r["sex"] == "all" and r["test"] == "wilcoxon_signed_rank")
     k_excl = [r for r in tests if r["metric"] == "dr_exclusive" and r["test"] == "kruskal"]
     summary = {
         "status": "ok",
-        "phase_layer": phase,
+        "session": phase,
         "grain": GRAIN.format(phase=phase),
         "r_m": r_m,
         "median_dr_exclusive": (float(animals["dr_exclusive"].median()) if len(animals) else float("nan")),
@@ -277,7 +277,7 @@ AGREE_METRICS = ("dr_exclusive", "dr_inclusive")
 
 def animal_median_across_models(animals: pd.DataFrame) -> pd.DataFrame:
     """One row per animal × phase: median occupancy/DR across models."""
-    keys = ["animal_id", "sex", "tx", "phase_layer"]
+    keys = ["animal_id", "sex", "condition", "session"]
     out = animals.groupby(keys, as_index=False)[list(METRIC_COLS)].median()
     n_mod = animals.groupby(keys)["model"].nunique()
     if int(n_mod.min()) != int(n_mod.max()):
@@ -311,11 +311,11 @@ def across_model_dispersion(animals: pd.DataFrame) -> pd.DataFrame:
     columns; ``sd`` / ``var`` are companions. Occupancy and DR magnitudes are
     commensurate across models (same formula; ids never pooled).
     """
-    need = {"animal_id", "sex", "tx", "phase_layer", "model", *METRIC_COLS}
+    need = {"animal_id", "sex", "condition", "session", "model", *METRIC_COLS}
     missing = need - set(animals.columns)
     if missing:
         raise KeyError(f"across_model_dispersion missing columns: {sorted(missing)}")
-    keys = ["animal_id", "sex", "tx", "phase_layer"]
+    keys = ["animal_id", "sex", "condition", "session"]
     rows: list[dict[str, object]] = []
     for key_vals, g in animals.groupby(keys, sort=False):
         key_map = dict(zip(keys, key_vals if isinstance(key_vals, tuple) else (key_vals,)))
@@ -361,9 +361,9 @@ def across_model_dispersion_summary(disp: pd.DataFrame) -> pd.DataFrame:
     if disp.empty:
         return disp.copy()
     rows: list[dict[str, object]] = []
-    for key_vals, g in disp.groupby(["phase_layer", "metric"], sort=True):
+    for key_vals, g in disp.groupby(["session", "metric"], sort=True):
         key_map = dict(
-            zip(("phase_layer", "metric"), key_vals if isinstance(key_vals, tuple) else (key_vals,))
+            zip(("session", "metric"), key_vals if isinstance(key_vals, tuple) else (key_vals,))
         )
         rows.append(
             {
@@ -385,12 +385,12 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
     """Wilcoxon vs 0 and Kruskal-by-tx on animal-level median-across-models DR."""
     rows: list[dict[str, object]] = []
     n_models = int(med["n_models"].iloc[0]) if len(med) else 0
-    for phase, g in med.groupby("phase_layer", sort=True):
+    for phase, g in med.groupby("session", sort=True):
         for m in AGREE_METRICS:
             rec = wilcoxon_paired(g[m].to_numpy())
             rows.append(
                 {
-                    "phase_layer": phase,
+                    "session": phase,
                     "sex": "all",
                     "metric": m,
                     "question": "object_prox_dr",
@@ -406,7 +406,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
                 rec_s = wilcoxon_paired(g.loc[g["sex"] == sex, m].to_numpy())
                 rows.append(
                     {
-                        "phase_layer": phase,
+                        "session": phase,
                         "sex": sex,
                         "metric": m,
                         "question": "object_prox_dr",
@@ -423,7 +423,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
                 p = r["p"]
                 rows.append(
                     {
-                        "phase_layer": phase,
+                        "session": phase,
                         "sex": r["sex"],
                         "metric": m,
                         "question": "object_prox_dr_tx",
@@ -446,7 +446,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
                 p = r["p"]
                 rows.append(
                     {
-                        "phase_layer": phase,
+                        "session": phase,
                         "sex": r["sex"],
                         "metric": m,
                         "question": "object_prox_dr_tx",
@@ -472,7 +472,7 @@ def agreement_table(tests: pd.DataFrame) -> pd.DataFrame:
     if sub.empty:
         return pd.DataFrame()
     rows = []
-    for (phase, metric), g in sub.groupby(["phase_layer", "metric"], sort=True):
+    for (phase, metric), g in sub.groupby(["session", "metric"], sort=True):
         n = int(len(g))
         if g["hit_p05"].dtype == bool:
             n_hit = int(g["hit_p05"].sum())
@@ -489,7 +489,7 @@ def agreement_table(tests: pd.DataFrame) -> pd.DataFrame:
             n_agree_sign = 0
         rows.append(
             {
-                "phase_layer": phase,
+                "session": phase,
                 "metric": metric,
                 "n_models": n,
                 "n_hit_p05": n_hit,
@@ -524,16 +524,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.model:
         models = [args.model]
     else:
-        models = sorted(p.name for p in art_root.glob("paramscan_*") if p.is_dir() and any((p / tag / "ladder_bout_features.csv").exists() for _, tag in PHASES))
+        models = sorted(p.name for p in art_root.glob("paramscan_*") if p.is_dir() and any((p / tag / "ladder_bout_features.csv").exists() for _, tag in SESSIONS))
 
     animal_parts: list[pd.DataFrame] = []
     test_parts: list[pd.DataFrame] = []
     overlap_rows: list[dict[str, object]] = []
-    n_jobs = len(models) * len(PHASES)
+    n_jobs = len(models) * len(SESSIONS)
     done = 0
     for model in models:
         art = art_root / model
-        for phase, tag in PHASES:
+        for phase, tag in SESSIONS:
             done += 1
             bout_csv = art / tag / "ladder_bout_features.csv"
             if not bout_csv.exists():
@@ -575,7 +575,7 @@ def main(argv: list[str] | None = None) -> int:
         "n_models": len(models),
         "models": models,
         "cleanup": "raw",
-        "condition_layer": CONDITION,
+        "trial": CONDITION,
         "gate": "bout_mean_dist_fam_m | bout_mean_dist_nvl_m",
         "r_m": float(args.r_m),
         "grain_template": GRAIN,
@@ -597,7 +597,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             show[
                 [
-                    "phase_layer",
+                    "session",
                     "metric",
                     "n_hit_p05",
                     "n_models",

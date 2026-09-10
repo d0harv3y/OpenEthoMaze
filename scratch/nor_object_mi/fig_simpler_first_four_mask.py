@@ -1,4 +1,4 @@
-"""Four-mask TX−BL frac by tx (novel_obj); mark tx-specific cells.
+"""Four-mask TX−BL frac by tx (nvl_obj); mark tx-specific cells.
 
 Regen (OpenEthoMaze repo root):
   uv run python scratch/nor_object_mi/fig_simpler_first_four_mask.py --dest slides
@@ -20,8 +20,8 @@ if str(_SCRATCH) not in sys.path:
 
 from nor_object_mi._pub_style import (  # noqa: E402
     INK,
-    TX_COLOR,
-    TX_ORDER,
+    CONDITION_COLOR,
+    CONDITION_ORDER,
     apply_style,
     fig_footnote,
     save_pdf_svg,
@@ -51,7 +51,7 @@ def _as_bool(s: pd.Series) -> pd.Series:
 def fig_delta_frac(paired: pd.DataFrame, gates: pd.DataFrame, stem: Path, *, dest: str) -> None:
     apply_style(dest=dest)
     ts = type_scale(dest)
-    p = paired[paired["condition_layer"] == "novel_obj"].copy()
+    p = paired[paired["trial"] == "nvl_obj"].copy()
     g = gates.copy()
     if not g.empty:
         g["tx_specific"] = _as_bool(g["tx_specific"])
@@ -61,11 +61,11 @@ def fig_delta_frac(paired: pd.DataFrame, gates: pd.DataFrame, stem: Path, *, des
         for c, mask in enumerate(MASKS):
             ax = axes[r][c]
             cell = p[(p["sex"] == sex) & (p["mask"] == mask)]
-            for i, tx in enumerate(TX_ORDER):
-                y = cell.loc[cell["tx"] == tx, "delta_frac_mask"].to_numpy(dtype=np.float64)
+            for i, tx in enumerate(CONDITION_ORDER):
+                y = cell.loc[cell["condition"] == tx, "delta_frac_mask"].to_numpy(dtype=np.float64)
                 y = y[np.isfinite(y)]
                 x = np.full(y.size, i, dtype=np.float64) + rng.uniform(-0.12, 0.12, size=y.size)
-                ax.scatter(x, y, s=22, color=TX_COLOR[tx], alpha=0.75, zorder=2)
+                ax.scatter(x, y, s=22, color=CONDITION_COLOR[condition], alpha=0.75, zorder=2)
                 if y.size:
                     ax.hlines(float(np.mean(y)), i - 0.28, i + 0.28, color=INK, lw=1.2, zorder=3)
             spec = False
@@ -82,13 +82,13 @@ def fig_delta_frac(paired: pd.DataFrame, gates: pd.DataFrame, stem: Path, *, des
                 title = title + " ★"
             ax.set_title(title, fontsize=ts["annotation"], color="#b00020" if spec else INK)
             ax.axhline(0.0, color="#cccccc", lw=0.8)
-            ax.set_xticks(range(len(TX_ORDER)))
-            ax.set_xticklabels(list(TX_ORDER), fontsize=ts["cell"])
+            ax.set_xticks(range(len(CONDITION_ORDER)))
+            ax.set_xticklabels(list(CONDITION_ORDER), fontsize=ts["cell"])
             if c == 0:
                 ax.set_ylabel(f"{sex}  Δ frac", fontsize=ts["annotation"])
             else:
                 ax.set_ylabel("")
-    fig.suptitle("Four-mask hunt — novel_obj TX−BL frac", fontsize=ts["suptitle"], color=INK)
+    fig.suptitle("Four-mask hunt — nvl_obj TX−BL frac", fontsize=ts["suptitle"], color=INK)
     fig_footnote(fig, FOOT)
     save_pdf_svg(fig, stem)
     plt.close(fig)

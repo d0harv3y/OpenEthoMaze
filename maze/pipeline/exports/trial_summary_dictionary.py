@@ -195,7 +195,8 @@ _TRIAL_SUMMARY_IDENTITY_COLUMNS: tuple[tuple[str, str, str, str], ...] = (
         "trial_state",
         "text",
         "",
-        "Band label for the metric row (e.g. iti_wait vs run) for per-band summaries; "
+        "Band label for the metric row (e.g. wait vs run) for per-band summaries; "
+        "legacy unre-processed files may still say iti_wait. "
         "trial-level metrics use run.",
     ),
     (
@@ -435,7 +436,7 @@ def _base_rows() -> list[dict[str, str]]:
                 "section": "long_metric",
                 "csv_column": "metric / value",
                 "metric_name": str(name),
-                "trial_state_scope": "iti_wait and run (separate rows per band when stored)",
+                "trial_state_scope": "wait and run (legacy unre-processed: iti_wait)",
                 "value_type": "number",
                 "units": _metric_units(str(name)),
                 "description": _NODE_METRIC_HELP.get(

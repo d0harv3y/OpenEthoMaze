@@ -432,7 +432,7 @@ def build_xy_table_with_exit(
     if seek_row > 0:
         table["trial_state"][:seek_row] = b"excluded"
     if run_row > seek_row:
-        table["trial_state"][seek_row:run_row] = b"iti_wait"
+        table["trial_state"][seek_row:run_row] = b"wait"
     if run_row < n_frames:
         table["trial_state"][run_row:] = b"run"
 

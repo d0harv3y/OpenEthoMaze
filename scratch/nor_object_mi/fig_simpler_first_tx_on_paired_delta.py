@@ -29,12 +29,12 @@ from nor_object_mi._pub_style import (  # noqa: E402
     FIGSIZE_DOUBLE,
     INK,
     MUTE,
-    PHASE_SHORT,
-    PHASES,
+    SESSION_SHORT,
+    SESSIONS,
     PILOT_MODEL,
     SEX_ORDER,
-    TX_COLOR,
-    TX_ORDER,
+    CONDITION_COLOR,
+    CONDITION_ORDER,
     apply_style,
     fig_footnote,
     save_pdf_png,
@@ -47,17 +47,17 @@ DEFAULT_RUN = Path(
 )
 GRAINS = ("full_session", "near_0p10")
 GRAIN_LAB = {"full_session": "full session", "near_0p10": "near 0.10 m"}
-CONDS = ("no_obj", "identical_obj", "novel_obj")
+TRIALS = ("no_obj", "id_obj", "nvl_obj")
 COND_LAB = {
     "no_obj": "no_obj",
-    "identical_obj": "identical",
-    "novel_obj": "novel",
+    "id_obj": "id_obj",
+    "nvl_obj": "nvl_obj",
 }
-COND_STEPS = ("no_obj->identical", "identical->novel", "no_obj->novel")
+COND_STEPS = ("no_obj->id_obj", "id_obj->nvl_obj", "no_obj->nvl_obj")
 COND_STEP_LAB = {
-    "no_obj->identical": "presence",
-    "identical->novel": "novelty",
-    "no_obj->novel": "span",
+    "no_obj->id_obj": "presence",
+    "id_obj->nvl_obj": "novelty",
+    "no_obj->nvl_obj": "span",
 }
 PHASE_STEPS = ("BL->TX", "TX->REC3hr", "REC3hr->REC11hr", "BL->REC11hr")
 PHASE_STEP_LAB = {
@@ -264,10 +264,10 @@ def fig_q1_agreement(agr: pd.DataFrame, out: Path) -> None:
         for c, sex in enumerate(SEX_ORDER):
             ax = axes[r, c]
             sub = agr[(agr["grain"] == grain) & (agr["sex"] == sex)]
-            mat = np.full((len(PHASES), len(COND_STEPS)), np.nan)
-            for i, ph in enumerate(PHASES):
+            mat = np.full((len(SESSIONS), len(COND_STEPS)), np.nan)
+            for i, ph in enumerate(SESSIONS):
                 for j, st in enumerate(COND_STEPS):
-                    row = _pick_row(sub, phase_layer=ph, step=st)
+                    row = _pick_row(sub, session=ph, step=st)
                     if row is not None:
                         mat[i, j] = float(row["frac_model_consensus_hit"])
             im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
@@ -275,8 +275,8 @@ def fig_q1_agreement(agr: pd.DataFrame, out: Path) -> None:
             ax.set_xticklabels(
                 [COND_STEP_LAB[s] for s in COND_STEPS], rotation=30, ha="right", fontsize=7
             )
-            ax.set_yticks(range(len(PHASES)))
-            ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+            ax.set_yticks(range(len(SESSIONS)))
+            ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
             ax.set_title(
                 f"{GRAIN_LAB[grain]}  ·  {_sex_lab(sex)}",
                 loc="left",
@@ -312,10 +312,10 @@ def fig_q2_agreement(agr: pd.DataFrame, out: Path) -> None:
         for c, sex in enumerate(SEX_ORDER):
             ax = axes[r, c]
             sub = agr[(agr["grain"] == grain) & (agr["sex"] == sex)]
-            mat = np.full((len(PHASES), len(COND_STEPS)), np.nan)
-            for i, ph in enumerate(PHASES):
+            mat = np.full((len(SESSIONS), len(COND_STEPS)), np.nan)
+            for i, ph in enumerate(SESSIONS):
                 for j, st in enumerate(COND_STEPS):
-                    row = _pick_row(sub, phase_layer=ph, step=st)
+                    row = _pick_row(sub, session=ph, step=st)
                     if row is not None:
                         mat[i, j] = float(row["frac_hit"])
             im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
@@ -323,8 +323,8 @@ def fig_q2_agreement(agr: pd.DataFrame, out: Path) -> None:
             ax.set_xticklabels(
                 [COND_STEP_LAB[s] for s in COND_STEPS], rotation=30, ha="right", fontsize=7
             )
-            ax.set_yticks(range(len(PHASES)))
-            ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+            ax.set_yticks(range(len(SESSIONS)))
+            ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
             ax.set_title(
                 f"{GRAIN_LAB[grain]}  ·  {_sex_lab(sex)}",
                 loc="left",
@@ -354,10 +354,10 @@ def fig_q3_agreement(agr: pd.DataFrame, out: Path) -> None:
         for c, sex in enumerate(SEX_ORDER):
             ax = axes[r, c]
             sub = agr[(agr["grain"] == grain) & (agr["sex"] == sex)]
-            mat = np.full((len(CONDS), len(PHASE_STEPS)), np.nan)
-            for i, cond in enumerate(CONDS):
+            mat = np.full((len(TRIALS), len(PHASE_STEPS)), np.nan)
+            for i, cond in enumerate(TRIALS):
                 for j, st in enumerate(PHASE_STEPS):
-                    row = _pick_row(sub, condition_layer=cond, phase_step=st)
+                    row = _pick_row(sub, trial=cond, session_step=st)
                     if row is not None:
                         mat[i, j] = float(row["frac_model_consensus_hit"])
             im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
@@ -365,8 +365,8 @@ def fig_q3_agreement(agr: pd.DataFrame, out: Path) -> None:
             ax.set_xticklabels(
                 [PHASE_STEP_LAB[s] for s in PHASE_STEPS], rotation=30, ha="right", fontsize=7
             )
-            ax.set_yticks(range(len(CONDS)))
-            ax.set_yticklabels([COND_LAB[x] for x in CONDS])
+            ax.set_yticks(range(len(TRIALS)))
+            ax.set_yticklabels([COND_LAB[x] for x in TRIALS])
             ax.set_title(
                 f"{GRAIN_LAB[grain]}  ·  {_sex_lab(sex)}",
                 loc="left",
@@ -402,10 +402,10 @@ def fig_q4_agreement(agr: pd.DataFrame, out: Path) -> None:
         for c, sex in enumerate(SEX_ORDER):
             ax = axes[r, c]
             sub = agr[(agr["grain"] == grain) & (agr["sex"] == sex)]
-            mat = np.full((len(CONDS), len(PHASE_STEPS)), np.nan)
-            for i, cond in enumerate(CONDS):
+            mat = np.full((len(TRIALS), len(PHASE_STEPS)), np.nan)
+            for i, cond in enumerate(TRIALS):
                 for j, st in enumerate(PHASE_STEPS):
-                    row = _pick_row(sub, condition_layer=cond, phase_step=st)
+                    row = _pick_row(sub, trial=cond, session_step=st)
                     if row is not None:
                         mat[i, j] = float(row["frac_hit"])
             im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
@@ -413,8 +413,8 @@ def fig_q4_agreement(agr: pd.DataFrame, out: Path) -> None:
             ax.set_xticklabels(
                 [PHASE_STEP_LAB[s] for s in PHASE_STEPS], rotation=30, ha="right", fontsize=7
             )
-            ax.set_yticks(range(len(CONDS)))
-            ax.set_yticklabels([COND_LAB[x] for x in CONDS])
+            ax.set_yticks(range(len(TRIALS)))
+            ax.set_yticklabels([COND_LAB[x] for x in TRIALS])
             ax.set_title(
                 f"{GRAIN_LAB[grain]}  ·  {_sex_lab(sex)}",
                 loc="left",
@@ -440,10 +440,10 @@ def fig_q1_n_hit(tests: pd.DataFrame, out: Path, *, grain: str) -> None:
     t = _frame_share(tests)
     t = t[t["grain"] == grain].copy()
     t["hit"] = _as_bool(t["hit_fdr05"])
-    counts = t.groupby(["model", "phase_layer", "step", "sex"], as_index=False)["hit"].sum()
+    counts = t.groupby(["model", "session", "step", "sex"], as_index=False)["hit"].sum()
     rng = np.random.default_rng(0)
     fig, axes = plt.subplots(2, 3, figsize=(7.2, 5.8), sharey=True, constrained_layout=True)
-    x = np.arange(len(PHASES))
+    x = np.arange(len(SESSIONS))
     for r, sex in enumerate(SEX_ORDER):
         for c, st in enumerate(COND_STEPS):
             ax = axes[r, c]
@@ -454,10 +454,10 @@ def fig_q1_n_hit(tests: pd.DataFrame, out: Path, *, grain: str) -> None:
                 color=INK,
                 fontsize=8,
             )
-            for i, ph in enumerate(PHASES):
+            for i, ph in enumerate(SESSIONS):
                 ys = counts[
                     (counts["step"] == st)
-                    & (counts["phase_layer"] == ph)
+                    & (counts["session"] == ph)
                     & (counts["sex"] == sex)
                 ]["hit"].to_numpy(dtype=float)
                 jitter = rng.normal(0, 0.08, size=ys.size)
@@ -478,7 +478,7 @@ def fig_q1_n_hit(tests: pd.DataFrame, out: Path, *, grain: str) -> None:
                         zorder=3,
                     )
             ax.set_xticks(x)
-            ax.set_xticklabels([PHASE_SHORT[p] for p in PHASES], fontsize=7)
+            ax.set_xticklabels([SESSION_SHORT[p] for p in SESSIONS], fontsize=7)
             ax.axhline(0.0, color="#bbbbbb", lw=0.6, ls="--", zorder=0)
             if c == 0:
                 ax.set_ylabel("n FDR-hit syllables / model")
@@ -498,12 +498,12 @@ def fig_q3_n_hit(tests: pd.DataFrame, out: Path, *, grain: str) -> None:
     t = _frame_share(tests)
     t = t[t["grain"] == grain].copy()
     t["hit"] = _as_bool(t["hit_fdr05"])
-    counts = t.groupby(["model", "condition_layer", "phase_step", "sex"], as_index=False)["hit"].sum()
+    counts = t.groupby(["model", "trial", "session_step", "sex"], as_index=False)["hit"].sum()
     rng = np.random.default_rng(0)
     fig, axes = plt.subplots(2, 3, figsize=(7.2, 5.8), sharey=True, constrained_layout=True)
     x = np.arange(len(PHASE_STEPS))
     for r, sex in enumerate(SEX_ORDER):
-        for c, cond in enumerate(CONDS):
+        for c, cond in enumerate(TRIALS):
             ax = axes[r, c]
             ax.set_title(
                 f"{COND_LAB[cond]}  ·  {_sex_lab(sex)}",
@@ -514,8 +514,8 @@ def fig_q3_n_hit(tests: pd.DataFrame, out: Path, *, grain: str) -> None:
             )
             for i, st in enumerate(PHASE_STEPS):
                 ys = counts[
-                    (counts["condition_layer"] == cond)
-                    & (counts["phase_step"] == st)
+                    (counts["trial"] == cond)
+                    & (counts["session_step"] == st)
                     & (counts["sex"] == sex)
                 ]["hit"].to_numpy(dtype=float)
                 jitter = rng.normal(0, 0.08, size=ys.size)
@@ -560,15 +560,15 @@ def _pick_pilot_cell(agr: pd.DataFrame) -> dict[str, str]:
         return {
             "grain": "near_0p10",
             "sex": "M",
-            "phase_layer": "NOR_BL",
-            "step": "identical->novel",
+            "session": "NOR_BL",
+            "step": "id_obj->nvl_obj",
             "weighting": "frame_share",
         }
     top = agr.sort_values("frac_model_consensus_hit", ascending=False).iloc[0]
     return {
         "grain": str(top["grain"]),
         "sex": str(top["sex"]),
-        "phase_layer": str(top["phase_layer"]),
+        "session": str(top["session"]),
         "step": str(top["step"]),
         "weighting": str(top["weighting"]) if "weighting" in top.index else "frame_share",
     }
@@ -586,7 +586,7 @@ def fig_q1_lollipop_pilot(
         (tests["model"] == model)
         & (tests["grain"] == cell["grain"])
         & (tests["sex"] == cell["sex"])
-        & (tests["phase_layer"] == cell["phase_layer"])
+        & (tests["session"] == cell["session"])
         & (tests["step"] == cell["step"])
     ].copy()
     if "weighting" in t.columns:
@@ -596,9 +596,9 @@ def fig_q1_lollipop_pilot(
     loc = FEET.get("loc", "median")
     pref = f"{loc}_"
     # Fall back to medians if mean columns absent (older Kruskal-only tables).
-    if loc == "mean" and not all(f"mean_{tx}" in hits.columns for tx in TX_ORDER):
+    if loc == "mean" and not all(f"mean_{condition}" in hits.columns for condition in CONDITION_ORDER):
         loc, pref = "median", "median_"
-    loc_cols = [f"{pref}{tx}" for tx in TX_ORDER]
+    loc_cols = [f"{pref}{tx}" for condition in CONDITION_ORDER]
     fig, ax = plt.subplots(figsize=FIGSIZE_DOUBLE, constrained_layout=True)
     if hits.empty:
         ax.text(0.5, 0.5, "0 FDR hits in this pilot cell", ha="center", va="center", color=MUTE)
@@ -611,14 +611,14 @@ def fig_q1_lollipop_pilot(
         shown = shown.sort_values(loc_cols[0])
         y = np.arange(len(shown))
         ax.axvline(0.0, color="#bbbbbb", lw=0.7, ls="--", zorder=0)
-        for tx in TX_ORDER:
+        for condition in CONDITION_ORDER:
             col = f"{pref}{tx}"
             d = pd.to_numeric(shown[col], errors="coerce").to_numpy(dtype=float)
             ax.scatter(
-                d, y, s=28, c=TX_COLOR[tx], label=tx, zorder=3, edgecolors="white", linewidths=0.4
+                d, y, s=28, c=CONDITION_COLOR[condition], label=tx, zorder=3, edgecolors="white", linewidths=0.4
             )
         for i, (_, row) in enumerate(shown.iterrows()):
-            xs = [float(row[f"{pref}{tx}"]) for tx in TX_ORDER]
+            xs = [float(row[f"{pref}{tx}"]) for condition in CONDITION_ORDER]
             ax.plot([min(xs), max(xs)], [i, i], color="#b0b0b0", lw=0.8, zorder=1)
         ax.set_yticks(y)
         ax.set_yticklabels([str(int(i)) for i in shown["raw_syllable_id"]], fontsize=7)
@@ -630,7 +630,7 @@ def fig_q1_lollipop_pilot(
         ax.text(0.02, 0.98, note, transform=ax.transAxes, va="top", fontsize=7, color=MUTE)
     title_cell = (
         f"{GRAIN_LAB[cell['grain']]} · {_sex_lab(cell['sex'])} · "
-        f"{PHASE_SHORT[cell['phase_layer']]} · {COND_STEP_LAB[cell['step']]}"
+        f"{SESSION_SHORT[cell['session']]} · {COND_STEP_LAB[cell['step']]}"
     )
     fig.suptitle(
         f"Q1 pilot {model}: FDR-hit syllables · {title_cell}",
@@ -660,10 +660,10 @@ def fig_scalar_condition_agreement(agr: pd.DataFrame, out: Path) -> None:
         for c, sex in enumerate(SEX_ORDER):
             ax = axes[r, c]
             sub = agr[(agr["metric"] == met) & (agr["sex"] == sex)]
-            mat = np.full((len(PHASES), len(COND_STEPS)), np.nan)
-            for i, ph in enumerate(PHASES):
+            mat = np.full((len(SESSIONS), len(COND_STEPS)), np.nan)
+            for i, ph in enumerate(SESSIONS):
                 for j, st in enumerate(COND_STEPS):
-                    row = _pick_row(sub, phase_layer=ph, step=st)
+                    row = _pick_row(sub, session=ph, step=st)
                     if row is not None:
                         mat[i, j] = float(row["frac_hit"])
             im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
@@ -671,8 +671,8 @@ def fig_scalar_condition_agreement(agr: pd.DataFrame, out: Path) -> None:
             ax.set_xticklabels(
                 [COND_STEP_LAB[s] for s in COND_STEPS], rotation=30, ha="right", fontsize=6
             )
-            ax.set_yticks(range(len(PHASES)))
-            ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES], fontsize=6)
+            ax.set_yticks(range(len(SESSIONS)))
+            ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS], fontsize=6)
             ax.set_title(
                 f"{SCALAR_METRIC_LAB.get(met, met)}  ·  {_sex_lab(sex)}",
                 loc="left",
@@ -710,10 +710,10 @@ def fig_scalar_phase_agreement(agr: pd.DataFrame, out: Path) -> None:
         for c, sex in enumerate(SEX_ORDER):
             ax = axes[r, c]
             sub = agr[(agr["metric"] == met) & (agr["sex"] == sex)]
-            mat = np.full((len(CONDS), len(PHASE_STEPS)), np.nan)
-            for i, cond in enumerate(CONDS):
+            mat = np.full((len(TRIALS), len(PHASE_STEPS)), np.nan)
+            for i, cond in enumerate(TRIALS):
                 for j, st in enumerate(PHASE_STEPS):
-                    row = _pick_row(sub, condition_layer=cond, phase_step=st)
+                    row = _pick_row(sub, trial=cond, session_step=st)
                     if row is not None:
                         mat[i, j] = float(row["frac_hit"])
             im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
@@ -721,8 +721,8 @@ def fig_scalar_phase_agreement(agr: pd.DataFrame, out: Path) -> None:
             ax.set_xticklabels(
                 [PHASE_STEP_LAB[s] for s in PHASE_STEPS], rotation=30, ha="right", fontsize=6
             )
-            ax.set_yticks(range(len(CONDS)))
-            ax.set_yticklabels([COND_LAB[x] for x in CONDS], fontsize=6)
+            ax.set_yticks(range(len(TRIALS)))
+            ax.set_yticklabels([COND_LAB[x] for x in TRIALS], fontsize=6)
             ax.set_title(
                 f"{SCALAR_METRIC_LAB.get(met, met)}  ·  {_sex_lab(sex)}",
                 loc="left",
@@ -754,10 +754,10 @@ def fig_da_bout_count_agreement(agr: pd.DataFrame, out: Path) -> None:
         for c, sex in enumerate(SEX_ORDER):
             ax = axes[r, c]
             sub = agr[(agr["grain"] == grain) & (agr["sex"] == sex)]
-            mat = np.full((len(PHASES), len(COND_STEPS)), np.nan)
-            for i, ph in enumerate(PHASES):
+            mat = np.full((len(SESSIONS), len(COND_STEPS)), np.nan)
+            for i, ph in enumerate(SESSIONS):
                 for j, st in enumerate(COND_STEPS):
-                    row = _pick_row(sub, phase_layer=ph, step=st)
+                    row = _pick_row(sub, session=ph, step=st)
                     if row is not None:
                         mat[i, j] = float(row["frac_model_consensus_hit"])
             im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
@@ -765,8 +765,8 @@ def fig_da_bout_count_agreement(agr: pd.DataFrame, out: Path) -> None:
             ax.set_xticklabels(
                 [COND_STEP_LAB[s] for s in COND_STEPS], rotation=30, ha="right", fontsize=7
             )
-            ax.set_yticks(range(len(PHASES)))
-            ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+            ax.set_yticks(range(len(SESSIONS)))
+            ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
             ax.set_title(
                 f"{GRAIN_LAB[grain]}  ·  {_sex_lab(sex)}",
                 loc="left",
@@ -797,7 +797,7 @@ def fig_permanova_agreement(tests: pd.DataFrame, out: Path) -> None:
     t = t.copy()
     t["hit"] = _as_bool(t["hit_fdr05"])
     agr = (
-        t.groupby(["grain", "sex", "phase_layer", "condition_layer"], as_index=False)["hit"]
+        t.groupby(["grain", "sex", "session", "trial"], as_index=False)["hit"]
         .mean()
         .rename(columns={"hit": "frac_hit"})
     )
@@ -807,17 +807,17 @@ def fig_permanova_agreement(tests: pd.DataFrame, out: Path) -> None:
         for c, sex in enumerate(SEX_ORDER):
             ax = axes[r, c]
             sub = agr[(agr["grain"] == grain) & (agr["sex"] == sex)]
-            mat = np.full((len(PHASES), len(CONDS)), np.nan)
-            for i, ph in enumerate(PHASES):
-                for j, cond in enumerate(CONDS):
-                    row = _pick_row(sub, phase_layer=ph, condition_layer=cond)
+            mat = np.full((len(SESSIONS), len(TRIALS)), np.nan)
+            for i, ph in enumerate(SESSIONS):
+                for j, cond in enumerate(TRIALS):
+                    row = _pick_row(sub, session=ph, trial=cond)
                     if row is not None:
                         mat[i, j] = float(row["frac_hit"])
             im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
-            ax.set_xticks(range(len(CONDS)))
-            ax.set_xticklabels([COND_LAB[x] for x in CONDS], rotation=30, ha="right", fontsize=7)
-            ax.set_yticks(range(len(PHASES)))
-            ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+            ax.set_xticks(range(len(TRIALS)))
+            ax.set_xticklabels([COND_LAB[x] for x in TRIALS], rotation=30, ha="right", fontsize=7)
+            ax.set_yticks(range(len(SESSIONS)))
+            ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
             ax.set_title(
                 f"{GRAIN_LAB[grain]}  ·  {_sex_lab(sex)}",
                 loc="left",
@@ -847,7 +847,7 @@ def fig_arm_agreement(arm: pd.DataFrame, out: Path, *, metric: str = "delta_shan
     arm["hit"] = _as_bool(arm["hit_fdr05"])
     contrasts = ("noSD_vs_GHSD", "noSD_vs_RBSD", "GHSD_vs_RBSD")
     agr = (
-        arm.groupby(["sex", "phase_layer", "step", "contrast"], as_index=False)["hit"]
+        arm.groupby(["sex", "session", "step", "contrast"], as_index=False)["hit"]
         .mean()
         .rename(columns={"hit": "frac_hit"})
     )
@@ -857,10 +857,10 @@ def fig_arm_agreement(arm: pd.DataFrame, out: Path, *, metric: str = "delta_shan
         for c, contrast in enumerate(contrasts):
             ax = axes[r, c]
             sub = agr[(agr["sex"] == sex) & (agr["contrast"] == contrast)]
-            mat = np.full((len(PHASES), len(COND_STEPS)), np.nan)
-            for i, ph in enumerate(PHASES):
+            mat = np.full((len(SESSIONS), len(COND_STEPS)), np.nan)
+            for i, ph in enumerate(SESSIONS):
                 for j, st in enumerate(COND_STEPS):
-                    row = _pick_row(sub, phase_layer=ph, step=st)
+                    row = _pick_row(sub, session=ph, step=st)
                     if row is not None:
                         mat[i, j] = float(row["frac_hit"])
             im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
@@ -868,8 +868,8 @@ def fig_arm_agreement(arm: pd.DataFrame, out: Path, *, metric: str = "delta_shan
             ax.set_xticklabels(
                 [COND_STEP_LAB[s] for s in COND_STEPS], rotation=30, ha="right", fontsize=6
             )
-            ax.set_yticks(range(len(PHASES)))
-            ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES], fontsize=6)
+            ax.set_yticks(range(len(SESSIONS)))
+            ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS], fontsize=6)
             ax.set_title(
                 f"{contrast}  ·  {_sex_lab(sex)}",
                 loc="left",
@@ -910,10 +910,10 @@ def fig_consensus_animal(tests: pd.DataFrame, out: Path) -> None:
         for c, sex in enumerate(SEX_ORDER):
             ax = axes[r, c]
             sub = t[(t["metric"] == met) & (t["sex"] == sex)]
-            mat = np.full((len(PHASES), len(COND_STEPS)), np.nan)
-            for i, ph in enumerate(PHASES):
+            mat = np.full((len(SESSIONS), len(COND_STEPS)), np.nan)
+            for i, ph in enumerate(SESSIONS):
                 for j, st in enumerate(COND_STEPS):
-                    row = _pick_row(sub, phase_layer=ph, step=st)
+                    row = _pick_row(sub, session=ph, step=st)
                     if row is not None:
                         mat[i, j] = float(row["hit"])
             im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
@@ -921,8 +921,8 @@ def fig_consensus_animal(tests: pd.DataFrame, out: Path) -> None:
             ax.set_xticklabels(
                 [COND_STEP_LAB[s] for s in COND_STEPS], rotation=30, ha="right", fontsize=6
             )
-            ax.set_yticks(range(len(PHASES)))
-            ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES], fontsize=6)
+            ax.set_yticks(range(len(SESSIONS)))
+            ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS], fontsize=6)
             ax.set_title(
                 f"{SCALAR_METRIC_LAB.get(met, met)}  ·  {_sex_lab(sex)}",
                 loc="left",
@@ -962,7 +962,7 @@ def fig_grain_contrast_scalar(tests: pd.DataFrame, out: Path) -> None:
     if not metrics:
         metrics = sorted(set(t["metric"].astype(str)))[:3]
     agr = (
-        t.groupby(["sex", "phase_layer", "step", "metric"], as_index=False)["hit"]
+        t.groupby(["sex", "session", "step", "metric"], as_index=False)["hit"]
         .mean()
         .rename(columns={"hit": "frac_hit"})
     )
@@ -976,10 +976,10 @@ def fig_grain_contrast_scalar(tests: pd.DataFrame, out: Path) -> None:
         for c, sex in enumerate(SEX_ORDER):
             ax = axes[r, c]
             sub = agr[(agr["metric"] == met) & (agr["sex"] == sex)]
-            mat = np.full((len(PHASES), len(COND_STEPS)), np.nan)
-            for i, ph in enumerate(PHASES):
+            mat = np.full((len(SESSIONS), len(COND_STEPS)), np.nan)
+            for i, ph in enumerate(SESSIONS):
                 for j, st in enumerate(COND_STEPS):
-                    row = _pick_row(sub, phase_layer=ph, step=st)
+                    row = _pick_row(sub, session=ph, step=st)
                     if row is not None:
                         mat[i, j] = float(row["frac_hit"])
             im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
@@ -987,8 +987,8 @@ def fig_grain_contrast_scalar(tests: pd.DataFrame, out: Path) -> None:
             ax.set_xticklabels(
                 [COND_STEP_LAB[s] for s in COND_STEPS], rotation=30, ha="right", fontsize=6
             )
-            ax.set_yticks(range(len(PHASES)))
-            ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES], fontsize=6)
+            ax.set_yticks(range(len(SESSIONS)))
+            ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS], fontsize=6)
             ax.set_title(
                 f"{SCALAR_METRIC_LAB.get(met, met)}  ·  {_sex_lab(sex)}",
                 loc="left",
@@ -1018,7 +1018,7 @@ def fig_grain_contrast_da(tests: pd.DataFrame, out: Path) -> None:
     t["hit"] = _as_bool(t["hit_fdr05"])
     rows = []
     for (model, weighting, sex, phase, step), g in t.groupby(
-        ["model", "weighting", "sex", "phase_layer", "step"], sort=True
+        ["model", "weighting", "sex", "session", "step"], sort=True
     ):
         k = int(g["alphabet_k"].iloc[0]) if "alphabet_k" in g.columns else 50
         n_hit = int(g["hit"].sum())
@@ -1027,7 +1027,7 @@ def fig_grain_contrast_da(tests: pd.DataFrame, out: Path) -> None:
                 "model": model,
                 "weighting": weighting,
                 "sex": sex,
-                "phase_layer": phase,
+                "session": phase,
                 "step": step,
                 "consensus_hit": (float(n_hit) / float(k) >= 0.04) if k else False,
             }
@@ -1036,7 +1036,7 @@ def fig_grain_contrast_da(tests: pd.DataFrame, out: Path) -> None:
     if agr.empty:
         return
     cell = (
-        agr.groupby(["sex", "phase_layer", "step"], as_index=False)["consensus_hit"]
+        agr.groupby(["sex", "session", "step"], as_index=False)["consensus_hit"]
         .mean()
         .rename(columns={"consensus_hit": "frac_hit"})
     )
@@ -1045,10 +1045,10 @@ def fig_grain_contrast_da(tests: pd.DataFrame, out: Path) -> None:
     for c, sex in enumerate(SEX_ORDER):
         ax = axes[c]
         sub = cell[cell["sex"] == sex]
-        mat = np.full((len(PHASES), len(COND_STEPS)), np.nan)
-        for i, ph in enumerate(PHASES):
+        mat = np.full((len(SESSIONS), len(COND_STEPS)), np.nan)
+        for i, ph in enumerate(SESSIONS):
             for j, st in enumerate(COND_STEPS):
-                row = _pick_row(sub, phase_layer=ph, step=st)
+                row = _pick_row(sub, session=ph, step=st)
                 if row is not None:
                     mat[i, j] = float(row["frac_hit"])
         im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
@@ -1056,8 +1056,8 @@ def fig_grain_contrast_da(tests: pd.DataFrame, out: Path) -> None:
         ax.set_xticklabels(
             [COND_STEP_LAB[s] for s in COND_STEPS], rotation=30, ha="right", fontsize=7
         )
-        ax.set_yticks(range(len(PHASES)))
-        ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+        ax.set_yticks(range(len(SESSIONS)))
+        ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
         ax.set_title(_sex_lab(sex), loc="left", fontweight="bold", color=INK, fontsize=9)
         _annotate(ax, mat, fontsize=6)
     fig.colorbar(im, ax=axes, fraction=0.03, pad=0.02, label="frac models ≥4% alphabet")

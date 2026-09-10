@@ -13,7 +13,7 @@ from maze.pipeline.io.file_discovery import TrialManifest
 from .behavior_token_labels import validate_ethology_curation_complete
 
 Grain = Literal["token", "ethology"]
-PhaseName = Literal["run", "iti"]
+PhaseName = Literal["run", "wait"]
 
 
 @dataclass(frozen=True)
@@ -88,7 +88,7 @@ def _strata_key(
     session = str(manifest.session) if by_session else ""
     return (
         session,
-        str(manifest.tx or ""),
+        str(manifest.condition or ""),
         str(manifest.sex or ""),
         str(manifest.strain or ""),
     )
@@ -145,7 +145,7 @@ def aggregate_occupancy_rows(
                 "label": label,
                 "phase": phase,
                 "session": session,
-                "tx": tx,
+                "condition": tx,
                 "sex": sex,
                 "strain": strain,
                 "occupancy_fraction": f"{frac:.6f}",
@@ -207,7 +207,7 @@ def build_transition_rows(
                 "label_j": label_j,
                 "phase": phase,
                 "session": session,
-                "tx": tx,
+                "condition": tx,
                 "sex": sex,
                 "strain": strain,
                 "transition_count": str(int(count)),

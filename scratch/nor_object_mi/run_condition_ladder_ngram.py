@@ -98,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
             kept = set(cohort["kept_ids"])  # type: ignore[arg-type]
             sessions = list(
                 iter_joined_sessions(
-                    nor_h5, kpms_h5, kept_ids=kept, phase_layer=args.phase_layer
+                    nor_h5, kpms_h5, kept_ids=kept, session=args.session
                 )
             )
             bout_rows, bout_summary = build_ladder_bout_rows(
@@ -157,10 +157,10 @@ def main(argv: list[str] | None = None) -> int:
         [
             "animal_id",
             "sex",
-            "tx",
+            "condition",
             "cohort",
-            "phase_layer",
-            "condition_layer",
+            "session",
+            "trial",
             "stim_var",
             "channel",
             "n_bouts",
@@ -177,9 +177,9 @@ def main(argv: list[str] | None = None) -> int:
     ladder_fields = [
         "animal_id",
         "sex",
-        "tx",
+        "condition",
         "cohort",
-        "phase_layer",
+        "session",
         "nvl_nearest_hist_locus",
         "fam_nearest_hist_locus",
         "excess_no_obj_fam_side",
@@ -215,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
     side = summarize_side_tags(ngram_rows)
     summary = {
         "status": "ok",
-        "phase_layer": args.phase_layer,
+        "session": args.session,
         "pattern_len": int(args.pattern_len),
         "top_m": int(args.top_m),
         "max_span_frames": args.max_span_frames,

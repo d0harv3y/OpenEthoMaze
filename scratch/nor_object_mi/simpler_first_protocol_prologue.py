@@ -27,8 +27,8 @@ if str(_SCRATCH) not in sys.path:
 from nor_object_mi.simpler_first_presence import animal_median_across_models  # noqa: E402
 from nor_object_mi.simpler_first_q1 import SEX_ORDER, anova_within_sex  # noqa: E402
 
-PHASES = ("NOR_BL", "NOR_TX", "NOR_REC3hr", "NOR_REC11hr")
-STEPS = ("no_obj->identical", "identical->novel", "no_obj->novel")
+SESSIONS = ("NOR_BL", "NOR_TX", "NOR_REC3hr", "NOR_REC11hr")
+STEPS = ("no_obj->id_obj", "id_obj->nvl_obj", "no_obj->nvl_obj")
 PRESENCE_METRICS = (
     "delta_frac_near",
     "delta_mean_dist_any_m",
@@ -163,8 +163,8 @@ def build_dr_tables(paired: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, p
     keep = [
         "animal_id",
         "sex",
-        "tx",
-        "phase_layer",
+        "condition",
+        "session",
         "t_fam_s",
         "t_nvl_s",
         "dr_original",
@@ -177,22 +177,22 @@ def build_dr_tables(paired: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, p
         "dr_original_minus_object_prox",
     ]
     animals = animals[keep].copy()
-    animals["phase_layer"] = pd.Categorical(animals["phase_layer"], categories=list(PHASES), ordered=True)
-    animals = animals.sort_values(["phase_layer", "animal_id"]).reset_index(drop=True)
+    animals["session"] = pd.Categorical(animals["session"], categories=list(SESSIONS), ordered=True)
+    animals = animals.sort_values(["session", "animal_id"]).reset_index(drop=True)
 
     test_rows: list[dict[str, object]] = []
-    for phase, g in animals.groupby("phase_layer", observed=True):
+    for phase, g in animals.groupby("session", observed=True):
         for sex, gs in _sex_slices(g):
             grain = (
-                "animal × phase × novel_obj (txs pooled, within sex)"
+                "animal × phase × nvl_obj (txs pooled, within sex)"
                 if sex != "all"
-                else "animal × phase × novel_obj (txs pooled, sexes pooled)"
+                else "animal × phase × nvl_obj (txs pooled, sexes pooled)"
             )
             for metric in DR_METRICS:
                 rec = ttest_one_sample(gs[metric].to_numpy())
                 test_rows.append(
                     {
-                        "phase_layer": str(phase),
+                        "session": str(phase),
                         "question": "novel_preference",
                         "metric": metric,
                         "grain": grain,
@@ -211,7 +211,7 @@ def build_dr_tables(paired: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, p
             rec_t = ttest_paired(gs["t_nvl_s"].to_numpy(), gs["t_fam_s"].to_numpy())
             test_rows.append(
                 {
-                    "phase_layer": str(phase),
+                    "session": str(phase),
                     "question": "fam_vs_nvl_investigation_s",
                     "metric": "t_nvl_minus_t_fam_s",
                     "grain": grain,
@@ -229,10 +229,10 @@ def build_dr_tables(paired: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, p
             for _, row in anova.iterrows():
                 test_rows.append(
                     {
-                        "phase_layer": str(phase),
+                        "session": str(phase),
                         "question": "tx_on_dr",
                         "metric": metric,
-                        "grain": "animal × phase × novel_obj (within sex)",
+                        "grain": "animal × phase × nvl_obj (within sex)",
                         "sex": str(row["sex"]),
                         "step": "",
                         "n": int(row["n"]),
@@ -258,13 +258,13 @@ def build_dr_tables(paired: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, p
                 )
 
     assoc_rows: list[dict[str, object]] = []
-    for phase, g in animals.groupby("phase_layer", observed=True):
+    for phase, g in animals.groupby("session", observed=True):
         for sex, gs in _sex_slices(g):
             for ycol, contrast in ASSOC_Y:
                 rec = pearson_pair(gs["dr_original"].to_numpy(), gs[ycol].to_numpy())
                 assoc_rows.append(
                     {
-                        "phase_layer": str(phase),
+                        "session": str(phase),
                         "sex": sex,
                         "contrast": contrast,
                         "x": "dr_original",
@@ -284,17 +284,17 @@ def build_clock_tables(clocks: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame
     """Copy movement vs syllable clock metrics; Pearson within sex."""
     animals = clocks.copy()
     animals["animal_id"] = animals["animal_id"].astype(str)
-    animals["phase_layer"] = pd.Categorical(animals["phase_layer"], categories=list(PHASES), ordered=True)
-    animals = animals.sort_values(["phase_layer", "animal_id"]).reset_index(drop=True)
+    animals["session"] = pd.Categorical(animals["session"], categories=list(SESSIONS), ordered=True)
+    animals = animals.sort_values(["session", "animal_id"]).reset_index(drop=True)
 
     assoc_rows: list[dict[str, object]] = []
-    for phase, g in animals.groupby("phase_layer", observed=True):
+    for phase, g in animals.groupby("session", observed=True):
         for sex, gs in _sex_slices(g):
             for xcol, ycol, contrast, family in CLOCK_PAIRS:
                 rec = pearson_pair(gs[xcol].to_numpy(), gs[ycol].to_numpy())
                 assoc_rows.append(
                     {
-                        "phase_layer": str(phase),
+                        "session": str(phase),
                         "sex": sex,
                         "contrast": contrast,
                         "family": family,
@@ -318,16 +318,16 @@ def build_clock_tables(clocks: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame
 def build_presence_tables(deltas: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Consensus median-across-models Δ + one-sample t / Welch ANOVA within sex."""
     med = animal_median_across_models(deltas)
-    med["phase_layer"] = pd.Categorical(med["phase_layer"], categories=list(PHASES), ordered=True)
+    med["session"] = pd.Categorical(med["session"], categories=list(SESSIONS), ordered=True)
     med["step"] = pd.Categorical(med["step"], categories=list(STEPS), ordered=True)
-    med = med.sort_values(["phase_layer", "step", "animal_id"]).reset_index(drop=True)
+    med = med.sort_values(["session", "step", "animal_id"]).reset_index(drop=True)
 
     test_rows: list[dict[str, object]] = []
-    for (phase, step), g in med.groupby(["phase_layer", "step"], observed=True):
+    for (phase, step), g in med.groupby(["session", "step"], observed=True):
         q = (
             "presence"
-            if step == "no_obj->identical"
-            else ("novelty" if step == "identical->novel" else "span")
+            if step == "no_obj->id_obj"
+            else ("novelty" if step == "id_obj->nvl_obj" else "span")
         )
         for sex, gs in _sex_slices(g):
             grain = (
@@ -339,7 +339,7 @@ def build_presence_tables(deltas: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
                 rec = ttest_one_sample(gs[metric].to_numpy())
                 test_rows.append(
                     {
-                        "phase_layer": str(phase),
+                        "session": str(phase),
                         "step": str(step),
                         "question": q,
                         "metric": metric,
@@ -355,7 +355,7 @@ def build_presence_tables(deltas: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
             for _, row in anova.iterrows():
                 test_rows.append(
                     {
-                        "phase_layer": str(phase),
+                        "session": str(phase),
                         "step": str(step),
                         "question": "tx_on_paired_delta",
                         "metric": metric,
@@ -416,10 +416,10 @@ above 0 — and is the novelty step (`identical→novel`) as strong as presence?
 
 | Scalar | Grain | Consensus |
 | ------ | ----- | --------- |
-| `dr_original` | animal × phase × novel_obj | none (investigation export) |
+| `dr_original` | animal × phase × nvl_obj | none (investigation export) |
 | `dr_object_prox` | same | median across 21 kpMS models |
 | presence/novelty `delta_*` | animal × phase × step | median across 21 kpMS models |
-| `mean_speed_mps`, `time_immobile_s` | animal × phase × novel_obj | none (original ambulation export) |
+| `mean_speed_mps`, `time_immobile_s` | animal × phase × nvl_obj | none (original ambulation export) |
 
 **Association**
 
@@ -536,13 +536,13 @@ def main(argv: list[str] | None = None) -> int:
     t_pres = pr_tests[
         (pr_tests["test"] == "ttest_1samp")
         & (pr_tests["sex"].isin(list(SEX_ORDER)))
-        & (pr_tests["step"] == "no_obj->identical")
+        & (pr_tests["step"] == "no_obj->id_obj")
         & (pr_tests["metric"] == "delta_frac_near")
     ]
     t_nov = pr_tests[
         (pr_tests["test"] == "ttest_1samp")
         & (pr_tests["sex"].isin(list(SEX_ORDER)))
-        & (pr_tests["step"] == "identical->novel")
+        & (pr_tests["step"] == "id_obj->nvl_obj")
         & (pr_tests["metric"] == "delta_frac_near")
     ]
     summary = {

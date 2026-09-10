@@ -1,7 +1,7 @@
 """Four-mask tx hunt (locked kpMS; all three conditions).
 
 Masks are bout-level: locomotor majority × bout-mean dist < 0.10 m.
-Primary: Welch ANOVA of (TX − BL) by tx on novel_obj. Gates: identical_obj,
+Primary: Welch ANOVA of (TX − BL) by tx on nvl_obj. Gates: id_obj,
 no_obj, and BL level. Not frame-level investigation; not DA.
 
 Regen (OpenEthoMaze repo root):
@@ -30,7 +30,7 @@ from nor_object_mi.four_mask import (  # noqa: E402
     session_mask_table,
     session_rasters,
 )
-from nor_object_mi.simpler_first_presence import CONDS, NEAR_R_M  # noqa: E402
+from nor_object_mi.simpler_first_presence import TRIALS, NEAR_R_M  # noqa: E402
 from nor_object_mi.simpler_first_q1 import LOCKED  # noqa: E402
 from nor_object_mi.simpler_first_syll_ambulation_overlap import (  # noqa: E402
     AMB_COLS,
@@ -80,11 +80,11 @@ Grain: animal × phase × condition. Scalars: `frac_mask` (mask frames / session
 syllable frames) and Shannon bits of the frame-weighted composition inside the
 mask.
 
-**Tx hunt (inferential):** Welch ANOVA of (TX − BL) by tx on `novel_obj`,
+**Tx hunt (inferential):** Welch ANOVA of (TX − BL) by tx on `nvl_obj`,
 within sex. BH (Benjamini–Hochberg) family = 4 masks × 2 metrics within sex.
 Companion: one-sample t of Δ vs 0 (treatments pooled).
 
-**Gates (veto, not in the BH family):** same ANOVA must miss on `identical_obj`
+**Gates (veto, not in the BH family):** same ANOVA must miss on `id_obj`
 and `no_obj`; ANOVA of BL level by tx must miss on novel. `tx_specific` =
 novel ANOVA FDR hit and gates miss.
 
@@ -132,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
         "model": model,
         "near_m": float(args.near_m),
         "masks": list(MASKS),
-        "conditions": list(CONDS),
+        "conditions": list(TRIALS),
         "n_syllable_bouts": int(len(labeled)),
         "n_session_mask_rows": int(len(sessions)),
         "n_paired": int(len(paired)),

@@ -9,7 +9,7 @@ from unittest.mock import patch
 from maze.pipeline.controller_discovery import (
     default_discovery_data_dirs,
     default_results_h5_path,
-    default_treatment_labels_path,
+    default_condition_labels_path,
 )
 from maze.pipeline.io.file_discovery import (
     discover_trials,
@@ -43,9 +43,9 @@ def test_default_discovery_data_dirs_controller_first() -> None:
     assert default_discovery_data_dirs(empty) is None
 
 
-def test_default_treatment_labels_under_output_dir() -> None:
+def test_default_condition_labels_under_output_dir() -> None:
     cfg = SimpleNamespace(output_dir=r"C:\data\cohort1", h5_filename="trials.h5")
-    assert default_treatment_labels_path(cfg) == Path(r"C:\data\cohort1") / "treatment_labels.csv"
+    assert default_condition_labels_path(cfg) == Path(r"C:\data\cohort1") / "condition_labels.csv"
 
 
 def test_discover_trials_controller_video_fallback(tmp_path: Path) -> None:

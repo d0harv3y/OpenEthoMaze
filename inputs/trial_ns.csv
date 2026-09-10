@@ -1,4 +1,4 @@
-parent_directory,file_name,id,tx,sex,phase,trial,escape_arm,start_datetime
+parent_directory,file_name,id,condition,sex,session,trial,escape_arm,start_datetime
 EHRAM Cohort 1 DARPA videos,Test 1.mp4,3201,RBSD,F,train_1,1,1,2025-11-18T13:06:32
 EHRAM Cohort 1 DARPA videos,Test 2.mp4,3202,RBSD,F,train_1,1,2,2025-11-18T13:10:41
 EHRAM Cohort 1 DARPA videos,Test 3.mp4,3203,RBSD,F,train_1,1,5,2025-11-18T13:14:03

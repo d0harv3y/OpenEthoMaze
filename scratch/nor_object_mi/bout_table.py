@@ -28,9 +28,9 @@ BOUT_FIELDS: tuple[str, ...] = (
     "trial_key",
     "animal_id",
     "raw_session",
-    "phase_layer",
-    "condition_layer",
-    "tx",
+    "session",
+    "trial",
+    "condition",
     "sex",
     "cohort",
     "bout_index",
@@ -55,7 +55,7 @@ BOUT_FIELDS: tuple[str, ...] = (
 )
 
 # Conditions that contribute real object centers to shared distance bins.
-EDGE_FIT_CONDITIONS: frozenset[str] = frozenset({"novel_obj", "identical_obj"})
+EDGE_FIT_CONDITIONS: frozenset[str] = frozenset({"nvl_obj", "id_obj"})
 
 
 def _align_syll_dists(
@@ -81,18 +81,18 @@ def build_bout_rows(
     kpms_h5: h5py.File,
     sessions: Sequence[JoinedSession],
     *,
-    condition_layers: Sequence[str] = ("novel_obj", "identical_obj"),
+    trials: Sequence[str] = ("nvl_obj", "id_obj"),
     loci_cache: Mapping[tuple[str, str], np.ndarray] | None = None,
     min_bout_frames: int | None = None,
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
     """Collapse kpMS syllables to bouts; attach bout-mean spot→object distances.
 
-    ``novel_obj``: role-labeled fam/nvl distances (+ sorted obj_a/obj_b).
-    ``identical_obj``: sorted obj_a/obj_b (fam/nvl left NaN).
+    ``nvl_obj``: role-labeled fam/nvl distances (+ sorted obj_a/obj_b).
+    ``id_obj``: sorted obj_a/obj_b (fam/nvl left NaN).
 
     Spatial channels ``bout_mean_dist_locus_{a,b}_m`` are distances to **fixed
     historical** animal×phase 2-means loci (lower-x = A), not to session object
-    centers. On ``novel_obj``, ``nvl_nearest_hist_locus`` tags which historical
+    centers. On ``nvl_obj``, ``nvl_nearest_hist_locus`` tags which historical
     locus is nearer the session novel-object center.
     """
     rows: list[dict[str, object]] = []
@@ -103,12 +103,12 @@ def build_bout_rows(
     n_novel = 0
     n_identical = 0
     errors: list[dict[str, str]] = []
-    wanted = set(condition_layers)
+    wanted = set(trials)
     cache: dict[tuple[str, str], np.ndarray] = dict(loci_cache or {})
     locus_policy = "hist_2means_x_order_fixed"
 
     for js in sessions:
-        if js.condition_layer not in wanted:
+        if js.trial not in wanted:
             n_skip_cond += 1
             continue
         try:
@@ -134,9 +134,9 @@ def build_bout_rows(
             d_fam = np.full(d_a.shape, np.nan, dtype=np.float64)
             d_nvl = np.full(d_a.shape, np.nan, dtype=np.float64)
 
-            loci_key = (js.animal_id, js.phase_layer)
+            loci_key = (js.animal_id, js.session)
             if loci_key not in cache:
-                loci = loci_for_animal_phase(nor_h5, js.animal_id, js.phase_layer)
+                loci = loci_for_animal_phase(nor_h5, js.animal_id, js.session)
                 if loci is None:
                     n_skip_loci += 1
                     errors.append(
@@ -159,7 +159,7 @@ def build_bout_rows(
             role_at_b = ""
             nvl_nearest = ""
 
-            if js.condition_layer == "novel_obj":
+            if js.trial == "nvl_obj":
                 role_map = fam_nvl_map_for_session(nor_h5, js.animal_id, js.raw_session)
                 if not role_map:
                     n_skip_map += 1
@@ -184,7 +184,7 @@ def build_bout_rows(
                     nvl_nearest = "b"
                     role_at_a, role_at_b = "fam", "nvl"
                 n_novel += 1
-            elif js.condition_layer == "identical_obj":
+            elif js.trial == "id_obj":
                 n_identical += 1
             else:
                 n_skip_cond += 1
@@ -203,9 +203,9 @@ def build_bout_rows(
                         "trial_key": trial_key,
                         "animal_id": js.animal_id,
                         "raw_session": js.raw_session,
-                        "phase_layer": js.phase_layer,
-                        "condition_layer": js.condition_layer,
-                        "tx": js.tx,
+                        "session": js.session,
+                        "trial": js.trial,
+                        "condition": js.condition,
                         "sex": js.sex,
                         "cohort": js.cohort,
                         "bout_index": bout_index,
@@ -241,8 +241,8 @@ def build_bout_rows(
 
     summary = {
         "n_bout_rows": len(rows),
-        "n_sessions_novel_obj": n_novel,
-        "n_sessions_identical_obj": n_identical,
+        "n_sessions_nvl_obj": n_novel,
+        "n_sessions_id_obj": n_identical,
         "n_skip_condition": n_skip_cond,
         "n_skip_fam_nvl_map": n_skip_map,
         "n_skip_spatial_loci": n_skip_loci,
@@ -269,12 +269,12 @@ def build_presence_bout_rows(
     loci_cache: Mapping[tuple[str, str], np.ndarray] | None = None,
     min_bout_frames: int | None = None,
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
-    """Bouts for object-presence question: ``identical_obj`` vs ``no_obj``.
+    """Bouts for object-presence question: ``id_obj`` vs ``no_obj``.
 
     Distance fields:
     - ``bout_mean_dist_any_m``: bout-mean nearest-locus distance
     - ``bout_mean_dist_locus_{a,b}_m``: distances to spatially labeled loci
-      (animal×phase 2-means, lower-x = A). On ``identical_obj``, each real
+      (animal×phase 2-means, lower-x = A). On ``id_obj``, each real
       object center is matched to A/B; on ``no_obj``, targets are the
       pseudo-loci themselves.
     - ``bout_mean_dist_obj_{a,b}_m``: distances to sorted ``object_*`` keys
@@ -291,7 +291,7 @@ def build_presence_bout_rows(
     locus_policy = "spatial_2means_x_order"
 
     for js in sessions:
-        if js.condition_layer not in {"identical_obj", "no_obj"}:
+        if js.trial not in {"id_obj", "no_obj"}:
             n_skip_cond += 1
             continue
         try:
@@ -301,9 +301,9 @@ def build_presence_bout_rows(
                 min_bout_frames,
             )
 
-            key = (js.animal_id, js.phase_layer)
+            key = (js.animal_id, js.session)
             if key not in cache:
-                loci = loci_for_animal_phase(nor_h5, js.animal_id, js.phase_layer)
+                loci = loci_for_animal_phase(nor_h5, js.animal_id, js.session)
                 if loci is None:
                     n_skip_loci += 1
                     errors.append(
@@ -321,7 +321,7 @@ def build_presence_bout_rows(
             d_locus_a = dist_to_center_m(x_m, y_m, valid, loci[0], ppm)
             d_locus_b = dist_to_center_m(x_m, y_m, valid, loci[1], ppm)
 
-            if js.condition_layer == "identical_obj":
+            if js.trial == "id_obj":
                 centers = object_centers_px(sg)
                 if len(centers) < 2:
                     n_skip_err += 1
@@ -329,7 +329,7 @@ def build_presence_bout_rows(
                         {
                             "animal_id": js.animal_id,
                             "raw_session": js.raw_session,
-                            "reason": "need >=2 object centers on identical_obj",
+                            "reason": "need >=2 object centers on id_obj",
                         }
                     )
                     continue
@@ -367,9 +367,9 @@ def build_presence_bout_rows(
                         "trial_key": trial_key,
                         "animal_id": js.animal_id,
                         "raw_session": js.raw_session,
-                        "phase_layer": js.phase_layer,
-                        "condition_layer": js.condition_layer,
-                        "tx": js.tx,
+                        "session": js.session,
+                        "trial": js.trial,
+                        "condition": js.condition,
                         "sex": js.sex,
                         "cohort": js.cohort,
                         "bout_index": bout_index,
@@ -405,7 +405,7 @@ def build_presence_bout_rows(
 
     summary = {
         "n_bout_rows": len(rows),
-        "n_sessions_identical_obj": n_identical,
+        "n_sessions_id_obj": n_identical,
         "n_sessions_no_obj": n_no,
         "n_skip_condition": n_skip_cond,
         "n_skip_spatial_loci": n_skip_loci,
@@ -432,10 +432,10 @@ def build_ladder_bout_rows(
     loci_cache: Mapping[tuple[str, str], np.ndarray] | None = None,
     min_bout_frames: int | None = None,
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
-    """Bouts for condition ladder: ``no_obj``, ``identical_obj``, ``novel_obj``.
+    """Bouts for condition ladder: ``no_obj``, ``id_obj``, ``nvl_obj``.
 
     ``bout_mean_dist_locus_{a,b}_m`` = distance to **fixed** animal×phase historical
-    means (all three conditions). On ``novel_obj``, also fill fam/nvl role distances
+    means (all three conditions). On ``nvl_obj``, also fill fam/nvl role distances
     and ``nvl_nearest_hist_locus``.
     """
     rows: list[dict[str, object]] = []
@@ -447,10 +447,10 @@ def build_ladder_bout_rows(
     errors: list[dict[str, str]] = []
     cache: dict[tuple[str, str], np.ndarray] = dict(loci_cache or {})
     locus_policy = "hist_2means_x_order_fixed"
-    wanted = {"no_obj", "identical_obj", "novel_obj"}
+    wanted = {"no_obj", "id_obj", "nvl_obj"}
 
     for js in sessions:
-        if js.condition_layer not in wanted:
+        if js.trial not in wanted:
             n_skip_cond += 1
             continue
         try:
@@ -460,9 +460,9 @@ def build_ladder_bout_rows(
                 min_bout_frames,
             )
 
-            key = (js.animal_id, js.phase_layer)
+            key = (js.animal_id, js.session)
             if key not in cache:
-                loci = loci_for_animal_phase(nor_h5, js.animal_id, js.phase_layer)
+                loci = loci_for_animal_phase(nor_h5, js.animal_id, js.session)
                 if loci is None:
                     n_skip_loci += 1
                     errors.append(
@@ -488,7 +488,7 @@ def build_ladder_bout_rows(
             role_at_a = role_at_b = ""
             source = "hist_loci"
 
-            if js.condition_layer in {"identical_obj", "novel_obj"}:
+            if js.trial in {"id_obj", "nvl_obj"}:
                 centers = object_centers_px(sg)
                 if len(centers) < 2:
                     n_skip_err += 1
@@ -511,7 +511,7 @@ def build_ladder_bout_rows(
                 obj_a_id, obj_b_id = "pseudo_locus_0", "pseudo_locus_1"
                 source = "pseudo_loci"
 
-            if js.condition_layer == "novel_obj":
+            if js.trial == "nvl_obj":
                 role_map = fam_nvl_map_for_session(nor_h5, js.animal_id, js.raw_session)
                 if not role_map:
                     n_skip_map += 1
@@ -535,7 +535,7 @@ def build_ladder_bout_rows(
                     nvl_nearest = "b"
                     role_at_a, role_at_b = "fam", "nvl"
 
-            n_by_cond[js.condition_layer] += 1
+            n_by_cond[js.trial] += 1
             syll, aligned = _align_syll_dists(
                 syll, [d_any, d_locus_a, d_locus_b, d_fam, d_nvl, d_obj_a, d_obj_b]
             )
@@ -549,9 +549,9 @@ def build_ladder_bout_rows(
                         "trial_key": trial_key,
                         "animal_id": js.animal_id,
                         "raw_session": js.raw_session,
-                        "phase_layer": js.phase_layer,
-                        "condition_layer": js.condition_layer,
-                        "tx": js.tx,
+                        "session": js.session,
+                        "trial": js.trial,
+                        "condition": js.condition,
                         "sex": js.sex,
                         "cohort": js.cohort,
                         "bout_index": bout_index,

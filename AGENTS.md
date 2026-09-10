@@ -52,7 +52,7 @@ Entry: `uv run maze-daq` (needs `--extra gui`). Composition root: [maze/controll
 |------|--------------------------|
 | **Analyze…** | `controller` (GUI default) — [trial_filters.py](maze/pipeline/trial_filters.py) `GUI_DEFAULT_PREFILTER_MODE` |
 | **Virtual acquisition…** | SLEAP-NN batch; skip-existing when pose sidecar already present |
-| **Discovery…** | Scans output folder; `treatment_labels.csv` editor (not HTTP discover) |
+| **Discovery…** | Scans output folder; `condition_labels.csv` editor (not HTTP discover) |
 | Legacy batch CLI | `uv run maze-legacy-db run` uses `prefilter_mode=legacy` |
 
 Modes: `controller` (no legacy frame-diff / mistrial gates), `legacy` (strict), `auto` (infer from manifest). Details: [readme.md](readme.md) § Analyze prefilter modes.

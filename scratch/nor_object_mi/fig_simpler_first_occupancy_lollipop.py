@@ -35,9 +35,9 @@ from nor_object_mi.occupancy_lollipop import (  # noqa: E402
     join_da_occupancy,
     signed_overlap_summary,
 )
-from nor_object_mi.simpler_first_protocol_prologue import PHASES  # noqa: E402
+from nor_object_mi.simpler_first_protocol_prologue import SESSIONS  # noqa: E402
 
-PHASE_SHORT = {
+SESSION_SHORT = {
     "NOR_BL": "BL",
     "NOR_TX": "TX",
     "NOR_REC3hr": "REC3",
@@ -54,15 +54,15 @@ DEFAULT_DA = Path(
 )
 CLASS_COLOR = {"move": "#2f5d8a", "still": "#8a4f3d", "ns": "#9a9a9a", "no_occ": "#cccccc"}
 STEP_LAB = {
-    "no_obj->identical": "presence",
-    "identical->novel": "novelty",
-    "no_obj->novel": "span",
+    "no_obj->id_obj": "presence",
+    "id_obj->nvl_obj": "novelty",
+    "no_obj->nvl_obj": "span",
 }
 MAX_N = 28
 FOOT = (
     "Locked ss-50. Stem = DA FDR hit; x = median Δp (right = more share on the "
-    "destination condition). Color = dest occupancy (identical_obj for presence, "
-    "novel_obj for novelty/span). ▲ gain  ▼ loss. Grey = occupancy ns vs 0. "
+    "destination condition). Color = dest occupancy (id_obj for presence, "
+    "nvl_obj for novelty/span). ▲ gain  ▼ loss. Grey = occupancy ns vs 0. "
     "Occupancy and DA are different contrasts. Ids not portable. Not tx."
 )
 FOOT_CONS = (
@@ -84,9 +84,9 @@ def fig_join_lollipops(joined: pd.DataFrame, stem: Path, *, dest: str) -> None:
     j["on_lollipop"] = _as_bool(j["on_lollipop"]) if "on_lollipop" in j.columns else _as_bool(j["hit_da_fdr05"])
     fig, axes = plt.subplots(3, 4, figsize=(12.4, 9.8), constrained_layout=True)
     for r, step in enumerate(STEPS):
-        for c, ph in enumerate(PHASES):
+        for c, ph in enumerate(SESSIONS):
             ax = axes[r][c]
-            cell = j[(j["step"] == step) & (j["phase_layer"] == ph) & j["on_lollipop"]]
+            cell = j[(j["step"] == step) & (j["session"] == ph) & j["on_lollipop"]]
             n_hit = int(len(cell))
             if n_hit == 0:
                 ax.text(0.5, 0.5, "0 FDR DA", ha="center", va="center", color="#888888")
@@ -112,7 +112,7 @@ def fig_join_lollipops(joined: pd.DataFrame, stem: Path, *, dest: str) -> None:
             n_m = int((cell["locomotor_class"] == "move").sum())
             n_s = int((cell["locomotor_class"] == "still").sum())
             ax.set_title(
-                f"{PHASE_SHORT.get(ph, ph)}  DA={n_hit}  +{n_gain} −{n_loss}  m={n_m} s={n_s}",
+                f"{SESSION_SHORT.get(ph, ph)}  DA={n_hit}  +{n_gain} −{n_loss}  m={n_m} s={n_s}",
                 loc="left",
                 fontsize=ts["annotation"] - 2,
                 color=INK,
@@ -144,9 +144,9 @@ def fig_signed_consensus(cons: pd.DataFrame, stem: Path, *, dest: str) -> None:
     ts = type_scale(dest)
     fig, axes = plt.subplots(3, 4, figsize=(11.6, 7.6), constrained_layout=True, sharey=True)
     for r, step in enumerate(STEPS):
-        for c, ph in enumerate(PHASES):
+        for c, ph in enumerate(SESSIONS):
             ax = axes[r][c]
-            rec = cons[(cons["step"] == step) & (cons["phase_layer"] == ph)]
+            rec = cons[(cons["step"] == step) & (cons["session"] == ph)]
             ax.set_xlim(-0.5, 1.5)
             ax.set_ylim(-0.05, 1.05)
             ax.axhline(0.5, color="#dddddd", lw=0.6, zorder=1)
@@ -165,7 +165,7 @@ def fig_signed_consensus(cons: pd.DataFrame, stem: Path, *, dest: str) -> None:
             n_g = int(row["n_models_with_gain"])
             n_l = int(row["n_models_with_loss"])
             ax.set_title(
-                f"{PHASE_SHORT.get(ph, ph)}  {n_g}/{n_l} models",
+                f"{SESSION_SHORT.get(ph, ph)}  {n_g}/{n_l} models",
                 loc="left",
                 fontsize=ts["annotation"] - 1,
                 color=INK,

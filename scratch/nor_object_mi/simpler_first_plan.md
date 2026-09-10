@@ -1,4 +1,4 @@
-# Simpler first: tx on NOR phases × novel_obj
+# Simpler first: tx on NOR phases × nvl_obj
 
 Question → folder map (canonical, next to artifacts):
 `C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017\_nor_object_mi\README.md`
@@ -7,7 +7,7 @@ Question → folder map (canonical, next to artifacts):
 
 | Knob | Value |
 |------|--------|
-| Grain | animal × phase × `novel_obj`; all bout frames |
+| Grain | animal × phase × `nvl_obj`; all bout frames |
 | Model | `paramscan_s1-1e8_s2-1e5_ss-50` raw |
 | Result | Q1/Q2 miss at BL/TX/REC3hr/REC11hr |
 
@@ -16,7 +16,7 @@ Question → folder map (canonical, next to artifacts):
 | Knob | Value |
 |------|--------|
 | Gate | **A**: `bout_mean_dist_any_m` < **0.10 m** (fixed; `spot`) |
-| Grain | animal × phase × `novel_obj` × spot_bout_mean_any < 0.10 m (raw) |
+| Grain | animal × phase × `nvl_obj` × spot_bout_mean_any < 0.10 m (raw) |
 | Keep rule | ≥ 50 gated frames / animal; else drop from preference & composition tests |
 | Model | same pilot |
 | Phases | `NOR_BL`, `NOR_TX`, `NOR_REC3hr`, `NOR_REC11hr` |
@@ -58,7 +58,7 @@ Out: `…/_nor_object_mi/simpler_first_presence_steps/`
 ## Per-object 0.10 m proximity windows (object-prox DR) — locked 2026-08-18
 
 Classic NOR discrimination ratio from presence occupancy: each object gets
-its own `spot` proximity window of radius 0.10 m on `novel_obj`. Overlap audited.
+its own `spot` proximity window of radius 0.10 m on `nvl_obj`. Overlap audited.
 
 ```
 DR = (T_nvl − T_fam) / (T_nvl + T_fam)
@@ -72,7 +72,7 @@ Dictionary: `INFO_object_prox.md`
 
 21-model result: **zero overlap** in all 84 model × phase cells (no dual-gated
 bouts; min `d_fam+d_nvl` 0.29–0.32 m). Wilcoxon DR vs 0 hits 21/21 at BL / TX /
-REC3hr; miss 0/21 at REC11hr. Kruskal on DR by tx: miss all sex × phase × model.
+REC3hr; miss 0/21 at REC11hr. Kruskal on DR by condition: miss all sex × phase × model.
 Occupancy Kruskal hits in three cells (not a DR claim). Inclusive = exclusive.
 
 ## Classic investigation DR vs object-prox DR — locked 2026-08-18

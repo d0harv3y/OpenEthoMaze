@@ -37,9 +37,12 @@ from maze.pipeline.io.file_discovery import load_manifest_csv
 def _parse_phases(raw: str) -> list[PhaseName]:
     value = raw.strip().lower()
     if value == "all":
-        return ["run", "iti"]
-    if value in {"run", "iti"}:
+        return ["run", "wait"]
+    if value in {"run", "wait"}:
         return [value]  # type: ignore[list-item]
+    # Legacy CLI alias
+    if value == "iti":
+        return ["wait"]
     raise ValueError(f"unsupported phase: {raw!r}")
 
 
@@ -54,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tokens-csv", type=Path, default=None)
     ap.add_argument("--labels-csv", type=Path, default=None)
     ap.add_argument("--grain", choices=("token", "ethology"), required=True)
-    ap.add_argument("--phase", choices=("run", "iti", "all"), default="run")
+    ap.add_argument("--phase", choices=("run", "wait", "all"), default="run")
     ap.add_argument(
         "--min-token-bouts",
         type=int,

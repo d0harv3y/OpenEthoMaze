@@ -23,7 +23,7 @@ class KpmsApplyRunConfig:
     trials: Optional[tuple[str, ...]] = None
     include_habituation: bool = False
     exclude_experimental: bool = False
-    enrich_from_treatment_labels: bool = True
+    enrich_from_condition_labels: bool = True
     num_iters: int = 100
     reindex_syllables_before_load: bool = True
     verbose: bool = True

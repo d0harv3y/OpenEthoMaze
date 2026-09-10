@@ -33,7 +33,7 @@ from nor_object_mi._pub_style import (  # noqa: E402
 from nor_object_mi.cluster13_tx_delta import STEP_LAB, STEPS
 from nor_object_mi.cluster_tx_kruskal import (  # noqa: E402
     filter_presence_novelty,
-    kruskal_by_syllable_phase_step_sex,
+    kruskal_by_syllable_session_step_sex,
 )
 from nor_object_mi.fig_cluster_tx_kruskal_overview import (  # noqa: E402
     PANELS,
@@ -53,9 +53,9 @@ DELTA_USECOLS = (
     "model",
     "animal_id",
     "sex",
-    "tx",
+    "condition",
     "step",
-    "phase_layer",
+    "session",
     "raw_syllable_id",
     "delta_p",
 )
@@ -214,7 +214,7 @@ def run_one_da_dir(
     for i, model in enumerate(all_models, start=1):
         print(f"  [{i}/{len(all_models)}] {model}", flush=True)
         sub = deltas[deltas["model"] == model]
-        kr = kruskal_by_syllable_phase_step_sex(sub)
+        kr = kruskal_by_syllable_session_step_sex(sub)
         kr.insert(0, "model", model)
         kr_parts.append(kr)
         stem = out / f"fig_model_syllable_tx_kruskal_{model}"

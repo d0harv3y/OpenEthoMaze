@@ -4,7 +4,7 @@
 `C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017\_nor_object_mi\README.md`
 
 That catalog is the narrative order (reproduce original → protocol check →
-snapshots → controlled evolution, `noSD` Wilcoxon within sex → then tx).
+snapshots → controlled evolution, `noSD` Wilcoxon within sex → then condition).
 Dictionaries live next to artifacts (`INFO_*.md` in each run folder), not here.
 
 Bout-level mutual information (MI) between keypoint-MoSeq (kpMS) syllables and
@@ -18,11 +18,11 @@ only after the pilot claim clears.
 | Knob | Value |
 |------|--------|
 | Keypoint | **`spot`** = mean(nose, neck, spine) in px, then / `pixels_per_meter` → meters |
-| Pilot phase | **`NOR_TX` only** (`phase_layer`) |
+| Pilot phase | **`NOR_TX` only** (`session`) |
 | Pilot model | `paramscan_s1-1e8_s2-1e5_ss-50` |
 | Cohort filter | Drop non-animal / blank `tx`/`sex`; log **N and IDs** in `cohort_filter.json` |
-| Primary claim | Treatment × novelty via `Δ = excess_I(dist_nvl) − excess_I(dist_fam)` on `novel_obj` |
-| Distance bins | **5 shared** quantiles on pooled bout-mean spot→object distance from **`novel_obj` + `identical_obj`**; same edges for fam & nvl. **`no_obj` excluded** for now |
+| Primary claim | Treatment × novelty via `Δ = excess_I(dist_nvl) − excess_I(dist_fam)` on `nvl_obj` |
+| Distance bins | **5 shared** quantiles on pooled bout-mean spot→object distance from **`nvl_obj` + `id_obj`**; same edges for fam & nvl. **`no_obj` excluded** for now |
 | Code home | `scratch/nor_object_mi/` |
 
 Note: classic NOR *investigation* metrics use forelimb keypoints
@@ -31,7 +31,7 @@ per explicit choice.
 
 **`no_obj` pseudo-targets (presence question):** objects occupy two arena loci;
 `which` locus holds the novel object varies. For `no_obj`, loci = 2-means of that
-animal×phase centers from `identical_obj` + `novel_obj`; `dist_any` = nearest locus.
+animal×phase centers from `id_obj` + `nvl_obj`; `dist_any` = nearest locus.
 
 ## Presence question (identical vs no_obj)
 
@@ -89,7 +89,7 @@ Artifacts under `--out-dir`:
 - `bin_edges.json` — shared `dist` quantiles (`n_bins=5`; any-object bout means; mirrored to `dist_fam`/`dist_nvl`)
 - `mi_per_animal.csv` — per animal × stim_var (`dist_fam` / `dist_nvl`) occupancy MI
 - `mi_delta_per_animal.csv` — novelty contrast `Δ`
-- `group_delta_tests.csv` — Kruskal / Mann–Whitney on `Δ` by `tx` and `sex`, **pooled and sex-stratified** (`sex_stratum` = `all` | `F` | `M`; also within-tx sex contrasts as `tx=…`)
+- `group_delta_tests.csv` — Kruskal / Mann–Whitney on `Δ` by `tx` and `sex`, **pooled and sex-stratified** (`sex_stratum` = `all` | `F` | `M`; also within-tx sex contrasts as `condition=…`)
 - `run_summary.json`
 
 ## Presence ensemble grid (done)
@@ -152,7 +152,7 @@ for most animals. Role Δ remains null; tagging works.
 
 ## Simpler first (tx before MI)
 
-One-page plan: `simpler_first_plan.md`. Locked cell = `NOR_TX` × `novel_obj` window ×
+One-page plan: `simpler_first_plan.md`. Locked cell = `NOR_TX` × `nvl_obj` window ×
 pilot model, raw bouts. Q1 proximity (`Δ_prox`); Q2 syllable composition; Q3 INFO/MI only after a hit.
 
 **Presence steps** (paired conditions inside a phase):
@@ -196,16 +196,16 @@ Ref TX: presence step (no→id) rises on both sides; id→role-object step is NS
 2. Fan out `run_pilot.py` over all 21 `paramscan_*` dirs (same `--phase-layer`, seed, edges).
 3. Aggregate `Δ` medians / tx p-values into a model × contrast table.
 4. **Survive model choice:** sign(`median_Δ` by tx contrast) and null-clear fraction stable across grid.
-5. If that fails, rank models by novel_obj `excess_I(dist_nvl)` (object-conditioned winner) as fallback.
+5. If that fails, rank models by nvl_obj `excess_I(dist_nvl)` (object-conditioned winner) as fallback.
 6. Optionally expand phase to `NOR_BL` / REC after TX clears.
 7. **Presence question (implemented + ensembled):** `run_presence_pilot.py` /
-   `run_presence_grid.py` — `excess_I(dist_any)` on `identical_obj` vs `no_obj`
+   `run_presence_grid.py` — `excess_I(dist_any)` on `id_obj` vs `no_obj`
    pseudo-loci. Keep **BL and TX separate**; do **not** average phases when
    hunting tx effects that appear only after treatment. Optional per-animal
    change: `Δ_TX − Δ_BL`.
 8. **Discrimination ratio on per-object 0.10 m proximity windows (implemented, 21 models):**
    `simpler_first_object_prox.py` — `DR = (T_nvl − T_fam) / (T_nvl + T_fam)`
-   on `novel_obj` with independent fam/nvl gates. Overlap audited (zero in all
+   on `nvl_obj` with independent fam/nvl gates. Overlap audited (zero in all
    21 × 4 cells). Figures: `fig_simpler_first_object_prox.py` (occupancy is
    two 16:9 1×4 packs, fam vs nvl). Classic
    investigation DR comparison: `simpler_first_classic_dr.py` (same formula;
@@ -219,4 +219,4 @@ Ref TX: presence step (no→id) rises on both sides; id→role-object step is NS
 
 - Proximity ↔ slowing ↔ investigate-like syllables.
 - Raw MI favors high-entropy (short-bout) models — use **excess** / compare `Δ`, not raw `I`.
-- `no_obj` / `identical_obj` are controls (built into bout table when present; MI primary = `novel_obj`).
+- `no_obj` / `id_obj` are controls (built into bout table when present; MI primary = `nvl_obj`).

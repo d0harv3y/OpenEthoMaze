@@ -1,7 +1,7 @@
 """INFO: shared information between object-prox DR and pause syllable Y.
 
 Between-animal association (not within-bout stim↔syll MI). Grain: animal × phase
-on ``novel_obj``; sex-stratified cells. Y is cluster-13 mapped id, median-merged
+on ``nvl_obj``; sex-stratified cells. Y is cluster-13 mapped id, median-merged
 across kpMS models (see ``Y_METRICS``).
 """
 
@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from nor_object_mi._pub_style import PHASES, SEX_ORDER
+from nor_object_mi._pub_style import SESSIONS, SEX_ORDER
 from nor_object_mi.cluster13_tx_delta import (
     STEP_LAB,
     STEPS,
@@ -38,9 +38,9 @@ DA_USECOLS = (
     "model",
     "animal_id",
     "sex",
-    "tx",
+    "condition",
     "step",
-    "phase_layer",
+    "session",
     "raw_syllable_id",
     "delta_p",
     "p_left",
@@ -63,7 +63,7 @@ class YMetricSpec:
 Y_METRICS: dict[str, YMetricSpec] = {
     "delta_p_novelty": YMetricSpec(
         token="delta_p_novelty",
-        step="identical->novel",
+        step="id_obj->nvl_obj",
         value_col="delta_p",
         y_col="delta_p_pause",
         binary=False,
@@ -73,7 +73,7 @@ Y_METRICS: dict[str, YMetricSpec] = {
     ),
     "delta_p_presence": YMetricSpec(
         token="delta_p_presence",
-        step="no_obj->identical",
+        step="no_obj->id_obj",
         value_col="delta_p",
         y_col="delta_p_presence",
         binary=False,
@@ -83,7 +83,7 @@ Y_METRICS: dict[str, YMetricSpec] = {
     ),
     "delta_p_span": YMetricSpec(
         token="delta_p_span",
-        step="no_obj->novel",
+        step="no_obj->nvl_obj",
         value_col="delta_p",
         y_col="delta_p_span",
         binary=False,
@@ -93,43 +93,43 @@ Y_METRICS: dict[str, YMetricSpec] = {
     ),
     "p_novel": YMetricSpec(
         token="p_novel",
-        step="identical->novel",
+        step="id_obj->nvl_obj",
         value_col="p_right",
         y_col="p_novel",
         binary=False,
-        label="pause p_k under novel_obj",
+        label="pause p_k under nvl_obj",
         question="info_dr_vs_pause_p_novel",
-        y_axis="pause frame share (novel_obj)",
+        y_axis="pause frame share (nvl_obj)",
     ),
     "p_identical": YMetricSpec(
         token="p_identical",
-        step="identical->novel",
+        step="id_obj->nvl_obj",
         value_col="p_left",
         y_col="p_identical",
         binary=False,
-        label="pause p_k under identical_obj",
+        label="pause p_k under id_obj",
         question="info_dr_vs_pause_p_identical",
-        y_axis="pause frame share (identical_obj)",
+        y_axis="pause frame share (id_obj)",
     ),
     "presence_novel": YMetricSpec(
         token="presence_novel",
-        step="identical->novel",
+        step="id_obj->nvl_obj",
         value_col="p_right",
         y_col="presence_novel",
         binary=True,
-        label="pause presence (novel_obj)",
+        label="pause presence (nvl_obj)",
         question="info_dr_vs_pause_presence_novel",
-        y_axis="pause present on novel_obj (0/1)",
+        y_axis="pause present on nvl_obj (0/1)",
     ),
     "presence_identical": YMetricSpec(
         token="presence_identical",
-        step="identical->novel",
+        step="id_obj->nvl_obj",
         value_col="p_left",
         y_col="presence_identical",
         binary=True,
-        label="pause presence (identical_obj)",
+        label="pause presence (id_obj)",
         question="info_dr_vs_pause_presence_identical",
-        y_axis="pause present on identical_obj (0/1)",
+        y_axis="pause present on id_obj (0/1)",
     ),
 }
 
@@ -320,7 +320,7 @@ def spearman_pair(x: np.ndarray, y: np.ndarray) -> dict[str, float]:
 
 def animal_median_metric(mapped: pd.DataFrame, *, value_col: str, out_col: str) -> pd.DataFrame:
     """One row per animal × phase × step: median metric across models (+ IQR salt)."""
-    keys = ["animal_id", "sex", "tx", "phase_layer", "step"]
+    keys = ["animal_id", "sex", "condition", "session", "step"]
     rows: list[dict[str, object]] = []
     for key_vals, g in mapped.groupby(keys, sort=True):
         key_map = dict(zip(keys, key_vals if isinstance(key_vals, tuple) else (key_vals,)))
@@ -438,17 +438,17 @@ def join_dr_pause(
     y_col: str,
 ) -> pd.DataFrame:
     """Inner join on animal × phase; keep tx from DR table."""
-    keys = ["animal_id", "sex", "phase_layer"]
-    left = dr[keys + ["tx", DR_COL, "n_models"]].rename(columns={"n_models": "n_models_dr"})
+    keys = ["animal_id", "sex", "session"]
+    left = dr[keys + ["condition", DR_COL, "n_models"]].rename(columns={"n_models": "n_models_dr"})
     right_cols = [c for c in [y_col, "n_models", "iqr_across_models", "step"] if c in pause.columns]
-    right = pause[keys + ["tx", *right_cols]].rename(
+    right = pause[keys + ["condition", *right_cols]].rename(
         columns={"n_models": "n_models_da", "iqr_across_models": "iqr_y_across_models"}
     )
-    out = left.merge(right, on=keys + ["tx"], how="inner", suffixes=("", "_y"))
+    out = left.merge(right, on=keys + ["condition"], how="inner", suffixes=("", "_y"))
     if out.empty:
         return out
     out["animal_id"] = out["animal_id"].astype(str)
-    return out.sort_values(keys + ["tx"]).reset_index(drop=True)
+    return out.sort_values(keys + ["condition"]).reset_index(drop=True)
 
 
 def run_info_lattice(
@@ -461,9 +461,9 @@ def run_info_lattice(
 ) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     rows: list[dict[str, object]] = []
-    for phase in PHASES:
+    for phase in SESSIONS:
         for sex in SEX_ORDER:
-            g = joined[(joined["phase_layer"] == phase) & (joined["sex"] == sex)]
+            g = joined[(joined["session"] == phase) & (joined["sex"] == sex)]
             rec = info_cell(
                 g,
                 y_col=spec.y_col,
@@ -474,7 +474,7 @@ def run_info_lattice(
             )
             rows.append(
                 {
-                    "phase_layer": phase,
+                    "session": phase,
                     "sex": sex,
                     "step": spec.step,
                     "step_label": STEP_LAB.get(spec.step, spec.step),
@@ -482,7 +482,7 @@ def run_info_lattice(
                     "y_col": spec.y_col,
                     "x_metric": DR_COL,
                     "question": spec.question,
-                    "grain": "animal × phase × novel_obj; sex-stratified",
+                    "grain": "animal × phase × nvl_obj; sex-stratified",
                     "design": "between_animal_association",
                     "y_binary": spec.binary,
                     **rec,
@@ -502,7 +502,7 @@ def info_md(spec: YMetricSpec, *, n_bins: int, n_perm: int) -> str:
 
 ## Question
 
-Within sex × phase on `novel_obj`, how many **bits** does knowing **{spec.label}**
+Within sex × phase on `nvl_obj`, how many **bits** does knowing **{spec.label}**
 reduce uncertainty about **object-prox discrimination ratio (DR)**?
 
 Operation family: **INFO** (shared information). Not DA, not DIFFERENCE.

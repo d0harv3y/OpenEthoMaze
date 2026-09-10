@@ -43,7 +43,7 @@ def make_manifest(
         timestamp=extra.pop("timestamp", None),
         sex=extra.pop("sex", None),
         strain=extra.pop("strain", None),
-        tx=extra.pop("tx", None),
+        condition=extra.pop("condition", None),
         cohort=extra.pop("cohort", None),
         researcher=extra.pop("researcher", None),
         original_session=extra.pop("original_session", None),

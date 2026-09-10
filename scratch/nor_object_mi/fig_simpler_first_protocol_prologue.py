@@ -25,19 +25,19 @@ if str(_SCRATCH) not in sys.path:
 from nor_object_mi._pub_style import (  # noqa: E402
     FIGSIZE_SLIDES,
     INK,
-    PHASE_SHORT,
-    PHASES,
+    SESSION_SHORT,
+    SESSIONS,
     SEX_MARKER,
     SEX_ORDER,
-    TX_COLOR,
-    TX_ORDER,
+    CONDITION_COLOR,
+    CONDITION_ORDER,
     apply_style,
     fig_footnote,
     fig_legend_and_footnote,
     p_text,
     panel_stats_box,
     save_pdf_svg,
-    tx_sex_legend_handles,
+    condition_sex_legend_handles,
     type_scale,
 )
 
@@ -45,8 +45,8 @@ DEFAULT_RUN = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_protocol_prologue"
 )
-STEP_PRESENCE = "no_obj->identical"
-STEP_NOVELTY = "identical->novel"
+STEP_PRESENCE = "no_obj->id_obj"
+STEP_NOVELTY = "id_obj->nvl_obj"
 
 FOOT_ENGAGE = (
     "Points = one animal’s median Δ across 21 kpMS models (consensus); thin whiskers = "
@@ -91,7 +91,7 @@ def _lookup_ttest(
     step: str | None = None,
 ) -> pd.Series | None:
     m = (tests["test"] == "ttest_1samp") & (tests["sex"] == sex) & (tests["metric"] == metric)
-    m &= tests["phase_layer"] == phase
+    m &= tests["session"] == phase
     if step is not None:
         m &= tests["step"] == step
     sub = tests[m]
@@ -109,7 +109,7 @@ def _lookup_anova(
     step: str | None = None,
 ) -> float:
     m = (tests["test"] == "welch_anova") & (tests["metric"] == metric) & (tests["sex"] == sex)
-    m &= tests["phase_layer"] == phase
+    m &= tests["session"] == phase
     if step is not None:
         m &= tests["step"] == step
     sub = tests[m]
@@ -122,7 +122,7 @@ def _cohort_iqr(summary: pd.DataFrame | None, *, phase: str, step: str, metric: 
     if summary is None or summary.empty:
         return float("nan")
     sub = summary[
-        (summary["phase_layer"] == phase)
+        (summary["session"] == phase)
         & (summary["step"] == step)
         & (summary["metric"] == metric)
     ]
@@ -166,13 +166,13 @@ def _draw_tx_violins(
 ) -> list[int]:
     """Strip + violin by tx. Optional ``iqr_col`` → ±½ IQR whiskers on each point."""
     ts = type_scale(dest)
-    positions = list(range(len(TX_ORDER)))
+    positions = list(range(len(CONDITION_ORDER)))
     bodies: list[np.ndarray] = []
     body_pos: list[int] = []
     body_color: list[str] = []
     ns: list[int] = []
-    for i, t in enumerate(TX_ORDER):
-        sub = panel[panel["tx"] == t]
+    for i, t in enumerate(CONDITION_ORDER):
+        sub = panel[panel["condition"] == t]
         y = sub[ycol].to_numpy(dtype=float)
         sex = sub["sex"].to_numpy()
         iqr = (
@@ -188,7 +188,7 @@ def _draw_tx_violins(
         if y.size >= 2 and np.unique(y).size >= 2:
             bodies.append(y)
             body_pos.append(i)
-            body_color.append(TX_COLOR[t])
+            body_color.append(CONDITION_COLOR[t])
         if y.size:
             x = np.full(y.shape, float(i)) + rng.normal(0.0, 0.055, size=y.size)
             half = np.where(np.isfinite(iqr), 0.5 * iqr, np.nan)
@@ -202,7 +202,7 @@ def _draw_tx_violins(
                         y[m],
                         yerr=np.where(np.isfinite(half[m]), half[m], 0.0),
                         fmt="none",
-                        ecolor=TX_COLOR[t],
+                        ecolor=CONDITION_COLOR[t],
                         elinewidth=0.7,
                         capsize=0,
                         alpha=0.35,
@@ -212,7 +212,7 @@ def _draw_tx_violins(
                     x[m],
                     y[m],
                     s=ts["scatter"],
-                    c=TX_COLOR[t],
+                    c=CONDITION_COLOR[t],
                     marker=SEX_MARKER[s],
                     alpha=0.75,
                     edgecolors="none",
@@ -242,7 +242,7 @@ def _draw_tx_violins(
     ax.set_xticks(positions)
     ax.set_xticklabels([])
     ax.tick_params(axis="x", length=3)
-    ax.set_xlim(-0.7, len(TX_ORDER) - 0.3)
+    ax.set_xlim(-0.7, len(CONDITION_ORDER) - 0.3)
     return ns
 
 
@@ -265,14 +265,14 @@ def _engagement_grid(
         ("delta_frac_near", "Δ frac_near"),
         ("delta_mean_dist_any_m", "Δ mean_dist_any (m)"),
     )
-    join_keys = ["animal_id", "sex", "tx", "phase_layer", "step"]
+    join_keys = ["animal_id", "sex", "condition", "session", "step"]
     for r, (metric, ylab) in enumerate(metrics):
-        for c, ph in enumerate(PHASES):
+        for c, ph in enumerate(SESSIONS):
             ax = axes[r, c]
-            panel = deltas[(deltas["phase_layer"] == ph) & (deltas["step"] == step)].copy()
+            panel = deltas[(deltas["session"] == ph) & (deltas["step"] == step)].copy()
             if dispersion is not None and not dispersion.empty:
                 dsub = dispersion[
-                    (dispersion["phase_layer"] == ph)
+                    (dispersion["session"] == ph)
                     & (dispersion["step"] == step)
                     & (dispersion["metric"] == metric)
                 ][join_keys + ["iqr", "median"]].copy()
@@ -302,13 +302,13 @@ def _engagement_grid(
                 dest=dest,
             )
             if r == 1:
-                ax.set_xlabel(PHASE_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
+                ax.set_xlabel(SESSION_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
             if c == 0:
                 ax.set_ylabel(ylab)
             if r == 0:
-                ax.set_title(f"{'ABCD'[c]}  {PHASE_SHORT[ph]}", loc="left", fontweight="bold", color=INK)
+                ax.set_title(f"{'ABCD'[c]}  {SESSION_SHORT[ph]}", loc="left", fontweight="bold", color=INK)
     fig.suptitle(suptitle, fontsize=ts["suptitle"], fontweight="bold", color=INK, y=1.02)
-    fig_legend_and_footnote(fig, tx_sex_legend_handles(dest=dest), footnote, dest=dest)
+    fig_legend_and_footnote(fig, condition_sex_legend_handles(dest=dest), footnote, dest=dest)
     save_pdf_svg(fig, out_stem)
 
 
@@ -370,20 +370,20 @@ def fig_dr_preference(animals: pd.DataFrame, tests: pd.DataFrame, out: Path, *, 
         ("dr_object_prox", "object-prox occupancy DR"),
     )
     for r, (metric, ylab) in enumerate(rows):
-        for c, ph in enumerate(PHASES):
+        for c, ph in enumerate(SESSIONS):
             ax = axes[r, c]
-            panel = animals[animals["phase_layer"] == ph]
+            panel = animals[animals["session"] == ph]
             _draw_tx_violins(ax, panel, metric, rng, dest=dest)
             ax.axhline(0.0, color="#bbbbbb", lw=0.7, ls="--", zorder=0)
             panel_stats_box(ax, _fm_stats_lines(tests, phase=ph, metric=metric), dest=dest)
             if r == 1:
-                ax.set_xlabel(PHASE_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
+                ax.set_xlabel(SESSION_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
             if c == 0:
                 ax.set_ylabel(ylab)
             if r == 0:
-                ax.set_title(f"{'ABCD'[c]}  {PHASE_SHORT[ph]}", loc="left", fontweight="bold", color=INK)
+                ax.set_title(f"{'ABCD'[c]}  {SESSION_SHORT[ph]}", loc="left", fontweight="bold", color=INK)
     fig.suptitle(
-        "Novel preference: DR > 0 on novel_obj (original investigation and object-prox)",
+        "Novel preference: DR > 0 on nvl_obj (original investigation and object-prox)",
         fontsize=ts["suptitle"],
         fontweight="bold",
         color=INK,
@@ -391,9 +391,9 @@ def fig_dr_preference(animals: pd.DataFrame, tests: pd.DataFrame, out: Path, *, 
     )
     fig_legend_and_footnote(
         fig,
-        tx_sex_legend_handles(dest=dest),
+        condition_sex_legend_handles(dest=dest),
         (
-            "Grain animal × phase × novel_obj. Top: original investigation DR "
+            "Grain animal × phase × nvl_obj. Top: original investigation DR "
             "(nose/forelimb T; no kpMS consensus). Bottom: object-prox occupancy DR "
             "(spot bout-mean < 0.10 m; animal median across 21 kpMS models). "
             "One-sample t vs 0 within sex. DR normalizes (T_nvl−T_fam)/(T_nvl+T_fam); "
@@ -426,17 +426,17 @@ def fig_bout_clocks(
         ),
     )
     for r, (xcol, ycol, contrast, ylab) in enumerate(rows):
-        for c, ph in enumerate(PHASES):
+        for c, ph in enumerate(SESSIONS):
             ax = axes[r, c]
-            panel = clocks[clocks["phase_layer"] == ph]
+            panel = clocks[clocks["session"] == ph]
             x = panel[xcol].to_numpy(dtype=float)
             y = panel[ycol].to_numpy(dtype=float)
-            tx = panel["tx"].to_numpy()
+            tx = panel["condition"].to_numpy()
             sex = panel["sex"].to_numpy()
             ok = np.isfinite(x) & np.isfinite(y)
-            x, y, tx, sex = x[ok], y[ok], tx[ok], sex[ok]
+            x, y, condition, sex = x[ok], y[ok], tx[ok], sex[ok]
             jitter = rng.normal(0.0, 0.02 * (np.nanmax(x) - np.nanmin(x) + 1e-6), size=x.size)
-            for t in TX_ORDER:
+            for t in CONDITION_ORDER:
                 for s in SEX_ORDER:
                     m = (tx == t) & (sex == s)
                     if not np.any(m):
@@ -445,18 +445,18 @@ def fig_bout_clocks(
                         x[m] + jitter[m],
                         y[m],
                         s=ts["scatter"],
-                        c=TX_COLOR[t],
+                        c=CONDITION_COLOR[t],
                         marker=SEX_MARKER[s],
                         alpha=0.75,
                         edgecolors="none",
                         zorder=3,
                     )
             if r == 1:
-                ax.set_xlabel(PHASE_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
+                ax.set_xlabel(SESSION_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
             if c == 0:
                 ax.set_ylabel(f"syllable  ·  {ylab}")
             if r == 0:
-                ax.set_title(f"{'ABCD'[c]}  {PHASE_SHORT[ph]}", loc="left", fontweight="bold", color=INK)
+                ax.set_title(f"{'ABCD'[c]}  {SESSION_SHORT[ph]}", loc="left", fontweight="bold", color=INK)
             ax.set_xlabel(
                 ("movement  ·  " + ylab) if r == 1 else "",
                 fontsize=ts["annotation"],
@@ -464,7 +464,7 @@ def fig_bout_clocks(
             )
             if r == 1:
                 ax.set_xlabel(
-                    f"movement · {ylab}\n{PHASE_SHORT[ph]}",
+                    f"movement · {ylab}\n{SESSION_SHORT[ph]}",
                     fontsize=ts["annotation"],
                     color=INK,
                     fontweight="bold",
@@ -472,7 +472,7 @@ def fig_bout_clocks(
             lines = ["Pearson r (within sex)"]
             for s in SEX_ORDER:
                 row = assoc[
-                    (assoc["phase_layer"] == ph)
+                    (assoc["session"] == ph)
                     & (assoc["sex"] == s)
                     & (assoc["contrast"] == contrast)
                 ]
@@ -495,7 +495,7 @@ def fig_bout_clocks(
     )
     fig_legend_and_footnote(
         fig,
-        tx_sex_legend_handles(dest=dest),
+        condition_sex_legend_handles(dest=dest),
         (
             "Top: bout counts. Bottom: median bout duration. X = IMPRESS movement "
             "bouts; Y = kpMS syllable bouts (locked ss-50 model in the clocks run). "
@@ -531,18 +531,18 @@ def fig_bout_clocks(
         ),
     )
     for r, (xcol, ycol, contrast, metric_lab) in enumerate(rows):
-        for c, ph in enumerate(PHASES):
+        for c, ph in enumerate(SESSIONS):
             ax = axes[r, c]
-            panel = clocks[clocks["phase_layer"] == ph]
+            panel = clocks[clocks["session"] == ph]
             x = panel[xcol].to_numpy(dtype=float)
             y = panel[ycol].to_numpy(dtype=float)
-            tx = panel["tx"].to_numpy()
+            tx = panel["condition"].to_numpy()
             sex = panel["sex"].to_numpy()
             ok = np.isfinite(x) & np.isfinite(y)
-            x, y, tx, sex = x[ok], y[ok], tx[ok], sex[ok]
+            x, y, condition, sex = x[ok], y[ok], tx[ok], sex[ok]
             span = float(np.nanmax(x) - np.nanmin(x)) if x.size else 1.0
             jitter = rng.normal(0.0, 0.02 * (span + 1e-6), size=x.size)
-            for t in TX_ORDER:
+            for t in CONDITION_ORDER:
                 for s in SEX_ORDER:
                     m = (tx == t) & (sex == s)
                     if not np.any(m):
@@ -551,7 +551,7 @@ def fig_bout_clocks(
                         x[m] + jitter[m],
                         y[m],
                         s=ts["scatter"],
-                        c=TX_COLOR[t],
+                        c=CONDITION_COLOR[t],
                         marker=SEX_MARKER[s],
                         alpha=0.75,
                         edgecolors="none",
@@ -560,10 +560,10 @@ def fig_bout_clocks(
             if c == 0:
                 ax.set_ylabel(f"syllable · {metric_lab}")
             if r == 0:
-                ax.set_title(f"{'ABCD'[c]}  {PHASE_SHORT[ph]}", loc="left", fontweight="bold", color=INK)
+                ax.set_title(f"{'ABCD'[c]}  {SESSION_SHORT[ph]}", loc="left", fontweight="bold", color=INK)
             if r == 1:
                 ax.set_xlabel(
-                    f"movement · {metric_lab}\n{PHASE_SHORT[ph]}",
+                    f"movement · {metric_lab}\n{SESSION_SHORT[ph]}",
                     fontsize=ts["annotation"],
                     color=INK,
                     fontweight="bold",
@@ -571,7 +571,7 @@ def fig_bout_clocks(
             lines = ["Pearson r (within sex)"]
             for s in SEX_ORDER:
                 row = assoc[
-                    (assoc["phase_layer"] == ph)
+                    (assoc["session"] == ph)
                     & (assoc["sex"] == s)
                     & (assoc["contrast"] == contrast)
                 ]
@@ -594,7 +594,7 @@ def fig_bout_clocks(
     )
     fig_legend_and_footnote(
         fig,
-        tx_sex_legend_handles(dest=dest),
+        condition_sex_legend_handles(dest=dest),
         (
             "Top: bout counts. Bottom: median bout duration. X = IMPRESS movement "
             "bouts; Y = kpMS syllable bouts (locked ss-50 model). Different "
@@ -617,17 +617,17 @@ def fig_dr_association(animals: pd.DataFrame, assoc: pd.DataFrame, out: Path, *,
     agr = assoc[
         (assoc["contrast"] == "original_vs_object_prox") & (assoc["sex"].isin(list(SEX_ORDER)))
     ]
-    for i, ph in enumerate(PHASES):
+    for i, ph in enumerate(SESSIONS):
         ax = axes[i]
-        panel = animals[animals["phase_layer"] == ph]
+        panel = animals[animals["session"] == ph]
         x = panel["dr_original"].to_numpy(dtype=float)
         y = panel["dr_object_prox"].to_numpy(dtype=float)
-        tx = panel["tx"].to_numpy()
+        tx = panel["condition"].to_numpy()
         sex = panel["sex"].to_numpy()
         ok = np.isfinite(x) & np.isfinite(y)
-        x, y, tx, sex = x[ok], y[ok], tx[ok], sex[ok]
+        x, y, condition, sex = x[ok], y[ok], tx[ok], sex[ok]
         jitter = rng.normal(0.0, 0.008, size=x.size)
-        for t in TX_ORDER:
+        for t in CONDITION_ORDER:
             for s in SEX_ORDER:
                 m = (tx == t) & (sex == s)
                 if not np.any(m):
@@ -636,7 +636,7 @@ def fig_dr_association(animals: pd.DataFrame, assoc: pd.DataFrame, out: Path, *,
                     x[m] + jitter[m],
                     y[m],
                     s=ts["scatter"],
-                    c=TX_COLOR[t],
+                    c=CONDITION_COLOR[t],
                     marker=SEX_MARKER[s],
                     alpha=0.75,
                     edgecolors="none",
@@ -646,13 +646,13 @@ def fig_dr_association(animals: pd.DataFrame, assoc: pd.DataFrame, out: Path, *,
         ax.set_xlim(-1.08, 1.08)
         ax.set_ylim(-1.08, 1.08)
         ax.set_aspect("equal", adjustable="box")
-        ax.set_xlabel(PHASE_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
+        ax.set_xlabel(SESSION_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
         if i == 0:
             ax.set_ylabel("object-prox DR")
-        ax.set_title(f"{'ABCD'[i]}  {PHASE_SHORT[ph]}", loc="left", fontweight="bold", color=INK)
+        ax.set_title(f"{'ABCD'[i]}  {SESSION_SHORT[ph]}", loc="left", fontweight="bold", color=INK)
         lines = ["Pearson r (within sex)"]
         for s in SEX_ORDER:
-            row = agr[(agr["phase_layer"] == ph) & (agr["sex"] == s)]
+            row = agr[(agr["session"] == ph) & (agr["sex"] == s)]
             if len(row) != 1:
                 lines.append(f"{s} n/a")
                 continue
@@ -669,7 +669,7 @@ def fig_dr_association(animals: pd.DataFrame, assoc: pd.DataFrame, out: Path, *,
     )
     fig_legend_and_footnote(
         fig,
-        tx_sex_legend_handles(dest=dest),
+        condition_sex_legend_handles(dest=dest),
         (
             "X = original investigation DR (first analysis; nose/forelimb T). "
             "Y = object-prox occupancy DR from syllable bout clocks (median across "
@@ -699,22 +699,22 @@ def fig_tx_coda(
     )
     cmap = ListedColormap(["#e8e8e8", "#1b9e77"])
     for ax, (tests, metric, step, title) in zip(axes, panels):
-        mat = np.zeros((len(PHASES), len(SEX_ORDER)))
-        for i, ph in enumerate(PHASES):
+        mat = np.zeros((len(SESSIONS), len(SEX_ORDER)))
+        for i, ph in enumerate(SESSIONS):
             for j, sex in enumerate(SEX_ORDER):
                 p = _lookup_anova(tests, phase=ph, metric=metric, sex=sex, step=step)
                 mat[i, j] = 1.0 if (np.isfinite(p) and p < 0.05) else 0.0
         ax.imshow(mat, cmap=cmap, vmin=0.0, vmax=1.0, aspect="auto")
         ax.set_xticks(range(len(SEX_ORDER)))
         ax.set_xticklabels(list(SEX_ORDER))
-        ax.set_yticks(range(len(PHASES)))
-        ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+        ax.set_yticks(range(len(SESSIONS)))
+        ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
         ax.set_title(title, loc="left", fontweight="bold", color=INK)
         for i in range(mat.shape[0]):
             for j in range(mat.shape[1]):
                 p = _lookup_anova(
                     tests,
-                    phase=PHASES[i],
+                    phase=SESSIONS[i],
                     metric=metric,
                     sex=SEX_ORDER[j],
                     step=step,
@@ -773,7 +773,7 @@ Complementary to `INFO_protocol_prologue.md`. Dest = slides.
 | `fig_protocol_dr_association` | Syllable object-prox DR tracks original investigation DR | animals + `protocol_dr_association.csv` | scatter; Pearson within sex | D + I |
 | `fig_protocol_bout_clocks` | Movement vs syllable bout clocks (n, duration) | `protocol_clock_metrics_per_animal.csv` + `protocol_clock_association.csv` | 2×4 scatter; Pearson within sex | D + I |
 | `fig_protocol_presence` | Objects appear → engagement | consensus deltas + across-model IQR; t within sex | violin + ±½IQR whiskers; F/M t box | D + I |
-| `fig_protocol_novelty_step` | Novelty step weaker | same; `identical->novel` | same | D + I |
+| `fig_protocol_novelty_step` | Novelty step weaker | same; `id_obj->nvl_obj` | same | D + I |
 | `fig_protocol_dr_preference` | DR > 0 (original + object-prox) | DR animals; t within sex | 2×4 violin | D + I |
 | `fig_protocol_tx_coda` | Tx arms mostly miss | Welch ANOVA | hit/miss + p text | I |
 

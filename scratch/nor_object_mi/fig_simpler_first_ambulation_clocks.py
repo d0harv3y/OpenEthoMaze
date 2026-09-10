@@ -24,12 +24,12 @@ if str(_SCRATCH) not in sys.path:
 from nor_object_mi._pub_style import (  # noqa: E402
     FIGSIZE_DOUBLE,
     INK,
-    PHASE_SHORT,
-    PHASES,
+    SESSION_SHORT,
+    SESSIONS,
     SEX_MARKER,
     SEX_ORDER,
-    TX_COLOR,
-    TX_ORDER,
+    CONDITION_COLOR,
+    CONDITION_ORDER,
     apply_style,
     fig_footnote,
     p_text,
@@ -49,19 +49,19 @@ CONTRASTS = (
     ("n_move_vs_classic_dr", "n_move vs DR"),
 )
 FOOT_N = (
-    "Grain: animal × phase × novel_obj. X = IMPRESS movement-bout count "
+    "Grain: animal × phase × nvl_obj. X = IMPRESS movement-bout count "
     "(fore hysteresis). Y = kpMS syllable-bout count (locked ss-50 model). "
     "These are different clocks, not paired events. Color=tx, shape=sex. "
     "Spearman from clock_association.csv. Not DR; not syllable speed; not MI; not DA."
 )
 FOOT_DUR = (
-    "Grain: animal × phase × novel_obj. X = median movement-bout duration (s). "
+    "Grain: animal × phase × nvl_obj. X = median movement-bout duration (s). "
     "Y = median syllable-bout duration (bout_frames / 30). Different debounce "
     "rules and typical scales. Color=tx, shape=sex. Spearman from the association "
     "table. Not a speed comparison (NOR ladders have no bout_mean_speed_mps)."
 )
 FOOT_ASSOC = (
-    "Grain: animal × phase × novel_obj. Color is Spearman ρ (−1 to +1). Litmus "
+    "Grain: animal × phase × nvl_obj. Color is Spearman ρ (−1 to +1). Litmus "
     "columns (speed, distance) check that movement bouts reconstruct session "
     "ambulation. Clock columns compare n / duration across segmenters. DR columns "
     "are the negative control (kinematics ≠ preference). Uncorrected. Not MI; not DA."
@@ -98,7 +98,7 @@ def _as_bool(s: pd.Series) -> pd.Series:
 def _legend_tx_sex(fig, *, dest: str, bbox=(1.0, 1.04)) -> None:
     ts = type_scale(dest)
     ms = 8 if dest == "slides" else 6
-    handles = [Line2D([0], [0], marker="o", color="none", markerfacecolor=TX_COLOR[t], markersize=ms, label=t) for t in TX_ORDER] + [
+    handles = [Line2D([0], [0], marker="o", color="none", markerfacecolor=CONDITION_COLOR[t], markersize=ms, label=t) for t in CONDITION_ORDER] + [
         Line2D(
             [0],
             [0],
@@ -131,16 +131,16 @@ def _scatter_grid(
     ts = _begin(dest)
     agr = assoc[assoc["contrast"] == contrast]
     fig, axes = plt.subplots(2, 2, figsize=(7.2, 7.0), constrained_layout=True)
-    for i, ph in enumerate(PHASES):
+    for i, ph in enumerate(SESSIONS):
         ax = axes[i // 2][i % 2]
-        panel = paired[paired["phase_layer"] == ph]
+        panel = paired[paired["session"] == ph]
         x = panel[xcol].to_numpy(dtype=float)
         y = panel[ycol].to_numpy(dtype=float)
-        tx = panel["tx"].to_numpy()
+        tx = panel["condition"].to_numpy()
         sex = panel["sex"].to_numpy()
         ok = np.isfinite(x) & np.isfinite(y)
-        x, y, tx, sex = x[ok], y[ok], tx[ok], sex[ok]
-        for t in TX_ORDER:
+        x, y, condition, sex = x[ok], y[ok], tx[ok], sex[ok]
+        for t in CONDITION_ORDER:
             for s in SEX_ORDER:
                 m = (tx == t) & (sex == s)
                 if not np.any(m):
@@ -149,18 +149,18 @@ def _scatter_grid(
                     x[m],
                     y[m],
                     s=ts["scatter"],
-                    c=TX_COLOR[t],
+                    c=CONDITION_COLOR[t],
                     marker=SEX_MARKER[s],
                     alpha=0.75,
                     edgecolors="none",
                     zorder=3,
                 )
-        ax.set_title(PHASE_SHORT[ph], loc="left", fontweight="bold", color=INK, fontsize=ts["annotation"])
+        ax.set_title(SESSION_SHORT[ph], loc="left", fontweight="bold", color=INK, fontsize=ts["annotation"])
         if i // 2 == 1:
             ax.set_xlabel(xlabel)
         if i % 2 == 0:
             ax.set_ylabel(ylabel)
-        row = agr[agr["phase_layer"] == ph]
+        row = agr[agr["session"] == ph]
         if len(row) == 1:
             rho = float(row["spearman_rho"].iloc[0])
             p = float(row["p"].iloc[0])
@@ -185,17 +185,17 @@ def _scatter_grid(
 def fig_association(assoc: pd.DataFrame, out: Path, *, dest: str = "slides") -> None:
     ts = _begin(dest)
     fig, ax = plt.subplots(figsize=FIGSIZE_DOUBLE, constrained_layout=True)
-    mat = np.full((len(PHASES), len(CONTRASTS)), np.nan)
-    for i, ph in enumerate(PHASES):
+    mat = np.full((len(SESSIONS), len(CONTRASTS)), np.nan)
+    for i, ph in enumerate(SESSIONS):
         for j, (contrast, _lab) in enumerate(CONTRASTS):
-            row = assoc[(assoc["phase_layer"] == ph) & (assoc["contrast"] == contrast)]
+            row = assoc[(assoc["session"] == ph) & (assoc["contrast"] == contrast)]
             if len(row) == 1:
                 mat[i, j] = float(row["spearman_rho"].iloc[0])
     im = ax.imshow(mat, cmap="RdBu_r", vmin=-1.0, vmax=1.0, aspect="auto")
     ax.set_xticks(range(len(CONTRASTS)))
     ax.set_xticklabels([lab for _c, lab in CONTRASTS], rotation=28, ha="right", fontsize=ts["annotation"])
-    ax.set_yticks(range(len(PHASES)))
-    ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+    ax.set_yticks(range(len(SESSIONS)))
+    ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
     ax.set_title("A  Spearman ρ", loc="left", fontweight="bold", color=INK)
     for i in range(mat.shape[0]):
         for j in range(mat.shape[1]):

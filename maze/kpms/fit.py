@@ -47,16 +47,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--balance-by",
         type=str,
-        default="sex,tx,phase,strain",
+        default="sex,condition,strain",
         help=(
             "Comma-separated TrialManifest fields for stratified subsampling "
-            "(default: sex,tx,cohort,phase). See maze.kpms.manifest_subset.BALANCE_COLUMN_CHOICES."
+            "(default: sex,condition,cohort). See maze.kpms.manifest_subset.BALANCE_COLUMN_CHOICES."
         ),
     )
     parser.add_argument(
         "--no-enrich-labels",
         action="store_true",
-        help="When using --manifest-csv, do not fill blank sex/tx from inputs/treatment_labels.csv",
+        help="When using --manifest-csv, do not fill blank sex/tx from inputs/condition_labels.csv",
     )
     parser.add_argument(
         "--force-new",
@@ -221,7 +221,7 @@ def fit_run_config_from_args(args: argparse.Namespace) -> KpmsFitRunConfig:
         include_habituation=args.include_habituation,
         exclude_experimental=args.exclude_experimental,
         balance_columns=balance_cols,
-        enrich_from_treatment_labels=not args.no_enrich_labels,
+        enrich_from_condition_labels=not args.no_enrich_labels,
         force_new=bool(args.force_new),
         use_float32=bool(args.float32),
         fit=fit_cfg,

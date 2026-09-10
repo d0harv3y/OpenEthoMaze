@@ -1,12 +1,12 @@
-"""Paired simpler-first presence steps: no_obj → identical → novel_obj.
+"""Paired simpler-first presence steps: no_obj → identical → nvl_obj.
 
 Question (plain): when objects appear (then when novel replaces identical),
 does near-locus engagement or syllable composition change *within animal*?
 
 Not MI. Operations: scalar rates (S0); COUNT / UNCERTAINTY / DIFFERENCE (S1–S2).
-Association structure: paired / repeated (same animal across condition_layer).
+Association structure: paired / repeated (same animal across trial).
 
-Grain: animal × phase × condition_layer (full session; spot bout-means).
+Grain: animal × phase × trial (full session; spot bout-means).
 Near rate uses gate A: bout_mean_dist_any_m < 0.10 m (same as near-grain).
 
 Default: all paramscan models × BL/TX/REC3hr/REC11hr → long tests table + agreement.
@@ -33,23 +33,23 @@ from nor_object_mi.simpler_first_q1 import LOCKED, SEX_ORDER, kruskal_within_sex
 from nor_object_mi.simpler_first_q2 import shannon_bits  # noqa: E402
 
 NEAR_R_M = 0.10
-CONTROL_TX = "noSD"
-TX_STRATUM_ALL = "all"
-TX_STRATUM_CONTROL = "noSD"
-CONDS = ("no_obj", "identical_obj", "novel_obj")
+CONTROL_CONDITION = "noSD"
+CONDITION_STRATUM_ALL = "all"
+CONDITION_STRATUM_CONTROL = "noSD"
+TRIALS = ("no_obj", "id_obj", "nvl_obj")
 STEPS: tuple[tuple[str, str, str], ...] = (
-    ("no_obj->identical", "no_obj", "identical_obj"),
-    ("identical->novel", "identical_obj", "novel_obj"),
-    ("no_obj->novel", "no_obj", "novel_obj"),
+    ("no_obj->id_obj", "no_obj", "id_obj"),
+    ("id_obj->nvl_obj", "id_obj", "nvl_obj"),
+    ("no_obj->nvl_obj", "no_obj", "nvl_obj"),
 )
-PHASES: tuple[tuple[str, str], ...] = (
+SESSIONS: tuple[tuple[str, str], ...] = (
     ("NOR_BL", "condition_ladder_NOR_BL"),
     ("NOR_TX", "condition_ladder"),
     ("NOR_REC3hr", "condition_ladder_NOR_REC3hr"),
     ("NOR_REC11hr", "condition_ladder_NOR_REC11hr"),
 )
 AGREE_METRICS = ("frac_near", "mean_dist_any_m", "richness", "shannon_bits")
-AGREE_STEPS = ("no_obj->identical", "identical->novel")
+AGREE_STEPS = ("no_obj->id_obj", "id_obj->nvl_obj")
 
 
 GRAINS = ("full_session", "near_0p10")
@@ -114,25 +114,25 @@ def _animal_condition_row(
 def build_animal_condition_table(
     bouts: pd.DataFrame,
     *,
-    phase_layer: str,
+    session: str,
     r_m: float = NEAR_R_M,
     grain: str = "full_session",
     weighting: str = "frame_share",
 ) -> pd.DataFrame:
-    sub = bouts[bouts["phase_layer"] == phase_layer].copy()
+    sub = bouts[bouts["session"] == session].copy()
     sub["animal_id"] = sub["animal_id"].astype(str)
     rows: list[dict[str, object]] = []
-    for (aid, cond), g in sub.groupby(["animal_id", "condition_layer"], sort=True):
-        if str(cond) not in CONDS:
+    for (aid, cond), g in sub.groupby(["animal_id", "trial"], sort=True):
+        if str(cond) not in TRIALS:
             continue
         base = _animal_condition_row(g, r_m=r_m, grain=grain, weighting=weighting)
         rows.append(
             {
                 "animal_id": str(aid),
                 "sex": str(g["sex"].iloc[0]),
-                "tx": str(g["tx"].iloc[0]),
-                "phase_layer": phase_layer,
-                "condition_layer": str(cond),
+                "condition": str(g["condition"].iloc[0]),
+                "session": session,
+                "trial": str(cond),
                 "grain": grain,
                 "weighting": weighting,
                 "n_frames": base["n_frames"],
@@ -154,7 +154,7 @@ def _paired_delta_table(
     left: str,
     right: str,
     metrics: tuple[str, ...],
-    pair_col: str = "condition_layer",
+    pair_col: str = "trial",
 ) -> pd.DataFrame:
     L = ac[ac[pair_col] == left].set_index("animal_id")
     R = ac[ac[pair_col] == right].set_index("animal_id")
@@ -168,7 +168,7 @@ def _paired_delta_table(
         row: dict[str, object] = {
             "animal_id": aid,
             "sex": str(L.loc[aid, "sex"]),
-            "tx": str(L.loc[aid, "tx"]),
+            "condition": str(L.loc[aid, "condition"]),
             "step": step,
             "left": left,
             "right": right,
@@ -237,7 +237,7 @@ def wilcoxon_control_arm_rows(
     """Wilcoxon on Δ within sex, ``tx == noSD`` only (evolution I primary)."""
     rows: list[dict[str, object]] = []
     for sex in SEX_ORDER:
-        sub = dtab[(dtab["sex"] == sex) & (dtab["tx"] == CONTROL_TX)]
+        sub = dtab[(dtab["sex"] == sex) & (dtab["condition"] == CONTROL_CONDITION)]
         for m in metrics:
             rec = wilcoxon_paired(sub[f"delta_{m}"].to_numpy())
             rows.append(
@@ -248,14 +248,14 @@ def wilcoxon_control_arm_rows(
                     "question": "S0" if m in {"frac_near", "mean_dist_any_m", "frac_near", "mean_dist_any_m"} else "S1_S2",
                     **rec,
                     "hit_p05": bool(np.isfinite(rec["p"]) and float(rec["p"]) < 0.05),
-                    "tx_stratum": TX_STRATUM_CONTROL,
+                    "tx_stratum": CONDITION_STRATUM_CONTROL,
                 }
             )
     return rows
 
 
 def restrict_tx_stratum(
-    df: pd.DataFrame, stratum: str = TX_STRATUM_ALL
+    df: pd.DataFrame, stratum: str = CONDITION_STRATUM_ALL
 ) -> pd.DataFrame:
     """Keep Wilcoxon/Kruskal rows for one tx pooling rule. Missing column = legacy."""
     if df.empty or "tx_stratum" not in df.columns:
@@ -316,7 +316,7 @@ def across_model_dispersion(
 
     ``magnitude_commensurate_across_models`` is True only for engagement Δs.
     """
-    keys_l = list(keys or ("animal_id", "sex", "tx", "step", "phase_layer"))
+    keys_l = list(keys or ("animal_id", "sex", "condition", "step", "session"))
     metrics = metric_cols or DELTA_METRIC_COLS
     need = {"model", *keys_l, *metrics}
     missing = need - set(deltas.columns)
@@ -377,11 +377,11 @@ def across_model_dispersion_summary(
     if disp.empty:
         return disp.copy()
     if group_keys is None:
-        group_keys_l = ["phase_layer", "step", "metric"]
+        group_keys_l = ["session", "step", "metric"]
         if "ss" in disp.columns:
             group_keys_l = ["ss", *group_keys_l]
-        if "condition_layer" in disp.columns and "phase_layer" not in disp.columns:
-            group_keys_l = [c for c in ("condition_layer", "phase_step", "metric") if c in disp.columns]
+        if "trial" in disp.columns and "session" not in disp.columns:
+            group_keys_l = [c for c in ("trial", "session_step", "metric") if c in disp.columns]
     else:
         group_keys_l = list(group_keys)
     group_keys = group_keys_l
@@ -430,7 +430,7 @@ def across_model_dispersion_by_ss(deltas: pd.DataFrame) -> pd.DataFrame:
 
 def animal_median_across_models(deltas: pd.DataFrame) -> pd.DataFrame:
     """One row per animal × phase × step: median Δ across models."""
-    keys = ["animal_id", "sex", "tx", "step", "phase_layer"]
+    keys = ["animal_id", "sex", "condition", "step", "session"]
     out = deltas.groupby(keys, as_index=False)[list(DELTA_METRIC_COLS)].median()
     n_mod = deltas.groupby(keys)["model"].nunique()
     if int(n_mod.min()) != int(n_mod.max()):
@@ -447,14 +447,14 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     n_models = int(med["n_models"].iloc[0]) if len(med) else 0
     empty_tx_med = {"median_noSD": "", "median_GHSD": "", "median_RBSD": ""}
-    for (phase, step), g in med.groupby(["phase_layer", "step"], sort=False):
+    for (phase, step), g in med.groupby(["session", "step"], sort=False):
         for m in AGREE_METRICS:
             col = f"delta_{m}"
             q = "S0" if m in {"frac_near", "mean_dist_any_m"} else "S1_S2"
             rec = wilcoxon_paired(g[col].to_numpy())
             rows.append(
                 {
-                    "phase_layer": phase,
+                    "session": phase,
                     "step": step,
                     "sex": "all",
                     "metric": m,
@@ -462,7 +462,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
                     **rec,
                     "hit_p05": bool(np.isfinite(rec["p"]) and float(rec["p"]) < 0.05),
                     "n_models": n_models,
-                    "tx_stratum": TX_STRATUM_ALL,
+                    "tx_stratum": CONDITION_STRATUM_ALL,
                     **empty_tx_med,
                 }
             )
@@ -470,7 +470,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
                 rec_s = wilcoxon_paired(g.loc[g["sex"] == sex, col].to_numpy())
                 rows.append(
                     {
-                        "phase_layer": phase,
+                        "session": phase,
                         "step": step,
                         "sex": sex,
                         "metric": m,
@@ -478,7 +478,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
                         **rec_s,
                         "hit_p05": bool(np.isfinite(rec_s["p"]) and float(rec_s["p"]) < 0.05),
                         "n_models": n_models,
-                        "tx_stratum": TX_STRATUM_ALL,
+                        "tx_stratum": CONDITION_STRATUM_ALL,
                         **empty_tx_med,
                     }
                 )
@@ -487,7 +487,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
                     g,
                     (m,),
                     extra={
-                        "phase_layer": phase,
+                        "session": phase,
                         "step": step,
                         "n_models": n_models,
                         **empty_tx_med,
@@ -498,7 +498,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
                 pd.DataFrame(
                     {
                         "sex": g["sex"].to_numpy(),
-                        "tx": g["tx"].to_numpy(),
+                        "condition": g["condition"].to_numpy(),
                         m: g[col].to_numpy(),
                     }
                 ),
@@ -508,7 +508,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
                 p = r["p"]
                 rows.append(
                     {
-                        "phase_layer": phase,
+                        "session": phase,
                         "step": step,
                         "sex": r["sex"],
                         "metric": f"delta_{m}",
@@ -521,7 +521,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
                         "test": "kruskal",
                         "hit_p05": bool(pd.notna(p) and float(p) < 0.05),
                         "n_models": n_models,
-                        "tx_stratum": TX_STRATUM_ALL,
+                        "tx_stratum": CONDITION_STRATUM_ALL,
                         "median_noSD": r["median_noSD"],
                         "median_GHSD": r["median_GHSD"],
                         "median_RBSD": r["median_RBSD"],
@@ -549,7 +549,7 @@ def tests_from_dtab(
                 "question": "S0" if m in s0 else "S1_S2",
                 **rec,
                 "hit_p05": bool(np.isfinite(rec["p"]) and float(rec["p"]) < 0.05),
-                "tx_stratum": TX_STRATUM_ALL,
+                "tx_stratum": CONDITION_STRATUM_ALL,
             }
         )
     bc = dtab["braycurtis"].to_numpy(dtype=np.float64) if "braycurtis" in dtab.columns else np.array([])
@@ -567,7 +567,7 @@ def tests_from_dtab(
             "p": "",
             "test": "descriptive_median_BC",
             "hit_p05": False,
-            "tx_stratum": TX_STRATUM_ALL,
+            "tx_stratum": CONDITION_STRATUM_ALL,
         }
     )
     for sex in SEX_ORDER:
@@ -582,7 +582,7 @@ def tests_from_dtab(
                     "question": "S0" if m in s0 else "S1_S2",
                     **rec,
                     "hit_p05": bool(np.isfinite(rec["p"]) and float(rec["p"]) < 0.05),
-                    "tx_stratum": TX_STRATUM_ALL,
+                    "tx_stratum": CONDITION_STRATUM_ALL,
                 }
             )
     test_rows.extend(
@@ -597,7 +597,7 @@ def tests_from_dtab(
             pd.DataFrame(
                 {
                     "sex": dtab["sex"].to_numpy(),
-                    "tx": dtab["tx"].to_numpy(),
+                    "condition": dtab["condition"].to_numpy(),
                     m: dtab[f"delta_{m}"].to_numpy(),
                 }
             ),
@@ -617,7 +617,7 @@ def tests_from_dtab(
                     "p": r["p"],
                     "test": "kruskal",
                     "hit_p05": bool(pd.notna(r["p"]) and float(r["p"]) < 0.05),
-                    "tx_stratum": TX_STRATUM_ALL,
+                    "tx_stratum": CONDITION_STRATUM_ALL,
                     "median_noSD": r["median_noSD"],
                     "median_GHSD": r["median_GHSD"],
                     "median_RBSD": r["median_RBSD"],
@@ -631,7 +631,7 @@ def rebuild_tests_from_delta_csv(deltas: pd.DataFrame) -> tuple[pd.DataFrame, pd
     d = deltas.copy()
     if "model" not in d.columns:
         raise ValueError("delta table needs a model column")
-    phase_col = "phase_layer" if "phase_layer" in d.columns else "phase_layer"
+    phase_col = "session" if "session" in d.columns else "session"
     step_col = "step"
     delta_cols = [c for c in d.columns if c.startswith("delta_")]
     metrics = tuple(c[len("delta_") :] for c in delta_cols)
@@ -645,7 +645,7 @@ def rebuild_tests_from_delta_csv(deltas: pd.DataFrame) -> tuple[pd.DataFrame, pd
         rows.extend(recs)
     tests = pd.DataFrame(rows)
     id_col = "animal_id" if "animal_id" in d.columns else "animal_id"
-    med_keys = [id_col, "sex", "tx", step_col, phase_col]
+    med_keys = [id_col, "sex", "condition", step_col, phase_col]
     med = d.groupby(med_keys, as_index=False)[delta_cols].median()
     n_mod = d.groupby(med_keys)["model"].nunique()
     med["n_models"] = int(n_mod.min())
@@ -667,17 +667,17 @@ def run_phase(
     bout_csv: Path, phase: str, *, r_m: float = NEAR_R_M
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict]:
     bouts = pd.read_csv(bout_csv)
-    ac = build_animal_condition_table(bouts, phase_layer=phase, r_m=r_m)
+    ac = build_animal_condition_table(bouts, session=phase, r_m=r_m)
     metrics = ("frac_near", "mean_dist_any_m", "richness", "shannon_bits")
     delta_parts = []
     test_rows: list[dict[str, object]] = []
     for step, left, right in STEPS:
         dtab = _paired_delta_table(ac, step=step, left=left, right=right, metrics=metrics)
-        dtab["phase_layer"] = phase
+        dtab["session"] = phase
         delta_parts.append(dtab)
         test_rows.extend(
             tests_from_dtab(
-                dtab, metrics=metrics, keys={"phase_layer": phase, "step": step}
+                dtab, metrics=metrics, keys={"session": phase, "step": step}
             )
         )
 
@@ -690,20 +690,20 @@ def run_phase(
             & (tests["metric"] == metric)
             & (tests["sex"] == sex)
             & (tests["test"] == "wilcoxon_signed_rank")
-            & (tests["tx_stratum"] == TX_STRATUM_ALL)
+            & (tests["tx_stratum"] == CONDITION_STRATUM_ALL)
         ]
         return bool(sub["hit_p05"].any()) if len(sub) else False
 
     summary = {
-        "phase_layer": phase,
-        "grain": f"animal × {phase} × condition_layer (full session)",
+        "session": phase,
+        "grain": f"animal × {phase} × trial (full session)",
         "near_gate_for_frac": f"bout_mean_dist_any_m < {r_m:g} m",
         "n_animals": int(ac["animal_id"].nunique()),
         "presence_no_to_id": {
-            m: ("hit" if _hit("no_obj->identical", m) else "miss") for m in AGREE_METRICS
+            m: ("hit" if _hit("no_obj->id_obj", m) else "miss") for m in AGREE_METRICS
         },
         "novelty_id_to_novel": {
-            m: ("hit" if _hit("identical->novel", m) else "miss") for m in AGREE_METRICS
+            m: ("hit" if _hit("id_obj->nvl_obj", m) else "miss") for m in AGREE_METRICS
         },
     }
     return ac.drop(columns=["counts"]), deltas, tests, summary
@@ -718,11 +718,11 @@ def agreement_table(tests: pd.DataFrame) -> pd.DataFrame:
         & (tests["metric"].isin(AGREE_METRICS))
     ].copy()
     if "tx_stratum" in sub.columns:
-        sub = sub[sub["tx_stratum"] == TX_STRATUM_ALL]
+        sub = sub[sub["tx_stratum"] == CONDITION_STRATUM_ALL]
     if sub.empty:
         return pd.DataFrame()
     rows = []
-    pcol = "phase_layer" if "phase_layer" in sub.columns else "phase_layer"
+    pcol = "session" if "session" in sub.columns else "session"
     for (phase, step, metric), g in sub.groupby([pcol, "step", "metric"], sort=True):
         n = int(len(g))
         n_hit = int(g["hit_p05"].sum())
@@ -736,7 +736,7 @@ def agreement_table(tests: pd.DataFrame) -> pd.DataFrame:
             n_agree_sign = 0
         rows.append(
             {
-                "phase_layer": phase,
+                "session": phase,
                 "step": step,
                 "metric": metric,
                 "n_models": n,
@@ -752,7 +752,7 @@ def agreement_table(tests: pd.DataFrame) -> pd.DataFrame:
 
 
 def agreement_table_noSD_by_sex(tests: pd.DataFrame) -> pd.DataFrame:
-    """Cross-model agreement for Wilcoxon on Δ, tx=noSD, within sex."""
+    """Cross-model agreement for Wilcoxon on Δ, condition=noSD, within sex."""
     sub = tests[
         (tests["sex"].isin(SEX_ORDER))
         & (tests["test"] == "wilcoxon_signed_rank")
@@ -760,11 +760,11 @@ def agreement_table_noSD_by_sex(tests: pd.DataFrame) -> pd.DataFrame:
         & (tests["metric"].isin(AGREE_METRICS))
     ].copy()
     if "tx_stratum" in sub.columns:
-        sub = sub[sub["tx_stratum"] == TX_STRATUM_CONTROL]
+        sub = sub[sub["tx_stratum"] == CONDITION_STRATUM_CONTROL]
     if sub.empty:
         return pd.DataFrame()
     rows = []
-    pcol = "phase_layer" if "phase_layer" in sub.columns else "phase_layer"
+    pcol = "session" if "session" in sub.columns else "session"
     for (phase, step, metric, sex), g in sub.groupby(
         [pcol, "step", "metric", "sex"], sort=True
     ):
@@ -780,11 +780,11 @@ def agreement_table_noSD_by_sex(tests: pd.DataFrame) -> pd.DataFrame:
             n_agree_sign = 0
         rows.append(
             {
-                "phase_layer": phase,
+                "session": phase,
                 "step": step,
                 "metric": metric,
                 "sex": sex,
-                "tx_stratum": TX_STRATUM_CONTROL,
+                "tx_stratum": CONDITION_STRATUM_CONTROL,
                 "n_models": n,
                 "n_hit_p05": n_hit,
                 "frac_hit": float(n_hit / n) if n else float("nan"),
@@ -848,7 +848,7 @@ def main(argv: list[str] | None = None) -> int:
             "n_models": len(models),
             "models": models,
             "r_m": float(args.r_m),
-            "phases": [p for p, _ in PHASES],
+            "phases": [p for p, _ in SESSIONS],
             "n_test_rows": int(len(tests_df)),
             "tests_path": str(tests_path),
             "agreement_path": str(agree_path),
@@ -857,7 +857,7 @@ def main(argv: list[str] | None = None) -> int:
                 "companion: sex=all Wilcoxon on paired delta, p<0.05, txs pooled"
             ),
             "hit_rule_evolution_primary": (
-                "Wilcoxon on paired delta, tx=noSD, within sex, p<0.05 (tx_stratum=noSD)"
+                "Wilcoxon on paired delta, condition=noSD, within sex, p<0.05 (tx_stratum=noSD)"
             ),
             "rebuilt_from_deltas": str(delta_path),
             "agreement": agree.to_dict(orient="records") if not agree.empty else [],
@@ -879,16 +879,16 @@ def main(argv: list[str] | None = None) -> int:
             p.name
             for p in art_root.glob("paramscan_*")
             if p.is_dir()
-            and any((p / tag / "ladder_bout_features.csv").exists() for _, tag in PHASES)
+            and any((p / tag / "ladder_bout_features.csv").exists() for _, tag in SESSIONS)
         )
 
     all_tests: list[pd.DataFrame] = []
     all_deltas: list[pd.DataFrame] = []
-    n_jobs = len(models) * len(PHASES)
+    n_jobs = len(models) * len(SESSIONS)
     done = 0
     for model in models:
         art = art_root / model
-        for phase, tag in PHASES:
+        for phase, tag in SESSIONS:
             done += 1
             bout_csv = art / tag / "ladder_bout_features.csv"
             if not bout_csv.exists():
@@ -918,14 +918,14 @@ def main(argv: list[str] | None = None) -> int:
             out / "presence_step_across_model_dispersion_summary.csv", index=False
         )
         across_model_dispersion_summary(
-            disp, group_keys=("sex", "phase_layer", "step", "metric")
+            disp, group_keys=("sex", "session", "step", "metric")
         ).to_csv(
             out / "presence_step_across_model_dispersion_summary_by_sex.csv",
             index=False,
         )
         across_model_dispersion_summary(
-            disp.loc[disp["tx"] == CONTROL_TX],
-            group_keys=("sex", "phase_layer", "step", "metric"),
+            disp.loc[disp["condition"] == CONTROL_CONDITION],
+            group_keys=("sex", "session", "step", "metric"),
         ).to_csv(
             out / "presence_step_across_model_dispersion_summary_by_sex_noSD.csv",
             index=False,
@@ -951,7 +951,7 @@ def main(argv: list[str] | None = None) -> int:
         "n_models": len(models),
         "models": models,
         "r_m": float(args.r_m),
-        "phases": [p for p, _ in PHASES],
+        "phases": [p for p, _ in SESSIONS],
         "n_test_rows": int(len(tests_df)),
         "tests_path": str(tests_path),
         "agreement_path": str(agree_path),
@@ -960,7 +960,7 @@ def main(argv: list[str] | None = None) -> int:
             "companion: sex=all Wilcoxon on paired delta, p<0.05, txs pooled"
         ),
         "hit_rule_evolution_primary": (
-            "Wilcoxon on paired delta, tx=noSD, within sex, p<0.05 (tx_stratum=noSD)"
+            "Wilcoxon on paired delta, condition=noSD, within sex, p<0.05 (tx_stratum=noSD)"
         ),
         "agreement": agree.to_dict(orient="records") if not agree.empty else [],
         "pilot_model_note": str(LOCKED["model"]),
@@ -977,7 +977,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             show[
                 [
-                    "phase_layer",
+                    "session",
                     "step",
                     "metric",
                     "n_hit_p05",
@@ -1000,8 +1000,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 # Names used by tests / figures (keep both spellings).
-TX_STRATUM_ALL = TX_STRATUM_ALL
-TX_STRATUM_CONTROL = TX_STRATUM_CONTROL
+CONDITION_STRATUM_ALL = CONDITION_STRATUM_ALL
+CONDITION_STRATUM_CONTROL = CONDITION_STRATUM_CONTROL
 restrict_tx_stratum = restrict_tx_stratum
 wilcoxon_control_arm_rows = wilcoxon_control_arm_rows
 

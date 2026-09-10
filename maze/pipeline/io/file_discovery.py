@@ -32,11 +32,10 @@ MANIFEST_CSV_FIELDNAMES: tuple[str, ...] = (
     "session",
     "original_session",
     "trial",
-    "phase",
     "exit_number",
     "sex",
     "strain",
-    "tx",
+    "condition",
     "experiment",
     "drug",
     "cohort",
@@ -68,11 +67,10 @@ def trial_manifest_csv_row_values(t: "TrialManifest") -> list[str]:
         t.session,
         t.original_session or "",
         t.trial,
-        t.phase,
         "" if t.exit_number is None else str(int(t.exit_number)),
         t.sex or "",
         t.strain or "",
-        t.tx or "",
+        t.condition or "",
         t.experiment or "",
         t.drug or "",
         t.cohort or "",
@@ -90,16 +88,16 @@ def trial_manifest_csv_row_values(t: "TrialManifest") -> list[str]:
     ]
 
 
-def enrich_manifests_from_treatment_labels(
+def enrich_manifests_from_condition_labels(
     manifests: list["TrialManifest"],
     labels_path: Optional[Path] = None,
 ) -> None:
     """
-    Fill missing label fields on each manifest from ``treatment_labels.csv``.
+    Fill missing label fields on each manifest from ``condition_labels.csv``.
 
     Only updates attributes that are missing or blank so CSV values win when present.
     """
-    labels = load_treatment_labels(labels_path)
+    labels = load_condition_labels(labels_path)
     for trial in manifests:
         if trial.animal_id not in labels:
             continue
@@ -110,8 +108,8 @@ def enrich_manifests_from_treatment_labels(
             trial.experiment = label.experiment or trial.experiment
         if not (trial.sex or "").strip():
             trial.sex = label.sex or trial.sex
-        if not (trial.tx or "").strip():
-            trial.tx = label.tx or trial.tx
+        if not (trial.condition or "").strip():
+            trial.condition = label.condition or trial.condition
         if not (trial.drug or "").strip():
             trial.drug = label.drug or trial.drug
         if not (trial.researcher or "").strip():
@@ -136,12 +134,12 @@ class TrialManifest:
     cohort: Optional[str] = None
     researcher: Optional[str] = None  # "Kevan Lim" or "Nickolas Pasetto"
 
-    # Treatment labels (populated from treatment_labels.csv)
+    # Animal strata (populated from condition_labels.csv; column ``condition``)
     strain: Optional[str] = None  # F344-WT, F344t-AD, AZm -/-, AZm +/+
     experiment: Optional[str] = None  # VAST_NP, LAST_NP, VASTcontKL
     sex: Optional[str] = None  # M or F
-    tx: Optional[str] = None  # treatment group e.g. SF, noSF
-    drug: Optional[str] = None  # drug condition e.g. vehicle, compound name
+    condition: Optional[str] = None  # e.g. noSD, GHSD, RBSD
+    drug: Optional[str] = None  # drug label e.g. vehicle, compound name
 
     # For mislabeled trials (IDs 1-4), this holds the inferred correct ID
     inferred_id: Optional[str] = None
@@ -897,7 +895,7 @@ def get_trials_for_animal(
 
 
 @dataclass
-class TreatmentLabel:
+class ConditionLabel:
     """Treatment label for an animal or cohort."""
 
     type: str  # "cohort" or "animal_id"
@@ -906,94 +904,94 @@ class TreatmentLabel:
     experiment: str
     researcher: str
     sex: str = "M"  # M or F
-    tx: str = ""  # treatment group e.g. SF, noSF
-    drug: str = ""  # drug condition e.g. vehicle, compound name
+    condition: str = ""  # e.g. noSD, GHSD, RBSD
+    drug: str = ""  # drug label e.g. vehicle, compound name
     notes: str = ""
 
 
-_TREATMENT_LABELS_CACHE: dict[Path, tuple[float, dict[str, "TreatmentLabel"]]] = {}
+_CONDITION_LABELS_CACHE: dict[Path, tuple[float, dict[str, "ConditionLabel"]]] = {}
 
 
-def load_treatment_labels(labels_path: Optional[Path] = None) -> dict[str, TreatmentLabel]:
+def load_condition_labels(labels_path: Optional[Path] = None) -> dict[str, ConditionLabel]:
     """
-    Load treatment labels from CSV file.
+    Load condition labels from CSV file.
 
     Args:
-        labels_path: Path to treatment_labels.csv. If None, uses default in inputs/.
+        labels_path: Path to condition_labels.csv. If None, uses default in inputs/.
 
     Returns:
-        Dictionary mapping key (cohort name or animal_id) to TreatmentLabel
+        Dictionary mapping key (cohort name or animal_id) to ConditionLabel
     """
     import csv
 
     if labels_path is None:
         # Default location relative to this module
-        labels_path = Path(__file__).parent.parent.parent.parent / "inputs" / "treatment_labels.csv"
+        labels_path = Path(__file__).parent.parent.parent.parent / "inputs" / "condition_labels.csv"
 
-    labels: dict[str, TreatmentLabel] = {}
+    labels: dict[str, ConditionLabel] = {}
 
     labels_path = Path(labels_path).resolve()
 
     if not labels_path.exists():
-        logger.warning("Treatment labels file not found: %s", labels_path)
+        logger.warning("Condition labels file not found: %s", labels_path)
         return labels
 
     mtime = labels_path.stat().st_mtime
-    cached = _TREATMENT_LABELS_CACHE.get(labels_path)
+    cached = _CONDITION_LABELS_CACHE.get(labels_path)
     if cached is not None and cached[0] == mtime:
         return dict(cached[1])
 
     with open(labels_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            label = TreatmentLabel(
+            label = ConditionLabel(
                 type=row["type"],
                 key=row["key"],
                 strain=row["strain"],
                 experiment=row["experiment"],
                 researcher=row["researcher"],
                 sex=row.get("sex", "M"),
-                tx=row.get("tx", ""),
+                condition=(row.get("condition") or row.get("condition") or ""),
                 drug=row.get("drug", ""),
                 notes=row.get("notes", ""),
             )
             labels[row["key"]] = label
 
-    logger.debug("Loaded %d treatment labels from %s", len(labels), labels_path)
-    _TREATMENT_LABELS_CACHE[labels_path] = (mtime, dict(labels))
+    logger.debug("Loaded %d condition labels from %s", len(labels), labels_path)
+    _CONDITION_LABELS_CACHE[labels_path] = (mtime, dict(labels))
     return labels
 
 
-TREATMENT_LABELS_HEADER = [
+CONDITION_LABELS_HEADER = [
     "type",
     "key",
     "strain",
     "experiment",
     "researcher",
     "sex",
-    "tx",
+    "condition",
     "drug",
     "notes",
 ]
 
 
-def update_treatment_labels_from_discovery(
+def update_condition_labels_from_discovery(
     result: DiscoveryResult,
     labels_path: Optional[Path] = None,
 ) -> None:
     """
-    Update treatment_labels.csv from discovery: add rows for any animal_id or cohort
+    Update condition_labels.csv from discovery: add rows for any animal_id or cohort
     that appears in discovery but not yet in the CSV. Existing rows are preserved
     (human-filled values are not overwritten). New rows get blank strain/experiment/sex/tx/notes.
 
     Args:
         result: DiscoveryResult from discover_trials()
-        labels_path: Path to treatment_labels.csv. If None, uses default in inputs/.
+        labels_path: Path to condition_labels.csv. If None, uses default in inputs/.
     """
     import csv
 
     if labels_path is None:
-        labels_path = Path(__file__).parent.parent.parent / "inputs" / "treatment_labels.csv"
+        labels_path = Path(__file__).parent.parent.parent / "inputs" / "condition_labels.csv"
     labels_path = Path(labels_path)
     labels_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1003,7 +1001,7 @@ def update_treatment_labels_from_discovery(
         with open(labels_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                r = {k: (row.get(k) or "") for k in TREATMENT_LABELS_HEADER}
+                r = {k: (row.get(k) or "") for k in CONDITION_LABELS_HEADER}
                 existing_rows.append(r)
                 t = (r.get("type") or "").strip()
                 k = (r.get("key") or "").strip()
@@ -1024,7 +1022,7 @@ def update_treatment_labels_from_discovery(
                     "experiment": "",
                     "researcher": "",
                     "sex": "",
-                    "tx": "",
+                    "condition": "",
                     "drug": "",
                     "notes": "",
                 }
@@ -1032,18 +1030,22 @@ def update_treatment_labels_from_discovery(
             seen.add(("animal_id", aid))
 
     with open(labels_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=TREATMENT_LABELS_HEADER)
+        writer = csv.DictWriter(f, fieldnames=CONDITION_LABELS_HEADER)
         writer.writeheader()
         for row in existing_rows:
-            writer.writerow({k: row.get(k, "") for k in TREATMENT_LABELS_HEADER})
+            out = {k: row.get(k, "") for k in CONDITION_LABELS_HEADER}
+            if not out.get("condition") and row.get("condition"):
+                out["condition"] = row.get("condition", "")
+            writer.writerow(out)
         writer.writerows(new_rows)
 
     if new_rows:
         print(
-            f"Updated {labels_path}: added {len(new_rows)} new row(s) (fill in strain/experiment/sex/tx as needed)."
+            f"Updated {labels_path}: added {len(new_rows)} new row(s) "
+            "(fill in strain/experiment/sex/condition as needed)."
         )
     else:
-        print(f"Treatment labels already up to date: {labels_path}")
+        print(f"Condition labels already up to date: {labels_path}")
 
 
 def _infer_experiment_from_path(file_path: Path) -> Optional[str]:
@@ -1061,18 +1063,18 @@ def _infer_experiment_from_path(file_path: Path) -> Optional[str]:
     return None
 
 
-def apply_treatment_labels(
+def apply_condition_labels(
     result: DiscoveryResult,
-    labels: dict[str, TreatmentLabel],
+    labels: dict[str, ConditionLabel],
 ) -> None:
     """
-    Apply treatment labels to all trials in a discovery result.
+    Apply condition labels to all trials in a discovery result.
 
     Modifies trials in-place to set strain, experiment, and sex fields.
 
     Args:
         result: DiscoveryResult with trials
-        labels: Dictionary from load_treatment_labels()
+        labels: Dictionary from load_condition_labels()
     """
     for trial in result.trials:
         # Direct animal_id lookup
@@ -1081,7 +1083,7 @@ def apply_treatment_labels(
             trial.strain = label.strain
             trial.experiment = label.experiment
             trial.sex = label.sex
-            trial.tx = label.tx or None
+            trial.condition = label.condition or None
             trial.drug = label.drug or None
             trial.researcher = label.researcher or None
             continue
@@ -1321,7 +1323,7 @@ def load_manifest_csv(
                     strain=_cell(row, "strain"),
                     experiment=_cell(row, "experiment"),
                     sex=_cell(row, "sex"),
-                    tx=_cell(row, "tx"),
+                    condition=_cell(row, "condition") or _cell(row, "condition"),
                     drug=_cell(row, "drug"),
                     inferred_id=_cell(row, "inferred_id"),
                     kpms_recording_key=_cell(row, "kpms_recording_key"),

@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from nor_object_mi.simpler_first_da import apply_bh
-from nor_object_mi.simpler_first_presence import CONDS, NEAR_R_M
+from nor_object_mi.simpler_first_presence import TRIALS, NEAR_R_M
 from nor_object_mi.simpler_first_protocol_prologue import ttest_one_sample
 from nor_object_mi.simpler_first_q1 import SEX_ORDER, anova_within_sex
 from nor_object_mi.simpler_first_q2 import shannon_bits
@@ -138,12 +138,12 @@ def session_mask_table(labeled: pd.DataFrame) -> pd.DataFrame:
     frames = pd.to_numeric(df["bout_frames"], errors="coerce").fillna(0.0)
     df["_frames"] = frames
     sess_n = df.groupby(
-        ["animal_id", "phase_layer", "condition_layer"],
+        ["animal_id", "session", "trial"],
         sort=False,
     )["_frames"].sum()
     rows: list[dict[str, object]] = []
-    keys = ["animal_id", "phase_layer", "condition_layer", "mask"]
-    meta_cols = [c for c in ("sex", "tx", "model") if c in df.columns]
+    keys = ["animal_id", "session", "trial", "mask"]
+    meta_cols = [c for c in ("sex", "condition", "model") if c in df.columns]
     for key, g in df.groupby(keys, sort=False):
         aid, phase, cond, mask = key
         if mask not in MASKS:
@@ -155,8 +155,8 @@ def session_mask_table(labeled: pd.DataFrame) -> pd.DataFrame:
         p = (counts / tot).to_numpy(dtype=np.float64) if tot > 0 else np.array([])
         rec: dict[str, object] = {
             "animal_id": str(aid),
-            "phase_layer": phase,
-            "condition_layer": cond,
+            "session": phase,
+            "trial": cond,
             "mask": mask,
             "n_mask_frames": n_mask,
             "n_session_frames": n_sess,
@@ -171,7 +171,7 @@ def session_mask_table(labeled: pd.DataFrame) -> pd.DataFrame:
     if out.empty:
         return out
     # ensure every session has all four masks (zero time if absent)
-    idx_cols = ["animal_id", "phase_layer", "condition_layer"]
+    idx_cols = ["animal_id", "session", "trial"]
     sessions = df.groupby(idx_cols, sort=False).agg(
         **{c: (c, "first") for c in meta_cols},
         n_session_frames=("_frames", "sum"),
@@ -198,10 +198,10 @@ def session_mask_table(labeled: pd.DataFrame) -> pd.DataFrame:
 
 def paired_tx_minus_bl(sessions: pd.DataFrame) -> pd.DataFrame:
     """TX − BL for each animal × condition × mask × metric."""
-    bl = sessions[sessions["phase_layer"] == "NOR_BL"]
-    tx = sessions[sessions["phase_layer"] == "NOR_TX"]
-    keys = ["animal_id", "condition_layer", "mask"]
-    cols = keys + ["sex", "tx", "frac_mask", "shannon_bits"]
+    bl = sessions[sessions["session"] == "NOR_BL"]
+    tx = sessions[sessions["session"] == "NOR_TX"]
+    keys = ["animal_id", "trial", "mask"]
+    cols = keys + ["sex", "condition", "frac_mask", "shannon_bits"]
     a = bl[cols].rename(columns={"frac_mask": "frac_mask_bl", "shannon_bits": "shannon_bits_bl"})
     b = tx[cols].rename(columns={"frac_mask": "frac_mask_tx", "shannon_bits": "shannon_bits_tx"})
     m = a.merge(b, on=keys, how="inner", suffixes=("", "_txmeta"))
@@ -209,7 +209,7 @@ def paired_tx_minus_bl(sessions: pd.DataFrame) -> pd.DataFrame:
         m["sex"] = m["sex"].fillna(m["sex_txmeta"])
         m = m.drop(columns=["sex_txmeta"])
     if "tx_txmeta" in m.columns:
-        m["tx"] = m["tx"].fillna(m["tx_txmeta"])
+        m["condition"] = m["condition"].fillna(m["tx_txmeta"])
         m = m.drop(columns=["tx_txmeta"])
     m["delta_frac_mask"] = m["frac_mask_tx"] - m["frac_mask_bl"]
     m["delta_shannon_bits"] = m["shannon_bits_tx"] - m["shannon_bits_bl"]
@@ -217,10 +217,10 @@ def paired_tx_minus_bl(sessions: pd.DataFrame) -> pd.DataFrame:
 
 
 def hunt_tests(paired: pd.DataFrame) -> pd.DataFrame:
-    """Tx hunt: Welch ANOVA of TX−BL on novel_obj.
+    """Tx hunt: Welch ANOVA of TX−BL on nvl_obj.
 
     BH family (primary): within sex, 4 masks × 2 Δ metrics.
-    Gates (uncorrected veto): same ANOVA on identical_obj and no_obj; BL level by tx.
+    Gates (uncorrected veto): same ANOVA on id_obj and no_obj; BL level by tx.
     Companion: one-sample t of Δ vs 0 (txs pooled).
     """
     rows: list[dict[str, object]] = []
@@ -230,7 +230,7 @@ def hunt_tests(paired: pd.DataFrame) -> pd.DataFrame:
     def _anova(sub: pd.DataFrame, *, metric: str, contrast: str, condition: str, family: str) -> None:
         if sub.empty or "mask" not in sub.columns:
             return
-        tab = sub[["animal_id", "sex", "tx", metric]].copy()
+        tab = sub[["animal_id", "sex", "condition", metric]].copy()
         an = anova_within_sex(tab, metric=metric)
         mask = str(sub["mask"].iloc[0])
         for rec in an.to_dict("records"):
@@ -242,7 +242,7 @@ def hunt_tests(paired: pd.DataFrame) -> pd.DataFrame:
                     "n": rec["n"],
                     "test": rec["test"],
                     "mask": mask,
-                    "condition_layer": condition,
+                    "trial": condition,
                     "contrast": contrast,
                     "metric": metric,
                     "family": family,
@@ -251,12 +251,12 @@ def hunt_tests(paired: pd.DataFrame) -> pd.DataFrame:
 
     for mask in MASKS:
         g = paired[paired["mask"] == mask]
-        for cond in CONDS:
-            gc = g[g["condition_layer"] == cond]
+        for cond in TRIALS:
+            gc = g[g["trial"] == cond]
             if gc.empty:
                 continue
-            fam_t = "protocol" if cond == "novel_obj" else "gate"
-            fam_a = "primary" if cond == "novel_obj" else "gate"
+            fam_t = "protocol" if cond == "nvl_obj" else "gate"
+            fam_a = "primary" if cond == "nvl_obj" else "gate"
             for metric in ("delta_frac_mask", "delta_shannon_bits"):
                 for sex in SEX_ORDER:
                     gs = gc[gc["sex"] == sex]
@@ -269,20 +269,20 @@ def hunt_tests(paired: pd.DataFrame) -> pd.DataFrame:
                             "n": rec0["n"],
                             "test": rec0["test"],
                             "mask": mask,
-                            "condition_layer": cond,
+                            "trial": cond,
                             "contrast": "tx_minus_bl",
                             "metric": metric,
                             "family": fam_t,
                         }
                     )
                 _anova(gc, metric=metric, contrast="tx_minus_bl_by_tx", condition=cond, family=fam_a)
-        gn = g[g["condition_layer"] == "novel_obj"]
+        gn = g[g["trial"] == "nvl_obj"]
         if not gn.empty:
             bl_level = gn.copy()
             bl_level["frac_mask"] = bl_level["frac_mask_bl"]
             bl_level["shannon_bits"] = bl_level["shannon_bits_bl"]
-            _anova(bl_level, metric="frac_mask", contrast="bl_level_by_tx", condition="novel_obj", family="gate")
-            _anova(bl_level, metric="shannon_bits", contrast="bl_level_by_tx", condition="novel_obj", family="gate")
+            _anova(bl_level, metric="frac_mask", contrast="bl_level_by_tx", condition="nvl_obj", family="gate")
+            _anova(bl_level, metric="shannon_bits", contrast="bl_level_by_tx", condition="nvl_obj", family="gate")
 
     tests = pd.DataFrame(rows)
     if tests.empty:
@@ -313,7 +313,7 @@ def gate_hits(tests: pd.DataFrame) -> pd.DataFrame:
                     (an["sex"] == sex)
                     & (an["mask"] == mask)
                     & (an["metric"] == metric)
-                    & (an["condition_layer"] == "novel_obj")
+                    & (an["trial"] == "nvl_obj")
                     & (an["contrast"] == "tx_minus_bl_by_tx")
                 ]
                 if len(prim) != 1:
@@ -327,7 +327,7 @@ def gate_hits(tests: pd.DataFrame) -> pd.DataFrame:
                         (an["sex"] == sex)
                         & (an["mask"] == mask)
                         & (an["metric"] == met)
-                        & (an["condition_layer"] == cond)
+                        & (an["trial"] == cond)
                         & (an["contrast"] == contrast)
                     ]
                     if len(s) != 1:
@@ -335,9 +335,9 @@ def gate_hits(tests: pd.DataFrame) -> pd.DataFrame:
                     return float(s["p"].iloc[0])
 
                 bl_met = "frac_mask" if metric == "delta_frac_mask" else "shannon_bits"
-                p_id = _p("identical_obj", "tx_minus_bl_by_tx", metric)
+                p_id = _p("id_obj", "tx_minus_bl_by_tx", metric)
                 p_no = _p("no_obj", "tx_minus_bl_by_tx", metric)
-                p_bl = _p("novel_obj", "bl_level_by_tx", bl_met)
+                p_bl = _p("nvl_obj", "bl_level_by_tx", bl_met)
                 miss_gates = (not (np.isfinite(p_id) and p_id < 0.05)) and (
                     not (np.isfinite(p_no) and p_no < 0.05)
                 ) and (not (np.isfinite(p_bl) and p_bl < 0.05))

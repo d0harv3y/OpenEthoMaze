@@ -1,6 +1,6 @@
 """
 Legacy VAST database manager: init/sync DB and manifest from file discovery and
-treatment_labels.csv; run inference, pipeline, and exports on selected trials.
+condition_labels.csv; run inference, pipeline, and exports on selected trials.
 
 All outputs go to ``<repo>/outputs/legacy/`` (override with ``--db-path``):
   - vast_results_legacy.h5   (database)
@@ -8,7 +8,7 @@ All outputs go to ``<repo>/outputs/legacy/`` (override with ``--db-path``):
   - exports/                 (CSV exports from run-exports)
 
 Discovery uses ``maze.pipeline.paths`` ``DATA_DIRS`` (or ``--data-dir``); per-machine roots belong in
-``paths_local.py``. Cohort labels live beside discovery roots as ``treatment_labels.csv`` (legacy VAST adapter).
+``paths_local.py``. Cohort labels live beside discovery roots as ``condition_labels.csv`` (legacy VAST adapter).
 
 Usage:
   uv run maze-legacy-db init
@@ -37,13 +37,13 @@ from typing import Optional, Sequence
 from maze.pipeline.paths import DATA_DIRS
 from maze.pipeline.sources.legacy_vast import (
     TrialManifest,
-    apply_treatment_labels,
+    apply_condition_labels,
     check_duplicates,
     discover_trials,
     load_manifest_csv,
-    load_treatment_labels,
+    load_condition_labels,
     save_manifest_csv,
-    update_treatment_labels_from_discovery,
+    update_condition_labels_from_discovery,
 )
 from maze.pipeline.io.input_h5_loader import load_trial_data, load_trial_settings
 from maze.pipeline.db import (
@@ -84,7 +84,7 @@ LEGACY_DIR = REPO_ROOT / "outputs" / "legacy"
 LEGACY_DB = LEGACY_DIR / "vast_results_legacy.h5"
 LEGACY_MANIFEST = LEGACY_DIR / "trial_manifest_legacy.csv"
 DEFAULT_KPMS_TRACKING_DB = default_kpms_tracking_db(REPO_ROOT)
-LABELS_PATH = REPO_ROOT / "inputs" / "treatment_labels.csv"
+LABELS_PATH = REPO_ROOT / "inputs" / "condition_labels.csv"
 INFERRED_ID_MAPPINGS_PATH = REPO_ROOT / "inputs" / "inferred_id_mappings.csv"
 
 try:
@@ -188,8 +188,8 @@ def _resolve_data_dirs(data_dirs: Optional[Sequence[Path]]) -> Optional[list[Pat
     return out or None
 
 
-def _resolve_treatment_labels_path(labels_path: Optional[Path]) -> Path:
-    """CLI override or repo default ``inputs/treatment_labels.csv``."""
+def _resolve_condition_labels_path(labels_path: Optional[Path]) -> Path:
+    """CLI override or repo default ``inputs/condition_labels.csv``."""
     if labels_path is not None and str(labels_path).strip():
         return Path(labels_path).expanduser().resolve()
     return LABELS_PATH
@@ -213,15 +213,15 @@ def _normalize_trial(s: str) -> str:
 def cmd_init(
     *,
     data_dirs: Optional[Sequence[Path]] = None,
-    treatment_labels_path: Optional[Path] = None,
+    condition_labels_path: Optional[Path] = None,
 ) -> None:
-    """Initialize legacy DB and manifest from discovery + treatment_labels.csv."""
+    """Initialize legacy DB and manifest from discovery + condition_labels.csv."""
     _ensure_legacy_dir()
-    labels_path = _resolve_treatment_labels_path(treatment_labels_path)
+    labels_path = _resolve_condition_labels_path(condition_labels_path)
     print(f"Initializing legacy database: {LEGACY_DB}")
     resolved_data_dirs = _resolve_data_dirs(data_dirs)
     print(f"Data directories: {resolved_data_dirs or DATA_DIRS}")
-    print(f"Treatment labels: {labels_path}")
+    print(f"Condition labels: {labels_path}")
     print()
 
     init_database(LEGACY_DB)
@@ -238,9 +238,9 @@ def cmd_init(
         for key, trials in duplicates[:5]:
             print(f"  {key}: {[t.input_h5_path for t in trials]}")
 
-    print("\nLoading treatment labels...")
-    labels = load_treatment_labels(labels_path)
-    apply_treatment_labels(result, labels)
+    print("\nLoading condition labels...")
+    labels = load_condition_labels(labels_path)
+    apply_condition_labels(result, labels)
     n_strain = sum(1 for t in result.trials if t.strain)
     n_experiment = sum(1 for t in result.trials if t.experiment)
     print(f"  With strain: {n_strain}, With experiment: {n_experiment}")
@@ -356,7 +356,7 @@ def cmd_init(
             strain=trial.strain,
             experiment=trial.experiment,
             sex=trial.sex,
-            tx=trial.tx,
+            condition=trial.condition,
             researcher=trial.researcher,
             drug=trial.drug,
         )
@@ -378,12 +378,12 @@ def cmd_sync(
     prune_unlabeled: bool,
     *,
     data_dirs: Optional[Sequence[Path]] = None,
-    treatment_labels_path: Optional[Path] = None,
+    condition_labels_path: Optional[Path] = None,
 ) -> None:
     """Sync legacy DB and manifest with discovery; optionally prune and update labels."""
     from tqdm import tqdm
 
-    labels_path = _resolve_treatment_labels_path(treatment_labels_path)
+    labels_path = _resolve_condition_labels_path(condition_labels_path)
 
     if dry_run:
         print("Dry run: no backup or DB writes.")
@@ -407,12 +407,12 @@ def cmd_sync(
     print(f"  Trials: {len(result.trials)}\n")
 
     if update_labels and not dry_run:
-        update_treatment_labels_from_discovery(result, labels_path)
+        update_condition_labels_from_discovery(result, labels_path)
         print()
 
-    print("Loading and applying treatment labels...")
-    labels = load_treatment_labels(labels_path)
-    apply_treatment_labels(result, labels)
+    print("Loading and applying condition labels...")
+    labels = load_condition_labels(labels_path)
+    apply_condition_labels(result, labels)
     labeled_animal_ids = {
         key for key, label in labels.items() if getattr(label, "type", "animal_id") == "animal_id"
     }
@@ -505,7 +505,7 @@ def cmd_sync(
                 strain=trial.strain,
                 experiment=trial.experiment,
                 sex=trial.sex,
-                tx=trial.tx,
+                condition=trial.condition,
                 researcher=trial.researcher,
                 drug=trial.drug,
             )
@@ -524,7 +524,7 @@ def cmd_sync(
             if labeled_animal_ids and aid not in labeled_animal_ids
         }
         if unlabeled_animals:
-            print(f"Pruning unlabeled animals (no row in treatment_labels.csv): {len(unlabeled_animals)}")
+            print(f"Pruning unlabeled animals (no row in condition_labels.csv): {len(unlabeled_animals)}")
             animals_to_remove |= unlabeled_animals
 
     if to_prune or animals_to_remove:
@@ -762,7 +762,7 @@ def cmd_build_kpms_h5(
     overwrite_pose: bool = False,
     overwrite_blob: bool = False,
     profile_path: Path | None = None,
-    treatment_labels_path: Path | None = None,
+    condition_labels_path: Path | None = None,
 ) -> None:
     """
     Discover trials and write a kpMS-ready H5 with tracking/anatomical + tracking/blob.
@@ -773,14 +773,14 @@ def cmd_build_kpms_h5(
         print("Note: cv2 not available; blob materialization requires opencv-python.")
 
     resolved_data_dirs = _resolve_data_dirs(data_dirs)
-    labels_path = _resolve_treatment_labels_path(treatment_labels_path)
+    labels_path = _resolve_condition_labels_path(condition_labels_path)
     print(f"Discovering trials in: {resolved_data_dirs or DATA_DIRS}")
     result = discover_trials(resolved_data_dirs)
     print(f"  Trials discovered: {len(result.trials)}")
-    print(f"Treatment labels: {labels_path}")
+    print(f"Condition labels: {labels_path}")
 
-    labels = load_treatment_labels(labels_path)
-    apply_treatment_labels(result, labels)
+    labels = load_condition_labels(labels_path)
+    apply_condition_labels(result, labels)
     _apply_inferred_ids_from_csv(result)
 
     manifests = _filter_manifests(result.trials, animal_ids, sessions, trials)
@@ -933,7 +933,7 @@ def cmd_materialize_blob(
 # -----------------------------------------------------------------------------
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Legacy VAST DB: init/sync from discovery + treatment_labels; run inference, pipeline, exports.",
+        description="Legacy VAST DB: init/sync from discovery + condition_labels; run inference, pipeline, exports.",
         epilog="Outputs: outputs/legacy/vast_results_legacy.h5, trial_manifest_legacy.csv, exports/",
     )
     parser.add_argument(
@@ -943,18 +943,18 @@ def main() -> int:
         help="Path to legacy H5 database (default: <repo>/outputs/legacy/vast_results_legacy.h5)",
     )
     parser.add_argument(
-        "--treatment-labels",
+        "--condition-labels",
         type=Path,
         default=None,
         help=(
-            "Path to treatment_labels.csv for init/sync/build-kpms-h5 "
+            "Path to condition_labels.csv for init/sync/build-kpms-h5 "
             f"(default: {LABELS_PATH})"
         ),
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
     # init
-    p_init = sub.add_parser("init", help="Initialize legacy DB and manifest from discovery + treatment_labels.csv")
+    p_init = sub.add_parser("init", help="Initialize legacy DB and manifest from discovery + condition_labels.csv")
     p_init.add_argument(
         "--data-dir",
         dest="data_dirs",
@@ -975,13 +975,13 @@ def main() -> int:
         default=None,
         help="Override discovery root (repeat for multiple roots).",
     )
-    p_sync.add_argument("--update-labels", action="store_true", help="Add new IDs to treatment_labels.csv from discovery")
+    p_sync.add_argument("--update-labels", action="store_true", help="Add new IDs to condition_labels.csv from discovery")
     p_sync.add_argument("--no-backup", action="store_true", help="Do not backup DB before sync")
     p_sync.add_argument("--dry-run", action="store_true", help="Only report what would be pruned")
     p_sync.add_argument(
         "--prune-unlabeled",
         action="store_true",
-        help="Remove animal groups that have no row in treatment_labels.csv",
+        help="Remove animal groups that have no row in condition_labels.csv",
     )
 
     # run-inference
@@ -1109,7 +1109,7 @@ def main() -> int:
     )
 
     if args.command == "init":
-        cmd_init(data_dirs=args.data_dirs, treatment_labels_path=args.treatment_labels)
+        cmd_init(data_dirs=args.data_dirs, condition_labels_path=args.condition_labels)
         return 0
 
     if args.command == "sync":
@@ -1119,7 +1119,7 @@ def main() -> int:
             dry_run=args.dry_run,
             prune_unlabeled=args.prune_unlabeled,
             data_dirs=args.data_dirs,
-            treatment_labels_path=args.treatment_labels,
+            condition_labels_path=args.condition_labels,
         )
         return 0
 
@@ -1169,7 +1169,7 @@ def main() -> int:
             overwrite_pose=args.overwrite_pose,
             overwrite_blob=args.overwrite_blob,
             profile_path=args.profile,
-            treatment_labels_path=args.treatment_labels,
+            condition_labels_path=args.condition_labels,
         )
         return 0
 

@@ -113,7 +113,7 @@ if HAS_KPMS_FIT_DIALOG:
         seed_spin = QSpinBox()
         seed_spin.setRange(0, 2_147_483_647)
         seed_spin.setValue(42)
-        balance_edit = QLineEdit("sex,tx,phase,strain")
+        balance_edit = QLineEdit("sex,condition,strain")
 
         def browse_manifest() -> None:
             start = str(Path(manifest_edit.text()).parent)
@@ -154,7 +154,7 @@ if HAS_KPMS_FIT_DIALOG:
         lay.addLayout(form)
         incl_hab = QCheckBox("Include habituation trials")
         excl_exp = QCheckBox("Exclude experimental trials")
-        enrich_cb = QCheckBox("Enrich blank sex/tx from treatment_labels.csv")
+        enrich_cb = QCheckBox("Enrich blank sex/tx from condition_labels.csv")
         enrich_cb.setChecked(True)
         force_cb = QCheckBox("Force new checkpoint (--force-new)")
         force_cb.setToolTip("Delete existing checkpoint.h5 for this model name before fitting.")
@@ -210,8 +210,8 @@ if HAS_KPMS_FIT_DIALOG:
                 random_seed=int(seed_spin.value()),
                 include_habituation=incl_hab.isChecked(),
                 exclude_experimental=excl_exp.isChecked(),
-                balance_columns=balance_cols or ("sex", "tx", "phase", "strain"),
-                enrich_from_treatment_labels=enrich_cb.isChecked(),
+                balance_columns=balance_cols or ("sex", "condition", "strain"),
+                enrich_from_condition_labels=enrich_cb.isChecked(),
                 force_new=force_cb.isChecked(),
             )
             worker = KpmsFitWorker(cfg)

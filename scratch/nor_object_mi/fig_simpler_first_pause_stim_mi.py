@@ -23,16 +23,16 @@ if str(_SCRATCH) not in sys.path:
 from nor_object_mi._pub_style import (  # noqa: E402
     INK,
     MUTE,
-    PHASE_SHORT,
-    PHASES,
+    SESSION_SHORT,
+    SESSIONS,
     SEX_ORDER,
-    TX_COLOR,
-    TX_ORDER,
+    CONDITION_COLOR,
+    CONDITION_ORDER,
     apply_style,
     fig_footnote,
     panel_stats_box,
     save_pdf_png,
-    tx_sex_legend_handles,
+    condition_sex_legend_handles,
 )
 from nor_object_mi.info_dr_pause_delta import get_y_metric_spec  # noqa: E402
 from nor_object_mi.pause_stim_mi import DEFAULT_MODEL, default_out_dir  # noqa: E402
@@ -49,24 +49,24 @@ def _fmt_rho(val: float | None) -> str:
 
 def fig_pause_vs_full(run_dir: Path, fig_dir: Path) -> None:
     delta = pd.read_csv(run_dir / "pause_stim_delta_excess.csv")
-    tx = delta[delta["phase_layer"] == "NOR_TX"].copy()
+    tx = delta[delta["session"] == "NOR_TX"].copy()
     pause = tx[tx["mi_label"] == "pause_binary"].set_index("animal_id")
     full = tx[tx["mi_label"] == "full_alphabet"].set_index("animal_id")
-    merged = pause[["delta_excess", "sex", "tx"]].join(
+    merged = pause[["delta_excess", "sex", "condition"]].join(
         full[["delta_excess"]].rename(columns={"delta_excess": "full_delta_excess"}),
         how="inner",
     )
     apply_style()
     fig, ax = plt.subplots(figsize=(5.2, 4.6))
-    for tx_val in TX_ORDER:
+    for tx_val in CONDITION_ORDER:
         for sex in SEX_ORDER:
-            sub = merged[(merged["tx"] == tx_val) & (merged["sex"] == sex)]
+            sub = merged[(merged["condition"] == tx_val) & (merged["sex"] == sex)]
             if sub.empty:
                 continue
             ax.scatter(
                 sub["full_delta_excess"],
                 sub["delta_excess"],
-                c=TX_COLOR[tx_val],
+                c=CONDITION_COLOR[tx_val],
                 marker="o" if sex == "F" else "^",
                 s=36,
                 edgecolors=INK,
@@ -86,7 +86,7 @@ def fig_pause_vs_full(run_dir: Path, fig_dir: Path) -> None:
     ax.set_title("Pause vs full bout MI novelty contrast", fontweight="bold", color=INK)
     fig_footnote(
         fig,
-        "Within-animal bout occupancy MI on novel_obj; pilot model. "
+        "Within-animal bout occupancy MI on nvl_obj; pilot model. "
         "Points = animals; shape = sex; color = tx.",
     )
     save_pdf_png(fig, fig_dir / "fig_pause_vs_full_delta_excess_tx")
@@ -105,36 +105,36 @@ def fig_bridge_scatter(run_dir: Path, fig_dir: Path, *, y_token: str, y_label: s
 
     apply_style()
     fig, axes = plt.subplots(2, 4, figsize=(12.5, 5.8), sharex=False, sharey=False)
-    for col, phase in enumerate(PHASES):
+    for col, phase in enumerate(SESSIONS):
         for row, sex in enumerate(SEX_ORDER):
             ax = axes[row, col]
-            sub = joined[(joined["phase_layer"] == phase) & (joined["sex"] == sex)]
+            sub = joined[(joined["session"] == phase) & (joined["sex"] == sex)]
             sub = sub[sub["mi_label"] == "pause_binary"]
             yname = spec.y_col
-            for tx_val in TX_ORDER:
-                pts = sub[sub["tx"] == tx_val]
+            for tx_val in CONDITION_ORDER:
+                pts = sub[sub["condition"] == tx_val]
                 if pts.empty:
                     continue
                 ax.scatter(
                     pts["delta_excess"],
                     pts[yname],
-                    c=TX_COLOR[tx_val],
+                    c=CONDITION_COLOR[tx_val],
                     s=30,
                     edgecolors=INK,
                     linewidths=0.3,
                     alpha=0.9,
                 )
-            cell = assoc[(assoc["phase_layer"] == phase) & (assoc["sex"] == sex)]
+            cell = assoc[(assoc["session"] == phase) & (assoc["sex"] == sex)]
             rho = float(cell["spearman_rho"].iloc[0]) if len(cell) else float("nan")
             pval = float(cell["spearman_p"].iloc[0]) if len(cell) else float("nan")
             panel_stats_box(ax, [f"rho = {_fmt_rho(rho)}", f"p = {pval:.3g}" if np.isfinite(pval) else "p = n/a"])
             if row == 0:
-                ax.set_title(PHASE_SHORT.get(phase, phase), fontweight="bold", color=INK)
+                ax.set_title(SESSION_SHORT.get(phase, phase), fontweight="bold", color=INK)
             if col == 0:
                 ax.set_ylabel(f"{sex}\n{y_label}")
             if row == 1:
                 ax.set_xlabel(r"Pause $\Delta$ excess$_I$")
-    handles = tx_sex_legend_handles()
+    handles = condition_sex_legend_handles()
     fig.legend(handles=handles, loc="upper center", ncol=4, frameon=False, bbox_to_anchor=(0.5, 1.02))
     fig_footnote(
         fig,

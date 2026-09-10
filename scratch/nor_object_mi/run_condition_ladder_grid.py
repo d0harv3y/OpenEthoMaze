@@ -30,7 +30,7 @@ PHASE_OUT_TAG = {
 
 TEST_FIELDS = [
     "model",
-    "phase_layer",
+    "session",
     "cleanup",
     *LADDER_TEST_FIELDS,
     "out_dir",
@@ -55,7 +55,7 @@ def _tests_from_ladder(
         return [
             {
                 "model": model,
-                "phase_layer": phase,
+                "session": phase,
                 "cleanup": cleanup,
                 "panel": "",
                 "step": "",
@@ -88,7 +88,7 @@ def _tests_from_ladder(
         out.append(
             {
                 "model": model,
-                "phase_layer": phase,
+                "session": phase,
                 "cleanup": cleanup,
                 **r,
                 "out_dir": str(out_dir),
@@ -155,7 +155,7 @@ def _run_one(
         return [
             {
                 "model": model,
-                "phase_layer": phase,
+                "session": phase,
                 "panel": "",
                 "step": "",
                 "sex": "",
@@ -293,7 +293,7 @@ def main() -> int:
         all_rows,
         key=lambda r: (
             str(r.get("model", "")),
-            str(r.get("phase_layer", "")),
+            str(r.get("session", "")),
             str(r.get("test", "")),
             str(r.get("panel", "")),
             str(r.get("step", "")),

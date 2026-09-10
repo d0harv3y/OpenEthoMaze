@@ -22,17 +22,17 @@ from nor_object_mi.pause_stim_mi import (  # noqa: E402
 def _toy_rows(*, pause_id: int = 7) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for cond, fam, nvl in (
-        ("identical_obj", 0.2, 0.5),
-        ("novel_obj", 0.15, 0.25),
+        ("id_obj", 0.2, 0.5),
+        ("nvl_obj", 0.15, 0.25),
     ):
         for bout in range(6):
             rows.append(
                 {
                     "animal_id": "a1",
                     "sex": "F",
-                    "tx": "noSD",
-                    "phase_layer": "NOR_TX",
-                    "condition_layer": cond,
+                    "condition": "noSD",
+                    "session": "NOR_TX",
+                    "trial": cond,
                     "trial_key": "t1",
                     "bout_index": bout,
                     "raw_syllable_id": pause_id if bout % 2 == 0 else 1,
@@ -55,8 +55,8 @@ def test_delta_excess_fam_nvl_pair() -> None:
         {
             "animal_id": ["a1", "a1"],
             "sex": ["F", "F"],
-            "tx": ["noSD", "noSD"],
-            "phase_layer": ["NOR_TX", "NOR_TX"],
+            "condition": ["noSD", "noSD"],
+            "session": ["NOR_TX", "NOR_TX"],
             "mi_label": ["pause_binary", "pause_binary"],
             "stim_var": ["dist_fam", "dist_nvl"],
                 "excess": [0.1, 0.3],
@@ -73,8 +73,8 @@ def test_join_pause_mi_composition_inner() -> None:
         {
             "animal_id": ["a1", "a2"],
             "sex": ["F", "M"],
-            "tx": ["noSD", "GHSD"],
-            "phase_layer": ["NOR_TX", "NOR_TX"],
+            "condition": ["noSD", "GHSD"],
+            "session": ["NOR_TX", "NOR_TX"],
             "mi_label": ["pause_binary", "pause_binary"],
             "delta_excess": [0.05, -0.02],
         }
@@ -83,8 +83,8 @@ def test_join_pause_mi_composition_inner() -> None:
         {
             "animal_id": ["a1", "a3"],
             "sex": ["F", "F"],
-            "tx": ["noSD", "noSD"],
-            "phase_layer": ["NOR_TX", "NOR_TX"],
+            "condition": ["noSD", "noSD"],
+            "session": ["NOR_TX", "NOR_TX"],
             "p_novel": [0.04, 0.01],
         }
     )

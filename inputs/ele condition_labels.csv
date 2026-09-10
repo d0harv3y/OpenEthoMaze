@@ -1,4 +1,4 @@
-type,key,strain,experiment,researcher,sex,tx,drug,notes
+type,key,strain,experiment,researcher,sex,condition,drug,notes
 animal_id,3245,tg,VASTalt,Emma|Hayden,F,n/a,n/a,
 animal_id,3246,wt,VASTalt,Emma|Hayden,F,n/a,n/a,
 animal_id,3252,tg,VASTalt,Emma|Hayden,F,n/a,n/a,

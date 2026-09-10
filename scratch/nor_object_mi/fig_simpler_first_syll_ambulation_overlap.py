@@ -23,12 +23,12 @@ if str(_SCRATCH) not in sys.path:
 
 from nor_object_mi._pub_style import (  # noqa: E402
     INK,
-    PHASE_SHORT,
-    PHASES,
+    SESSION_SHORT,
+    SESSIONS,
     SEX_MARKER,
     SEX_ORDER,
-    TX_COLOR,
-    TX_ORDER,
+    CONDITION_COLOR,
+    CONDITION_ORDER,
     apply_style,
     fig_footnote,
     p_text,
@@ -42,7 +42,7 @@ DEFAULT_RUN = Path(
 )
 
 FOOT_ID = (
-    "Grain: animal × phase × novel_obj (locked ss-50). X = session frame P(movement). "
+    "Grain: animal × phase × nvl_obj (locked ss-50). X = session frame P(movement). "
     "Y = unweighted mean over syllable bouts of P(move|bout). The diagonal is the "
     "frame-weighted identity; leaving it means bout-duration mix differs from occupancy. "
     "Pearson from syll_locomotor_association.csv. Color=tx, shape=sex. Uncorrected. "
@@ -72,7 +72,7 @@ def _as_bool(s: pd.Series) -> pd.Series:
 
 
 def _lookup(tests: pd.DataFrame, *, phase: str, contrast: str, sex: str = "pooled") -> pd.Series | None:
-    m = (tests["contrast"] == contrast) & (tests["phase_layer"] == phase) & (tests["sex"] == sex)
+    m = (tests["contrast"] == contrast) & (tests["session"] == phase) & (tests["sex"] == sex)
     sub = tests[m]
     if len(sub) != 1:
         return None
@@ -82,7 +82,7 @@ def _lookup(tests: pd.DataFrame, *, phase: str, contrast: str, sex: str = "poole
 def _legend(fig, *, dest: str) -> None:
     ts = type_scale(dest)
     ms = 8 if dest == "slides" else 6
-    handles = [Line2D([0], [0], marker="o", color="none", markerfacecolor=TX_COLOR[t], markersize=ms, label=t) for t in TX_ORDER] + [
+    handles = [Line2D([0], [0], marker="o", color="none", markerfacecolor=CONDITION_COLOR[t], markersize=ms, label=t) for t in CONDITION_ORDER] + [
         Line2D(
             [0],
             [0],
@@ -114,16 +114,16 @@ def _scatter_phases(
 ) -> None:
     ts = _begin(dest)
     fig, axes = plt.subplots(2, 2, figsize=(7.2, 7.0), constrained_layout=True)
-    for i, ph in enumerate(PHASES):
+    for i, ph in enumerate(SESSIONS):
         ax = axes[i // 2][i % 2]
-        panel = sessions[sessions["phase_layer"] == ph]
+        panel = sessions[sessions["session"] == ph]
         x = panel[xcol].to_numpy(dtype=float)
         y = panel[ycol].to_numpy(dtype=float)
-        tx = panel["tx"].to_numpy()
+        tx = panel["condition"].to_numpy()
         sex = panel["sex"].to_numpy()
         ok = np.isfinite(x) & np.isfinite(y)
-        x, y, tx, sex = x[ok], y[ok], tx[ok], sex[ok]
-        for t in TX_ORDER:
+        x, y, condition, sex = x[ok], y[ok], tx[ok], sex[ok]
+        for t in CONDITION_ORDER:
             for s in SEX_ORDER:
                 m = (tx == t) & (sex == s)
                 if not np.any(m):
@@ -131,7 +131,7 @@ def _scatter_phases(
                 ax.scatter(
                     x[m],
                     y[m],
-                    c=TX_COLOR[t],
+                    c=CONDITION_COLOR[t],
                     marker=SEX_MARKER[s],
                     s=ts["scatter"],
                     alpha=0.85,
@@ -155,7 +155,7 @@ def _scatter_phases(
                 fontsize=ts["cell"],
                 color=INK,
             )
-        ax.set_title(PHASE_SHORT[ph], fontsize=ts["annotation"])
+        ax.set_title(SESSION_SHORT[ph], fontsize=ts["annotation"])
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
     fig.suptitle(title, fontsize=ts["suptitle"])
@@ -180,16 +180,16 @@ def _strip_phases(
     ts = _begin(dest)
     fig, axes = plt.subplots(2, 2, figsize=(7.2, 7.0), constrained_layout=True)
     rng = np.random.default_rng(0)
-    for i, ph in enumerate(PHASES):
+    for i, ph in enumerate(SESSIONS):
         ax = axes[i // 2][i % 2]
-        panel = sessions[sessions["phase_layer"] == ph]
+        panel = sessions[sessions["session"] == ph]
         y = panel[ycol].to_numpy(dtype=float)
-        tx = panel["tx"].to_numpy()
+        tx = panel["condition"].to_numpy()
         sex = panel["sex"].to_numpy()
         ok = np.isfinite(y)
-        y, tx, sex = y[ok], tx[ok], sex[ok]
-        x0 = {t: j for j, t in enumerate(TX_ORDER)}
-        for t in TX_ORDER:
+        y, condition, sex = y[ok], tx[ok], sex[ok]
+        x0 = {t: j for j, t in enumerate(CONDITION_ORDER)}
+        for t in CONDITION_ORDER:
             for s in SEX_ORDER:
                 m = (tx == t) & (sex == s)
                 if not np.any(m):
@@ -198,7 +198,7 @@ def _strip_phases(
                 ax.scatter(
                     np.full(int(m.sum()), x0[t], dtype=float) + jitter,
                     y[m],
-                    c=TX_COLOR[t],
+                    c=CONDITION_COLOR[t],
                     marker=SEX_MARKER[s],
                     s=ts["scatter"],
                     alpha=0.85,
@@ -220,9 +220,9 @@ def _strip_phases(
                 fontsize=ts["cell"],
                 color=INK,
             )
-        ax.set_xticks(list(range(len(TX_ORDER))))
-        ax.set_xticklabels(list(TX_ORDER))
-        ax.set_title(PHASE_SHORT[ph], fontsize=ts["annotation"])
+        ax.set_xticks(list(range(len(CONDITION_ORDER))))
+        ax.set_xticklabels(list(CONDITION_ORDER))
+        ax.set_title(SESSION_SHORT[ph], fontsize=ts["annotation"])
         ax.set_ylabel(ylabel)
     fig.suptitle(title, fontsize=ts["suptitle"])
     _legend(fig, dest=dest)

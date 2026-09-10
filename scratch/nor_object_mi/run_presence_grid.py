@@ -52,7 +52,7 @@ def _run_one(
     ok = proc.returncode == 0 and summary_path.exists()
     row: dict[str, object] = {
         "model": results_h5.parent.name,
-        "phase_layer": phase,
+        "session": phase,
         "returncode": proc.returncode,
         "out_dir": str(out_dir),
     }
@@ -72,7 +72,7 @@ def _run_one(
             (
                 t
                 for t in tests
-                if t.get("factor") == "tx"
+                if t.get("factor") == "condition"
                 and t.get("sex_stratum") == "all"
                 and t.get("test") == "kruskal"
             ),
@@ -188,7 +188,7 @@ def main() -> int:
                     (
                         t
                         for t in tests
-                        if t.get("factor") == "tx"
+                        if t.get("factor") == "condition"
                         and t.get("sex_stratum") == "all"
                         and t.get("test") == "kruskal"
                     ),
@@ -197,7 +197,7 @@ def main() -> int:
                 rows.append(
                     {
                         "model": model_dir.name,
-                        "phase_layer": phase,
+                        "session": phase,
                         "returncode": 0,
                         "out_dir": str(out_dir),
                         "status": summary.get("status", "ok"),
@@ -232,7 +232,7 @@ def main() -> int:
             row = fut.result()
             rows.append(row)
             print(
-                f"[{done}/{len(jobs)}] {row['model']} {row['phase_layer']} "
+                f"[{done}/{len(jobs)}] {row['model']} {row['session']} "
                 f"status={row.get('status')} median_delta={row.get('median_delta')} "
                 f"wilcoxon_p={row.get('wilcoxon_p')}"
             )
@@ -242,7 +242,7 @@ def main() -> int:
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     fields = [
         "model",
-        "phase_layer",
+        "session",
         "status",
         "returncode",
         "n_delta_animals",
@@ -253,7 +253,7 @@ def main() -> int:
         "tx_kruskal_p",
         "out_dir",
     ]
-    rows_sorted = sorted(rows, key=lambda r: (str(r.get("model")), str(r.get("phase_layer"))))
+    rows_sorted = sorted(rows, key=lambda r: (str(r.get("model")), str(r.get("session"))))
     with out_csv.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         w.writeheader()
@@ -264,7 +264,7 @@ def main() -> int:
     ok = [r for r in rows_sorted if r.get("status") == "ok"]
     print(f"wrote {out_csv}  ok={len(ok)}/{len(rows_sorted)}")
     for phase in args.phases:
-        sub = [r for r in ok if r.get("phase_layer") == phase]
+        sub = [r for r in ok if r.get("session") == phase]
         if not sub:
             continue
         sig = sum(1 for r in sub if r.get("wilcoxon_p") is not None and float(r["wilcoxon_p"]) < 0.05)

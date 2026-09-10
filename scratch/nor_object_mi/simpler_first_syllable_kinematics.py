@@ -69,7 +69,7 @@ Ethogram compile uses anatomical centroid + blob. This table uses **spot** for s
 
 Ethogram-parity: speed / IQR speed / duration / straightness / abs·IQR·net dheading / heading sin·cos / `ambiguous`.
 
-NOR extras: path length, valid-frame frac, nose–tail mean/IQR, `bout_mean_dist_any_m` (+ fam/nvl on `novel_obj`, obj_a/b when objects present).
+NOR extras: path length, valid-frame frac, nose–tail mean/IQR, `bout_mean_dist_any_m` (+ fam/nvl on `nvl_obj`, obj_a/b when objects present).
 
 ## N-grams
 
@@ -137,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[{i}/{n_models}] {model}", flush=True)
             with h5py.File(kpms_path, "r") as kpms_h5:
                 sessions = list(
-                    iter_joined_sessions(nor_h5, kpms_h5, kept_ids=kept, phase_layer=None)
+                    iter_joined_sessions(nor_h5, kpms_h5, kept_ids=kept, session=None)
                 )
                 rows, summary = build_kinematics_bout_rows(
                     nor_h5,

@@ -24,12 +24,12 @@ from nor_object_mi._pub_style import (  # noqa: E402
     FIGSIZE_DOUBLE,
     FIGSIZE_SLIDES,
     INK,
-    PHASE_SHORT,
-    PHASES,
+    SESSION_SHORT,
+    SESSIONS,
     SEX_MARKER,
     SEX_ORDER,
-    TX_COLOR,
-    TX_ORDER,
+    CONDITION_COLOR,
+    CONDITION_ORDER,
     apply_style,
     fig_footnote,
     fig_legend_and_footnote,
@@ -37,7 +37,7 @@ from nor_object_mi._pub_style import (  # noqa: E402
     panel_stats_box,
     save_pdf_png,
     text_on_cmap,
-    tx_sex_legend_handles,
+    condition_sex_legend_handles,
     type_scale,
 )
 
@@ -48,21 +48,21 @@ CONTRASTS = (
     ("classic_vs_immobile", "time immobile"),
 )
 FOOT_VIOLIN = (
-    "Grain: animal × phase × novel_obj. Each point is one animal's classic "
+    "Grain: animal × phase × nvl_obj. Each point is one animal's classic "
     "investigation DR (nose/forelimb T_nvl vs T_fam). Color=tx, shape=sex. "
     "Wilcoxon p is DR vs 0, txs pooled (preference, not a treatment claim). "
     "Kruskal p is within sex (treatment claim). Not a syllable composition; "
     "not object-prox occupancy; not MI; not DA."
 )
 FOOT_SCATTER = (
-    "Grain: animal × phase × novel_obj. X = classic investigation DR; Y = "
+    "Grain: animal × phase × nvl_obj. X = classic investigation DR; Y = "
     "object-prox occupancy DR (median across 21 kpMS models). Same formula, "
     "different T. Color=tx, shape=sex. Spearman ρ and p are from "
     "classic_dr_association.csv (not recomputed). Dashed line is y = x. "
     "Not a treatment claim; not speed thresholding; not MI; not DA."
 )
 FOOT_ASSOC = (
-    "Grain: animal × phase × novel_obj. Color is Spearman ρ of classic "
+    "Grain: animal × phase × nvl_obj. Color is Spearman ρ of classic "
     "investigation DR vs each Y (diverging map, −1 to +1). Cell text is ρ. "
     "This is a within-animal association, not a treatment claim and not "
     "Wilcoxon vs 0. Speed and immobile are ambulation (displacement hysteresis), "
@@ -109,13 +109,13 @@ def _as_bool(s: pd.Series) -> pd.Series:
 
 def _draw_tx_violins(ax, panel: pd.DataFrame, ycol: str, rng: np.random.Generator, *, dest: str) -> list[int]:
     ts = type_scale(dest)
-    positions = list(range(len(TX_ORDER)))
+    positions = list(range(len(CONDITION_ORDER)))
     bodies: list[np.ndarray] = []
     body_pos: list[int] = []
     body_color: list[str] = []
     ns: list[int] = []
-    for i, t in enumerate(TX_ORDER):
-        sub = panel[panel["tx"] == t]
+    for i, t in enumerate(CONDITION_ORDER):
+        sub = panel[panel["condition"] == t]
         y = sub[ycol].to_numpy(dtype=float)
         sex = sub["sex"].to_numpy()
         finite = np.isfinite(y)
@@ -125,7 +125,7 @@ def _draw_tx_violins(ax, panel: pd.DataFrame, ycol: str, rng: np.random.Generato
         if y.size >= 2 and np.unique(y).size >= 2:
             bodies.append(y)
             body_pos.append(i)
-            body_color.append(TX_COLOR[t])
+            body_color.append(CONDITION_COLOR[t])
         if y.size:
             x = np.full(y.shape, float(i)) + rng.normal(0.0, 0.055, size=y.size)
             for s in SEX_ORDER:
@@ -136,7 +136,7 @@ def _draw_tx_violins(ax, panel: pd.DataFrame, ycol: str, rng: np.random.Generato
                     x[m],
                     y[m],
                     s=ts["violin_scatter"],
-                    c=TX_COLOR[t],
+                    c=CONDITION_COLOR[t],
                     marker=SEX_MARKER[s],
                     alpha=0.75,
                     edgecolors="none",
@@ -168,8 +168,8 @@ def _draw_tx_violins(ax, panel: pd.DataFrame, ycol: str, rng: np.random.Generato
         ax.set_xticklabels([])
         ax.tick_params(axis="x", length=3)
     else:
-        ax.set_xticklabels(list(TX_ORDER), fontsize=ts["annotation"], rotation=35, ha="right")
-    ax.set_xlim(-0.7, len(TX_ORDER) - 0.3)
+        ax.set_xticklabels(list(CONDITION_ORDER), fontsize=ts["annotation"], rotation=35, ha="right")
+    ax.set_xlim(-0.7, len(CONDITION_ORDER) - 0.3)
     return ns
 
 
@@ -183,16 +183,16 @@ def fig_violin(paired: pd.DataFrame, tests: pd.DataFrame, out: Path, *, dest: st
     else:
         fig, axes = plt.subplots(1, 4, figsize=(7.2, 4.4), sharey=True, layout="constrained")
     ax_list = list(axes)
-    for c, ph in enumerate(PHASES):
+    for c, ph in enumerate(SESSIONS):
         ax = ax_list[c]
-        panel = paired[paired["phase_layer"] == ph]
+        panel = paired[paired["session"] == ph]
         ns = _draw_tx_violins(ax, panel, "dr_classic", rng, dest=dest)
         ax.axhline(0.0, color="#bbbbbb", lw=0.7, ls="--", zorder=0)
         nlab = "n=" + "/".join(str(n) for n in ns)
-        w = wx[wx["phase_layer"] == ph]
+        w = wx[wx["session"] == ph]
         pf = pm = float("nan")
         for sex in SEX_ORDER:
-            k = kr[(kr["phase_layer"] == ph) & (kr["sex"] == sex)]
+            k = kr[(kr["session"] == ph) & (kr["sex"] == sex)]
             if len(k) == 1:
                 if sex == "F":
                     pf = float(k["p"].iloc[0])
@@ -210,9 +210,9 @@ def fig_violin(paired: pd.DataFrame, tests: pd.DataFrame, out: Path, *, dest: st
             dest=dest,
         )
         if dest == "slides":
-            ax.set_xlabel(PHASE_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
+            ax.set_xlabel(SESSION_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
         else:
-            ax.set_title(PHASE_SHORT[ph], loc="left", fontweight="bold", color=INK, fontsize=ts["annotation"])
+            ax.set_title(SESSION_SHORT[ph], loc="left", fontweight="bold", color=INK, fontsize=ts["annotation"])
         if c == 0:
             ax.set_ylabel("classic investigation DR")
     fig.suptitle(
@@ -224,7 +224,7 @@ def fig_violin(paired: pd.DataFrame, tests: pd.DataFrame, out: Path, *, dest: st
     )
     fig_legend_and_footnote(
         fig,
-        tx_sex_legend_handles(dest=dest),
+        condition_sex_legend_handles(dest=dest),
         _note(dest, FOOT_VIOLIN, FOOT_VIOLIN_S),
         dest=dest,
     )
@@ -239,17 +239,17 @@ def fig_scatter(paired: pd.DataFrame, assoc: pd.DataFrame, out: Path, *, dest: s
     else:
         fig, axes = plt.subplots(1, 4, figsize=(7.2, 4.4), sharex=True, sharey=True, layout="constrained")
     agr = assoc[assoc["contrast"] == "classic_vs_object_prox"]
-    for i, ph in enumerate(PHASES):
+    for i, ph in enumerate(SESSIONS):
         ax = axes[i]
-        panel = paired[paired["phase_layer"] == ph]
+        panel = paired[paired["session"] == ph]
         x = panel["dr_classic"].to_numpy(dtype=float)
         y = panel["dr_object_prox"].to_numpy(dtype=float)
-        tx = panel["tx"].to_numpy()
+        tx = panel["condition"].to_numpy()
         sex = panel["sex"].to_numpy()
         ok = np.isfinite(x) & np.isfinite(y)
-        x, y, tx, sex = x[ok], y[ok], tx[ok], sex[ok]
+        x, y, condition, sex = x[ok], y[ok], tx[ok], sex[ok]
         jitter = rng.normal(0.0, 0.008, size=x.size)
-        for t in TX_ORDER:
+        for t in CONDITION_ORDER:
             for s in SEX_ORDER:
                 m = (tx == t) & (sex == s)
                 if not np.any(m):
@@ -258,7 +258,7 @@ def fig_scatter(paired: pd.DataFrame, assoc: pd.DataFrame, out: Path, *, dest: s
                     x[m] + jitter[m],
                     y[m],
                     s=ts["scatter"],
-                    c=TX_COLOR[t],
+                    c=CONDITION_COLOR[t],
                     marker=SEX_MARKER[s],
                     alpha=0.75,
                     edgecolors="none",
@@ -268,10 +268,10 @@ def fig_scatter(paired: pd.DataFrame, assoc: pd.DataFrame, out: Path, *, dest: s
         ax.set_xlim(-1.08, 1.08)
         ax.set_ylim(-1.08, 1.08)
         ax.set_aspect("equal", adjustable="box")
-        ax.set_xlabel(PHASE_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
+        ax.set_xlabel(SESSION_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
         if i == 0:
             ax.set_ylabel("object-prox DR")
-        row = agr[agr["phase_layer"] == ph]
+        row = agr[agr["session"] == ph]
         if len(row) == 1:
             rho = float(row["spearman_rho"].iloc[0])
             p = float(row["p"].iloc[0])
@@ -295,7 +295,7 @@ def fig_scatter(paired: pd.DataFrame, assoc: pd.DataFrame, out: Path, *, dest: s
     )
     fig_legend_and_footnote(
         fig,
-        tx_sex_legend_handles(dest=dest),
+        condition_sex_legend_handles(dest=dest),
         _note(dest, FOOT_SCATTER, FOOT_SCATTER_S),
         dest=dest,
     )
@@ -305,17 +305,17 @@ def fig_scatter(paired: pd.DataFrame, assoc: pd.DataFrame, out: Path, *, dest: s
 def fig_association(assoc: pd.DataFrame, out: Path, *, dest: str = "slides") -> None:
     ts = _begin(dest)
     fig, ax = plt.subplots(figsize=FIGSIZE_DOUBLE, constrained_layout=True)
-    mat = np.full((len(PHASES), len(CONTRASTS)), np.nan)
-    for i, ph in enumerate(PHASES):
+    mat = np.full((len(SESSIONS), len(CONTRASTS)), np.nan)
+    for i, ph in enumerate(SESSIONS):
         for j, (contrast, _lab) in enumerate(CONTRASTS):
-            row = assoc[(assoc["phase_layer"] == ph) & (assoc["contrast"] == contrast)]
+            row = assoc[(assoc["session"] == ph) & (assoc["contrast"] == contrast)]
             if len(row) == 1:
                 mat[i, j] = float(row["spearman_rho"].iloc[0])
     im = ax.imshow(mat, cmap="RdBu_r", vmin=-1.0, vmax=1.0, aspect="auto")
     ax.set_xticks(range(len(CONTRASTS)))
     ax.set_xticklabels([lab for _c, lab in CONTRASTS], rotation=20, ha="right")
-    ax.set_yticks(range(len(PHASES)))
-    ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+    ax.set_yticks(range(len(SESSIONS)))
+    ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
     ax.set_title("A  Spearman ρ with classic DR", loc="left", fontweight="bold", color=INK)
     for i in range(mat.shape[0]):
         for j in range(mat.shape[1]):

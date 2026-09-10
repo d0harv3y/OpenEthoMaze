@@ -1,4 +1,4 @@
-type,key,strain,experiment,researcher,sex,tx,drug,notes
+type,key,strain,experiment,researcher,sex,condition,drug,notes
 animal_id,2314,wt,VASTcont,Kevan Lim,M,n/a,n/a,
 animal_id,2315,tg,VASTcont,Kevan Lim,M,n/a,n/a,
 animal_id,2382,wt,VASTcont,Kevan Lim,M,n/a,n/a,

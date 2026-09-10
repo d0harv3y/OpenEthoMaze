@@ -18,7 +18,7 @@ def test_movement_session_sums_bout_distance() -> None:
                 {
                     "ID": 1,
                     "phase layer": "NOR_TX",
-                    "condition layer": "novel_obj",
+                    "condition layer": "nvl_obj",
                     "level": "bout",
                     "index": i,
                     "duration_s": dur,
@@ -36,8 +36,8 @@ def test_movement_session_sums_bout_distance() -> None:
 def test_syllable_session_duration_from_frames() -> None:
     df = pd.DataFrame(
         [
-            {"animal_id": "1", "phase_layer": "NOR_TX", "condition_layer": "novel_obj", "bout_frames": 15},
-            {"animal_id": "1", "phase_layer": "NOR_TX", "condition_layer": "novel_obj", "bout_frames": 30},
+            {"animal_id": "1", "session": "NOR_TX", "trial": "nvl_obj", "bout_frames": 15},
+            {"animal_id": "1", "session": "NOR_TX", "trial": "nvl_obj", "bout_frames": 30},
         ]
     )
     out = syllable_bout_session(df, fps=30.0)

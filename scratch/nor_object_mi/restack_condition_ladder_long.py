@@ -35,7 +35,7 @@ _OUT_DIR_RE = re.compile(
 
 META_FIELDS = (
     "model",
-    "phase_layer",
+    "session",
     "symbol_kind",
     "pattern_len",
     "cleanup",
@@ -60,14 +60,14 @@ def parse_out_dir_name(name: str) -> dict[str, object] | None:
     cleanup = "clean" if m.group("clean") else "raw"
     if n is not None:
         return {
-            "phase_layer": phase,
+            "session": phase,
             "symbol_kind": "ngram",
             "pattern_len": int(n),
             "cleanup": cleanup,
             "top_m": int(top) if top is not None else "",
         }
     return {
-        "phase_layer": phase,
+        "session": phase,
         "symbol_kind": "syllable",
         "pattern_len": 1,
         "cleanup": cleanup,

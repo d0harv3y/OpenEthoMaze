@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
                 nor_h5,
                 kpms_h5,
                 kept_ids=kept,
-                phase_layer=args.phase_layer,
+                session=args.session,
             )
         )
         join_rows = [
@@ -62,9 +62,9 @@ def main(argv: list[str] | None = None) -> int:
                 "kpms_key": s.kpms_key,
                 "animal_id": s.animal_id,
                 "raw_session": s.raw_session,
-                "phase_layer": s.phase_layer,
-                "condition_layer": s.condition_layer,
-                "tx": s.tx,
+                "session": s.session,
+                "trial": s.trial,
+                "condition": s.condition,
                 "sex": s.sex,
                 "cohort": s.cohort,
             }
@@ -76,9 +76,9 @@ def main(argv: list[str] | None = None) -> int:
                 "kpms_key",
                 "animal_id",
                 "raw_session",
-                "phase_layer",
-                "condition_layer",
-                "tx",
+                "session",
+                "trial",
+                "condition",
                 "sex",
                 "cohort",
             ],
@@ -89,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
             nor_h5,
             kpms_h5,
             sessions,
-            condition_layers=("novel_obj", "identical_obj"),
+            trials=("nvl_obj", "id_obj"),
         )
         _write_csv(out_dir / "object_bout_features.csv", list(BOUT_FIELDS), bout_rows)
         (out_dir / "bout_build_summary.json").write_text(
@@ -100,13 +100,13 @@ def main(argv: list[str] | None = None) -> int:
             summary = {
                 "status": "failed",
                 "reason": "no bout rows",
-                "phase_layer": args.phase_layer,
+                "session": args.session,
                 "n_joined_sessions": len(sessions),
                 "cohort": {
                     "n_kept": cohort["n_kept"],
                     "n_dropped_non_animal": cohort["n_dropped_non_animal"],
                     "dropped_non_animal_ids": cohort["dropped_non_animal_ids"],
-                    "n_dropped_blank_tx_or_sex": cohort["n_dropped_blank_tx_or_sex"],
+                    "n_dropped_blank_condition_or_sex": cohort["n_dropped_blank_condition_or_sex"],
                     "dropped_blank": cohort["dropped_blank"],
                 },
                 "bout_summary": bout_summary,
@@ -126,9 +126,9 @@ def main(argv: list[str] | None = None) -> int:
         mi_fields = [
             "animal_id",
             "sex",
-            "tx",
+            "condition",
             "cohort",
-            "phase_layer",
+            "session",
             "stim_var",
             "mi_type",
             "n_bouts",
@@ -145,9 +145,9 @@ def main(argv: list[str] | None = None) -> int:
         delta_fields = [
             "animal_id",
             "sex",
-            "tx",
+            "condition",
             "cohort",
-            "phase_layer",
+            "session",
             "excess_fam",
             "excess_nvl",
             "delta_excess_nvl_minus_fam",
@@ -177,17 +177,17 @@ def main(argv: list[str] | None = None) -> int:
         by_tx: dict[str, list[float]] = defaultdict(list)
         by_sex_tx: dict[str, list[float]] = defaultdict(list)
         for r in delta_rows:
-            tx = str(r["tx"])
+            condition = str(r["condition"])
             sex = str(r["sex"])
             val = float(r["delta_excess_nvl_minus_fam"])
-            by_tx[tx].append(val)
+            by_tx[condition].append(val)
             by_sex_tx[f"{sex}|{tx}"].append(val)
         tx_medians = {k: float(np.median(v)) for k, v in sorted(by_tx.items())}
         sex_tx_medians = {k: float(np.median(v)) for k, v in sorted(by_sex_tx.items())}
 
         summary = {
             "status": "ok",
-            "phase_layer": args.phase_layer,
+            "session": args.session,
             "kpms_results": str(args.kpms_results),
             "nor_h5": str(args.nor_h5),
             "n_bins": args.n_bins,
@@ -199,11 +199,11 @@ def main(argv: list[str] | None = None) -> int:
                 "kept_ids": cohort["kept_ids"],
                 "n_dropped_non_animal": cohort["n_dropped_non_animal"],
                 "dropped_non_animal_ids": cohort["dropped_non_animal_ids"],
-                "n_dropped_blank_tx_or_sex": cohort["n_dropped_blank_tx_or_sex"],
+                "n_dropped_blank_condition_or_sex": cohort["n_dropped_blank_condition_or_sex"],
                 "dropped_blank": cohort["dropped_blank"],
             },
             "n_joined_sessions": len(sessions),
-            "n_novel_obj_sessions": sum(1 for s in sessions if s.condition_layer == "novel_obj"),
+            "n_nvl_obj_sessions": sum(1 for s in sessions if s.trial == "nvl_obj"),
             "n_bout_rows": len(bout_rows),
             "n_mi_rows": len(mi_rows),
             "n_delta_animals": len(delta_rows),

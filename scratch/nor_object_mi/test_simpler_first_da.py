@@ -57,17 +57,17 @@ def _bouts_one_animal_swap() -> pd.DataFrame:
     rows = []
     for cond, frames_by_syll in (
         ("no_obj", {1: 80, 2: 20}),
-        ("identical_obj", {1: 20, 2: 80}),
-        ("novel_obj", {1: 20, 2: 80}),
+        ("id_obj", {1: 20, 2: 80}),
+        ("nvl_obj", {1: 20, 2: 80}),
     ):
         for sid, fr in frames_by_syll.items():
             rows.append(
                 {
                     "animal_id": "a1",
                     "sex": "F",
-                    "tx": "noSD",
-                    "phase_layer": "NOR_TX",
-                    "condition_layer": cond,
+                    "condition": "noSD",
+                    "session": "NOR_TX",
+                    "trial": cond,
                     "raw_syllable_id": sid,
                     "bout_frames": fr,
                     "bout_mean_dist_any_m": 0.20,
@@ -77,20 +77,20 @@ def _bouts_one_animal_swap() -> pd.DataFrame:
 
 
 def test_paired_da_deltas_presence_step() -> None:
-    ac = build_animal_condition_table(_bouts_one_animal_swap(), phase_layer="NOR_TX")
+    ac = build_animal_condition_table(_bouts_one_animal_swap(), session="NOR_TX")
     dtab = paired_da_deltas(
         ac,
-        step="no_obj->identical",
+        step="no_obj->id_obj",
         left="no_obj",
-        right="identical_obj",
-        pair_col="condition_layer",
+        right="id_obj",
+        pair_col="trial",
     )
     assert set(dtab["raw_syllable_id"]) == {1, 2}
     d1 = float(dtab.loc[dtab["raw_syllable_id"] == 1, "delta_p"].iloc[0])
     d2 = float(dtab.loc[dtab["raw_syllable_id"] == 2, "delta_p"].iloc[0])
     assert abs(d1 - (-0.6)) < 1e-12
     assert abs(d2 - 0.6) < 1e-12
-    assert str(dtab["phase_layer"].iloc[0]) == "NOR_TX"
+    assert str(dtab["session"].iloc[0]) == "NOR_TX"
 
 
 def test_da_wilcoxon_hits_consistent_share_shift() -> None:
@@ -99,28 +99,28 @@ def test_da_wilcoxon_hits_consistent_share_shift() -> None:
         aid = f"a{i}"
         for cond, frames_by_syll in (
             ("no_obj", {1: 90, 2: 10}),
-            ("identical_obj", {1: 10, 2: 90}),
+            ("id_obj", {1: 10, 2: 90}),
         ):
             for sid, fr in frames_by_syll.items():
                 rows.append(
                     {
                         "animal_id": aid,
                         "sex": "F",
-                        "tx": "noSD",
-                        "phase_layer": "NOR_TX",
-                        "condition_layer": cond,
+                        "condition": "noSD",
+                        "session": "NOR_TX",
+                        "trial": cond,
                         "raw_syllable_id": sid,
                         "bout_frames": fr,
                         "bout_mean_dist_any_m": 0.20,
                     }
                 )
-    ac = build_animal_condition_table(pd.DataFrame(rows), phase_layer="NOR_TX")
+    ac = build_animal_condition_table(pd.DataFrame(rows), session="NOR_TX")
     dtab = paired_da_deltas(
         ac,
-        step="no_obj->identical",
+        step="no_obj->id_obj",
         left="no_obj",
-        right="identical_obj",
-        pair_col="condition_layer",
+        right="id_obj",
+        pair_col="trial",
     )
     tests = da_tests_from_deltas(dtab)
     assert len(tests) == 2
@@ -145,8 +145,8 @@ def test_jaccard_and_consistency_within_model() -> None:
     tests = pd.DataFrame(
         {
             "model": ["m"] * 6,
-            "step": ["no_obj->identical"] * 6,
-            "phase_layer": ["NOR_BL", "NOR_BL", "NOR_TX", "NOR_TX", "NOR_TX", "NOR_REC3hr"],
+            "step": ["no_obj->id_obj"] * 6,
+            "session": ["NOR_BL", "NOR_BL", "NOR_TX", "NOR_TX", "NOR_TX", "NOR_REC3hr"],
             "raw_syllable_id": [1, 2, 1, 2, 3, 1],
             "median_delta_p": [0.1, -0.1, 0.2, -0.05, 0.01, 0.15],
             "hit_fdr05": [True, True, True, False, True, True],
@@ -154,16 +154,16 @@ def test_jaccard_and_consistency_within_model() -> None:
         }
     )
     pairs = consistency_phase_pairs(
-        tests, facet_col="phase_layer", group_cols=("model", "step")
+        tests, facet_col="session", group_cols=("model", "step")
     )
     bl_tx = pairs[
-        (pairs["phase_layer_a"] == "NOR_BL") & (pairs["phase_layer_b"] == "NOR_TX")
+        (pairs["session_a"] == "NOR_BL") & (pairs["session_b"] == "NOR_TX")
     ].iloc[0]
     # BL hits {1,2}, TX hits {1,3} → Jaccard 1/3
     assert int(bl_tx["n_hit_both"]) == 1
     assert abs(float(bl_tx["jaccard"]) - 1 / 3) < 1e-12
     persist = syllable_persistence(
-        tests, facet_col="phase_layer", group_cols=("model", "step")
+        tests, facet_col="session", group_cols=("model", "step")
     )
     s1 = persist.loc[persist["raw_syllable_id"] == 1].iloc[0]
     assert int(s1["n_hit_fdr05"]) == 3
@@ -175,16 +175,16 @@ def test_da_tx_sex_stratum_does_not_pool() -> None:
     for i in range(8):
         for cond, frames in (
             ("no_obj", {1: 90, 2: 10}),
-            ("identical_obj", {1: 10, 2: 90}),
+            ("id_obj", {1: 10, 2: 90}),
         ):
             for sid, fr in frames.items():
                 rows.append(
                     {
                         "animal_id": f"f{i}",
                         "sex": "F",
-                        "tx": "noSD",
-                        "phase_layer": "NOR_TX",
-                        "condition_layer": cond,
+                        "condition": "noSD",
+                        "session": "NOR_TX",
+                        "trial": cond,
                         "raw_syllable_id": sid,
                         "bout_frames": fr,
                         "bout_mean_dist_any_m": 0.20,
@@ -193,51 +193,100 @@ def test_da_tx_sex_stratum_does_not_pool() -> None:
     for i in range(8):
         for cond, frames in (
             ("no_obj", {1: 50, 2: 50}),
-            ("identical_obj", {1: 50, 2: 50}),
+            ("id_obj", {1: 50, 2: 50}),
         ):
             for sid, fr in frames.items():
                 rows.append(
                     {
                         "animal_id": f"m{i}",
                         "sex": "M",
-                        "tx": "GHSD",
-                        "phase_layer": "NOR_TX",
-                        "condition_layer": cond,
+                        "condition": "GHSD",
+                        "session": "NOR_TX",
+                        "trial": cond,
                         "raw_syllable_id": sid,
                         "bout_frames": fr,
                         "bout_mean_dist_any_m": 0.20,
                     }
                 )
-    ac = build_animal_condition_table(pd.DataFrame(rows), phase_layer="NOR_TX")
+    ac = build_animal_condition_table(pd.DataFrame(rows), session="NOR_TX")
     dtab = paired_da_deltas(
         ac,
-        step="no_obj->identical",
+        step="no_obj->id_obj",
         left="no_obj",
-        right="identical_obj",
-        pair_col="condition_layer",
+        right="id_obj",
+        pair_col="trial",
     )
     dtab["model"] = "toy"
     tests = da_tests_tx_sex_from_animal_deltas(dtab)
-    f = tests[(tests["tx"] == "noSD") & (tests["sex"] == "F")]
-    m = tests[(tests["tx"] == "GHSD") & (tests["sex"] == "M")]
+    f = tests[(tests["condition"] == "noSD") & (tests["sex"] == "F")]
+    m = tests[(tests["condition"] == "GHSD") & (tests["sex"] == "M")]
     assert bool(f["hit_fdr05"].all())
     assert not bool(m["hit_p05"].any())
     pooled = da_tests_from_deltas(dtab)
     assert str(pooled["sex"].iloc[0]) == "all"
 
 
+def test_da_tx_sex_phase_paired_cell_cols() -> None:
+    rows = []
+    for i in range(8):
+        rows.append(
+            {
+                "model": "toy",
+                "trial": "nvl_obj",
+                "session_step": "BL->TX",
+                "animal_id": f"a{i}",
+                "sex": "F",
+                "condition": "noSD",
+                "raw_syllable_id": 1,
+                "p_left": 0.9,
+                "p_right": 0.1,
+                "delta_p": -0.8,
+                "bc_contrib_frac": 0.5,
+                "left": "NOR_BL",
+                "right": "NOR_TX",
+            }
+        )
+    for i in range(8):
+        rows.append(
+            {
+                "model": "toy",
+                "trial": "nvl_obj",
+                "session_step": "BL->TX",
+                "animal_id": f"b{i}",
+                "sex": "M",
+                "condition": "GHSD",
+                "raw_syllable_id": 1,
+                "p_left": 0.5,
+                "p_right": 0.5,
+                "delta_p": 0.0,
+                "bc_contrib_frac": 0.5,
+                "left": "NOR_BL",
+                "right": "NOR_TX",
+            }
+        )
+    dtab = pd.DataFrame(rows)
+    tests = da_tests_tx_sex_from_animal_deltas(
+        dtab, cell_cols=("model", "trial", "session_step", "condition", "sex")
+    )
+    assert set(tests.columns) >= {"trial", "session_step", "hit_fdr05"}
+    f = tests[(tests["condition"] == "noSD") & (tests["sex"] == "F")]
+    m = tests[(tests["condition"] == "GHSD") & (tests["sex"] == "M")]
+    assert bool(f["hit_fdr05"].all())
+    assert not bool(m["hit_p05"].any())
+
+
 def test_run_phase_da_accepts_bout_count(tmp_path: Path) -> None:
     rows = []
     for aid in ("1", "2"):
-        for cond, fr_a, fr_b in (("no_obj", 10, 1), ("identical_obj", 1, 10), ("novel_obj", 2, 8)):
+        for cond, fr_a, fr_b in (("no_obj", 10, 1), ("id_obj", 1, 10), ("nvl_obj", 2, 8)):
             for syll, fr in ((1, fr_a), (2, fr_b)):
                 rows.append(
                     {
                         "animal_id": aid,
                         "sex": "F",
-                        "tx": "noSD",
-                        "phase_layer": "NOR_TX",
-                        "condition_layer": cond,
+                        "condition": "noSD",
+                        "session": "NOR_TX",
+                        "trial": cond,
                         "raw_syllable_id": syll,
                         "bout_frames": fr,
                         "bout_mean_dist_any_m": 0.5,
@@ -248,3 +297,41 @@ def test_run_phase_da_accepts_bout_count(tmp_path: Path) -> None:
     tests, _deltas = run_phase_da(path, "NOR_TX", weighting="bout_count")
     assert not tests.empty
     assert (tests["weighting"] == "bout_count").all()
+
+
+def test_sex_pooled_cell_cols_separate_sexes_pool_tx() -> None:
+    """Wilcoxon within sex (txs mixed) must keep sex and drop tx from the key."""
+    rows = []
+    for sex, delta in (("F", 0.4), ("M", 0.0)):
+        for i in range(8):
+            for condition in ("noSD", "GHSD"):
+                rows.append(
+                    {
+                        "model": "toy",
+                        "session": "NOR_BL",
+                        "step": "no_obj->id_obj",
+                        "animal_id": f"{sex}{condition}{i}",
+                        "sex": sex,
+                        "condition": condition,
+                        "raw_syllable_id": 1,
+                        "p_left": 0.2,
+                        "p_right": 0.2 + delta,
+                        "delta_p": delta,
+                        "bc_contrib_frac": 0.5,
+                        "left": "no_obj",
+                        "right": "id_obj",
+                    }
+                )
+    tests = da_tests_tx_sex_from_animal_deltas(
+        pd.DataFrame(rows),
+        cell_cols=("model", "session", "step", "sex"),
+    )
+    assert "condition" not in tests.columns
+    assert set(tests["sex"].astype(str)) == {"F", "M"}
+    assert len(tests) == 2
+    f = tests[tests["sex"] == "F"].iloc[0]
+    m = tests[tests["sex"] == "M"].iloc[0]
+    assert float(f["median_delta_p"]) > 0
+    assert float(m["median_delta_p"]) == 0.0
+    assert bool(f["hit_p05"])
+    assert not bool(m["hit_p05"])

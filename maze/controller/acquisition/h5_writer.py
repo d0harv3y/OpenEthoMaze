@@ -290,7 +290,7 @@ def write_animal_label(
     h5: h5py.File,
     animal_id: str,
     sex: Optional[str] = None,
-    tx: Optional[str] = None,
+    condition: Optional[str] = None,
     strain: Optional[str] = None,
     experiment: Optional[str] = None,
     researcher: Optional[str] = None,
@@ -303,7 +303,7 @@ def write_animal_label(
         g_animal,
         {
             "sex": safe_str(sex) if sex is not None else None,
-            "tx": safe_str(tx) if tx is not None else None,
+            "condition": safe_str(condition) if condition is not None else None,
             "strain": safe_str(strain) if strain is not None else None,
             "experiment": safe_str(experiment) if experiment is not None else None,
             "researcher": safe_str(researcher) if researcher is not None else None,

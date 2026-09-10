@@ -124,7 +124,7 @@ def test_build_feedback_table_from_wm_sets_states() -> None:
     w = np.array([1.0, 2.0, 3.0], dtype=np.float32)
     m = np.array([4.0, 5.0, 6.0], dtype=np.float32)
     fb = build_feedback_table_from_wm(w, m, trial_start_frame=1)
-    assert fb["trial_state"][0] == b"iti_wait"
+    assert fb["trial_state"][0] == b"wait"
     assert fb["trial_state"][1] == b"run"
     assert fb["light_fb"][2] == pytest.approx(3.0)
     assert fb["motor_fb"][0] == pytest.approx(4.0)

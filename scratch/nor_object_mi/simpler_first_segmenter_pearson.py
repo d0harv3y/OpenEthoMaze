@@ -1,7 +1,7 @@
 """Grain-1 Pearson block heatmap of two session segmenters.
 
 Not lagged CCF. Not Pearson n_move vs n_syll as a clock identity.
-Locked kpMS × novel_obj. Frame-weighted mean speed is the kinematics litmus.
+Locked kpMS × nvl_obj. Frame-weighted mean speed is the kinematics litmus.
 
 Regen (OpenEthoMaze repo root):
   uv run python scratch/nor_object_mi/simpler_first_segmenter_pearson.py
@@ -25,10 +25,10 @@ from nor_object_mi.segmenter_pearson import (  # noqa: E402
     join_session_features,
     pearson_long,
 )
-from nor_object_mi.simpler_first_protocol_prologue import PHASES  # noqa: E402
+from nor_object_mi.simpler_first_protocol_prologue import SESSIONS  # noqa: E402
 from nor_object_mi.simpler_first_q1 import LOCKED  # noqa: E402
 
-CONDITION = "novel_obj"
+CONDITION = "nvl_obj"
 DEFAULT_SYLL = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_syllable_kinematics\syllable_bout_kinematics.csv"
@@ -54,9 +54,9 @@ SYLL_COLS = (
     "model",
     "animal_id",
     "raw_session",
-    "phase_layer",
-    "condition_layer",
-    "tx",
+    "session",
+    "trial",
+    "condition",
     "sex",
     "raw_syllable_id",
     "bout_frames",
@@ -66,8 +66,8 @@ SYLL_COLS = (
 AMB_COLS = (
     "animal_id",
     "raw_session",
-    "phase_layer",
-    "condition_layer",
+    "session",
+    "trial",
     "bout_frames",
     "bout_duration_s",
     "bout_mean_speed_mps",
@@ -78,7 +78,7 @@ def load_locked_syll(path: Path, *, model: str, condition: str) -> pd.DataFrame:
     parts: list[pd.DataFrame] = []
     kept = 0
     for chunk in pd.read_csv(path, usecols=list(SYLL_COLS), chunksize=250_000):
-        sub = chunk[(chunk["model"] == model) & (chunk["condition_layer"] == condition)]
+        sub = chunk[(chunk["model"] == model) & (chunk["trial"] == condition)]
         if not sub.empty:
             parts.append(sub)
             kept += len(sub)
@@ -95,7 +95,7 @@ def _info_md() -> str:
 
 ## Grain
 
-animal × phase × `novel_obj` (locked kpMS). Between-session Pearson of
+animal × phase × `nvl_obj` (locked kpMS). Between-session Pearson of
 **session summaries**, not within-session lagged cross-correlation.
 
 ## Segmenters
@@ -136,8 +136,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"syllable bouts={len(syll):,}", flush=True)
     move = pd.read_csv(args.movement_csv, usecols=list(AMB_COLS))
     still = pd.read_csv(args.immobile_csv, usecols=list(AMB_COLS))
-    move = move[move["condition_layer"] == CONDITION].copy()
-    still = still[still["condition_layer"] == CONDITION].copy()
+    move = move[move["trial"] == CONDITION].copy()
+    still = still[still["trial"] == CONDITION].copy()
     move["animal_id"] = move["animal_id"].astype(str)
     still["animal_id"] = still["animal_id"].astype(str)
     overlap = pd.read_csv(args.overlap_csv)
@@ -151,16 +151,16 @@ def main(argv: list[str] | None = None) -> int:
     sessions.to_csv(out / "segmenter_session_features.csv", index=False)
 
     longs: list[pd.DataFrame] = []
-    for phase in PHASES:
-        g = sessions[sessions["phase_layer"] == phase]
+    for phase in SESSIONS:
+        g = sessions[sessions["session"] == phase]
         print(f"  {phase} n={len(g)}", flush=True)
         longs.append(pearson_long(g, phase=str(phase)))
     long = pd.concat(longs, ignore_index=True)
     long.to_csv(out / "pearson_long.csv", index=False)
     summary = {
         "model": model,
-        "condition_layer": CONDITION,
-        "grain": "animal × phase × novel_obj",
+        "trial": CONDITION,
+        "grain": "animal × phase × nvl_obj",
         "n_sessions": int(len(sessions)),
         "features": list(FEATURES),
         "litmus": "pearson(speed_syll_mps, speed_move_mps)",

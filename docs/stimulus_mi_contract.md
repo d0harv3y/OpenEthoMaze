@@ -22,12 +22,12 @@ Stimulus duty is a **deterministic function of distance-to-exit**. Mutual inform
 
 | Phase | `stim_var` | Expected MI | If null is cleared |
 |-------|------------|-------------|-------------------|
-| `iti` | **duty** | ~chance (duty fixed off-center during `iti_wait`) | Suspect join bug or mis-phase labeling |
+| `iti` | **duty** | ~chance (duty fixed off-center during `wait`) | Suspect join bug or mis-phase labeling |
 | `iti` | **dist** | **May exceed null** | **Expected under chamber geometry**, not a failed control |
 
-During `iti_wait`, delivered duty is often flat (see `wait_not_center_duty_pct` in VAST config), but **`dist_to_exit_px` still varies systematically**: the exit is placed opposite the animal's start position, so distance evolves as the animal moves through the wait. Bout-level syllable occupancy can track distance bin along that trajectory even when no stimulus signal is being manipulated. Circular-shift null breaks bout pairing but does not remove this trial-wide spatial co-structure.
+During `wait`, delivered duty is often flat (see `wait_not_center_duty_pct` in VAST config), but **`dist_to_exit_px` still varies systematically**: the exit is placed opposite the animal's start position, so distance evolves as the animal moves through the wait. Bout-level syllable occupancy can track distance bin along that trajectory even when no stimulus signal is being manipulated. Circular-shift null breaks bout pairing but does not remove this trial-wide spatial co-structure.
 
-**Interpretation:** `iti_control_flag=1` with `stim_var=dist` means **distance MI is measuring goal/chamber geometry + locomotion**, not independent vibration coupling. Do not treat ITI×dist as evidence of stimulus-driven behavior. Use **ITI×duty** as the clean control; quarantine ITI×dist from primary inference and apply the same caution to **run×dist** (duty and distance are coupled in run as well).
+**Interpretation:** `wait_control_flag=1` with `stim_var=dist` means **distance MI is measuring goal/chamber geometry + locomotion**, not independent vibration coupling. Do not treat ITI×dist as evidence of stimulus-driven behavior. Use **ITI×duty** as the clean control; quarantine ITI×dist from primary inference and apply the same caution to **run×dist** (duty and distance are coupled in run as well).
 
 ## Artifact locations
 
@@ -83,7 +83,7 @@ Per animal × phase (`run`, `iti`) × stim_var (`duty`, `dist`) × mi_type (`occ
 | `null_circ_mean`, `null_circ_p` | Circular shift null (primary) |
 | `null_perm_mean`, `null_perm_p` | Bin-label permutation null |
 | `excess` | `mi_mm − null_circ_mean` (bits) |
-| `iti_control_flag` | 1 when iti `mi_mm` clears circular null (possible confound/bug) |
+| `wait_control_flag` | 1 when iti `mi_mm` clears circular null (possible confound/bug) |
 
 **Occupancy:** `I(syllable ; stim_bin)`. **Transition:** `I(next_syllable ; stim_bin | current_syllable)` on consecutive bout pairs within trial.
 

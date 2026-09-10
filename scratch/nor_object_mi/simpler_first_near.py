@@ -2,7 +2,7 @@
 
 Grain declaration
 -----------------
-animal × phase × novel_obj × spot_bout_mean_any < 0.10 m (raw)
+animal × phase × nvl_obj × spot_bout_mean_any < 0.10 m (raw)
 
 Gate A (locked): any-object distance, fixed r = 0.10 m.
 Q1 redefined: among gated bouts, novelty preference (not full-session Δ_prox).
@@ -36,9 +36,9 @@ from nor_object_mi.simpler_first_q2 import (  # noqa: E402
 
 NEAR_R_M = 0.10
 MIN_NEAR_FRAMES = 50  # fail loud if animal has fewer gated frames
-CONDITION = "novel_obj"
+CONDITION = "nvl_obj"
 
-PHASES: tuple[tuple[str, str], ...] = (
+SESSIONS: tuple[tuple[str, str], ...] = (
     ("NOR_BL", "condition_ladder_NOR_BL"),
     ("NOR_TX", "condition_ladder"),
     ("NOR_REC3hr", "condition_ladder_NOR_REC3hr"),
@@ -54,13 +54,13 @@ GRAIN = (
 def gate_near_any(
     bouts: pd.DataFrame,
     *,
-    phase_layer: str,
+    session: str,
     r_m: float = NEAR_R_M,
-    condition_layer: str = CONDITION,
+    trial: str = CONDITION,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return (session slice, near-gated slice) for one phase."""
     sess = bouts[
-        (bouts["phase_layer"] == phase_layer) & (bouts["condition_layer"] == condition_layer)
+        (bouts["session"] == session) & (bouts["trial"] == trial)
     ].copy()
     if sess.empty:
         return sess, sess.iloc[0:0].copy()
@@ -74,7 +74,7 @@ def animal_near_q1(
     sess: pd.DataFrame,
     near: pd.DataFrame,
     *,
-    phase_layer: str,
+    session: str,
     min_near_frames: int = MIN_NEAR_FRAMES,
 ) -> pd.DataFrame:
     """Per-animal redefined Q1 metrics on the near-any gate.
@@ -84,7 +84,7 @@ def animal_near_q1(
     """
     meta = (
         sess.groupby("animal_id", sort=True)
-        .agg(sex=("sex", "first"), tx=("tx", "first"), n_sess_frames=("bout_frames", "sum"))
+        .agg(sex=("sex", "first"), condition=("condition", "first"), n_sess_frames=("bout_frames", "sum"))
         .reset_index()
     )
     rows: list[dict[str, object]] = []
@@ -98,8 +98,8 @@ def animal_near_q1(
                 {
                     "animal_id": aid,
                     "sex": str(m["sex"]),
-                    "tx": str(m["tx"]),
-                    "phase_layer": phase_layer,
+                    "condition": str(m["condition"]),
+                    "session": session,
                     "n_sess_frames": n_sess,
                     "n_near_frames": 0,
                     "frac_near": 0.0,
@@ -124,8 +124,8 @@ def animal_near_q1(
             {
                 "animal_id": aid,
                 "sex": str(m["sex"]),
-                "tx": str(m["tx"]),
-                "phase_layer": phase_layer,
+                "condition": str(m["condition"]),
+                "session": session,
                 "n_sess_frames": n_sess,
                 "n_near_frames": n_near,
                 "frac_near": float(n_near / n_sess) if n_sess > 0 else float("nan"),
@@ -145,8 +145,8 @@ def run_phase_near(
     min_near_frames: int = MIN_NEAR_FRAMES,
 ) -> tuple[list[dict[str, object]], dict[str, object], pd.DataFrame, pd.DataFrame]:
     bouts = pd.read_csv(bout_csv)
-    sess, near = gate_near_any(bouts, phase_layer=phase, r_m=r_m)
-    q1 = animal_near_q1(sess, near, phase_layer=phase, min_near_frames=min_near_frames)
+    sess, near = gate_near_any(bouts, session=phase, r_m=r_m)
+    q1 = animal_near_q1(sess, near, session=phase, min_near_frames=min_near_frames)
     kept = q1[q1["kept"]].copy()
 
     long_rows: list[dict[str, object]] = []
@@ -156,7 +156,7 @@ def run_phase_near(
         for _, r in tests.iterrows():
             long_rows.append(
                 {
-                    "phase_layer": phase,
+                    "session": phase,
                     "question": question,
                     "metric": metric,
                     "grain": GRAIN.format(phase=phase),
@@ -218,7 +218,7 @@ def run_phase_near(
         }
     else:
         meta, P, syll_ids = compositions_from_bouts(
-            near_kept, phase_layer=phase, condition_layer=CONDITION
+            near_kept, session=phase, trial=CONDITION
         )
         # Restrict to kept (compositions_from_bouts already only sees near_kept)
         k_rich = kruskal_within_sex(meta, metric="richness")
@@ -227,7 +227,7 @@ def run_phase_near(
         for _, r in k_rich.iterrows():
             long_rows.append(
                 {
-                    "phase_layer": phase,
+                    "session": phase,
                     "question": "q2_near",
                     "metric": "richness",
                     "grain": GRAIN.format(phase=phase),
@@ -251,7 +251,7 @@ def run_phase_near(
         for _, r in k_h.iterrows():
             long_rows.append(
                 {
-                    "phase_layer": phase,
+                    "session": phase,
                     "question": "q2_near",
                     "metric": "shannon_bits",
                     "grain": GRAIN.format(phase=phase),
@@ -275,7 +275,7 @@ def run_phase_near(
         for _, r in perm.iterrows():
             long_rows.append(
                 {
-                    "phase_layer": phase,
+                    "session": phase,
                     "question": "q2_near",
                     "metric": "braycurtis_composition",
                     "grain": GRAIN.format(phase=phase),
@@ -300,7 +300,7 @@ def run_phase_near(
 
     summary = {
         "status": "ok",
-        "phase_layer": phase,
+        "session": phase,
         "grain": GRAIN.format(phase=phase),
         "r_m": r_m,
         "min_near_frames": min_near_frames,
@@ -348,10 +348,10 @@ def main(argv: list[str] | None = None) -> int:
     summaries: list[dict[str, object]] = []
     animal_parts: list[pd.DataFrame] = []
 
-    for phase, tag in PHASES:
+    for phase, tag in SESSIONS:
         bout_csv = art / tag / "ladder_bout_features.csv"
         if not bout_csv.exists():
-            summaries.append({"phase_layer": phase, "status": "missing_bout_csv"})
+            summaries.append({"session": phase, "status": "missing_bout_csv"})
             print(f"MISSING {phase}", flush=True)
             continue
         print(f"near-grain {phase} r={args.r_m} …", flush=True)
@@ -381,7 +381,7 @@ def main(argv: list[str] | None = None) -> int:
     payload = {
         "model": args.model,
         "cleanup": "raw",
-        "condition_layer": CONDITION,
+        "trial": CONDITION,
         "gate": "bout_mean_dist_any_m",
         "r_m": float(args.r_m),
         "min_near_frames": int(args.min_near_frames),
@@ -399,7 +399,7 @@ def main(argv: list[str] | None = None) -> int:
         show["p"] = show["p"].map(lambda x: f"{float(x):.3g}" if pd.notna(x) and x != "" else "")
         print(
             show[
-                ["phase_layer", "question", "metric", "sex", "test", "p", "hit_p05", "n"]
+                ["session", "question", "metric", "sex", "test", "p", "hit_p05", "n"]
             ].to_string(index=False)
         )
     print(json.dumps({"path": str(long_path), "per_phase": summaries}, indent=2))

@@ -31,12 +31,12 @@ from nor_object_mi._pub_style import (  # noqa: E402
     FIGSIZE_DOUBLE,
     FIGSIZE_SLIDES,
     INK,
-    PHASE_SHORT,
-    PHASES,
+    SESSION_SHORT,
+    SESSIONS,
     SEX_MARKER,
     SEX_ORDER,
-    TX_COLOR,
-    TX_ORDER,
+    CONDITION_COLOR,
+    CONDITION_ORDER,
     apply_style,
     fig_footnote,
     fig_legend_and_footnote,
@@ -44,7 +44,7 @@ from nor_object_mi._pub_style import (  # noqa: E402
     panel_stats_box,
     save_pdf_png,
     text_on_cmap,
-    tx_sex_legend_handles,
+    condition_sex_legend_handles,
     type_scale,
 )
 from nor_object_mi.simpler_first_object_prox import (  # noqa: E402
@@ -57,27 +57,27 @@ SEX_LAB = {"F": "female", "M": "male"}
 R2_M = 0.20
 
 FOOT_OVERLAP = (
-    "Grain: animal × phase × novel_obj (full session); geometry is bout-mean "
+    "Grain: animal × phase × nvl_obj (full session); geometry is bout-mean "
     "spot→object distance. Color in A is n animals with dual-gated frames; "
     "in B is min(d_fam + d_nvl) in meters (floor of the map is 2r = 0.20 m). "
     "21 kpMS models. This figure is a geometry audit, not a preference test "
     "and not a treatment claim. Not MI; not DA."
 )
 FOOT_WX_HIT = (
-    "Grain: animal × phase × novel_obj. This figure: Wilcoxon signed-rank on "
+    "Grain: animal × phase × nvl_obj. This figure: Wilcoxon signed-rank on "
     "DR vs 0, sex=all, txs pooled — a preference claim, not a treatment claim. "
     "Color: frac of 21 kpMS models with p < 0.05. Inclusive equals exclusive "
     "because overlap is zero. Uncorrected. Not MI; not DA."
 )
 FOOT_KR_DR = (
-    "Grain: animal × phase × novel_obj. This figure is Kruskal–Wallis by tx "
+    "Grain: animal × phase × nvl_obj. This figure is Kruskal–Wallis by tx "
     "(noSD, GHSD, RBSD) within sex, on DR — groups differ on a scalar. That is "
     "a treatment claim. Color: frac of 21 kpMS models with Kruskal p < 0.05 "
     "(uncorrected). Not the Wilcoxon hit rule (sex=all, txs pooled). Not MI; "
     "not DA; not PERMANOVA."
 )
 FOOT_KR_OCC = (
-    "Grain: animal × phase × novel_obj. This figure is Kruskal–Wallis by tx "
+    "Grain: animal × phase × nvl_obj. This figure is Kruskal–Wallis by tx "
     "within sex on occupancy in one prox window (frac_near_fam or frac_near_nvl) — a "
     "treatment claim on that scalar, not on DR. Color: frac of 21 kpMS models "
     "with Kruskal p < 0.05 (uncorrected). Occupancy can hit while DR misses. "
@@ -98,7 +98,7 @@ FOOT_CONS_KR = (
     "consensus. Not MI; not DA; not PERMANOVA."
 )
 FOOT_VIOLIN = (
-    "Grain: animal × phase × novel_obj. Each point is one animal: the median of "
+    "Grain: animal × phase × nvl_obj. Each point is one animal: the median of "
     "that animal's exclusive DR across 21 kpMS models. Thin whiskers = ±½ IQR of "
     "that animal's DR across models (across-model dispersion / salt), not SEM. "
     "Not 21 independent replicates of the same animal. Color=tx, shape=sex; "
@@ -108,7 +108,7 @@ FOOT_VIOLIN = (
     "BL/TX n≈48 per tx arm; REC n≈24. Not MI; not DA."
 )
 FOOT_OCC = (
-    "Grain: animal × phase × novel_obj. Each point is one animal: the median "
+    "Grain: animal × phase × nvl_obj. Each point is one animal: the median "
     "across 21 kpMS models of that prox window's occupancy (frames with bout-mean "
     "spot distance < 0.10 m / session frames). Color=tx, shape=sex. Kruskal p "
     "is within sex on those medians — a treatment claim on occupancy, not on DR. "
@@ -210,13 +210,13 @@ def _draw_tx_violins(
 ) -> list[int]:
     """Strip + violin by tx. Optional ``iqr_col`` → ±½ IQR whiskers (salt)."""
     ts = type_scale(dest)
-    positions = list(range(len(TX_ORDER)))
+    positions = list(range(len(CONDITION_ORDER)))
     bodies: list[np.ndarray] = []
     body_pos: list[int] = []
     body_color: list[str] = []
     ns: list[int] = []
-    for i, t in enumerate(TX_ORDER):
-        sub = panel[panel["tx"] == t]
+    for i, t in enumerate(CONDITION_ORDER):
+        sub = panel[panel["condition"] == t]
         y = sub[ycol].to_numpy(dtype=float)
         sex = sub["sex"].to_numpy()
         iqr = (
@@ -232,7 +232,7 @@ def _draw_tx_violins(
         if y.size >= 2 and np.unique(y).size >= 2:
             bodies.append(y)
             body_pos.append(i)
-            body_color.append(TX_COLOR[t])
+            body_color.append(CONDITION_COLOR[t])
         if y.size:
             x = np.full(y.shape, float(i)) + rng.normal(0.0, 0.055, size=y.size)
             half = np.where(np.isfinite(iqr), 0.5 * iqr, np.nan)
@@ -246,7 +246,7 @@ def _draw_tx_violins(
                         y[m],
                         yerr=np.where(np.isfinite(half[m]), half[m], 0.0),
                         fmt="none",
-                        ecolor=TX_COLOR[t],
+                        ecolor=CONDITION_COLOR[t],
                         elinewidth=0.7,
                         capsize=0,
                         alpha=0.35,
@@ -256,7 +256,7 @@ def _draw_tx_violins(
                     x[m],
                     y[m],
                     s=ts["violin_scatter"],
-                    c=TX_COLOR[t],
+                    c=CONDITION_COLOR[t],
                     marker=SEX_MARKER[s],
                     alpha=0.75,
                     edgecolors="none",
@@ -288,8 +288,8 @@ def _draw_tx_violins(
         ax.set_xticklabels([])
         ax.tick_params(axis="x", length=3)
     else:
-        ax.set_xticklabels(list(TX_ORDER), fontsize=ts["annotation"], rotation=35, ha="right")
-    ax.set_xlim(-0.7, len(TX_ORDER) - 0.3)
+        ax.set_xticklabels(list(CONDITION_ORDER), fontsize=ts["annotation"], rotation=35, ha="right")
+    ax.set_xlim(-0.7, len(CONDITION_ORDER) - 0.3)
     return ns
 
 
@@ -297,18 +297,18 @@ def fig_overlap(ov: pd.DataFrame, out: Path, *, dest: str = "slides") -> None:
     ts = _begin(dest)
     models = sorted(ov["model"].unique())
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 9.4 if dest == "slides" else 7.6), constrained_layout=True)
-    overlap = np.full((len(models), len(PHASES)), np.nan)
-    spacing = np.full((len(models), len(PHASES)), np.nan)
+    overlap = np.full((len(models), len(SESSIONS)), np.nan)
+    spacing = np.full((len(models), len(SESSIONS)), np.nan)
     for i, m in enumerate(models):
-        for j, ph in enumerate(PHASES):
-            row = ov[(ov["model"] == m) & (ov["phase_layer"] == ph)]
+        for j, ph in enumerate(SESSIONS):
+            row = ov[(ov["model"] == m) & (ov["session"] == ph)]
             if len(row) == 1:
                 overlap[i, j] = float(row["n_animals_with_overlap"].iloc[0])
                 spacing[i, j] = float(row["min_d_fam_plus_d_nvl"].iloc[0])
     ax = axes[0]
     im0 = ax.imshow(overlap, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
-    ax.set_xticks(range(len(PHASES)))
-    ax.set_xticklabels([PHASE_SHORT[p] for p in PHASES])
+    ax.set_xticks(range(len(SESSIONS)))
+    ax.set_xticklabels([SESSION_SHORT[p] for p in SESSIONS])
     ax.set_yticks(range(len(models)))
     ax.set_yticklabels([_model_short(m) for m in models], fontsize=ts["cell"])
     ax.set_title("A  Dual-gated animals", loc="left", fontweight="bold", color=INK, fontsize=ts["annotation"])
@@ -328,8 +328,8 @@ def fig_overlap(ov: pd.DataFrame, out: Path, *, dest: str = "slides") -> None:
     fig.colorbar(im0, ax=ax, fraction=0.035, pad=0.03, label="n animals with overlap")
     ax = axes[1]
     im1 = ax.imshow(spacing, cmap="viridis", vmin=R2_M, vmax=0.35, aspect="auto")
-    ax.set_xticks(range(len(PHASES)))
-    ax.set_xticklabels([PHASE_SHORT[p] for p in PHASES])
+    ax.set_xticks(range(len(SESSIONS)))
+    ax.set_xticklabels([SESSION_SHORT[p] for p in SESSIONS])
     ax.set_yticks(range(len(models)))
     ax.set_yticklabels([_model_short(m) for m in models], fontsize=ts["cell"])
     ax.set_title("B  Min d_fam + d_nvl (m)", loc="left", fontweight="bold", color=INK, fontsize=ts["annotation"])
@@ -363,17 +363,17 @@ def fig_frac_hit(agr: pd.DataFrame, out: Path, *, dest: str = "slides") -> None:
     metrics = ("dr_exclusive", "dr_inclusive")
     labels = ("exclusive DR", "inclusive DR")
     fig, ax = plt.subplots(figsize=FIGSIZE_DOUBLE, constrained_layout=True)
-    mat = np.full((len(PHASES), len(metrics)), np.nan)
-    for i, ph in enumerate(PHASES):
+    mat = np.full((len(SESSIONS), len(metrics)), np.nan)
+    for i, ph in enumerate(SESSIONS):
         for j, met in enumerate(metrics):
-            row = agr[(agr["phase_layer"] == ph) & (agr["metric"] == met)]
+            row = agr[(agr["session"] == ph) & (agr["metric"] == met)]
             if len(row) == 1:
                 mat[i, j] = float(row["frac_hit"].iloc[0])
     im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
     ax.set_xticks(range(len(metrics)))
     ax.set_xticklabels(list(labels))
-    ax.set_yticks(range(len(PHASES)))
-    ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+    ax.set_yticks(range(len(SESSIONS)))
+    ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
     ax.set_title("A  Wilcoxon DR vs 0", loc="left", fontweight="bold", color=INK)
     _annotate_frac(ax, mat, dest=dest)
     fig.colorbar(im, ax=ax, fraction=0.04, pad=0.03, label="frac of 21 models with Wilcoxon hit")
@@ -396,16 +396,16 @@ def fig_tx_kruskal(tests: pd.DataFrame, out: Path, *, dest: str = "slides") -> N
     im = None
     for ax, sex, letter in zip(axes, SEX_ORDER, ("A", "B")):
         sub = kr[kr["sex"] == sex]
-        mat = np.full((len(PHASES), 1), np.nan)
-        for i, ph in enumerate(PHASES):
-            cell = sub[sub["phase_layer"] == ph]
+        mat = np.full((len(SESSIONS), 1), np.nan)
+        for i, ph in enumerate(SESSIONS):
+            cell = sub[sub["session"] == ph]
             if not cell.empty:
                 mat[i, 0] = float(cell["hit"].mean())
         im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
         ax.set_xticks([0])
         ax.set_xticklabels(["exclusive DR"])
-        ax.set_yticks(range(len(PHASES)))
-        ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+        ax.set_yticks(range(len(SESSIONS)))
+        ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
         ax.set_title(f"{letter}  {SEX_LAB[sex]}", loc="left", fontweight="bold", color=INK)
         _annotate_frac(ax, mat, dest=dest)
     fig.colorbar(im, ax=axes, fraction=0.03, pad=0.02, label="frac of 21 models with Kruskal hit")
@@ -428,17 +428,17 @@ def fig_occupancy_kruskal(tests: pd.DataFrame, out: Path, *, dest: str = "slides
     im = None
     for ax, sex, letter in zip(axes, SEX_ORDER, ("A", "B")):
         sub = kr[kr["sex"] == sex]
-        mat = np.full((len(PHASES), len(OCC_METRICS)), np.nan)
-        for i, ph in enumerate(PHASES):
+        mat = np.full((len(SESSIONS), len(OCC_METRICS)), np.nan)
+        for i, ph in enumerate(SESSIONS):
             for j, met in enumerate(OCC_METRICS):
-                cell = sub[(sub["phase_layer"] == ph) & (sub["metric"] == met)]
+                cell = sub[(sub["session"] == ph) & (sub["metric"] == met)]
                 if not cell.empty:
                     mat[i, j] = float(cell["hit"].mean())
         im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
         ax.set_xticks(range(len(OCC_METRICS)))
         ax.set_xticklabels([OCC_LAB[m] for m in OCC_METRICS])
-        ax.set_yticks(range(len(PHASES)))
-        ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+        ax.set_yticks(range(len(SESSIONS)))
+        ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
         ax.set_title(f"{letter}  {SEX_LAB[sex]}", loc="left", fontweight="bold", color=INK)
         _annotate_frac(ax, mat, dest=dest)
     fig.colorbar(im, ax=axes, fraction=0.03, pad=0.02, label="frac of 21 models with Kruskal hit")
@@ -459,18 +459,18 @@ def fig_consensus_wilcoxon(cons: pd.DataFrame, out: Path, *, dest: str = "slides
     metrics = ("dr_exclusive", "dr_inclusive")
     labels = ("exclusive DR", "inclusive DR")
     fig, ax = plt.subplots(figsize=FIGSIZE_DOUBLE, constrained_layout=True)
-    pmat = np.full((len(PHASES), len(metrics)), np.nan)
-    for i, ph in enumerate(PHASES):
+    pmat = np.full((len(SESSIONS), len(metrics)), np.nan)
+    for i, ph in enumerate(SESSIONS):
         for j, met in enumerate(metrics):
-            cell = wx[(wx["phase_layer"] == ph) & (wx["metric"] == met)]
+            cell = wx[(wx["session"] == ph) & (wx["metric"] == met)]
             if len(cell) == 1:
                 pmat[i, j] = float(cell["p"].iloc[0])
     nlp = np.vectorize(_neglog10_p, otypes=[float])(pmat)
     im = ax.imshow(nlp, cmap="viridis", vmin=0.0, vmax=NLP_VMAX, aspect="auto")
     ax.set_xticks(range(len(metrics)))
     ax.set_xticklabels(list(labels))
-    ax.set_yticks(range(len(PHASES)))
-    ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+    ax.set_yticks(range(len(SESSIONS)))
+    ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
     ax.set_title("A  Consensus Wilcoxon", loc="left", fontweight="bold", color=INK)
     for i in range(pmat.shape[0]):
         for j in range(pmat.shape[1]):
@@ -505,17 +505,17 @@ def fig_consensus_kruskal(cons: pd.DataFrame, out: Path, *, dest: str = "slides"
     im = None
     for ax, sex, letter in zip(axes, SEX_ORDER, ("A", "B")):
         sub = kr[kr["sex"] == sex]
-        pmat = np.full((len(PHASES), 1), np.nan)
-        for i, ph in enumerate(PHASES):
-            cell = sub[sub["phase_layer"] == ph]
+        pmat = np.full((len(SESSIONS), 1), np.nan)
+        for i, ph in enumerate(SESSIONS):
+            cell = sub[sub["session"] == ph]
             if len(cell) == 1:
                 pmat[i, 0] = float(cell["p"].iloc[0])
         nlp = np.vectorize(_neglog10_p, otypes=[float])(pmat)
         im = ax.imshow(nlp, cmap="viridis", vmin=0.0, vmax=NLP_VMAX, aspect="auto")
         ax.set_xticks([0])
         ax.set_xticklabels(["exclusive DR"])
-        ax.set_yticks(range(len(PHASES)))
-        ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+        ax.set_yticks(range(len(SESSIONS)))
+        ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
         ax.set_title(f"{letter}  {SEX_LAB[sex]}", loc="left", fontweight="bold", color=INK)
         for i in range(pmat.shape[0]):
             p = pmat[i, 0]
@@ -556,9 +556,9 @@ def fig_violin_dr(
     iqr_col: str | None = None
     if salt is not None and not salt.empty:
         salt_ex = salt[salt["metric"] == "dr_exclusive"][
-            ["animal_id", "sex", "tx", "phase_layer", "iqr"]
+            ["animal_id", "sex", "condition", "session", "iqr"]
         ].rename(columns={"iqr": "iqr_across_models"})
-        med = med.merge(salt_ex, on=["animal_id", "sex", "tx", "phase_layer"], how="left")
+        med = med.merge(salt_ex, on=["animal_id", "sex", "condition", "session"], how="left")
         iqr_col = "iqr_across_models"
     n_models = int(med["n_models"].iloc[0]) if len(med) else 0
     wx_all = cons[(cons["test"] == "wilcoxon_signed_rank") & (cons["sex"] == "all") & (cons["metric"] == "dr_exclusive")]
@@ -569,16 +569,16 @@ def fig_violin_dr(
     else:
         fig, axes = plt.subplots(1, 4, figsize=(7.2, 4.4), sharey=True, layout="constrained")
     ax_list = list(axes)
-    for c, ph in enumerate(PHASES):
+    for c, ph in enumerate(SESSIONS):
         ax = ax_list[c]
-        panel = med[med["phase_layer"] == ph]
+        panel = med[med["session"] == ph]
         ns = _draw_tx_violins(ax, panel, "dr_exclusive", rng, dest=dest, iqr_col=iqr_col)
         ax.axhline(0.0, color="#bbbbbb", lw=0.7, ls="--", zorder=0)
         nlab = "n=" + "/".join(str(n) for n in ns)
-        w = wx_all[wx_all["phase_layer"] == ph]
+        w = wx_all[wx_all["session"] == ph]
         pf = pm = float("nan")
         for sex in SEX_ORDER:
-            k = kr[(kr["phase_layer"] == ph) & (kr["sex"] == sex)]
+            k = kr[(kr["session"] == ph) & (kr["sex"] == sex)]
             if len(k) == 1:
                 if sex == "F":
                     pf = float(k["p"].iloc[0])
@@ -593,15 +593,15 @@ def fig_violin_dr(
         ]
         if salt_summary is not None and not salt_summary.empty:
             srow = salt_summary[
-                (salt_summary["phase_layer"] == ph) & (salt_summary["metric"] == "dr_exclusive")
+                (salt_summary["session"] == ph) & (salt_summary["metric"] == "dr_exclusive")
             ]
             if len(srow) == 1:
                 box.append(f"cohort med IQR={float(srow['median_of_iqr'].iloc[0]):.3g}")
         panel_stats_box(ax, box, dest=dest)
         if dest == "slides":
-            ax.set_xlabel(PHASE_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
+            ax.set_xlabel(SESSION_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
         else:
-            ax.set_title(PHASE_SHORT[ph], loc="left", fontweight="bold", color=INK, fontsize=ts["annotation"])
+            ax.set_title(SESSION_SHORT[ph], loc="left", fontweight="bold", color=INK, fontsize=ts["annotation"])
         if c == 0:
             ax.set_ylabel("exclusive DR")
     fig.suptitle(
@@ -613,7 +613,7 @@ def fig_violin_dr(
     )
     fig_legend_and_footnote(
         fig,
-        tx_sex_legend_handles(dest=dest),
+        condition_sex_legend_handles(dest=dest),
         _note(dest, FOOT_VIOLIN, FOOT_VIOLIN_S),
         dest=dest,
     )
@@ -631,16 +631,16 @@ def fig_occupancy(animals: pd.DataFrame, cons: pd.DataFrame, out: Path, *, dest:
             fig, axes = plt.subplots(1, 4, figsize=FIGSIZE_SLIDES, sharey=True, layout="constrained")
         else:
             fig, axes = plt.subplots(1, 4, figsize=(7.2, 4.4), sharey=True, layout="constrained")
-        for c, ph in enumerate(PHASES):
+        for c, ph in enumerate(SESSIONS):
             ax = axes[c]
-            panel = med[med["phase_layer"] == ph]
+            panel = med[med["session"] == ph]
             ns = _draw_tx_violins(ax, panel, met, rng, dest=dest)
             if c == 0:
                 ax.set_ylabel(OCC_LAB[met], fontsize=ts["annotation"])
             nlab = "n=" + "/".join(str(n) for n in ns)
             pf = pm = float("nan")
             for sex in SEX_ORDER:
-                k = kr[(kr["phase_layer"] == ph) & (kr["sex"] == sex) & (kr["metric"] == met)]
+                k = kr[(kr["session"] == ph) & (kr["sex"] == sex) & (kr["metric"] == met)]
                 if len(k) == 1:
                     if sex == "F":
                         pf = float(k["p"].iloc[0])
@@ -652,9 +652,9 @@ def fig_occupancy(animals: pd.DataFrame, cons: pd.DataFrame, out: Path, *, dest:
                 dest=dest,
             )
             if dest == "slides":
-                ax.set_xlabel(PHASE_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
+                ax.set_xlabel(SESSION_SHORT[ph], fontsize=ts["annotation"], color=INK, fontweight="bold")
             else:
-                ax.set_title(PHASE_SHORT[ph], loc="center", fontweight="bold", color=INK, fontsize=ts["annotation"])
+                ax.set_title(SESSION_SHORT[ph], loc="center", fontweight="bold", color=INK, fontsize=ts["annotation"])
         fig.suptitle(
             f"{OCC_LAB[met]} occupancy  ·  median across {n_models} kpMS models",
             fontsize=ts["suptitle"],
@@ -664,7 +664,7 @@ def fig_occupancy(animals: pd.DataFrame, cons: pd.DataFrame, out: Path, *, dest:
         )
         fig_legend_and_footnote(
             fig,
-            tx_sex_legend_handles(dest=dest),
+            condition_sex_legend_handles(dest=dest),
             _note(dest, FOOT_OCC, FOOT_OCC_S),
             dest=dest,
         )

@@ -1,4 +1,4 @@
-"""Figure: novelty Δ (nvl−fam) vs spatial-locus Δ (B−A) on novel_obj."""
+"""Figure: novelty Δ (nvl−fam) vs spatial-locus Δ (B−A) on nvl_obj."""
 
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def _paired(
     )
 
 
-def make_figure(rows: list[dict[str, str]], *, out_stem: Path, phase_layer: str, dpi: int = 300) -> None:
+def make_figure(rows: list[dict[str, str]], *, out_stem: Path, session: str, dpi: int = 300) -> None:
     ink, mute, accent = "#1a1a1a", "#6b6b6b", "#2f5d8a"
     terracotta = "#8a4f3d"
 
@@ -153,7 +153,7 @@ def make_figure(rows: list[dict[str, str]], *, out_stem: Path, phase_layer: str,
     )
 
     fig.suptitle(
-        f"Novelty role Δ vs spatial-locus Δ — {phase_layer} (novel_obj)",
+        f"Novelty role Δ vs spatial-locus Δ — {session} (nvl_obj)",
         fontsize=11,
         fontweight="bold",
         color=ink,
@@ -190,9 +190,9 @@ def main() -> int:
     ap.add_argument("--out-stem", type=Path, default=None)
     args = ap.parse_args()
     rows = _load(args.delta_csv)
-    phase = str(rows[0]["phase_layer"]) if rows else "NOR_TX"
+    phase = str(rows[0]["session"]) if rows else "NOR_TX"
     out = args.out_stem or (args.delta_csv.parent / "fig_novelty_loci_contrast")
-    make_figure(rows, out_stem=out, phase_layer=phase)
+    make_figure(rows, out_stem=out, session=phase)
     return 0
 
 

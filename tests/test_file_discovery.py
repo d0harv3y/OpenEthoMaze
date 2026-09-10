@@ -39,7 +39,7 @@ def test_trial_manifest_csv_row_values_matches_fieldnames() -> None:
         video_n_frames=99,
         timestamp=ts,
         sex="M",
-        tx="SF",
+        condition="SF",
         cohort="vast",
         kpms_recording_key="556-S02-T03",
     )

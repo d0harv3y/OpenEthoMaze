@@ -104,7 +104,7 @@ After `uv sync --extra gui --extra sleap`:
 
 | Menu item | Purpose |
 |-----------|---------|
-| **Discovery…** | Scan acquisition **Output folder** for `{animal}_{session}_{trial}.mp4` and pose sidecars; sync paths into `trials.h5`. **Create new…** / **Open in editor…** for `treatment_labels.csv` (manual cohort labels; not HTTP discover). |
+| **Discovery…** | Scan acquisition **Output folder** for `{animal}_{session}_{trial}.mp4` and pose sidecars; sync paths into `trials.h5`. **Create new…** / **Open in editor…** for `condition_labels.csv` (manual cohort labels; not HTTP discover). |
 | **Virtual acquisition…** | Batch **SLEAP-NN** on trials with `video_path` in the results H5. Defaults: results H5 = `<output_dir>/trials.h5`, predictions under **Output folder**. |
 | **Analyze…** | Run ambulation/QC on trials in `<output_dir>/trials.h5` with **`prefilter_mode=controller`** (GUI default). |
 | **kpMS fit…** | Fit keypoint-MoSeq from a trial manifest CSV (`--extra kpms`; long-running QThread worker). Default project dir `<output_dir>/kpms`. |

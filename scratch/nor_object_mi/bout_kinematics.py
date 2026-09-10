@@ -39,8 +39,8 @@ from .syllable_cleanup import maybe_absorb_short_bouts
 
 _SS_RE = re.compile(r"_ss-(\d+)(?:_|$)")
 
-PHASES: tuple[str, ...] = ("NOR_BL", "NOR_TX", "NOR_REC3hr", "NOR_REC11hr")
-CONDITIONS: frozenset[str] = frozenset({"novel_obj", "identical_obj", "no_obj"})
+SESSIONS: tuple[str, ...] = ("NOR_BL", "NOR_TX", "NOR_REC3hr", "NOR_REC11hr")
+CONDITIONS: frozenset[str] = frozenset({"nvl_obj", "id_obj", "no_obj"})
 
 KINEMATICS_FIELDS: tuple[str, ...] = (
     "model",
@@ -48,9 +48,9 @@ KINEMATICS_FIELDS: tuple[str, ...] = (
     "kpms_key",
     "animal_id",
     "raw_session",
-    "phase_layer",
-    "condition_layer",
-    "tx",
+    "session",
+    "trial",
+    "condition",
     "sex",
     "cohort",
     "bout_index",
@@ -150,7 +150,7 @@ def nose_tail_length_m(session: h5py.Group) -> tuple[np.ndarray, float]:
     nx, ny, nv = _node_xy(sleap, "nose")
     tx, ty, tv = _node_xy(sleap, "tail")
     ppm = pixels_per_meter(session)
-    ok = nv & tv & np.isfinite(nx) & np.isfinite(ny) & np.isfinite(tx) & np.isfinite(ty)
+    ok = nv & tv & np.isfinite(nx) & np.isfinite(ny) & np.isfinite(condition) & np.isfinite(ty)
     out = np.full(nx.shape, np.nan, dtype=np.float64)
     out[ok] = np.hypot(nx[ok] - tx[ok], ny[ok] - ty[ok]) / ppm
     return out, ppm
@@ -189,8 +189,8 @@ def proximity_channels(
     loci_cache: dict[tuple[str, str], np.ndarray],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, str]:
     """Return d_any, d_fam, d_nvl, d_obj_a, d_obj_b, and a short source tag."""
-    cond = js.condition_layer
-    if cond == "novel_obj":
+    cond = js.trial
+    if cond == "nvl_obj":
         role_map = fam_nvl_map_for_session(nor_h5, js.animal_id, js.raw_session)
         if not role_map:
             raise ValueError("fam_nvl_map_failed")
@@ -202,7 +202,7 @@ def proximity_channels(
         d_any = np.minimum(d_a, d_b)
         return d_any, d_fam, d_nvl, d_a, d_b, "real_objects"
 
-    if cond == "identical_obj":
+    if cond == "id_obj":
         obj_keys, obj_dists, _ = all_object_distances_m(session)
         if len(obj_keys) < 2:
             raise ValueError(f"need >=2 objects, got {len(obj_keys)}")
@@ -211,9 +211,9 @@ def proximity_channels(
         return d_any, _nan_like(d_a), _nan_like(d_a), d_a, d_b, "real_objects"
 
     if cond == "no_obj":
-        key = (js.animal_id, js.phase_layer)
+        key = (js.animal_id, js.session)
         if key not in loci_cache:
-            loci = loci_for_animal_phase(nor_h5, js.animal_id, js.phase_layer)
+            loci = loci_for_animal_phase(nor_h5, js.animal_id, js.session)
             if loci is None:
                 raise ValueError("spatial_loci_unavailable")
             loci_cache[key] = loci
@@ -221,7 +221,7 @@ def proximity_channels(
         d_any, _ = nearest_distance_m(session, [loci[0], loci[1]])
         return d_any, _nan_like(d_any), _nan_like(d_any), _nan_like(d_any), _nan_like(d_any), "pseudo_loci"
 
-    raise ValueError(f"unhandled condition_layer {cond!r}")
+    raise ValueError(f"unhandled trial {cond!r}")
 
 
 def sleap_heading_rad(session: h5py.Group) -> np.ndarray:
@@ -349,9 +349,9 @@ def _kinematics_row(
         "kpms_key": js.kpms_key,
         "animal_id": js.animal_id,
         "raw_session": js.raw_session,
-        "phase_layer": js.phase_layer,
-        "condition_layer": js.condition_layer,
-        "tx": js.tx,
+        "session": js.session,
+        "trial": js.trial,
+        "condition": js.condition,
         "sex": js.sex,
         "cohort": js.cohort,
         "bout_index": bout_index,
@@ -406,10 +406,10 @@ def build_kinematics_bout_rows(
     fps_values: list[float] = []
 
     for js in sessions:
-        if js.phase_layer not in PHASES:
+        if js.session not in SESSIONS:
             n_skip_phase += 1
             continue
-        if js.condition_layer not in CONDITIONS:
+        if js.trial not in CONDITIONS:
             n_skip_cond += 1
             continue
         try:
@@ -482,9 +482,9 @@ def build_kinematics_bout_rows(
                         "kpms_key": js.kpms_key,
                         "animal_id": js.animal_id,
                         "raw_session": js.raw_session,
-                        "phase_layer": js.phase_layer,
-                        "condition_layer": js.condition_layer,
-                        "tx": js.tx,
+                        "session": js.session,
+                        "trial": js.trial,
+                        "condition": js.condition,
                         "sex": js.sex,
                         "cohort": js.cohort,
                         "bout_index": bout_index,
@@ -649,10 +649,10 @@ def build_ambulation_kinematics_bout_rows(
         )
 
     for js in sessions:
-        if js.phase_layer not in PHASES:
+        if js.session not in SESSIONS:
             n_skip_phase += 1
             continue
-        if js.condition_layer not in CONDITIONS:
+        if js.trial not in CONDITIONS:
             n_skip_cond += 1
             continue
         try:

@@ -38,7 +38,7 @@ def test_weighted_speed_unequal_bouts() -> None:
         {
             "animal_id": ["a", "a"],
             "raw_session": ["s", "s"],
-            "phase_layer": ["NOR_BL", "NOR_BL"],
+            "session": ["NOR_BL", "NOR_BL"],
             "bout_mean_speed_mps": [0.0, 1.0],
             "bout_duration_s": [1.0, 3.0],
             "bout_frames": [10, 30],
@@ -55,7 +55,7 @@ def test_weighted_speed_unequal_bouts() -> None:
 
 
 def test_speed_litmus_is_identity_when_speeds_copied() -> None:
-    keys = {"animal_id": ["a", "b", "c", "d"], "raw_session": ["s"] * 4, "phase_layer": ["NOR_BL"] * 4}
+    keys = {"animal_id": ["a", "b", "c", "d"], "raw_session": ["s"] * 4, "session": ["NOR_BL"] * 4}
     speed = np.array([0.05, 0.10, 0.20, 0.08])
     overlap = pd.DataFrame(
         {
@@ -73,7 +73,7 @@ def test_speed_litmus_is_identity_when_speeds_copied() -> None:
         {
             "animal_id": np.repeat(["a", "b", "c", "d"], 2),
             "raw_session": ["s"] * 8,
-            "phase_layer": ["NOR_BL"] * 8,
+            "session": ["NOR_BL"] * 8,
             "raw_syllable_id": [0, 1] * 4,
             "bout_mean_speed_mps": np.repeat(speed, 2),
             "bout_duration_s": [1.0] * 8,

@@ -32,7 +32,7 @@ PHASE_OUT_TAG = {
 
 TEST_FIELDS = [
     "model",
-    "phase_layer",
+    "session",
     "pattern_len",
     "cleanup",
     "top_m",
@@ -61,7 +61,7 @@ def _kruskal_rows(
         return [
             {
                 "model": model,
-                "phase_layer": phase,
+                "session": phase,
                 "pattern_len": pattern_len,
                 "cleanup": cleanup,
                 "top_m": top_m,
@@ -93,7 +93,7 @@ def _kruskal_rows(
         out.append(
             {
                 "model": model,
-                "phase_layer": phase,
+                "session": phase,
                 "pattern_len": pattern_len,
                 "cleanup": cleanup,
                 "top_m": top_m,
@@ -179,7 +179,7 @@ def _run_one(
         return [
             {
                 "model": model,
-                "phase_layer": phase,
+                "session": phase,
                 "pattern_len": pattern_len,
                 "cleanup": cleanup,
                 "top_m": top_m,
@@ -338,7 +338,7 @@ def main(argv: list[str] | None = None) -> int:
         all_rows,
         key=lambda r: (
             str(r.get("model", "")),
-            str(r.get("phase_layer", "")),
+            str(r.get("session", "")),
             int(r.get("pattern_len", 0) or 0),
             str(r.get("cleanup", "")),
             str(r.get("test", "")),

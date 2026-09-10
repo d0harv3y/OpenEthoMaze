@@ -25,13 +25,13 @@ if str(_SCRATCH) not in sys.path:
 from nor_object_mi._pub_style import (  # noqa: E402
     FIGSIZE_DOUBLE,
     INK,
-    PHASE_SHORT,
-    PHASES,
+    SESSION_SHORT,
+    SESSIONS,
     PILOT_MODEL,
     SEX_MARKER,
     SEX_ORDER,
-    TX_COLOR,
-    TX_ORDER,
+    CONDITION_COLOR,
+    CONDITION_ORDER,
     apply_style,
     fig_footnote,
     p_text,
@@ -39,9 +39,9 @@ from nor_object_mi._pub_style import (  # noqa: E402
     text_on_cmap,
 )
 from nor_object_mi.simpler_first_presence import (  # noqa: E402
-    CONTROL_TX,
-    TX_STRATUM_ALL,
-    TX_STRATUM_CONTROL,
+    CONTROL_CONDITION,
+    CONDITION_STRATUM_ALL,
+    CONDITION_STRATUM_CONTROL,
     across_model_dispersion_summary,
     animal_median_across_models,
     consensus_tests,
@@ -60,18 +60,18 @@ METRIC_LAB = {
     "shannon_bits": "Shannon (bits)",
 }
 STEPS = (
-    ("no_obj->identical", "A  Presence  no_obj → identical"),
-    ("identical->novel", "B  Novelty  identical → novel"),
+    ("no_obj->id_obj", "A  Presence  no_obj → identical"),
+    ("id_obj->nvl_obj", "B  Novelty  identical → novel"),
 )
 STEP_ARROW = {
-    "no_obj->identical": "no_obj → identical",
-    "identical->novel": "identical → novel",
-    "no_obj->novel": "no_obj → novel",
+    "no_obj->id_obj": "no_obj → identical",
+    "id_obj->nvl_obj": "identical → novel",
+    "no_obj->nvl_obj": "no_obj → novel",
 }
 STEP_PLAIN = {
-    "no_obj->identical": "Presence",
-    "identical->novel": "Novelty",
-    "no_obj->novel": "Span",
+    "no_obj->id_obj": "Presence",
+    "id_obj->nvl_obj": "Novelty",
+    "no_obj->nvl_obj": "Span",
 }
 STEP_GLOSS = (
     "Presence = no_obj → identical (objects appear). "
@@ -95,21 +95,21 @@ FOOT_WILCOXON_SEX_POOLED = (
     "Grain: animal × phase × condition (full session). This figure: Wilcoxon signed-rank "
     "on the paired Δ vs 0, within sex, txs pooled — companion, not a treatment claim. "
     "Color: frac of 21 kpMS models with Wilcoxon p < 0.05. sex=all companion: "
-    "fig_presence_frac_hit. Evolution I (tx=noSD): --wilcoxon nosd. Near window 0.10 m "
+    "fig_presence_frac_hit. Evolution I (condition=noSD): --wilcoxon nosd. Near window 0.10 m "
     "on spot. Not MI; not DA. On no_obj, dist_any is to historical loci. "
 )
 FOOT_WILCOXON_SEX_NOSD = (
     "Grain: animal × phase × condition (full session). This figure: Wilcoxon signed-rank "
-    "on the paired Δ vs 0, within sex, tx=noSD only — evolution I primary, not a treatment "
+    "on the paired Δ vs 0, within sex, condition=noSD only — evolution I primary, not a treatment "
     "claim. Color: frac of 21 kpMS models with Wilcoxon p < 0.05. Pooled-tx companion: "
     "fig_presence_frac_hit (sex=all). Near window 0.10 m on spot. Not MI; not DA. "
     "On no_obj, dist_any is to historical loci. "
 )
 STEP_SEX_PANELS = (
-    (0, 0, "no_obj->identical", "F", "A"),
-    (0, 1, "no_obj->identical", "M", "B"),
-    (1, 0, "identical->novel", "F", "C"),
-    (1, 1, "identical->novel", "M", "D"),
+    (0, 0, "no_obj->id_obj", "F", "A"),
+    (0, 1, "no_obj->id_obj", "M", "B"),
+    (1, 0, "id_obj->nvl_obj", "F", "C"),
+    (1, 1, "id_obj->nvl_obj", "M", "D"),
 )
 SEX_LAB = {"F": "female", "M": "male"}
 FOOT_CONSENSUS_WX = (
@@ -122,7 +122,7 @@ FOOT_CONSENSUS_WX_BY_SEX_POOLED = (
     FOOT_CONSENSUS_WX + " By-sex panel: txs pooled (companion). "
 )
 FOOT_CONSENSUS_WX_BY_SEX_NOSD = (
-    FOOT_CONSENSUS_WX + " By-sex panel: tx=noSD only (evolution I). "
+    FOOT_CONSENSUS_WX + " By-sex panel: condition=noSD only (evolution I). "
 )
 FOOT_CONSENSUS_KR = (
     "Grain: one animal; each animal's Δ is the median across 21 kpMS models. "
@@ -175,11 +175,11 @@ def _p_cell_text(p: float) -> str:
 
 
 def _p_mat(sub: pd.DataFrame, *, metric_key: str) -> np.ndarray:
-    mat = np.full((len(PHASES), len(METRICS)), np.nan)
-    for i, ph in enumerate(PHASES):
+    mat = np.full((len(SESSIONS), len(METRICS)), np.nan)
+    for i, ph in enumerate(SESSIONS):
         for j, met in enumerate(METRICS):
             key = metric_key.format(met=met)
-            cell = sub[(sub["phase_layer"] == ph) & (sub["metric"] == key)]
+            cell = sub[(sub["session"] == ph) & (sub["metric"] == key)]
             if len(cell) == 1:
                 mat[i, j] = float(cell["p"].iloc[0])
     return mat
@@ -190,8 +190,8 @@ def _imshow_p(ax, pmat: np.ndarray):
     im = ax.imshow(nlp, cmap="viridis", vmin=0.0, vmax=NLP_VMAX, aspect="auto")
     ax.set_xticks(range(len(METRICS)))
     ax.set_xticklabels([METRIC_LAB[m] for m in METRICS], rotation=35, ha="right", fontsize=7)
-    ax.set_yticks(range(len(PHASES)))
-    ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+    ax.set_yticks(range(len(SESSIONS)))
+    ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
     for i in range(pmat.shape[0]):
         for j in range(pmat.shape[1]):
             p = pmat[i, j]
@@ -210,10 +210,10 @@ def _imshow_p(ax, pmat: np.ndarray):
 
 
 def _iqr_mat(sub: pd.DataFrame) -> np.ndarray:
-    mat = np.full((len(PHASES), len(METRICS)), np.nan)
-    for i, ph in enumerate(PHASES):
+    mat = np.full((len(SESSIONS), len(METRICS)), np.nan)
+    for i, ph in enumerate(SESSIONS):
         for j, met in enumerate(METRICS):
-            row = sub[(sub["phase_layer"] == ph) & (sub["metric"] == DELTA_COL[met])]
+            row = sub[(sub["session"] == ph) & (sub["metric"] == DELTA_COL[met])]
             if len(row) == 1:
                 mat[i, j] = float(row["median_of_iqr"].iloc[0])
     return mat
@@ -251,8 +251,8 @@ def _imshow_iqr(ax, mat: np.ndarray, color: np.ndarray):
     im = ax.imshow(color, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
     ax.set_xticks(range(len(METRICS)))
     ax.set_xticklabels([METRIC_LAB[m] for m in METRICS], rotation=35, ha="right", fontsize=7)
-    ax.set_yticks(range(len(PHASES)))
-    ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+    ax.set_yticks(range(len(SESSIONS)))
+    ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
     for i in range(mat.shape[0]):
         for j in range(mat.shape[1]):
             v = mat[i, j]
@@ -277,17 +277,17 @@ def fig_frac_hit(agr: pd.DataFrame, out: Path) -> None:
     im = None
     for ax, (step, title) in zip(axes, STEPS):
         sub = agr[agr["step"] == step]
-        mat = np.full((len(PHASES), len(METRICS)), np.nan)
-        for i, ph in enumerate(PHASES):
+        mat = np.full((len(SESSIONS), len(METRICS)), np.nan)
+        for i, ph in enumerate(SESSIONS):
             for j, met in enumerate(METRICS):
-                row = sub[(sub["phase_layer"] == ph) & (sub["metric"] == met)]
+                row = sub[(sub["session"] == ph) & (sub["metric"] == met)]
                 if len(row) == 1:
                     mat[i, j] = float(row["frac_hit"].iloc[0])
         im = ax.imshow(mat, cmap="viridis", vmin=vmin, vmax=vmax, aspect="auto")
         ax.set_xticks(range(len(METRICS)))
         ax.set_xticklabels([METRIC_LAB[m] for m in METRICS], rotation=35, ha="right")
-        ax.set_yticks(range(len(PHASES)))
-        ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+        ax.set_yticks(range(len(SESSIONS)))
+        ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
         ax.set_title(title, loc="left", fontweight="bold", color=INK)
         for i in range(mat.shape[0]):
             for j in range(mat.shape[1]):
@@ -315,7 +315,7 @@ def fig_frac_hit(agr: pd.DataFrame, out: Path) -> None:
 
 
 def _wilcoxon_hit_frac(sub: pd.DataFrame, phase: str, metric: str) -> float:
-    cell = sub[(sub["phase_layer"] == phase) & (sub["metric"] == metric)]
+    cell = sub[(sub["session"] == phase) & (sub["metric"] == metric)]
     if cell.empty:
         return float("nan")
     return float(cell["hit"].mean())
@@ -333,15 +333,15 @@ def fig_frac_hit_by_sex(tests: pd.DataFrame, out: Path, *, wilcoxon: str = WILCO
     for r, c, step, sex, letter in STEP_SEX_PANELS:
         ax = axes[r, c]
         sub = wx[(wx["step"] == step) & (wx["sex"] == sex)]
-        mat = np.full((len(PHASES), len(METRICS)), np.nan)
-        for i, ph in enumerate(PHASES):
+        mat = np.full((len(SESSIONS), len(METRICS)), np.nan)
+        for i, ph in enumerate(SESSIONS):
             for j, met in enumerate(METRICS):
                 mat[i, j] = _wilcoxon_hit_frac(sub, ph, met)
         im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
         ax.set_xticks(range(len(METRICS)))
         ax.set_xticklabels([METRIC_LAB[m] for m in METRICS], rotation=35, ha="right", fontsize=7)
-        ax.set_yticks(range(len(PHASES)))
-        ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+        ax.set_yticks(range(len(SESSIONS)))
+        ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
         ax.set_title(
             f"{letter}  {STEP_PLAIN[step]} · {SEX_LAB[sex]}\n{STEP_ARROW[step]}",
             loc="left",
@@ -370,20 +370,20 @@ def fig_frac_hit_by_sex(tests: pd.DataFrame, out: Path, *, wilcoxon: str = WILCO
 def fig_median_delta(agr: pd.DataFrame, out: Path) -> None:
     apply_style()
     fig, axes = plt.subplots(2, 4, figsize=(7.2, 5.4), constrained_layout=True)
-    x = np.arange(len(PHASES))
+    x = np.arange(len(SESSIONS))
     for r, (step, stitle) in enumerate(STEPS):
         sub = agr[agr["step"] == step]
         for c, met in enumerate(METRICS):
             ax = axes[r, c]
             ys = []
-            for ph in PHASES:
-                row = sub[(sub["phase_layer"] == ph) & (sub["metric"] == met)]
+            for ph in SESSIONS:
+                row = sub[(sub["session"] == ph) & (sub["metric"] == met)]
                 ys.append(float(row["median_of_median_delta"].iloc[0]) if len(row) == 1 else np.nan)
             colors = ["#2f5d8a" if (np.isfinite(y) and y >= 0) else "#8a4f3d" for y in ys]
             ax.bar(x, ys, color=colors, width=0.72, edgecolor="none")
             ax.axhline(0.0, color="#bbbbbb", lw=0.7, ls="--", zorder=0)
             ax.set_xticks(x)
-            ax.set_xticklabels([PHASE_SHORT[p] for p in PHASES], fontsize=7)
+            ax.set_xticklabels([SESSION_SHORT[p] for p in SESSIONS], fontsize=7)
             if c == 0:
                 ax.set_ylabel("median of model median Δ")
             if r == 0:
@@ -417,15 +417,15 @@ def fig_median_delta(agr: pd.DataFrame, out: Path) -> None:
 
 def fig_paired_pilot(deltas: pd.DataFrame, tests: pd.DataFrame, out: Path, *, model: str) -> None:
     apply_style()
-    dsub = deltas[(deltas["model"] == model) & (deltas["phase_layer"] == "NOR_TX")].copy()
+    dsub = deltas[(deltas["model"] == model) & (deltas["session"] == "NOR_TX")].copy()
     tsub = restrict_tx_stratum(
         tests[
             (tests["model"] == model)
-            & (tests["phase_layer"] == "NOR_TX")
+            & (tests["session"] == "NOR_TX")
             & (tests["sex"] == "all")
             & (tests["test"] == "wilcoxon_signed_rank")
         ],
-        TX_STRATUM_ALL,
+        CONDITION_STRATUM_ALL,
     )
     rng = np.random.default_rng(0)
     fig, axes = plt.subplots(2, 4, figsize=(7.2, 6.2), constrained_layout=True)
@@ -435,17 +435,17 @@ def fig_paired_pilot(deltas: pd.DataFrame, tests: pd.DataFrame, out: Path, *, mo
             ax = axes[r, c]
             col = DELTA_COL[met]
             y = step_d[col].to_numpy(dtype=float)
-            tx = step_d["tx"].to_numpy()
+            tx = step_d["condition"].to_numpy()
             sex = step_d["sex"].to_numpy()
             x = rng.normal(0.0, 0.08, size=y.size)
-            for t in TX_ORDER:
+            for t in CONDITION_ORDER:
                 for s in SEX_ORDER:
                     m = (tx == t) & (sex == s)
                     ax.scatter(
                         x[m],
                         y[m],
                         s=10,
-                        c=TX_COLOR[t],
+                        c=CONDITION_COLOR[t],
                         marker=SEX_MARKER[s],
                         alpha=0.75,
                         edgecolors="none",
@@ -487,8 +487,8 @@ def fig_paired_pilot(deltas: pd.DataFrame, tests: pd.DataFrame, out: Path, *, mo
                     va="bottom",
                 )
     handles = [
-        Line2D([0], [0], marker="o", color="none", markerfacecolor=TX_COLOR[t], markersize=6, label=t)
-        for t in TX_ORDER
+        Line2D([0], [0], marker="o", color="none", markerfacecolor=CONDITION_COLOR[t], markersize=6, label=t)
+        for t in CONDITION_ORDER
     ] + [
         Line2D(
             [0],
@@ -518,8 +518,8 @@ def fig_paired_pilot(deltas: pd.DataFrame, tests: pd.DataFrame, out: Path, *, mo
 
 
 VIOLIN_STEPS = (
-    ("no_obj->identical", "Presence"),
-    ("identical->novel", "Novelty"),
+    ("no_obj->id_obj", "Presence"),
+    ("id_obj->nvl_obj", "Novelty"),
 )
 VIOLIN_STEM = {
     "frac_near": "fig_presence_violin_frac_near",
@@ -537,7 +537,7 @@ FOOT_VIOLIN_WX_POOLED = (
     "Wilcoxon p is Δ vs 0, sex=all, txs pooled (companion; not a treatment claim). "
 )
 FOOT_VIOLIN_WX_NOSD = (
-    "Wilcoxon p is Δ vs 0, tx=noSD, within sex (evolution I; not a treatment claim). "
+    "Wilcoxon p is Δ vs 0, condition=noSD, within sex (evolution I; not a treatment claim). "
 )
 FOOT_VIOLIN_TAIL = (
     "Kruskal p is within sex on the same medians (treatment claim). "
@@ -551,7 +551,7 @@ def _foot_violin(wilcoxon: str) -> str:
 
 
 def _wx_stratum(wilcoxon: str) -> str:
-    return TX_STRATUM_ALL if wilcoxon == WILCOXON_POOLED else TX_STRATUM_CONTROL
+    return CONDITION_STRATUM_ALL if wilcoxon == WILCOXON_POOLED else CONDITION_STRATUM_CONTROL
 
 
 FOOT_VIOLIN_COMPOSITION = (
@@ -564,13 +564,13 @@ def _draw_tx_violins(
     ax, panel: pd.DataFrame, ycol: str, rng: np.random.Generator, *, iqr_col: str | None = None
 ) -> list[int]:
     """Strip + violin by tx. Optional ``iqr_col`` → ±½ IQR whiskers (salt)."""
-    positions = list(range(len(TX_ORDER)))
+    positions = list(range(len(CONDITION_ORDER)))
     bodies: list[np.ndarray] = []
     body_pos: list[int] = []
     body_color: list[str] = []
     ns: list[int] = []
-    for i, t in enumerate(TX_ORDER):
-        sub = panel[panel["tx"] == t]
+    for i, t in enumerate(CONDITION_ORDER):
+        sub = panel[panel["condition"] == t]
         y = sub[ycol].to_numpy(dtype=float)
         sex = sub["sex"].to_numpy()
         iqr = (
@@ -586,7 +586,7 @@ def _draw_tx_violins(
         if y.size >= 2 and np.unique(y).size >= 2:
             bodies.append(y)
             body_pos.append(i)
-            body_color.append(TX_COLOR[t])
+            body_color.append(CONDITION_COLOR[t])
         if y.size:
             x = np.full(y.shape, float(i)) + rng.normal(0.0, 0.055, size=y.size)
             half = np.where(np.isfinite(iqr), 0.5 * iqr, np.nan)
@@ -600,7 +600,7 @@ def _draw_tx_violins(
                         y[m],
                         yerr=np.where(np.isfinite(half[m]), half[m], 0.0),
                         fmt="none",
-                        ecolor=TX_COLOR[t],
+                        ecolor=CONDITION_COLOR[t],
                         elinewidth=0.65,
                         capsize=0,
                         alpha=0.35,
@@ -610,7 +610,7 @@ def _draw_tx_violins(
                     x[m],
                     y[m],
                     s=9,
-                    c=TX_COLOR[t],
+                    c=CONDITION_COLOR[t],
                     marker=SEX_MARKER[s],
                     alpha=0.75,
                     edgecolors="none",
@@ -639,8 +639,8 @@ def _draw_tx_violins(
             pc.set_zorder(1)
     ax.axhline(0.0, color="#bbbbbb", lw=0.7, ls="--", zorder=0)
     ax.set_xticks(positions)
-    ax.set_xticklabels(list(TX_ORDER), fontsize=6, rotation=35, ha="right")
-    ax.set_xlim(-0.7, len(TX_ORDER) - 0.3)
+    ax.set_xticklabels(list(CONDITION_ORDER), fontsize=6, rotation=35, ha="right")
+    ax.set_xlim(-0.7, len(CONDITION_ORDER) - 0.3)
     return ns
 
 
@@ -669,11 +669,11 @@ def fig_delta_violins(
     n_models = int(deltas["model"].nunique())
     wx_rows = cons[cons["test"] == "wilcoxon_signed_rank"]
     if wilcoxon == WILCOXON_POOLED:
-        wx_ann = restrict_tx_stratum(wx_rows[wx_rows["sex"] == "all"], TX_STRATUM_ALL)
+        wx_ann = restrict_tx_stratum(wx_rows[wx_rows["sex"] == "all"], CONDITION_STRATUM_ALL)
     else:
-        wx_ann = restrict_tx_stratum(wx_rows[wx_rows["sex"].isin(("F", "M"))], TX_STRATUM_CONTROL)
+        wx_ann = restrict_tx_stratum(wx_rows[wx_rows["sex"].isin(("F", "M"))], CONDITION_STRATUM_CONTROL)
     kr = cons[cons["test"] == "kruskal"]
-    salt_on = ["animal_id", "sex", "tx", "step", "phase_layer"]
+    salt_on = ["animal_id", "sex", "condition", "step", "session"]
     for met in METRICS:
         rng = np.random.default_rng(0)
         fig, axes = plt.subplots(2, 4, figsize=(7.2, 6.4), sharey=True, constrained_layout=True)
@@ -684,18 +684,18 @@ def fig_delta_violins(
             med = _attach_iqr(dsub, salt, metric=col, on=salt_on)
             iqr_col = "iqr_across_models"
         for r, (step, slabel) in enumerate(VIOLIN_STEPS):
-            for c, ph in enumerate(PHASES):
+            for c, ph in enumerate(SESSIONS):
                 ax = axes[r, c]
-                panel = med[(med["step"] == step) & (med["phase_layer"] == ph)]
+                panel = med[(med["step"] == step) & (med["session"] == ph)]
                 ns = _draw_tx_violins(ax, panel, col, rng, iqr_col=iqr_col)
                 if c == 0:
                     ax.set_ylabel(f"{slabel}\nΔ (right − left)", fontsize=8)
                 if r == 0:
-                    ax.set_title(PHASE_SHORT[ph], loc="left", fontweight="bold", color=INK, fontsize=8)
+                    ax.set_title(SESSION_SHORT[ph], loc="left", fontweight="bold", color=INK, fontsize=8)
                 lines = ["n=" + "/".join(str(n) for n in ns)]
                 if salt_summary is not None and not salt_summary.empty and met in ("frac_near", "mean_dist_any_m"):
                     srow = salt_summary[
-                        (salt_summary["phase_layer"] == ph)
+                        (salt_summary["session"] == ph)
                         & (salt_summary["step"] == step)
                         & (salt_summary["metric"] == col)
                     ]
@@ -704,7 +704,7 @@ def fig_delta_violins(
                 if wilcoxon == WILCOXON_POOLED:
                     w = wx_ann[
                         (wx_ann["step"] == step)
-                        & (wx_ann["phase_layer"] == ph)
+                        & (wx_ann["session"] == ph)
                         & (wx_ann["metric"] == met)
                     ]
                     if len(w) == 1:
@@ -713,7 +713,7 @@ def fig_delta_violins(
                     for sex in SEX_ORDER:
                         w = wx_ann[
                             (wx_ann["step"] == step)
-                            & (wx_ann["phase_layer"] == ph)
+                            & (wx_ann["session"] == ph)
                             & (wx_ann["metric"] == met)
                             & (wx_ann["sex"] == sex)
                         ]
@@ -722,7 +722,7 @@ def fig_delta_violins(
                 for sex, lab in (("F", "Kruskal F "), ("M", "Kruskal M ")):
                     k = kr[
                         (kr["step"] == step)
-                        & (kr["phase_layer"] == ph)
+                        & (kr["session"] == ph)
                         & (kr["sex"] == sex)
                         & (kr["metric"] == f"delta_{met}")
                     ]
@@ -745,8 +745,8 @@ def fig_delta_violins(
                     ),
                 )
         handles = [
-            Line2D([0], [0], marker="o", color="none", markerfacecolor=TX_COLOR[t], markersize=6, label=t)
-            for t in TX_ORDER
+            Line2D([0], [0], marker="o", color="none", markerfacecolor=CONDITION_COLOR[t], markersize=6, label=t)
+            for t in CONDITION_ORDER
         ] + [
             Line2D(
                 [0],
@@ -776,9 +776,9 @@ def fig_delta_violins(
 
 
 def _kruskal_hit_frac(sub: pd.DataFrame, phase: str, metric: str) -> float:
-    cell = sub[(sub["phase_layer"] == phase) & (sub["metric"] == f"delta_{metric}")]
+    cell = sub[(sub["session"] == phase) & (sub["metric"] == f"delta_{metric}")]
     if cell.empty:
-        cell = sub[(sub["phase_layer"] == phase) & (sub["metric"] == metric)]
+        cell = sub[(sub["session"] == phase) & (sub["metric"] == metric)]
     if cell.empty:
         return float("nan")
     return float(cell["hit"].mean())
@@ -809,15 +809,15 @@ def fig_tx_kruskal(tests: pd.DataFrame, out: Path) -> None:
     for r, c, step, sex, letter in STEP_SEX_PANELS:
         ax = axes[r, c]
         sub = kr[(kr["step"] == step) & (kr["sex"] == sex)]
-        mat = np.full((len(PHASES), len(METRICS)), np.nan)
-        for i, ph in enumerate(PHASES):
+        mat = np.full((len(SESSIONS), len(METRICS)), np.nan)
+        for i, ph in enumerate(SESSIONS):
             for j, met in enumerate(METRICS):
                 mat[i, j] = _kruskal_hit_frac(sub, ph, met)
         im = ax.imshow(mat, cmap="viridis", vmin=0.0, vmax=1.0, aspect="auto")
         ax.set_xticks(range(len(METRICS)))
         ax.set_xticklabels([METRIC_LAB[m] for m in METRICS], rotation=35, ha="right", fontsize=7)
-        ax.set_yticks(range(len(PHASES)))
-        ax.set_yticklabels([PHASE_SHORT[p] for p in PHASES])
+        ax.set_yticks(range(len(SESSIONS)))
+        ax.set_yticklabels([SESSION_SHORT[p] for p in SESSIONS])
         ax.set_title(
             f"{letter}  {STEP_PLAIN[step]} · {SEX_LAB[sex]}\n{STEP_ARROW[step]}",
             loc="left",
@@ -846,7 +846,7 @@ def fig_consensus_wilcoxon(cons: pd.DataFrame, out: Path) -> None:
     apply_style()
     wx = restrict_tx_stratum(
         cons[(cons["test"] == "wilcoxon_signed_rank") & (cons["sex"] == "all")],
-        TX_STRATUM_ALL,
+        CONDITION_STRATUM_ALL,
     )
     fig, axes = plt.subplots(1, 2, figsize=FIGSIZE_DOUBLE, constrained_layout=True)
     im = None
@@ -1001,7 +1001,7 @@ def fig_consensus_wilcoxon_iqr_by_sex(
             "Across-model salt on consensus Δ: cohort median IQR (Wilcoxon grain, within sex)"
         )
     else:
-        grain = " Animals with tx=noSD only, within sex (evolution I salt grain). "
+        grain = " Animals with condition=noSD only, within sex (evolution I salt grain). "
         title = (
             "Across-model salt on consensus Δ: cohort median IQR (Wilcoxon noSD, within sex)"
         )
@@ -1062,14 +1062,14 @@ def main(argv: list[str] | None = None) -> int:
     salt_sum_sex_nosd = None
     if salt is not None and not salt.empty:
         salt_sum_sex = across_model_dispersion_summary(
-            salt, group_keys=("sex", "phase_layer", "step", "metric")
+            salt, group_keys=("sex", "session", "step", "metric")
         )
         salt_sum_sex.to_csv(
             run / "presence_step_across_model_dispersion_summary_by_sex.csv", index=False
         )
         salt_sum_sex_nosd = across_model_dispersion_summary(
-            salt.loc[salt["tx"] == CONTROL_TX],
-            group_keys=("sex", "phase_layer", "step", "metric"),
+            salt.loc[salt["condition"] == CONTROL_CONDITION],
+            group_keys=("sex", "session", "step", "metric"),
         )
         salt_sum_sex_nosd.to_csv(
             run / "presence_step_across_model_dispersion_summary_by_sex_noSD.csv",

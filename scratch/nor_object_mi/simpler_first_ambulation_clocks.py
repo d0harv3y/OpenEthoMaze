@@ -5,7 +5,7 @@ is a contiguous kpMS label run. They are not the same unit. NOR ladders have
 bout duration, not bout speed — this run compares clocks (n, duration) and
 movement kinematics, not a made-up syllable speed.
 
-Grain: animal × phase × novel_obj (full session).
+Grain: animal × phase × nvl_obj (full session).
 """
 
 from __future__ import annotations
@@ -24,11 +24,11 @@ if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
 
 from nor_object_mi.simpler_first_classic_dr import spearman_pair  # noqa: E402
-from nor_object_mi.simpler_first_object_prox import PHASES as PHASE_TAGS  # noqa: E402
+from nor_object_mi.simpler_first_object_prox import SESSIONS as PHASE_TAGS  # noqa: E402
 from nor_object_mi.simpler_first_q1 import LOCKED  # noqa: E402
 
-CONDITION = "novel_obj"
-PHASES = ("NOR_BL", "NOR_TX", "NOR_REC3hr", "NOR_REC11hr")
+CONDITION = "nvl_obj"
+SESSIONS = ("NOR_BL", "NOR_TX", "NOR_REC3hr", "NOR_REC11hr")
 GRAIN = f"animal × {{phase}} × {CONDITION} (full session)"
 FPS = 30.0
 ASSOC_PAIRS = (
@@ -51,17 +51,23 @@ def movement_bout_session(long_df: pd.DataFrame, *, condition: str = CONDITION) 
     """One row per animal × phase: movement-bout counts, duration, speed, distance."""
     df = long_df.copy()
     df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
-    df = df.rename(columns={"ID": "animal_id", "phase_layer": "phase_layer"})
+    df = df.rename(
+        columns={
+            "ID": "animal_id",
+            "phase_layer": "session",
+            "condition_layer": "trial",
+        }
+    )
     df["animal_id"] = df["animal_id"].astype(str)
-    b = df[(df["level"] == "bout") & (df["condition_layer"] == condition) & (df["phase_layer"].isin(PHASES))].copy()
+    b = df[(df["level"] == "bout") & (df["trial"] == condition) & (df["session"].isin(SESSIONS))].copy()
     if b.empty:
         return b.iloc[0:0].copy()
-    speed = b[b["metric"] == "mean_speed_mps"][["animal_id", "phase_layer", "index", "duration_s", "value"]].rename(columns={"value": "mean_speed_mps"})
-    dist = b[b["metric"] == "distance_m"][["animal_id", "phase_layer", "index", "value"]].rename(columns={"value": "distance_m"})
-    mx = b[b["metric"] == "max_speed_mps"][["animal_id", "phase_layer", "index", "value"]].rename(columns={"value": "max_speed_mps"})
-    mb = speed.merge(dist, on=["animal_id", "phase_layer", "index"], how="outer")
-    mb = mb.merge(mx, on=["animal_id", "phase_layer", "index"], how="left")
-    out = mb.groupby(["animal_id", "phase_layer"], as_index=False).agg(
+    speed = b[b["metric"] == "mean_speed_mps"][["animal_id", "session", "index", "duration_s", "value"]].rename(columns={"value": "mean_speed_mps"})
+    dist = b[b["metric"] == "distance_m"][["animal_id", "session", "index", "value"]].rename(columns={"value": "distance_m"})
+    mx = b[b["metric"] == "max_speed_mps"][["animal_id", "session", "index", "value"]].rename(columns={"value": "max_speed_mps"})
+    mb = speed.merge(dist, on=["animal_id", "session", "index"], how="outer")
+    mb = mb.merge(mx, on=["animal_id", "session", "index"], how="left")
+    out = mb.groupby(["animal_id", "session"], as_index=False).agg(
         n_move_bouts=("index", "nunique"),
         median_move_duration_s=("duration_s", "median"),
         median_move_speed_mps=("mean_speed_mps", "median"),
@@ -73,13 +79,13 @@ def movement_bout_session(long_df: pd.DataFrame, *, condition: str = CONDITION) 
 
 def syllable_bout_session(bouts: pd.DataFrame, *, fps: float = FPS, condition: str = CONDITION) -> pd.DataFrame:
     """One row per animal × phase: syllable-bout count and duration (no speed on NOR ladders)."""
-    sub = bouts[bouts["condition_layer"] == condition].copy()
+    sub = bouts[bouts["trial"] == condition].copy()
     if sub.empty:
         return sub.iloc[0:0].copy()
     sub["animal_id"] = sub["animal_id"].astype(str)
     frames = pd.to_numeric(sub["bout_frames"], errors="coerce")
     sub = sub.assign(syll_duration_s=frames / float(fps))
-    out = sub.groupby(["animal_id", "phase_layer"], as_index=False).agg(
+    out = sub.groupby(["animal_id", "session"], as_index=False).agg(
         n_syll_bouts=("bout_frames", "size"),
         median_syll_duration_s=("syll_duration_s", "median"),
         mean_syll_duration_s=("syll_duration_s", "mean"),
@@ -91,11 +97,18 @@ def syllable_bout_session(bouts: pd.DataFrame, *, fps: float = FPS, condition: s
 def session_ambulation(sess: pd.DataFrame, *, condition: str = CONDITION) -> pd.DataFrame:
     df = sess.copy()
     df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
-    df = df.rename(columns={"ID": "animal_id"})
+    df = df.rename(
+        columns={
+            "ID": "animal_id",
+            "phase_layer": "session",
+            "condition_layer": "trial",
+            "treatment_group": "condition",
+        }
+    )
     df["animal_id"] = df["animal_id"].astype(str)
-    sub = df[(df["condition_layer"] == condition) & (df["phase_layer"].isin(PHASES))]
+    sub = df[(df["trial"] == condition) & (df["session"].isin(SESSIONS))]
     piv = sub.pivot_table(
-        index=["animal_id", "phase_layer", "sex", "treatment_group"],
+        index=["animal_id", "session", "sex", "condition"],
         columns="metric",
         values="value",
         aggfunc="first",
@@ -103,7 +116,6 @@ def session_ambulation(sess: pd.DataFrame, *, condition: str = CONDITION) -> pd.
     piv.columns.name = None
     return piv.rename(
         columns={
-            "treatment_group": "tx",
             "distance_m": "session_distance_m",
             "mean_speed_mps": "session_mean_speed_mps",
             "time_immobile_s": "session_time_immobile_s",
@@ -113,13 +125,13 @@ def session_ambulation(sess: pd.DataFrame, *, condition: str = CONDITION) -> pd.
 
 def association_table(paired: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
-    for phase, g in paired.groupby("phase_layer", sort=True):
+    for phase, g in paired.groupby("session", sort=True):
         for xcol, ycol, contrast in ASSOC_PAIRS:
             rec = spearman_pair(g[xcol].to_numpy(), g[ycol].to_numpy())
             p = rec["p"]
             rows.append(
                 {
-                    "phase_layer": phase,
+                    "session": phase,
                     "contrast": contrast,
                     "x": xcol,
                     "y": ycol,
@@ -172,17 +184,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"syllable {phase}", flush=True)
         bouts = pd.read_csv(
             csv,
-            usecols=["animal_id", "phase_layer", "condition_layer", "bout_frames"],
+            usecols=["animal_id", "session", "trial", "bout_frames"],
         )
         syll_parts.append(syllable_bout_session(bouts))
     syll = pd.concat(syll_parts, ignore_index=True) if syll_parts else pd.DataFrame()
 
-    paired = sess.merge(move, on=["animal_id", "phase_layer"], how="left")
-    paired = paired.merge(syll, on=["animal_id", "phase_layer"], how="left")
+    paired = sess.merge(move, on=["animal_id", "session"], how="left")
+    paired = paired.merge(syll, on=["animal_id", "session"], how="left")
     if args.classic_dr.exists():
-        dr = pd.read_csv(args.classic_dr, usecols=["animal_id", "phase_layer", "dr_classic", "dr_object_prox"])
+        dr = pd.read_csv(args.classic_dr, usecols=["animal_id", "session", "dr_classic", "dr_object_prox"])
         dr["animal_id"] = dr["animal_id"].astype(str)
-        paired = paired.merge(dr, on=["animal_id", "phase_layer"], how="left")
+        paired = paired.merge(dr, on=["animal_id", "session"], how="left")
     else:
         paired["dr_classic"] = np.nan
         paired["dr_object_prox"] = np.nan
@@ -193,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
         assoc.to_csv(out / "clock_association.csv", index=False)
 
     payload = {
-        "condition_layer": CONDITION,
+        "trial": CONDITION,
         "syllable_model": args.model,
         "fps": FPS,
         "movement_keypoint": "fore",
@@ -210,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     (out / "run_summary.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     if not assoc.empty:
-        print(assoc[["phase_layer", "contrast", "n", "spearman_rho", "hit_p05"]].to_string(index=False), flush=True)
+        print(assoc[["session", "contrast", "n", "spearman_rho", "hit_p05"]].to_string(index=False), flush=True)
     print(json.dumps({"path": str(out), "n_paired_rows": int(len(paired))}, indent=2))
     return 0
 

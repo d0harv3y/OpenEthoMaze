@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--enrich-labels",
         action="store_true",
-        help="Fill blank manifest fields from repo inputs/treatment_labels.csv (off by default)",
+        help="Fill blank manifest fields from repo inputs/condition_labels.csv (off by default)",
     )
     ap.add_argument("--fps", type=float, default=30.0)
     args = ap.parse_args(argv)
@@ -142,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
         manifest_csv=args.manifest_path,
         require_sleap=False,
         include_habituation=args.include_habituation,
-        enrich_from_treatment_labels=args.enrich_labels,
+        enrich_from_condition_labels=args.enrich_labels,
         db_path=tracking_h5,
     )
     manifests = filter_manifests(load_manifests(cfg), cfg)

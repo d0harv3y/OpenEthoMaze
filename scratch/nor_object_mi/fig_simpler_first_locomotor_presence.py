@@ -20,22 +20,22 @@ if str(_SCRATCH) not in sys.path:
 
 from nor_object_mi._pub_style import (  # noqa: E402
     INK,
-    TX_COLOR,
-    TX_ORDER,
+    CONDITION_COLOR,
+    CONDITION_ORDER,
     apply_style,
     fig_footnote,
     save_pdf_svg,
     type_scale,
 )
 from nor_object_mi.locomotor_presence import PRIMARY_STEP  # noqa: E402
-from nor_object_mi.simpler_first_protocol_prologue import PHASES  # noqa: E402
+from nor_object_mi.simpler_first_protocol_prologue import SESSIONS  # noqa: E402
 from nor_object_mi.simpler_first_q1 import SEX_ORDER  # noqa: E402
 
 DEFAULT_RUN = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_locomotor_presence"
 )
-PHASE_SHORT = {
+SESSION_SHORT = {
     "NOR_BL": "BL",
     "NOR_TX": "TX",
     "NOR_REC3hr": "REC3",
@@ -70,15 +70,15 @@ def fig_delta_p_move(
     fig, axes = plt.subplots(2, 4, figsize=(12.4, 6.2), constrained_layout=True)
     rng = np.random.default_rng(2)
     for r, sex in enumerate(SEX_ORDER):
-        for c, ph in enumerate(PHASES):
+        for c, ph in enumerate(SESSIONS):
             ax = axes[r][c]
-            cell = p[(p["sex"] == sex) & (p["phase_layer"] == ph)]
-            for i, tx in enumerate(TX_ORDER):
-                y = pd.to_numeric(cell.loc[cell["tx"] == tx, "delta_p_move"], errors="coerce")
+            cell = p[(p["sex"] == sex) & (p["session"] == ph)]
+            for i, tx in enumerate(CONDITION_ORDER):
+                y = pd.to_numeric(cell.loc[cell["condition"] == tx, "delta_p_move"], errors="coerce")
                 y = y.to_numpy(dtype=np.float64)
                 y = y[np.isfinite(y)]
                 x = np.full(y.size, i, dtype=np.float64) + rng.uniform(-0.12, 0.12, size=y.size)
-                ax.scatter(x, y, s=20, color=TX_COLOR.get(tx, INK), alpha=0.75, zorder=2)
+                ax.scatter(x, y, s=20, color=CONDITION_COLOR.get(condition, INK), alpha=0.75, zorder=2)
                 if y.size:
                     ax.hlines(float(np.mean(y)), i - 0.28, i + 0.28, color=INK, lw=1.2, zorder=3)
             ax.axhline(0.0, color="#cccccc", lw=0.8)
@@ -88,15 +88,15 @@ def fig_delta_p_move(
                     (t["family"] == "primary")
                     & (t["metric"] == "p_move")
                     & (t["sex"] == sex)
-                    & (t["phase_layer"] == ph)
+                    & (t["session"] == ph)
                 ]
                 hit = len(rec) == 1 and bool(rec["hit_fdr05"].iloc[0])
-            title = PHASE_SHORT.get(ph, ph)
+            title = SESSION_SHORT.get(ph, ph)
             if hit:
                 title = title + " ★"
             ax.set_title(title, fontsize=ts["annotation"], color="#b00020" if hit else INK)
-            ax.set_xticks(range(len(TX_ORDER)))
-            ax.set_xticklabels(list(TX_ORDER), fontsize=ts["cell"])
+            ax.set_xticks(range(len(CONDITION_ORDER)))
+            ax.set_xticklabels(list(CONDITION_ORDER), fontsize=ts["cell"])
             if c == 0:
                 ax.set_ylabel(f"{sex}  Δ P(move)", fontsize=ts["annotation"])
     fig.suptitle("Presence on the original segmenter — Δ P(move)", fontsize=ts["suptitle"], color=INK)

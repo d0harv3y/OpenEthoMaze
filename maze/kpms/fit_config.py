@@ -43,8 +43,8 @@ class KpmsFitRunConfig:
     random_seed: int = 42
     include_habituation: bool = False
     exclude_experimental: bool = False
-    balance_columns: tuple[str, ...] = ("sex", "tx", "phase", "strain")
-    enrich_from_treatment_labels: bool = True
+    balance_columns: tuple[str, ...] = ("sex", "condition", "strain")
+    enrich_from_condition_labels: bool = True
     force_new: bool = False
     #: float32 + ``jax_enable_x64=False`` (lower GPU memory; less numerically stable).
     use_float32: bool = False
@@ -60,5 +60,5 @@ def subset_config_from_fit_run(cfg: KpmsFitRunConfig) -> SubsetConfig:
         max_trials=cfg.max_trials,
         random_seed=cfg.random_seed,
         balance_columns=cfg.balance_columns,
-        enrich_from_treatment_labels=cfg.enrich_from_treatment_labels,
+        enrich_from_condition_labels=cfg.enrich_from_condition_labels,
     )

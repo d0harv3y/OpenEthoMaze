@@ -1023,7 +1023,7 @@ class SettingsDialog(QDialog):
             self._animals_table.setItem(i, 0, QTableWidgetItem(animal.animal_id or ""))
             self._animals_table.setItem(i, 1, QTableWidgetItem(animal.sex or ""))
             self._animals_table.setItem(i, 2, QTableWidgetItem(animal.strain or ""))
-            self._animals_table.setItem(i, 3, QTableWidgetItem(animal.tx or ""))
+            self._animals_table.setItem(i, 3, QTableWidgetItem(animal.condition or ""))
             self._animals_table.setItem(i, 4, QTableWidgetItem(animal.drug or ""))
             self._animals_table.setItem(i, 5, QTableWidgetItem(animal.experiment or ""))
             self._animals_table.setItem(i, 6, QTableWidgetItem(animal.researcher or ""))
@@ -1179,7 +1179,7 @@ class SettingsDialog(QDialog):
             c.session.animals.append(
                 AnimalInfo(
                     animal_id=aid or str(1000 + i),
-                    tx=(tx_item.text() or "").strip() or None if tx_item else None,
+                    condition=(tx_item.text() or "").strip() or None if tx_item else None,
                     strain=(strain_item.text() or "").strip() or None if strain_item else None,
                     sex=(sex_item.text() or "").strip() or None if sex_item else None,
                     drug=(drug_item.text() or "").strip() or None if drug_item else None,

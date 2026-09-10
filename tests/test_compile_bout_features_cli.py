@@ -14,7 +14,7 @@ from maze.kpms.manifest_subset import SubsetConfig, load_manifests
 from maze.pipeline.io.file_discovery import TrialManifest
 
 
-def test_subset_config_skips_treatment_labels_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_subset_config_skips_condition_labels_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     csv_path = tmp_path / "manifest.csv"
     csv_path.write_text(
         "animal_id,session,trial,phase,sex,strain,tx\n"
@@ -23,10 +23,10 @@ def test_subset_config_skips_treatment_labels_by_default(tmp_path: Path, monkeyp
     )
 
     def _boom(*_args, **_kwargs):
-        raise AssertionError("load_treatment_labels should not run")
+        raise AssertionError("load_condition_labels should not run")
 
     monkeypatch.setattr(
-        "maze.kpms.manifest_subset.enrich_manifests_from_treatment_labels",
+        "maze.kpms.manifest_subset.enrich_manifests_from_condition_labels",
         lambda manifests, labels_path=None: _boom(),
     )
     cfg = SubsetConfig(manifest_csv=csv_path)
@@ -49,10 +49,10 @@ def test_subset_config_enriches_when_opted_in(tmp_path: Path, monkeypatch: pytes
             m.sex = "F"
 
     monkeypatch.setattr(
-        "maze.kpms.manifest_subset.enrich_manifests_from_treatment_labels",
+        "maze.kpms.manifest_subset.enrich_manifests_from_condition_labels",
         _enrich,
     )
-    cfg = SubsetConfig(manifest_csv=csv_path, enrich_from_treatment_labels=True)
+    cfg = SubsetConfig(manifest_csv=csv_path, enrich_from_condition_labels=True)
     manifests = load_manifests(cfg)
     assert calls == [1]
     assert manifests[0].sex == "F"
@@ -111,7 +111,7 @@ def test_manifest_stratify_fields() -> None:
         input_h5_path=Path("x.h5"),
         sex="F",
         strain="tg",
-        tx="n/a",
+        condition="n/a",
         exit_number=3,
     )
     fields = manifest_stratify_fields(m)

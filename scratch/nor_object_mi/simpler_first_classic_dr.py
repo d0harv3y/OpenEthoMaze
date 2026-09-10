@@ -1,6 +1,6 @@
 """Classic IMPRESS investigation DR vs object-prox occupancy DR.
 
-Grain: animal × phase × novel_obj (full session).
+Grain: animal × phase × nvl_obj (full session).
 
 Classic T is nose/forelimb investigation time (IMPRESS exploration export).
 Object-prox T is spot occupancy in 0.10 m proximity windows (median across 21 kpMS models).
@@ -35,8 +35,8 @@ from nor_object_mi.simpler_first_object_prox import (  # noqa: E402
 from nor_object_mi.simpler_first_presence import wilcoxon_paired  # noqa: E402
 from nor_object_mi.simpler_first_q1 import kruskal_within_sex  # noqa: E402
 
-CONDITION = "novel_obj"
-PHASES = ("NOR_BL", "NOR_TX", "NOR_REC3hr", "NOR_REC11hr")
+CONDITION = "nvl_obj"
+SESSIONS = ("NOR_BL", "NOR_TX", "NOR_REC3hr", "NOR_REC11hr")
 GRAIN = f"animal × {{phase}} × {CONDITION} (full session)"
 ASSOC_Y = (
     ("dr_object_prox", "classic_vs_object_prox"),
@@ -52,7 +52,12 @@ DEFAULT_OBJECT_PROX = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\mo
 def _norm_cols(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out.columns = [str(c).strip().replace(" ", "_") for c in out.columns]
-    rename = {"ID": "animal_id", "treatment_group": "tx", "phase_layer": "phase_layer"}
+    rename = {
+        "ID": "animal_id",
+        "treatment_group": "condition",
+        "phase_layer": "session",
+        "condition_layer": "trial",
+    }
     return out.rename(columns=rename)
 
 
@@ -69,10 +74,10 @@ def spearman_pair(x: np.ndarray, y: np.ndarray) -> dict[str, float]:
 
 
 def wide_novel_investigation(expl: pd.DataFrame) -> pd.DataFrame:
-    """One row per animal × phase on novel_obj: investigation times + DR."""
+    """One row per animal × phase on nvl_obj: investigation times + DR."""
     df = _norm_cols(expl)
     df["animal_id"] = df["animal_id"].astype(str)
-    sub = df[df["condition_layer"] == CONDITION].copy()
+    sub = df[df["trial"] == CONDITION].copy()
     if sub.empty:
         return sub.iloc[0:0].copy()
 
@@ -82,7 +87,7 @@ def wide_novel_investigation(expl: pd.DataFrame) -> pd.DataFrame:
             m = m[m["object_id"].isna() | (m["object_id"].astype(str).str.lower().isin(("nan", "both", "")))]
         else:
             m = m[m["object_id"].astype(str) == object_id]
-        keep = ["animal_id", "sex", "tx", "phase_layer", "duration_s", "value"]
+        keep = ["animal_id", "sex", "condition", "session", "duration_s", "value"]
         out = m[keep].copy()
         return out
 
@@ -94,7 +99,7 @@ def wide_novel_investigation(expl: pd.DataFrame) -> pd.DataFrame:
     n_nvl = _metric_map("total_investigations", "nvl").rename(columns={"value": "n_nvl"})
     t_both = _metric_map("total_investigation_time_s", None).rename(columns={"value": "t_both_s"})
 
-    keys = ["animal_id", "sex", "tx", "phase_layer"]
+    keys = ["animal_id", "sex", "condition", "session"]
     wide = t_fam[keys + ["duration_s", "t_fam_s"]].merge(t_nvl[keys + ["t_nvl_s"]], on=keys, how="outer")
     for extra, col in (
         (n_fam, "n_fam"),
@@ -110,18 +115,18 @@ def wide_novel_investigation(expl: pd.DataFrame) -> pd.DataFrame:
     wide["dr_classic"] = pd.to_numeric(wide["dr_stored"], errors="coerce")
     miss = ~np.isfinite(wide["dr_classic"].to_numpy(dtype=float))
     wide.loc[miss, "dr_classic"] = wide.loc[miss, "dr_recomputed"]
-    wide["phase_layer"] = pd.Categorical(wide["phase_layer"], categories=list(PHASES), ordered=True)
-    return wide.sort_values(["phase_layer", "animal_id"]).reset_index(drop=True)
+    wide["session"] = pd.Categorical(wide["session"], categories=list(SESSIONS), ordered=True)
+    return wide.sort_values(["session", "animal_id"]).reset_index(drop=True)
 
 
 def wide_novel_ambulation(amb: pd.DataFrame) -> pd.DataFrame:
     df = _norm_cols(amb)
     df["animal_id"] = df["animal_id"].astype(str)
-    sub = df[df["condition_layer"] == CONDITION].copy()
+    sub = df[df["trial"] == CONDITION].copy()
     if sub.empty:
-        return pd.DataFrame(columns=["animal_id", "phase_layer"])
+        return pd.DataFrame(columns=["animal_id", "session"])
     piv = sub.pivot_table(
-        index=["animal_id", "phase_layer"],
+        index=["animal_id", "session"],
         columns="metric",
         values="value",
         aggfunc="first",
@@ -140,14 +145,14 @@ def pair_with_object_prox(
     med["animal_id"] = med["animal_id"].astype(str)
     keep_ob = [
         "animal_id",
-        "phase_layer",
+        "session",
         "dr_object_prox",
         "frac_near_fam",
         "frac_near_nvl",
         "n_models",
     ]
-    paired = classic.merge(med[keep_ob], on=["animal_id", "phase_layer"], how="inner")
-    paired = paired.merge(amb, on=["animal_id", "phase_layer"], how="left")
+    paired = classic.merge(med[keep_ob], on=["animal_id", "session"], how="inner")
+    paired = paired.merge(amb, on=["animal_id", "session"], how="left")
     paired["dr_classic_minus_object_prox"] = paired["dr_classic"] - paired["dr_object_prox"]
     return paired
 
@@ -155,7 +160,7 @@ def pair_with_object_prox(
 def _wx_row(phase: str, metric: str, question: str, values: np.ndarray) -> dict[str, object]:
     rec = wilcoxon_paired(values)
     return {
-        "phase_layer": phase,
+        "session": phase,
         "question": question,
         "metric": metric,
         "grain": GRAIN.format(phase=phase),
@@ -170,7 +175,7 @@ def _wx_row(phase: str, metric: str, question: str, values: np.ndarray) -> dict[
 
 def test_table(paired: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
-    for phase, g in paired.groupby("phase_layer", sort=True):
+    for phase, g in paired.groupby("session", sort=True):
         rows.append(_wx_row(str(phase), "dr_classic", "classic_dr", g["dr_classic"].to_numpy()))
         rows.append(_wx_row(str(phase), "dr_object_prox", "object_prox_dr", g["dr_object_prox"].to_numpy()))
         rows.append(
@@ -187,7 +192,7 @@ def test_table(paired: pd.DataFrame) -> pd.DataFrame:
                 p = r["p"]
                 rows.append(
                     {
-                        "phase_layer": phase,
+                        "session": phase,
                         "question": question,
                         "metric": metric,
                         "grain": GRAIN.format(phase=phase),
@@ -209,13 +214,13 @@ def test_table(paired: pd.DataFrame) -> pd.DataFrame:
 
 def association_table(paired: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
-    for phase, g in paired.groupby("phase_layer", sort=True):
+    for phase, g in paired.groupby("session", sort=True):
         for ycol, contrast in ASSOC_Y:
             rec = spearman_pair(g["dr_classic"].to_numpy(), g[ycol].to_numpy())
             p = rec["p"]
             rows.append(
                 {
-                    "phase_layer": phase,
+                    "session": phase,
                     "contrast": contrast,
                     "x": "dr_classic",
                     "y": ycol,
@@ -256,7 +261,7 @@ def main(argv: list[str] | None = None) -> int:
 
     recon = pd.to_numeric(classic["dr_stored"], errors="coerce") - pd.to_numeric(classic["dr_recomputed"], errors="coerce")
     payload = {
-        "condition_layer": CONDITION,
+        "trial": CONDITION,
         "classic_gate": "IMPRESS investigation (nose/forelimb + radius + angle)",
         "object_prox_gate": "spot bout-mean < 0.10 m; median across 21 kpMS models",
         "formula": "DR = (T_nvl - T_fam) / (T_nvl + T_fam)",

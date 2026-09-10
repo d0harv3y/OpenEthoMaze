@@ -117,9 +117,9 @@ bash scripts/wsl_kpms_multi_stream_apply_sweep.sh
 
 **Fit checkpoints are not invalidated** when you add trials. You only need to (1) extend the tracking H5 + manifest, then (2) **append** apply for new trials.
 
-### 1. Update treatment labels (Windows)
+### 1. Update condition labels (Windows)
 
-Add the 4 `animal_id` rows to `inputs/treatment_labels.csv` (or your cohort CSV). Discovery applies labels during build.
+Add the 4 `animal_id` rows to `inputs/condition_labels.csv` (or your cohort CSV). Discovery applies labels during build.
 
 ### 2. Extend `kpms_tracking.h5` (Windows)
 
@@ -130,7 +130,7 @@ uv run maze-legacy-db build-kpms-h5 \
   --db-path outputs/legacy/kpms_tracking.h5 \
   --data-dir <your-data-root> \
   --profile <profile.json> \
-  --treatment-labels inputs/treatment_labels.csv
+  --condition-labels inputs/condition_labels.csv
 ```
 
 - **Existing trials:** `tracking/anatomical` and `tracking/blob` are **skipped** by default (`keep_live` / no `--overwrite-pose`).
@@ -144,7 +144,7 @@ Label-only refresh (no new tracking writes):
 uv run maze-legacy-db build-kpms-h5 \
   --db-path outputs/legacy/kpms_tracking.h5 \
   --data-dir <root> \
-  --treatment-labels inputs/treatment_labels.csv \
+  --condition-labels inputs/condition_labels.csv \
   --skip-anatomical --skip-blob
 ```
 

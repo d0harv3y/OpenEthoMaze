@@ -6,13 +6,13 @@ import random
 
 from ..pipeline.io.file_discovery import (
     TrialManifest,
-    apply_treatment_labels,
+    apply_condition_labels,
     discover_trials,
     enrich_manifests_exit_number,
-    enrich_manifests_from_treatment_labels,
+    enrich_manifests_from_condition_labels,
     enrich_manifests_has_tracking_pose,
     load_manifest_csv,
-    load_treatment_labels,
+    load_condition_labels,
 )
 from .h5_pose import resolve_canonical_trial_h5
 
@@ -46,7 +46,7 @@ def _manifest_has_usable_pose(manifest: TrialManifest, db_path: Path) -> bool:
 BALANCE_COLUMN_CHOICES: frozenset[str] = frozenset(
     {
         "sex",
-        "tx",
+        "condition",
         "cohort",
         "phase",
         "strain",
@@ -70,7 +70,7 @@ STRATIFY_LABEL_COLUMNS: tuple[str, ...] = (
     "exit_number",
     "sex",
     "strain",
-    "tx",
+    "condition",
     "experiment",
     "drug",
     "cohort",
@@ -106,9 +106,9 @@ class SubsetConfig:
     max_trials: int | None = None
     random_seed: int = 42
     # Stratification keys for representative subsampling (must be TrialManifest attrs).
-    balance_columns: tuple[str, ...] = ("sex", "tx", "phase", "strain")
-    # When loading from CSV, fill blank sex/tx/strain/... from treatment_labels.csv (opt-in).
-    enrich_from_treatment_labels: bool = False
+    balance_columns: tuple[str, ...] = ("sex", "condition", "strain")
+    # When loading from CSV, fill blank sex/tx/strain/... from condition_labels.csv (opt-in).
+    enrich_from_condition_labels: bool = False
     #: Cohort / results HDF5 for ``has_tracking_pose`` when ``input_h5_path`` is empty.
     db_path: Path | None = None
 
@@ -129,14 +129,14 @@ def load_manifests(cfg: SubsetConfig) -> list[TrialManifest]:
     """Load manifests from CSV or discovery and attach treatment metadata."""
     if cfg.manifest_csv is not None:
         manifests = load_manifest_csv(cfg.manifest_csv)
-        if cfg.enrich_from_treatment_labels:
-            enrich_manifests_from_treatment_labels(manifests)
+        if cfg.enrich_from_condition_labels:
+            enrich_manifests_from_condition_labels(manifests)
     else:
         result = discover_trials()
         manifests = result.trials
-        if cfg.enrich_from_treatment_labels:
-            labels = load_treatment_labels()
-            apply_treatment_labels(result, labels)
+        if cfg.enrich_from_condition_labels:
+            labels = load_condition_labels()
+            apply_condition_labels(result, labels)
     enrich_manifests_exit_number(manifests)
     db_path = _effective_db_path(cfg)
     if not db_path.is_file():
@@ -169,7 +169,7 @@ def sample_representative_subset(
     manifests: list[TrialManifest],
     max_trials: int | None,
     random_seed: int,
-    balance_columns: tuple[str, ...] = ("sex", "tx", "phase", "strain"),
+    balance_columns: tuple[str, ...] = ("sex", "condition", "strain"),
 ) -> list[TrialManifest]:
     """
     Select a representative subset by stratifying on ``balance_columns`` only.

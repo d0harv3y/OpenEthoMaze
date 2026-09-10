@@ -75,7 +75,7 @@ def load_manifests_for_apply(
     *,
     include_habituation: bool = False,
     include_experimental: bool = True,
-    enrich_from_treatment_labels: bool = True,
+    enrich_from_condition_labels: bool = True,
     animal_ids: Optional[list[str]] = None,
     sessions: Optional[list[str]] = None,
     trials: Optional[list[str]] = None,
@@ -88,7 +88,7 @@ def load_manifests_for_apply(
         require_sleap=True,
         include_habituation=include_habituation,
         include_experimental=include_experimental,
-        enrich_from_treatment_labels=enrich_from_treatment_labels,
+        enrich_from_condition_labels=enrich_from_condition_labels,
     )
     manifests = load_manifests(cfg)
     n_csv = len(manifests)
@@ -421,7 +421,7 @@ def apply_run_config_from_args(args: argparse.Namespace) -> KpmsApplyRunConfig:
         trials=tuple(tr) if tr else None,
         include_habituation=args.include_habituation,
         exclude_experimental=args.exclude_experimental,
-        enrich_from_treatment_labels=not args.no_enrich_labels,
+        enrich_from_condition_labels=not args.no_enrich_labels,
         num_iters=args.num_iters,
         reindex_syllables_before_load=not args.no_reindex,
         verbose=not args.quiet,
@@ -456,7 +456,7 @@ def run_kpms_apply(cfg: KpmsApplyRunConfig) -> dict[str, Any]:
         manifest_csv,
         include_habituation=cfg.include_habituation,
         include_experimental=not cfg.exclude_experimental,
-        enrich_from_treatment_labels=cfg.enrich_from_treatment_labels,
+        enrich_from_condition_labels=cfg.enrich_from_condition_labels,
         animal_ids=animal_ids,
         sessions=sessions,
         trials=trials,
@@ -538,7 +538,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--no-enrich-labels",
         action="store_true",
-        help="Do not fill blank sex/tx from inputs/treatment_labels.csv",
+        help="Do not fill blank sex/condition from inputs/condition_labels.csv",
     )
     p.add_argument("--num-iters", type=int, default=100)
     p.add_argument("--no-reindex", action="store_true", help="Skip reindex_syllables_in_checkpoint")

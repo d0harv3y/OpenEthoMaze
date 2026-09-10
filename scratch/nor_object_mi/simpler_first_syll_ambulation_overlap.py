@@ -21,7 +21,7 @@ if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
 
 from nor_object_mi.simpler_first_protocol_prologue import (  # noqa: E402
-    PHASES,
+    SESSIONS,
     pearson_pair,
     ttest_one_sample,
     ttest_paired,
@@ -32,7 +32,7 @@ from nor_object_mi.syll_ambulation_overlap import (  # noqa: E402
     session_association,
 )
 
-CONDITION = "novel_obj"
+CONDITION = "nvl_obj"
 DEFAULT_SYLL = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_syllable_kinematics\syllable_bout_kinematics.csv"
@@ -54,9 +54,9 @@ SYLL_COLS = (
     "model",
     "animal_id",
     "raw_session",
-    "phase_layer",
-    "condition_layer",
-    "tx",
+    "session",
+    "trial",
+    "condition",
     "sex",
     "bout_index",
     "raw_syllable_id",
@@ -69,8 +69,8 @@ SYLL_COLS = (
 AMB_COLS = (
     "animal_id",
     "raw_session",
-    "phase_layer",
-    "condition_layer",
+    "session",
+    "trial",
     "row_start",
     "row_end_exclusive",
 )
@@ -91,7 +91,7 @@ def load_locked_syllable_bouts(
     for chunk in pd.read_csv(path, usecols=list(SYLL_COLS), chunksize=250_000):
         sub = chunk[chunk["model"] == model]
         if condition is not None:
-            sub = sub[sub["condition_layer"] == condition]
+            sub = sub[sub["trial"] == condition]
         if not sub.empty:
             chunks.append(sub)
             kept += len(sub)
@@ -124,7 +124,7 @@ def build_overlap_tables(
     empty_amb = move.iloc[0:0]
     session_rows: list[dict[str, object]] = []
     bout_parts: list[pd.DataFrame] = []
-    groups = list(syll.groupby(["animal_id", "raw_session", "phase_layer"], sort=False))
+    groups = list(syll.groupby(["animal_id", "raw_session", "session"], sort=False))
     n_jobs = len(groups)
     for i, ((aid, sess, phase), sy) in enumerate(groups, start=1):
         if i == 1 or i % 50 == 0 or i == n_jobs:
@@ -145,11 +145,11 @@ def build_overlap_tables(
             {
                 "animal_id": aid,
                 "raw_session": sess,
-                "phase_layer": phase,
-                "condition_layer": str(sy["condition_layer"].iloc[0])
-                if "condition_layer" in sy.columns
+                "session": phase,
+                "trial": str(sy["trial"].iloc[0])
+                if "trial" in sy.columns
                 else CONDITION,
-                "tx": meta["tx"],
+                "condition": meta["condition"],
                 "sex": meta["sex"],
                 "model": meta["model"],
                 **assoc,
@@ -158,10 +158,10 @@ def build_overlap_tables(
     bouts = pd.concat(bout_parts, ignore_index=True) if bout_parts else pd.DataFrame()
     sessions = pd.DataFrame(session_rows)
     if not sessions.empty:
-        sessions["phase_layer"] = pd.Categorical(
-            sessions["phase_layer"], categories=list(PHASES), ordered=True
+        sessions["session"] = pd.Categorical(
+            sessions["session"], categories=list(SESSIONS), ordered=True
         )
-        sessions = sessions.sort_values(["phase_layer", "animal_id"]).reset_index(drop=True)
+        sessions = sessions.sort_values(["session", "animal_id"]).reset_index(drop=True)
     return bouts, sessions
 
 
@@ -169,7 +169,7 @@ def association_tests(sessions: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     if sessions.empty:
         return pd.DataFrame()
-    for phase, g in sessions.groupby("phase_layer", observed=True):
+    for phase, g in sessions.groupby("session", observed=True):
         for sex, gs in _sex_slices(g):
             rec_i = ttest_one_sample(gs["i_syllable_locomotor_bits"].to_numpy())
             rec_e = ttest_one_sample(gs["enrich_unweighted_move"].to_numpy())
@@ -204,7 +204,7 @@ def association_tests(sessions: pd.DataFrame) -> pd.DataFrame:
             for rec, contrast, test_name, note in specs:
                 rows.append(
                     {
-                        "phase_layer": str(phase),
+                        "session": str(phase),
                         "sex": sex,
                         "contrast": contrast,
                         "n": rec["n"],
@@ -219,7 +219,7 @@ def association_tests(sessions: pd.DataFrame) -> pd.DataFrame:
                 )
             rows.append(
                 {
-                    "phase_layer": str(phase),
+                    "session": str(phase),
                     "sex": sex,
                     "contrast": "session_p_move_vs_unweighted_bout_frac",
                     "n": int(rec_p["n"]),
@@ -268,7 +268,7 @@ overlapping frames in movement vs immobile bout tables (spot node). Exclusive en
 Within sex (and pooled): one-sample t on I and on enrich; paired t on median
 durations; Pearson of session P(move) vs unweighted bout-mean P(move).
 
-Locked model: `paramscan_s1-1e8_s2-1e5_ss-50`. Condition: `novel_obj`.
+Locked model: `paramscan_s1-1e8_s2-1e5_ss-50`. Condition: `nvl_obj`.
 """
 
 
@@ -290,8 +290,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"syllable bouts={len(syll):,}", flush=True)
     move = pd.read_csv(args.movement_csv, usecols=list(AMB_COLS))
     still = pd.read_csv(args.immobile_csv, usecols=list(AMB_COLS))
-    move = move[move["condition_layer"] == CONDITION]
-    still = still[still["condition_layer"] == CONDITION]
+    move = move[move["trial"] == CONDITION]
+    still = still[still["trial"] == CONDITION]
     print(f"move bouts={len(move):,} still bouts={len(still):,}", flush=True)
 
     bouts, sessions = build_overlap_tables(syll, move, still)
@@ -302,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
     tests.to_csv(out / "syll_locomotor_association.csv", index=False)
     summary = {
         "model": model,
-        "condition_layer": CONDITION,
+        "trial": CONDITION,
         "n_syll_bouts": int(len(bouts)),
         "n_sessions": int(len(sessions)),
         "join": "interval_overlap_exclusive_end",

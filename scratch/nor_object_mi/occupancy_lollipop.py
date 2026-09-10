@@ -12,14 +12,14 @@ import numpy as np
 import pandas as pd
 
 from nor_object_mi.simpler_first_da import apply_bh_grouped
-from nor_object_mi.simpler_first_protocol_prologue import PHASES, ttest_one_sample
+from nor_object_mi.simpler_first_protocol_prologue import SESSIONS, ttest_one_sample
 
 MIN_N = 8
-STEPS = ("no_obj->identical", "identical->novel", "no_obj->novel")
+STEPS = ("no_obj->id_obj", "id_obj->nvl_obj", "no_obj->nvl_obj")
 STEP_DEST = {
-    "no_obj->identical": "identical_obj",
-    "identical->novel": "novel_obj",
-    "no_obj->novel": "novel_obj",
+    "no_obj->id_obj": "id_obj",
+    "id_obj->nvl_obj": "nvl_obj",
+    "no_obj->nvl_obj": "nvl_obj",
 }
 
 
@@ -32,12 +32,12 @@ def occupancy_tests(occ: pd.DataFrame, *, min_n: int = MIN_N) -> pd.DataFrame:
     if occ.empty:
         return pd.DataFrame()
     has_model = "model" in occ.columns
-    has_cond = "condition_layer" in occ.columns
-    group_keys = ["phase_layer"]
+    has_cond = "trial" in occ.columns
+    group_keys = ["session"]
     if has_model:
         group_keys = ["model", *group_keys]
     if has_cond:
-        group_keys = [*group_keys, "condition_layer"]
+        group_keys = [*group_keys, "trial"]
     enrich_col = "enrich_move" if "enrich_move" in occ.columns else "enrich_move"
     for key, g in occ.groupby(group_keys, sort=False):
         key_t = key if isinstance(key, tuple) else (key,)
@@ -55,7 +55,7 @@ def occupancy_tests(occ: pd.DataFrame, *, min_n: int = MIN_N) -> pd.DataFrame:
             if n < min_n:
                 continue
             row: dict[str, object] = {
-                "phase_layer": str(phase),
+                "session": str(phase),
                 "raw_syllable_id": int(sid),
                 "n": n,
                 "mean_enrich_move": float(rec["mean_delta"]),
@@ -67,16 +67,16 @@ def occupancy_tests(occ: pd.DataFrame, *, min_n: int = MIN_N) -> pd.DataFrame:
             if has_model:
                 row["model"] = str(model)
             if has_cond:
-                row["condition_layer"] = str(cond)
+                row["trial"] = str(cond)
             rows.append(row)
     tests = pd.DataFrame(rows)
     if tests.empty:
         return tests
-    family = ["phase_layer"]
+    family = ["session"]
     if has_model:
         family = ["model", *family]
     if has_cond:
-        family = [*family, "condition_layer"]
+        family = [*family, "trial"]
     tests = apply_bh_grouped(tests, family, p_col="p", q_col="q_bh")
     tests["hit_fdr05"] = tests["hit_fdr05"]
     cls = np.full(len(tests), "ns", dtype=object)
@@ -85,10 +85,10 @@ def occupancy_tests(occ: pd.DataFrame, *, min_n: int = MIN_N) -> pd.DataFrame:
     cls[hit & pos] = "move"
     cls[hit & ~pos] = "still"
     tests["locomotor_class"] = cls
-    tests["phase_layer"] = pd.Categorical(tests["phase_layer"], categories=list(PHASES), ordered=True)
-    sort_cols = (["model"] if has_model else []) + ["phase_layer"]
+    tests["session"] = pd.Categorical(tests["session"], categories=list(SESSIONS), ordered=True)
+    sort_cols = (["model"] if has_model else []) + ["session"]
     if has_cond:
-        sort_cols.append("condition_layer")
+        sort_cols.append("trial")
     sort_cols.append("raw_syllable_id")
     return tests.sort_values(sort_cols).reset_index(drop=True)
 
@@ -121,7 +121,7 @@ def join_da_occupancy(
         }
     )
     keep_occ = [
-        "phase_layer",
+        "session",
         "raw_syllable_id",
         "n",
         "mean_enrich_move",
@@ -131,11 +131,11 @@ def join_da_occupancy(
         "hit_occupancy_fdr05",
         "locomotor_class",
     ]
-    on = ["phase_layer", "raw_syllable_id"]
-    if "condition_layer" in occ.columns:
-        d["condition_layer"] = _dest_condition(d)
-        keep_occ = ["condition_layer", *keep_occ]
-        on = ["phase_layer", "condition_layer", "raw_syllable_id"]
+    on = ["session", "raw_syllable_id"]
+    if "trial" in occ.columns:
+        d["trial"] = _dest_condition(d)
+        keep_occ = ["trial", *keep_occ]
+        on = ["session", "trial", "raw_syllable_id"]
     out = d.merge(occ[keep_occ], on=on, how="left")
     out["locomotor_class"] = out["locomotor_class"].fillna("no_occ")
     out["on_lollipop"] = out["hit_da_fdr05"]
@@ -175,9 +175,9 @@ def signed_overlap_summary(joined: pd.DataFrame) -> pd.DataFrame:
     hit = _is_da_hit(joined)
     for model in model_vals:
         in_m = pd.Series(True, index=joined.index) if model is None else joined["model"].astype(str) == str(model)
-        for phase in PHASES:
+        for phase in SESSIONS:
             for step in STEPS:
-                sel = in_m & (joined["phase_layer"] == phase) & (joined["step"] == step) & hit
+                sel = in_m & (joined["session"] == phase) & (joined["step"] == step) & hit
                 g = joined.loc[sel]
                 d = delta.loc[sel]
                 gain = d > 0
@@ -190,7 +190,7 @@ def signed_overlap_summary(joined: pd.DataFrame) -> pd.DataFrame:
                 n_move_loss = int((loss & (cls == "move")).sum())
                 n_still_loss = int((loss & (cls == "still")).sum())
                 rec: dict[str, object] = {
-                    "phase_layer": phase,
+                    "session": phase,
                     "step": step,
                     "n_da_fdr": int(sel.sum()),
                     "n_gain": n_gain,
@@ -213,7 +213,7 @@ def consensus_signed_across_models(summary: pd.DataFrame) -> pd.DataFrame:
     if summary.empty:
         return pd.DataFrame()
     rows: list[dict[str, object]] = []
-    for (phase, step), g in summary.groupby(["phase_layer", "step"], sort=False):
+    for (phase, step), g in summary.groupby(["session", "step"], sort=False):
         n_models = int(g["model"].nunique()) if "model" in g.columns else int(len(g))
         n_gain = pd.to_numeric(g["n_gain"], errors="coerce")
         n_loss = pd.to_numeric(g["n_loss"], errors="coerce")
@@ -221,7 +221,7 @@ def consensus_signed_across_models(summary: pd.DataFrame) -> pd.DataFrame:
         fl = pd.to_numeric(g.loc[n_loss > 0, "frac_loss_move"], errors="coerce")
         rows.append(
             {
-                "phase_layer": str(phase),
+                "session": str(phase),
                 "step": str(step),
                 "n_models": n_models,
                 "n_models_with_gain": int((n_gain > 0).sum()),
@@ -237,8 +237,8 @@ def consensus_signed_across_models(summary: pd.DataFrame) -> pd.DataFrame:
             }
         )
     out = pd.DataFrame(rows)
-    out["phase_layer"] = pd.Categorical(out["phase_layer"], categories=list(PHASES), ordered=True)
-    return out.sort_values(["phase_layer", "step"]).reset_index(drop=True)
+    out["session"] = pd.Categorical(out["session"], categories=list(SESSIONS), ordered=True)
+    return out.sort_values(["session", "step"]).reset_index(drop=True)
 
 
 def set_overlap_summary(joined: pd.DataFrame) -> pd.DataFrame:
@@ -250,8 +250,8 @@ def set_overlap_summary(joined: pd.DataFrame) -> pd.DataFrame:
     model_vals: list[object] = list(joined["model"].astype(str).unique()) if has_model else [None]
     for model in model_vals:
         block = joined if model is None else joined[joined["model"].astype(str) == str(model)]
-        for phase in PHASES:
-            occ = block[block["phase_layer"] == phase]
+        for phase in SESSIONS:
+            occ = block[block["session"] == phase]
             for step in STEPS:
                 g = occ[(occ["step"] == step) & _is_da_hit(occ)]
                 da_ids = set(g["raw_syllable_id"].dropna().astype(int))
@@ -274,7 +274,7 @@ def set_overlap_summary(joined: pd.DataFrame) -> pd.DataFrame:
                 )
                 n_da = len(da_ids)
                 rec: dict[str, object] = {
-                    "phase_layer": phase,
+                    "session": phase,
                     "step": step,
                     "n_da_fdr": n_da,
                     "n_occ_move": len(move_ids),
@@ -299,7 +299,7 @@ def consensus_across_models(summary: pd.DataFrame) -> pd.DataFrame:
     if summary.empty:
         return pd.DataFrame()
     rows: list[dict[str, object]] = []
-    for (phase, step), g in summary.groupby(["phase_layer", "step"], sort=False):
+    for (phase, step), g in summary.groupby(["session", "step"], sort=False):
         n_models = int(g["model"].nunique()) if "model" in g.columns else int(len(g))
         da = pd.to_numeric(g["n_da_fdr"], errors="coerce")
         with_da = g.loc[da > 0]
@@ -308,7 +308,7 @@ def consensus_across_models(summary: pd.DataFrame) -> pd.DataFrame:
         n_da = int((da > 0).sum())
         rows.append(
             {
-                "phase_layer": str(phase),
+                "session": str(phase),
                 "step": str(step),
                 "n_models": n_models,
                 "n_models_with_da": n_da,
@@ -335,12 +335,12 @@ def consensus_across_models(summary: pd.DataFrame) -> pd.DataFrame:
             }
         )
     out = pd.DataFrame(rows)
-    out["phase_layer"] = pd.Categorical(out["phase_layer"], categories=list(PHASES), ordered=True)
+    out["session"] = pd.Categorical(out["session"], categories=list(SESSIONS), ordered=True)
     out["n_models_move_majority"] = out["n_models_move_majority"]
     out["n_models"] = out["n_models"]
     out["n_models_with_da"] = out["n_models_with_da"]
     out["median_frac_da_move"] = out["median_frac_da_move"]
-    return out.sort_values(["phase_layer", "step"]).reset_index(drop=True)
+    return out.sort_values(["session", "step"]).reset_index(drop=True)
 
 
 join_da_occupancy = join_da_occupancy

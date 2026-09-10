@@ -11,8 +11,8 @@ MI_PER_ANIMAL_FIELDS: tuple[str, ...] = (
     "animal_id",
     "sex",
     "strain",
-    "tx",
-    "phase",
+    "condition",
+    "interval",
     "stim_var",
     "mi_type",
     "n_bouts",
@@ -25,14 +25,14 @@ MI_PER_ANIMAL_FIELDS: tuple[str, ...] = (
     "null_perm_mean",
     "null_perm_p",
     "excess",
-    "iti_control_flag",
+    "wait_control_flag",
 )
 
 GROUP_MI_TEST_FIELDS: tuple[str, ...] = (
     "factor",
     "level_a",
     "level_b",
-    "phase",
+    "interval",
     "stim_var",
     "mi_type",
     "n_a",
@@ -46,10 +46,10 @@ GROUP_MI_TEST_FIELDS: tuple[str, ...] = (
 
 GROUP_MI_EXCESS_TEST_FIELDS: tuple[str, ...] = GROUP_MI_TEST_FIELDS
 
-STIM_PHASES: tuple[str, ...] = ("run", "iti")
+STIM_INTERVALS: tuple[str, ...] = ("run", "wait")
 STIM_VARS: tuple[str, ...] = ("duty", "dist")
 MI_TYPES: tuple[str, ...] = ("occupancy", "transition")
-GROUP_FACTORS: tuple[str, ...] = ("sex", "genotype", "tx")
+GROUP_FACTORS: tuple[str, ...] = ("sex", "genotype", "condition")
 
 EARLY_LATE_K: int = 3
 MIN_TRIALS_FOR_EARLY_LATE: int = 6
@@ -61,13 +61,13 @@ MI_PER_TRIAL_FIELDS: tuple[str, ...] = (
     "animal_id",
     "sex",
     "strain",
-    "tx",
+    "condition",
     "session",
     "trial",
     "trial_key",
     "trial_ord",
     "cum_run_bouts",
-    "phase",
+    "interval",
     "stim_var",
     "mi_type",
     "n_bouts",
@@ -84,8 +84,8 @@ MI_TRIAL_ANIMAL_SUMMARY_FIELDS: tuple[str, ...] = (
     "animal_id",
     "sex",
     "strain",
-    "tx",
-    "phase",
+    "condition",
+    "interval",
     "stim_var",
     "mi_type",
     "n_trials",
@@ -107,7 +107,7 @@ GROUP_MI_WHEN_TEST_FIELDS: tuple[str, ...] = (
     "factor",
     "level_a",
     "level_b",
-    "phase",
+    "interval",
     "stim_var",
     "mi_type",
     "metric",
@@ -128,10 +128,10 @@ WHEN_TEST_METRICS: tuple[str, ...] = (
     "early_late_delta_excess",
 )
 
-PRIMARY_WHEN_PHASE: str = "run"
+PRIMARY_WHEN_INTERVAL: str = "run"
 PRIMARY_WHEN_MI_TYPE: str = "occupancy"
 
-SLICE_FACTORS: tuple[str, ...] = ("sex", "genotype", "tx")
+SLICE_FACTORS: tuple[str, ...] = ("sex", "genotype", "condition")
 MIN_SLICE_ARM_N: int = 5
 
 FDR_FAMILY_POOLED: str = "A"
@@ -143,11 +143,11 @@ GROUP_MI_SLICED_TEST_FIELDS: tuple[str, ...] = (
     "fdr_family",
     "hold_sex",
     "hold_strain",
-    "hold_tx",
+    "hold_condition",
     "contrast_factor",
     "level_a",
     "level_b",
-    "phase",
+    "interval",
     "stim_var",
     "mi_type",
     "metric",

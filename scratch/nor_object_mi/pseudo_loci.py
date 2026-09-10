@@ -25,20 +25,20 @@ def _session_object_centers_px(session: h5py.Group) -> list[np.ndarray]:
 def collect_phase_object_centers_px(
     nor_h5: h5py.File,
     animal_id: str,
-    phase_layer: str,
+    session: str,
     *,
-    condition_layers: tuple[str, ...] = ("identical_obj", "novel_obj"),
+    trials: tuple[str, ...] = ("id_obj", "nvl_obj"),
 ) -> np.ndarray:
     """Stack object centers (px) from object-present sessions in one phase."""
     if animal_id not in nor_h5:
         return np.zeros((0, 2), dtype=np.float64)
     pts: list[np.ndarray] = []
-    wanted = set(condition_layers)
+    wanted = set(trials)
     for raw in nor_h5[animal_id].keys():
         sg = nor_h5[animal_id][raw]
-        if str(sg.attrs.get("phase_layer", "") or "") != phase_layer:
+        if str(sg.attrs.get("session", "") or "") != session:
             continue
-        if str(sg.attrs.get("condition_layer", "") or "") not in wanted:
+        if str(sg.attrs.get("trial", "") or "") not in wanted:
             continue
         pts.extend(_session_object_centers_px(sg))
     if not pts:
@@ -75,10 +75,10 @@ def two_means_loci_px(points: np.ndarray, *, n_iter: int = 25) -> np.ndarray:
 def loci_for_animal_phase(
     nor_h5: h5py.File,
     animal_id: str,
-    phase_layer: str,
+    session: str,
 ) -> Optional[np.ndarray]:
     """Two placement loci (px) averaged from that animal's object-present trials."""
-    pts = collect_phase_object_centers_px(nor_h5, animal_id, phase_layer)
+    pts = collect_phase_object_centers_px(nor_h5, animal_id, session)
     if pts.shape[0] < 2:
         return None
     return two_means_loci_px(pts)

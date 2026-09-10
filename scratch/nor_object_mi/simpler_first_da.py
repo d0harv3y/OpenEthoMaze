@@ -6,7 +6,7 @@ Question (plain): which syllables change relative use when objects appear
 Not Shannon, not richness, not median Bray–Curtis. Operation: category contrast / DA
 (analogy-only on syllables). Association: paired / repeated (same animal, two conditions).
 
-Grain: animal × phase × condition_layer (full session). Same bout tables as
+Grain: animal × phase × trial (full session). Same bout tables as
 `simpler_first_presence.py`. Composition weighting: ``frame_share`` (sum
 ``bout_frames``; default) or ``bout_count`` (one count per bout).
 
@@ -40,7 +40,7 @@ if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
 
 from nor_object_mi.simpler_first_presence import (  # noqa: E402
-    PHASES,
+    SESSIONS,
     STEPS,
     WEIGHTINGS,
     build_animal_condition_table,
@@ -48,7 +48,7 @@ from nor_object_mi.simpler_first_presence import (  # noqa: E402
 )
 from nor_object_mi.simpler_first_q1 import LOCKED  # noqa: E402
 
-DA_STEPS = ("no_obj->identical", "identical->novel", "no_obj->novel")
+DA_STEPS = ("no_obj->id_obj", "id_obj->nvl_obj", "no_obj->nvl_obj")
 FDR_ALPHA = 0.05
 
 
@@ -119,13 +119,25 @@ def benjamini_hochberg(p_values: Sequence[float]) -> list[float]:
     return [float(x) for x in out]
 
 
-def apply_bh(tests: pd.DataFrame, *, p_col: str = "p", q_col: str = "q_bh") -> pd.DataFrame:
-    """Add q_bh / hit_p05 / hit_fdr05. FDR family = all finite-p rows in this table."""
+def apply_bh(
+    tests: pd.DataFrame,
+    *,
+    p_col: str = "p",
+    q_col: str = "q_bh",
+    hit_fdr_col: str = "hit_fdr05",
+    write_hit_p05: bool = True,
+) -> pd.DataFrame:
+    """Add BH q / FDR hit columns. FDR family = all finite-p rows in this table.
+
+    ``hit_fdr_col`` / ``write_hit_p05`` let a second family (e.g. column-wise)
+    attach without clobbering panel-wide ``q_bh`` / ``hit_fdr05``.
+    """
     out = tests.copy()
     if out.empty:
         out[q_col] = pd.Series(dtype=float)
-        out["hit_p05"] = pd.Series(dtype=bool)
-        out["hit_fdr05"] = pd.Series(dtype=bool)
+        if write_hit_p05:
+            out["hit_p05"] = pd.Series(dtype=bool)
+        out[hit_fdr_col] = pd.Series(dtype=bool)
         return out
     p = pd.to_numeric(out[p_col], errors="coerce").to_numpy(dtype=np.float64)
     q = np.full(p.shape[0], np.nan, dtype=np.float64)
@@ -133,8 +145,9 @@ def apply_bh(tests: pd.DataFrame, *, p_col: str = "p", q_col: str = "q_bh") -> p
     if np.any(ok):
         q[ok] = np.asarray(benjamini_hochberg(p[ok].tolist()), dtype=np.float64)
     out[q_col] = q
-    out["hit_p05"] = ok & (p < 0.05)
-    out["hit_fdr05"] = np.isfinite(q) & (q < FDR_ALPHA)
+    if write_hit_p05:
+        out["hit_p05"] = ok & (p < 0.05)
+    out[hit_fdr_col] = np.isfinite(q) & (q < FDR_ALPHA)
     return out
 
 
@@ -144,15 +157,29 @@ def apply_bh_grouped(
     *,
     p_col: str = "p",
     q_col: str = "q_bh",
+    hit_fdr_col: str = "hit_fdr05",
+    write_hit_p05: bool = True,
 ) -> pd.DataFrame:
     """BH separately within each group; preserves row order within groups."""
     if tests.empty:
-        return apply_bh(tests, p_col=p_col, q_col=q_col)
+        return apply_bh(
+            tests,
+            p_col=p_col,
+            q_col=q_col,
+            hit_fdr_col=hit_fdr_col,
+            write_hit_p05=write_hit_p05,
+        )
     missing = [c for c in group_cols if c not in tests.columns]
     if missing:
         raise ValueError(f"apply_bh_grouped missing columns: {missing}")
     parts = [
-        apply_bh(g, p_col=p_col, q_col=q_col)
+        apply_bh(
+            g,
+            p_col=p_col,
+            q_col=q_col,
+            hit_fdr_col=hit_fdr_col,
+            write_hit_p05=write_hit_p05,
+        )
         for _, g in tests.groupby(list(group_cols), sort=False)
     ]
     return pd.concat(parts, ignore_index=True)
@@ -185,8 +212,8 @@ def paired_da_deltas(
         vocab.update(cl)
         vocab.update(cr)
     sylls = sorted(vocab)
-    extra_phase = "phase_layer" in ac.columns and pair_col != "phase_layer"
-    extra_cond = "condition_layer" in ac.columns and pair_col != "condition_layer"
+    extra_phase = "session" in ac.columns and pair_col != "session"
+    extra_cond = "trial" in ac.columns and pair_col != "trial"
     rows: list[dict[str, object]] = []
     for aid in common:
         cl = left_maps[aid]
@@ -197,16 +224,16 @@ def paired_da_deltas(
         base: dict[str, object] = {
             "animal_id": aid,
             "sex": str(L.loc[aid, "sex"]),
-            "tx": str(L.loc[aid, "tx"]),
+            "condition": str(L.loc[aid, "condition"]),
             "step": step,
             "left": left,
             "right": right,
             "braycurtis": bc,
         }
         if extra_phase:
-            base["phase_layer"] = str(L.loc[aid, "phase_layer"])
+            base["session"] = str(L.loc[aid, "session"])
         if extra_cond:
-            base["condition_layer"] = str(L.loc[aid, "condition_layer"])
+            base["trial"] = str(L.loc[aid, "trial"])
         for sid in sylls:
             rows.append(
                 {
@@ -271,18 +298,22 @@ def da_tests_from_deltas(dtab: pd.DataFrame) -> pd.DataFrame:
     return apply_bh(pd.DataFrame(rows))
 
 
-def da_tests_tx_sex_from_animal_deltas(dtab: pd.DataFrame, *, progress: bool = False) -> pd.DataFrame:
-    """Wilcoxon + BH per syllable inside each model × phase × step × tx × sex.
+def da_tests_tx_sex_from_animal_deltas(
+    dtab: pd.DataFrame,
+    *,
+    cell_cols: tuple[str, ...] = ("model", "session", "step", "condition", "sex"),
+    progress: bool = False,
+) -> pd.DataFrame:
+    """Wilcoxon + BH per syllable inside each model × cell × tx × sex.
+
+    Default cell = session × step (condition-step DA). Pass
+    ``cell_cols=("model", "trial", "session_step", "condition", "sex")`` for
+    between-phase paired DA (condition held).
 
     Does not pool tx or sex. Family for BH = syllables in that stratum (same as
     ``da_tests_from_deltas`` on the subset). Ids still are not portable across models.
     """
-    need = {
-        "model",
-        "phase_layer",
-        "step",
-        "tx",
-        "sex",
+    need = set(cell_cols) | {
         "raw_syllable_id",
         "delta_p",
         "p_left",
@@ -294,7 +325,7 @@ def da_tests_tx_sex_from_animal_deltas(dtab: pd.DataFrame, *, progress: bool = F
         raise ValueError(f"da_tests_tx_sex_from_animal_deltas missing columns: {missing}")
     if dtab.empty:
         return pd.DataFrame()
-    keys = ["model", "phase_layer", "step", "tx", "sex", "raw_syllable_id"]
+    keys = list(cell_cols) + ["raw_syllable_id"]
     has_left = "left" in dtab.columns
     has_right = "right" in dtab.columns
     cols = list(keys) + ["delta_p", "p_left", "p_right", "bc_contrib_frac"]
@@ -343,13 +374,7 @@ def da_tests_tx_sex_from_animal_deltas(dtab: pd.DataFrame, *, progress: bool = F
             rec = {"n": int(d.size), "stat": float(stat), "p": float(p)}
         finite = np.isfinite(dp)
         n_fin = int(np.sum(finite))
-        row: dict[str, object] = {
-            "model": str(rec_key[0]),
-            "phase_layer": str(rec_key[1]),
-            "step": str(rec_key[2]),
-            "tx": str(rec_key[3]),
-            "sex": str(rec_key[4]),
-            "raw_syllable_id": int(rec_key[5]),
+        row = {
             "n": rec["n"],
             "n_nonzero": int(np.sum(finite & (dp != 0))),
             "median_p_left": float(np.nanmedian(pl_all[a:b])),
@@ -362,13 +387,18 @@ def da_tests_tx_sex_from_animal_deltas(dtab: pd.DataFrame, *, progress: bool = F
             "test": "wilcoxon_signed_rank",
             "question": "DA",
         }
+        for col, val in zip(keys, rec_key):
+            if col == "raw_syllable_id":
+                row[col] = int(val)
+            else:
+                row[col] = str(val)
         if has_left:
             row["left"] = str(left_all[a])
         if has_right:
             row["right"] = str(right_all[a])
         rows.append(row)
     out = pd.DataFrame(rows)
-    return apply_bh_grouped(out, ["model", "phase_layer", "step", "tx", "sex"])
+    return apply_bh_grouped(out, list(cell_cols))
 
 
 def _spearman(a: np.ndarray, b: np.ndarray) -> float:
@@ -488,24 +518,24 @@ def run_phase_da(
     if weighting not in WEIGHTINGS:
         raise ValueError(f"weighting must be one of {WEIGHTINGS}, got {weighting!r}")
     bouts = pd.read_csv(bout_csv)
-    ac = build_animal_condition_table(bouts, phase_layer=phase, weighting=weighting)
+    ac = build_animal_condition_table(bouts, session=phase, weighting=weighting)
     test_parts: list[pd.DataFrame] = []
     delta_parts: list[pd.DataFrame] = []
     for step, left, right in STEPS:
         dtab = paired_da_deltas(
-            ac, step=step, left=left, right=right, pair_col="condition_layer"
+            ac, step=step, left=left, right=right, pair_col="trial"
         )
         if dtab.empty:
             continue
         tests = da_tests_from_deltas(dtab)
-        tests.insert(0, "phase_layer", phase)
+        tests.insert(0, "session", phase)
         tests.insert(1, "step", step)
         tests.insert(2, "left", left)
         tests.insert(3, "right", right)
         tests.insert(4, "weighting", weighting)
         test_parts.append(tests)
         dtab = dtab.copy()
-        dtab["phase_layer"] = phase
+        dtab["session"] = phase
         dtab["weighting"] = weighting
         delta_parts.append(dtab)
     tests_df = pd.concat(test_parts, ignore_index=True) if test_parts else pd.DataFrame()
@@ -600,7 +630,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         for p in sorted(base.glob("paramscan_*")):
             if p.is_dir() and any(
-                (p / tag / "ladder_bout_features.csv").exists() for _, tag in PHASES
+                (p / tag / "ladder_bout_features.csv").exists() for _, tag in SESSIONS
             ):
                 model_roots.append(p)
     # Prefer non-archive when both exist (same model name).
@@ -619,11 +649,11 @@ def main(argv: list[str] | None = None) -> int:
 
     all_tests: list[pd.DataFrame] = []
     all_deltas: list[pd.DataFrame] = []
-    n_jobs = len(model_paths) * len(PHASES)
+    n_jobs = len(model_paths) * len(SESSIONS)
     done = 0
     for art in model_paths:
         model = art.name
-        for phase, tag in PHASES:
+        for phase, tag in SESSIONS:
             done += 1
             bout_csv = art / tag / "ladder_bout_features.csv"
             if not bout_csv.exists():
@@ -654,10 +684,10 @@ def main(argv: list[str] | None = None) -> int:
     pair_path = out / "da_consistency_phase_pairs.csv"
     persist_path = out / "da_syllable_phase_persistence.csv"
     pairs = consistency_phase_pairs(
-        tests_df, facet_col="phase_layer", group_cols=("model", "step")
+        tests_df, facet_col="session", group_cols=("model", "step")
     )
     persist = syllable_persistence(
-        tests_df, facet_col="phase_layer", group_cols=("model", "step")
+        tests_df, facet_col="session", group_cols=("model", "step")
     )
     if not pairs.empty:
         pairs.to_csv(pair_path, index=False)
@@ -669,7 +699,7 @@ def main(argv: list[str] | None = None) -> int:
     payload = {
         "n_models": len(models),
         "models": models,
-        "phases": [p for p, _ in PHASES],
+        "phases": [p for p, _ in SESSIONS],
         "steps": list(DA_STEPS),
         "weighting": args.weighting,
         "n_test_rows": int(len(tests_df)),
@@ -680,7 +710,7 @@ def main(argv: list[str] | None = None) -> int:
         "bout_source": "archive/" if any("archive" in str(p) for p in model_paths) else "art_root/",
         "hit_rule": (
             "sex=all Wilcoxon on paired Δp_k, BH FDR q<0.05 within model × phase × step "
-            f"(animals pooled across tx). weighting={args.weighting}."
+            f"(animals pooled across condition). weighting={args.weighting}."
         ),
         "id_portability": "raw_syllable_id aligned within a kpMS model across phases; not across models",
         "pilot_model_note": str(LOCKED["model"]),

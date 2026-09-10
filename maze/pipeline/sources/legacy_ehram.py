@@ -89,7 +89,7 @@ def load_trial_ns_rows(csv_path: Path | str) -> list[LegacyRamSidecarRow]:
                     parent_directory=str(row.get("parent_directory", "")).strip(),
                     file_name=str(row.get("file_name", "")).strip(),
                     animal_id=str(row.get("id", "")).strip(),
-                    tx=str(row.get("tx", "")).strip(),
+                    condition=str(row.get("condition", "")).strip(),
                     sex=str(row.get("sex", "")).strip(),
                     phase=str(row.get("phase", "")).strip(),
                     trial=str(row.get("trial", "")).strip(),
@@ -147,7 +147,7 @@ def sidecar_row_to_work_item(
             "phase": row.phase,
             "trial": row.trial,
             "escape_arm": str(row.escape_arm),
-            "tx": row.tx,
+            "condition": row.condition,
             "sex": row.sex,
             "start_datetime": (
                 row.start_datetime.isoformat() if row.start_datetime is not None else ""

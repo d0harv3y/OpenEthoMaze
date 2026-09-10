@@ -57,7 +57,7 @@ def source_work_item_to_trial_manifest(item: SourceWorkItem, pipeline_h5: Path) 
         sleap_path=item.sleap_path.resolve() if item.sleap_path else None,
         timestamp=item.timestamp,
         original_session=phase or None,
-        tx=(md.get("tx") or "").strip() or None,
+        condition=(md.get("condition") or "").strip() or None,
         sex=(md.get("sex") or "").strip() or None,
         is_habituation=_is_habituation_phase(phase),
         cohort=None,

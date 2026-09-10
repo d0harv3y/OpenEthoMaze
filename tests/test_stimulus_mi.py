@@ -36,11 +36,11 @@ def _bout_row(**kwargs: str) -> dict[str, str]:
         "animal_id": "3243",
         "session": "S01",
         "trial": "T01",
-        "phase": "experimental",
+        "interval": "experimental",
         "exit_number": "1",
         "sex": "F",
         "strain": "wt",
-        "tx": "n/a",
+        "condition": "n/a",
         "experiment": "VASTcont",
         "drug": "n/a",
         "cohort": "",
@@ -120,13 +120,13 @@ def test_compute_animal_mi_synthetic_cohort() -> None:
                 raw_syllable_id=str(i % 4),
                 bout_mean_duty=f"{duty:.2f}",
                 bout_mean_dist_px=f"{100 + i * 10}.0",
-                bout_primary_state="run" if i % 3 else "iti_wait",
+                bout_primary_state="run" if i % 3 else "wait",
             )
         )
     edges = compute_global_bin_edges(rows, n_bins=4)
     results = compute_animal_mi(rows, edges=edges, n_perm=50, rng=np.random.default_rng(0))
     assert results
-    phases = {r.phase for r in results}
+    phases = {r.interval for r in results}
     assert "run" in phases
     assert all(r.n_bouts > 0 for r in results)
 
@@ -137,8 +137,8 @@ def test_run_group_mi_tests_mann_whitney() -> None:
             "animal_id": "1",
             "sex": "F",
             "strain": "wt",
-            "tx": "n/a",
-            "phase": "run",
+            "condition": "n/a",
+            "interval": "run",
             "stim_var": "duty",
             "mi_type": "occupancy",
             "mi_mm": "0.5",
@@ -149,8 +149,8 @@ def test_run_group_mi_tests_mann_whitney() -> None:
             "animal_id": "2",
             "sex": "M",
             "strain": "wt",
-            "tx": "n/a",
-            "phase": "run",
+            "condition": "n/a",
+            "interval": "run",
             "stim_var": "duty",
             "mi_type": "occupancy",
             "mi_mm": "0.1",
@@ -170,8 +170,8 @@ def test_run_group_mi_excess_tests_uses_excess_column() -> None:
             "animal_id": "1",
             "sex": "F",
             "strain": "wt",
-            "tx": "n/a",
-            "phase": "run",
+            "condition": "n/a",
+            "interval": "run",
             "stim_var": "duty",
             "mi_type": "occupancy",
             "mi_mm": "0.5",
@@ -182,8 +182,8 @@ def test_run_group_mi_excess_tests_uses_excess_column() -> None:
             "animal_id": "2",
             "sex": "M",
             "strain": "wt",
-            "tx": "n/a",
-            "phase": "run",
+            "condition": "n/a",
+            "interval": "run",
             "stim_var": "duty",
             "mi_type": "occupancy",
             "mi_mm": "0.5",
@@ -211,7 +211,7 @@ def test_compute_animal_mi_emits_excess() -> None:
     ]
     edges = compute_global_bin_edges(rows, n_bins=4)
     results = compute_animal_mi(rows, edges=edges, n_perm=20, rng=np.random.default_rng(0))
-    run_occ = [r for r in results if r.phase == "run" and r.stim_var == "duty" and r.mi_type == "occupancy"]
+    run_occ = [r for r in results if r.interval == "run" and r.stim_var == "duty" and r.mi_type == "occupancy"]
     assert run_occ
     assert all(np.isfinite(r.excess) for r in run_occ)
 
@@ -265,7 +265,7 @@ def test_compute_per_trial_mi_full_factorial() -> None:
     edges = compute_global_bin_edges(rows, n_bins=4)
     trial_results = compute_per_trial_mi(rows, edges=edges)
     assert trial_results
-    combos = {(r.phase, r.stim_var, r.mi_type) for r in trial_results}
+    combos = {(r.interval, r.stim_var, r.mi_type) for r in trial_results}
     assert ("run", "duty", "occupancy") in combos
     assert ("run", "dist", "transition") in combos
     assert all(r.trial_ord >= 0 for r in trial_results)
@@ -277,7 +277,7 @@ def test_early_late_delta_requires_six_trials() -> None:
     edges = compute_global_bin_edges(rows, n_bins=4)
     trial_results = compute_per_trial_mi(rows, edges=edges)
     summaries = compute_trial_animal_summaries(
-        [r for r in trial_results if r.phase == "run" and r.stim_var == "duty" and r.mi_type == "occupancy"]
+        [r for r in trial_results if r.interval == "run" and r.stim_var == "duty" and r.mi_type == "occupancy"]
     )
     assert summaries
     assert all(np.isnan(s.early_late_delta) for s in summaries)
@@ -288,7 +288,7 @@ def test_slope_sign_with_rising_coupling() -> None:
     edges = compute_global_bin_edges(rows, n_bins=4)
     trial_results = compute_per_trial_mi(rows, edges=edges)
     summaries = compute_trial_animal_summaries(
-        [r for r in trial_results if r.phase == "run" and r.stim_var == "duty" and r.mi_type == "occupancy"]
+        [r for r in trial_results if r.interval == "run" and r.stim_var == "duty" and r.mi_type == "occupancy"]
     )
     assert len(summaries) == 1
     assert summaries[0].slope_vs_trial_ord > 0
@@ -300,8 +300,8 @@ def test_run_group_mi_when_tests_primary_cells_only() -> None:
             "animal_id": "1",
             "sex": "F",
             "strain": "wt",
-            "tx": "n/a",
-            "phase": "run",
+            "condition": "n/a",
+            "interval": "run",
             "stim_var": "duty",
             "mi_type": "occupancy",
             "slope_vs_trial_ord": 0.05,
@@ -313,8 +313,8 @@ def test_run_group_mi_when_tests_primary_cells_only() -> None:
             "animal_id": "2",
             "sex": "M",
             "strain": "wt",
-            "tx": "n/a",
-            "phase": "run",
+            "condition": "n/a",
+            "interval": "run",
             "stim_var": "duty",
             "mi_type": "occupancy",
             "slope_vs_trial_ord": -0.01,
@@ -326,8 +326,8 @@ def test_run_group_mi_when_tests_primary_cells_only() -> None:
             "animal_id": "1",
             "sex": "F",
             "strain": "wt",
-            "tx": "n/a",
-            "phase": "iti",
+            "condition": "n/a",
+            "interval": "wait",
             "stim_var": "duty",
             "mi_type": "occupancy",
             "slope_vs_trial_ord": 0.99,
@@ -338,10 +338,10 @@ def test_run_group_mi_when_tests_primary_cells_only() -> None:
     ]
     out = run_group_mi_when_tests(summary_rows, trial_nulls=False)
     assert out
-    assert all(r["phase"] == "run" for r in out)
+    assert all(r["interval"] == "run" for r in out)
     assert all(r["mi_type"] == "occupancy" for r in out)
     assert all(r["metric"] in ("slope_vs_trial_ord", "early_late_delta") for r in out)
-    assert not any(r["phase"] == "iti" for r in out)
+    assert not any(r["interval"] == "wait" for r in out)
     assert all("q_bh" in r for r in out)
     assert all(np.isfinite(float(r["q_bh"])) for r in out)
 
@@ -352,8 +352,8 @@ def test_run_group_mi_when_tests_bh_exploratory_with_trial_nulls() -> None:
             "animal_id": f"{i}",
             "sex": "F" if i < 5 else "M",
             "strain": "wt",
-            "tx": "n/a",
-            "phase": "run",
+            "condition": "n/a",
+            "interval": "run",
             "stim_var": "duty",
             "mi_type": "occupancy",
             "slope_vs_trial_ord": float(i) * 0.1,
@@ -382,7 +382,7 @@ def test_compute_per_trial_mi_with_nulls_populates_excess() -> None:
         n_perm=20,
         rng=np.random.default_rng(0),
     )
-    run_occ = [r for r in trial_results if r.phase == "run" and r.stim_var == "duty" and r.mi_type == "occupancy"]
+    run_occ = [r for r in trial_results if r.interval == "run" and r.stim_var == "duty" and r.mi_type == "occupancy"]
     assert run_occ
     assert all(np.isfinite(r.null_circ_mean) for r in run_occ)
     assert all(np.isfinite(r.excess) for r in run_occ)
@@ -420,7 +420,7 @@ def test_within_session_early_late_delta() -> None:
     edges = compute_global_bin_edges(rows, n_bins=4)
     trial_results = compute_per_trial_mi(rows, edges=edges)
     summaries = compute_trial_animal_summaries(
-        [r for r in trial_results if r.phase == "run" and r.stim_var == "duty" and r.mi_type == "occupancy"]
+        [r for r in trial_results if r.interval == "run" and r.stim_var == "duty" and r.mi_type == "occupancy"]
     )
     assert len(summaries) == 1
     assert summaries[0].n_sessions_used == 2
@@ -447,8 +447,8 @@ def _factorial_cohort_fixture(*, n_per_cell: int) -> tuple[list[dict[str, object
                             "animal_id": aid,
                             "sex": sex,
                             "strain": strain,
-                            "tx": tx,
-                            "phase": "run",
+                            "condition": tx,
+                            "interval": "run",
                             "stim_var": "duty",
                             "mi_type": "occupancy",
                             "mi_mm": mi_mm,
@@ -459,8 +459,8 @@ def _factorial_cohort_fixture(*, n_per_cell: int) -> tuple[list[dict[str, object
                             "animal_id": aid,
                             "sex": sex,
                             "strain": strain,
-                            "tx": tx,
-                            "phase": "run",
+                            "condition": tx,
+                            "interval": "run",
                             "stim_var": "duty",
                             "mi_type": "occupancy",
                             "slope_vs_trial_ord": slope,
@@ -481,14 +481,14 @@ def test_run_group_mi_tests_sliced_2x2x2_catalog_and_bh() -> None:
     families = {str(r["fdr_family"]) for r in out}
     assert FDR_FAMILY_POOLED in families
     assert FDR_FAMILY_SLOPE in families
-    assert all(r["phase"] == "run" for r in out)
+    assert all(r["interval"] == "run" for r in out)
     assert all(r["mi_type"] == "occupancy" for r in out)
     pooled_rows = [r for r in out if r["fdr_family"] == FDR_FAMILY_POOLED]
     assert pooled_rows
     assert any(np.isfinite(float(r["q_bh"])) for r in pooled_rows)
 
     def _n_holds(row: dict[str, object]) -> int:
-        return sum(1 for col in ("hold_sex", "hold_strain", "hold_tx") if str(row.get(col, "")).strip())
+        return sum(1 for col in ("hold_sex", "hold_strain", "hold_condition") if str(row.get(col, "")).strip())
 
     one_hold = [r for r in out if _n_holds(r) == 1]
     two_hold = [r for r in out if _n_holds(r) == 2]
@@ -504,8 +504,8 @@ def test_run_group_mi_tests_sliced_omits_small_arms() -> None:
             "animal_id": f"wt{i}",
             "sex": "F",
             "strain": "wt",
-            "tx": "a",
-            "phase": "run",
+            "condition": "a",
+            "interval": "run",
             "stim_var": "duty",
             "mi_type": "occupancy",
         }
@@ -523,8 +523,8 @@ def test_run_group_mi_tests_sliced_omits_small_arms() -> None:
             "animal_id": f"tg{i}",
             "sex": "F",
             "strain": "tg",
-            "tx": "a",
-            "phase": "run",
+            "condition": "a",
+            "interval": "run",
             "stim_var": "duty",
             "mi_type": "occupancy",
         }

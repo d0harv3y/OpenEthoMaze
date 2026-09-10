@@ -1,4 +1,4 @@
-"""Paired between-phase contrasts holding condition_layer fixed.
+"""Paired between-phase contrasts holding trial fixed.
 
 Question (plain): within the same animal, does engagement or syllable composition
 change from BL → TX → REC, *in the same condition* (empty / identical / novel)?
@@ -8,9 +8,9 @@ Not the old phase grid (that was independent-groups tx Kruskal / PERMANOVA
 inside each phase).
 
 Association: paired / repeated (same animal, two phases).
-Grain: animal × condition_layer (full session; spot bout-means).
+Grain: animal × trial (full session; spot bout-means).
 
-Phase steps: BL→TX, TX→REC3hr, REC3hr→REC11hr, BL→REC11hr.
+Phase steps: BL→TX, TX→REC3hr, REC3hr→REC11hr, BL→REC11hr, BL→REC3hr, TX→REC11hr.
 REC pairing uses animals present in both phases (~72 vs ~144 at BL/TX).
 
 Operations: same scalar families as presence (frac_near, mean dist, COUNT,
@@ -41,10 +41,10 @@ from nor_object_mi.simpler_first_da import (  # noqa: E402
     syllable_persistence,
 )
 from nor_object_mi.simpler_first_presence import (  # noqa: E402
-    CONDS,
-    PHASES,
-    TX_STRATUM_ALL,
-    TX_STRATUM_CONTROL,
+    TRIALS,
+    SESSIONS,
+    CONDITION_STRATUM_ALL,
+    CONDITION_STRATUM_CONTROL,
     _paired_delta_table,
     build_animal_condition_table,
     tests_from_dtab,
@@ -60,17 +60,133 @@ PHASE_STEPS: tuple[tuple[str, str, str], ...] = (
     ("TX->REC3hr", "NOR_TX", "NOR_REC3hr"),
     ("REC3hr->REC11hr", "NOR_REC3hr", "NOR_REC11hr"),
     ("BL->REC11hr", "NOR_BL", "NOR_REC11hr"),
+    ("BL->REC3hr", "NOR_BL", "NOR_REC3hr"),
+    ("TX->REC11hr", "NOR_TX", "NOR_REC11hr"),
 )
+PHASE_STEP_NAMES: tuple[str, ...] = tuple(s for s, _a, _b in PHASE_STEPS)
+STEP_LAB: dict[str, str] = {
+    "BL->TX": "BL–TX",
+    "TX->REC3hr": "TX–R3",
+    "REC3hr->REC11hr": "R3–R11",
+    "BL->REC11hr": "BL–R11",
+    "BL->REC3hr": "BL–R3",
+    "TX->REC11hr": "TX–R11",
+}
+PAIRED_FOOT_LEAD = (
+    "Within-animal paired Δ: same animal at both phases, condition held. "
+    "Test n = number of paired animals (intersection of both phases). "
+)
+
+
+def paired_n_by_step(
+    df: pd.DataFrame,
+    *,
+    step_col: str = "session_step",
+    animal_col: str = "animal_id",
+) -> dict[str, int]:
+    """Unique animals per phase step — denominator for paired Wilcoxon/Kruskal."""
+    if df.empty or step_col not in df.columns or animal_col not in df.columns:
+        return {}
+    out: dict[str, int] = {}
+    for step in PHASE_STEP_NAMES:
+        sub = df[df[step_col].astype(str) == step]
+        if sub.empty:
+            continue
+        out[step] = int(sub[animal_col].nunique())
+    return out
+
+
+PHASE_LAYER_SHORT: dict[str, str] = {
+    "NOR_BL": "BL",
+    "NOR_TX": "TX",
+    "NOR_REC3hr": "REC3",
+    "NOR_REC11hr": "REC11",
+}
+STEP_END: dict[str, tuple[str, str]] = {
+    step: (PHASE_LAYER_SHORT[left], PHASE_LAYER_SHORT[right])
+    for step, left, right in PHASE_STEPS
+}
+
+
+def step_endpoints(step: str) -> tuple[str, str]:
+    """Short phase labels (left, right) for a paired step key."""
+    try:
+        return STEP_END[step]
+    except KeyError as exc:
+        raise KeyError(f"unknown session_step: {step!r}") from exc
+
+
+def step_arrow_emph(step: str) -> str:
+    """Directional step label: (left)→(right), not a subtraction."""
+    left, right = step_endpoints(step)
+    return f"({left})→({right})"
+
+
+def overlay_step_suptitle_parts(step: str, n_map: dict[str, int]) -> tuple[str, str]:
+    """Suptitle line-2: bold (left)→(right), then n and Δp_k = right − left."""
+    left, right = step_endpoints(step)
+    emph = step_arrow_emph(step)
+    after = ""
+    n = n_map.get(step)
+    if n is not None:
+        after += f"  n={n} paired"
+    after += f"  ·  Δp_k = {right} − {left}"
+    return emph, after
+
+
+def step_axis_label(step: str, n_map: dict[str, int]) -> str:
+    lab = STEP_LAB.get(step, step)
+    n = n_map.get(step)
+    if n is None:
+        return lab
+    return f"{lab}\nn={n}"
+
+
+def step_axis_labels(n_map: dict[str, int]) -> list[str]:
+    return [step_axis_label(s, n_map) for s in PHASE_STEP_NAMES]
+
+
+def footnote_paired_n(n_map: dict[str, int]) -> str:
+    if not n_map:
+        return PAIRED_FOOT_LEAD.rstrip()
+    parts = [f"{STEP_LAB[s]} {n_map[s]}" for s in PHASE_STEP_NAMES if s in n_map]
+    return PAIRED_FOOT_LEAD + "Pair n by step: " + ", ".join(parts) + "."
+
+
+def resolve_model_art(art_root: Path, model: str) -> Path:
+    """Active model dir, else ``archive/<model>`` (bout CSVs kept after archive move)."""
+    direct = art_root / model
+    if direct.is_dir():
+        return direct
+    archived = art_root / "archive" / model
+    if archived.is_dir():
+        return archived
+    return direct
+
+
+def list_paramscan_models(art_root: Path) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for base in (art_root, art_root / "archive"):
+        if not base.is_dir():
+            continue
+        for p in sorted(base.glob("paramscan_*")):
+            if not p.is_dir() or p.name in seen:
+                continue
+            if any((p / tag / "ladder_bout_features.csv").exists() for _, tag in SESSIONS):
+                seen.add(p.name)
+                out.append(p.name)
+    return out
 
 
 def load_animal_condition_all_phases(art: Path, *, r_m: float = NEAR_R_M) -> pd.DataFrame:
     parts: list[pd.DataFrame] = []
-    for phase, tag in PHASES:
+    for phase, tag in SESSIONS:
         bout_csv = art / tag / "ladder_bout_features.csv"
         if not bout_csv.exists():
             continue
         bouts = pd.read_csv(bout_csv)
-        parts.append(build_animal_condition_table(bouts, phase_layer=phase, r_m=r_m))
+        parts.append(build_animal_condition_table(bouts, session=phase, r_m=r_m))
     if not parts:
         return pd.DataFrame()
     return pd.concat(parts, ignore_index=True)
@@ -88,8 +204,8 @@ def run_model_phase_paired(
     da_test_parts: list[pd.DataFrame] = []
     da_delta_parts: list[pd.DataFrame] = []
 
-    for cond in CONDS:
-        sub = ac[ac["condition_layer"] == cond]
+    for cond in TRIALS:
+        sub = ac[ac["trial"] == cond]
         if sub.empty:
             continue
         for step, left, right in PHASE_STEPS:
@@ -99,20 +215,20 @@ def run_model_phase_paired(
                 left=left,
                 right=right,
                 metrics=SCALAR_METRICS,
-                pair_col="phase_layer",
+                pair_col="session",
             )
             if dtab.empty:
                 continue
             dtab = dtab.copy()
-            dtab["condition_layer"] = cond
-            dtab["phase_step"] = step
+            dtab["trial"] = cond
+            dtab["session_step"] = step
             scalar_delta_parts.append(dtab)
             for m in SCALAR_METRICS:
                 rec = wilcoxon_paired(dtab[f"delta_{m}"].to_numpy())
                 scalar_test_rows.append(
                     {
-                        "condition_layer": cond,
-                        "phase_step": step,
+                        "trial": cond,
+                        "session_step": step,
                         "left": left,
                         "right": right,
                         "sex": "all",
@@ -120,15 +236,15 @@ def run_model_phase_paired(
                         "question": "S0" if m in {"frac_near", "mean_dist_any_m"} else "S1_S2",
                         **rec,
                         "hit_p05": bool(np.isfinite(rec["p"]) and float(rec["p"]) < 0.05),
-                        "tx_stratum": TX_STRATUM_ALL,
+                        "tx_stratum": CONDITION_STRATUM_ALL,
                     }
                 )
             bc = dtab["braycurtis"].to_numpy(dtype=np.float64)
             bc = bc[np.isfinite(bc)]
             scalar_test_rows.append(
                 {
-                    "condition_layer": cond,
-                    "phase_step": step,
+                    "trial": cond,
+                    "session_step": step,
                     "left": left,
                     "right": right,
                     "sex": "all",
@@ -141,7 +257,7 @@ def run_model_phase_paired(
                     "p": "",
                     "test": "descriptive_median_BC",
                     "hit_p05": False,
-                    "tx_stratum": TX_STRATUM_ALL,
+                    "tx_stratum": CONDITION_STRATUM_ALL,
                 }
             )
             for sex in SEX_ORDER:
@@ -150,8 +266,8 @@ def run_model_phase_paired(
                     rec = wilcoxon_paired(sex_sub[f"delta_{m}"].to_numpy())
                     scalar_test_rows.append(
                         {
-                            "condition_layer": cond,
-                            "phase_step": step,
+                            "trial": cond,
+                            "session_step": step,
                             "left": left,
                             "right": right,
                             "sex": sex,
@@ -159,7 +275,7 @@ def run_model_phase_paired(
                             "question": "S0" if m in {"frac_near", "mean_dist_any_m"} else "S1_S2",
                             **rec,
                             "hit_p05": bool(np.isfinite(rec["p"]) and float(rec["p"]) < 0.05),
-                            "tx_stratum": TX_STRATUM_ALL,
+                            "tx_stratum": CONDITION_STRATUM_ALL,
                         }
                     )
             scalar_test_rows.extend(
@@ -167,8 +283,8 @@ def run_model_phase_paired(
                     dtab,
                     SCALAR_METRICS,
                     extra={
-                        "condition_layer": cond,
-                        "phase_step": step,
+                        "trial": cond,
+                        "session_step": step,
                         "left": left,
                         "right": right,
                     },
@@ -179,7 +295,7 @@ def run_model_phase_paired(
                     pd.DataFrame(
                         {
                             "sex": dtab["sex"].to_numpy(),
-                            "tx": dtab["tx"].to_numpy(),
+                            "condition": dtab["condition"].to_numpy(),
                             m: dtab[f"delta_{m}"].to_numpy(),
                         }
                     ),
@@ -188,8 +304,8 @@ def run_model_phase_paired(
                 for _, r in k.iterrows():
                     scalar_test_rows.append(
                         {
-                            "condition_layer": cond,
-                            "phase_step": step,
+                            "trial": cond,
+                            "session_step": step,
                             "left": left,
                             "right": right,
                             "sex": r["sex"],
@@ -202,7 +318,7 @@ def run_model_phase_paired(
                             "p": r["p"],
                             "test": "kruskal",
                             "hit_p05": bool(pd.notna(r["p"]) and float(r["p"]) < 0.05),
-                            "tx_stratum": TX_STRATUM_ALL,
+                            "tx_stratum": CONDITION_STRATUM_ALL,
                             "median_noSD": r["median_noSD"],
                             "median_GHSD": r["median_GHSD"],
                             "median_RBSD": r["median_RBSD"],
@@ -210,19 +326,19 @@ def run_model_phase_paired(
                     )
 
             da_dtab = paired_da_deltas(
-                sub, step=step, left=left, right=right, pair_col="phase_layer"
+                sub, step=step, left=left, right=right, pair_col="session"
             )
             if da_dtab.empty:
                 continue
             da_tests = da_tests_from_deltas(da_dtab)
-            da_tests.insert(0, "condition_layer", cond)
-            da_tests.insert(1, "phase_step", step)
+            da_tests.insert(0, "trial", cond)
+            da_tests.insert(1, "session_step", step)
             da_tests.insert(2, "left", left)
             da_tests.insert(3, "right", right)
             da_test_parts.append(da_tests)
             da_dtab = da_dtab.copy()
-            da_dtab["condition_layer"] = cond
-            da_dtab["phase_step"] = step
+            da_dtab["trial"] = cond
+            da_dtab["session_step"] = step
             da_delta_parts.append(da_dtab)
 
     scalar_tests = pd.DataFrame(scalar_test_rows)
@@ -236,6 +352,8 @@ def run_model_phase_paired(
 
 def agreement_table(tests: pd.DataFrame) -> pd.DataFrame:
     """Fraction of models with hit + sign agreement (sex=all Wilcoxon)."""
+    if tests.empty or "sex" not in tests.columns:
+        return pd.DataFrame()
     sub = tests[
         (tests["sex"].isin(("all", "all")))
         & (tests["test"] == "wilcoxon_signed_rank")
@@ -243,12 +361,12 @@ def agreement_table(tests: pd.DataFrame) -> pd.DataFrame:
         & (tests["metric"] != "braycurtis_paired")
     ].copy()
     if "tx_stratum" in sub.columns:
-        sub = sub[sub["tx_stratum"] == TX_STRATUM_ALL]
+        sub = sub[sub["tx_stratum"] == CONDITION_STRATUM_ALL]
     if sub.empty:
         return pd.DataFrame()
     rows = []
     for (cond, step, metric), g in sub.groupby(
-        ["condition_layer", "phase_step", "metric"], sort=True
+        ["trial", "session_step", "metric"], sort=True
     ):
         n = int(len(g))
         n_hit = int(g["hit_p05"].sum())
@@ -262,8 +380,8 @@ def agreement_table(tests: pd.DataFrame) -> pd.DataFrame:
             n_agree_sign = 0
         rows.append(
             {
-                "condition_layer": cond,
-                "phase_step": step,
+                "trial": cond,
+                "session_step": step,
                 "metric": metric,
                 "n_models": n,
                 "n_hit_p05": n_hit,
@@ -278,7 +396,9 @@ def agreement_table(tests: pd.DataFrame) -> pd.DataFrame:
 
 
 def agreement_table_noSD_by_sex(tests: pd.DataFrame) -> pd.DataFrame:
-    """Cross-model agreement for Wilcoxon on Δ, tx=noSD, within sex."""
+    """Cross-model agreement for Wilcoxon on Δ, condition=noSD, within sex."""
+    if tests.empty or "sex" not in tests.columns:
+        return pd.DataFrame()
     sub = tests[
         (tests["sex"].isin(SEX_ORDER))
         & (tests["test"] == "wilcoxon_signed_rank")
@@ -286,12 +406,12 @@ def agreement_table_noSD_by_sex(tests: pd.DataFrame) -> pd.DataFrame:
         & (tests["metric"] != "braycurtis_paired")
     ].copy()
     if "tx_stratum" in sub.columns:
-        sub = sub[sub["tx_stratum"] == TX_STRATUM_CONTROL]
+        sub = sub[sub["tx_stratum"] == CONDITION_STRATUM_CONTROL]
     if sub.empty:
         return pd.DataFrame()
     rows = []
     for (cond, step, metric, sex), g in sub.groupby(
-        ["condition_layer", "phase_step", "metric", "sex"], sort=True
+        ["trial", "session_step", "metric", "sex"], sort=True
     ):
         n = int(len(g))
         n_hit = int(g["hit_p05"].sum())
@@ -305,11 +425,11 @@ def agreement_table_noSD_by_sex(tests: pd.DataFrame) -> pd.DataFrame:
             n_agree_sign = 0
         rows.append(
             {
-                "condition_layer": cond,
-                "phase_step": step,
+                "trial": cond,
+                "session_step": step,
                 "metric": metric,
                 "sex": sex,
-                "tx_stratum": TX_STRATUM_CONTROL,
+                "tx_stratum": CONDITION_STRATUM_CONTROL,
                 "n_models": n,
                 "n_hit_p05": n_hit,
                 "frac_hit": float(n_hit / n) if n else float("nan"),
@@ -385,14 +505,14 @@ def main(argv: list[str] | None = None) -> int:
         metrics = tuple(c[len("delta_") :] for c in delta_cols)
         rows: list[dict[str, object]] = []
         for (model, cond, pstep), g in d.groupby(
-            ["model", "condition_layer", "phase_step"], sort=False
+            ["model", "trial", "session_step"], sort=False
         ):
             recs = tests_from_dtab(
                 g,
                 metrics=metrics,
                 keys={
-                    "condition_layer": cond,
-                    "phase_step": pstep,
+                    "trial": cond,
+                    "session_step": pstep,
                     "left": g["left"].iloc[0],
                     "right": g["right"].iloc[0],
                 },
@@ -423,7 +543,7 @@ def main(argv: list[str] | None = None) -> int:
                 "companion: sex=all Wilcoxon on paired delta, p<0.05, txs pooled"
             ),
             "hit_rule_evolution_primary": (
-                "Wilcoxon on paired delta, tx=noSD, within sex, p<0.05 (tx_stratum=noSD)"
+                "Wilcoxon on paired delta, condition=noSD, within sex, p<0.05 (tx_stratum=noSD)"
             ),
             "rebuilt_from_deltas": str(delta_path),
         }
@@ -434,12 +554,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.model:
         models = [args.model]
     else:
-        models = sorted(
-            p.name
-            for p in art_root.glob("paramscan_*")
-            if p.is_dir()
-            and any((p / tag / "ladder_bout_features.csv").exists() for _, tag in PHASES)
-        )
+        models = list_paramscan_models(art_root)
 
     all_scalar_tests: list[pd.DataFrame] = []
     all_scalar_deltas: list[pd.DataFrame] = []
@@ -447,7 +562,7 @@ def main(argv: list[str] | None = None) -> int:
     all_da_deltas: list[pd.DataFrame] = []
     n_jobs = len(models)
     for i, model in enumerate(models, start=1):
-        art = art_root / model
+        art = resolve_model_art(art_root, model)
         print(f"[{i}/{n_jobs}] {model}", flush=True)
         ac = load_animal_condition_all_phases(art, r_m=float(args.r_m))
         if ac.empty:
@@ -492,10 +607,10 @@ def main(argv: list[str] | None = None) -> int:
         agree_ctrl.to_csv(agree_ctrl_path, index=False)
 
     da_pairs = consistency_phase_pairs(
-        da_df, facet_col="phase_step", group_cols=("model", "condition_layer")
+        da_df, facet_col="session_step", group_cols=("model", "trial")
     )
     da_persist = syllable_persistence(
-        da_df, facet_col="phase_step", group_cols=("model", "condition_layer")
+        da_df, facet_col="session_step", group_cols=("model", "trial")
     )
     da_pair_path = out / "phase_paired_da_consistency_step_pairs.csv"
     da_persist_path = out / "phase_paired_da_syllable_persistence.csv"
@@ -508,8 +623,8 @@ def main(argv: list[str] | None = None) -> int:
         "n_models": len(models),
         "models": models,
         "r_m": float(args.r_m),
-        "conditions": list(CONDS),
-        "phase_steps": [s for s, _a, _b in PHASE_STEPS],
+        "conditions": list(TRIALS),
+        "session_steps": [s for s, _a, _b in PHASE_STEPS],
         "n_scalar_test_rows": int(len(tests_df)),
         "n_da_test_rows": int(len(da_df)),
         "n_da_hit_fdr05": int(da_df["hit_fdr05"].sum()) if not da_df.empty else 0,
@@ -521,12 +636,12 @@ def main(argv: list[str] | None = None) -> int:
             "companion: sex=all Wilcoxon on paired delta, p<0.05, txs pooled"
         ),
         "hit_rule_evolution_primary": (
-            "Wilcoxon on paired delta, tx=noSD, within sex, p<0.05 (tx_stratum=noSD)"
+            "Wilcoxon on paired delta, condition=noSD, within sex, p<0.05 (tx_stratum=noSD)"
         ),
         "hit_rule_da": (
             "sex=all Wilcoxon on paired Δp_k, BH FDR q<0.05 within model × condition × phase-step"
         ),
-        "pairing": "same animal, two phases, condition_layer held fixed",
+        "pairing": "same animal, two phases, trial held fixed",
         "id_portability": "raw_syllable_id aligned within a kpMS model; not across models",
         "pilot_model_note": str(LOCKED["model"]),
         "agreement": agree.to_dict(orient="records") if not agree.empty else [],
@@ -540,8 +655,8 @@ def main(argv: list[str] | None = None) -> int:
         print(
             show[
                 [
-                    "condition_layer",
-                    "phase_step",
+                    "trial",
+                    "session_step",
                     "metric",
                     "n_hit_p05",
                     "n_models",
@@ -569,6 +684,16 @@ def main(argv: list[str] | None = None) -> int:
 run_model_phase_paired = run_model_phase_paired
 SCALAR_METRICS = SCALAR_METRICS
 PHASE_STEPS = PHASE_STEPS
+PHASE_STEP_NAMES = PHASE_STEP_NAMES
+STEP_LAB = STEP_LAB
+overlay_step_suptitle_parts = overlay_step_suptitle_parts
+step_arrow_emph = step_arrow_emph
+step_endpoints = step_endpoints
+PAIRED_FOOT_LEAD = PAIRED_FOOT_LEAD
+paired_n_by_step = paired_n_by_step
+step_axis_label = step_axis_label
+step_axis_labels = step_axis_labels
+footnote_paired_n = footnote_paired_n
 NEAR_R_M = NEAR_R_M
 agreement_table = agreement_table
 load_animal_condition_all_phases = load_animal_condition_all_phases

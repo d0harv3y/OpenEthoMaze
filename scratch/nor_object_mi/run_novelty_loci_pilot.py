@@ -1,4 +1,4 @@
-"""CLI: novelty fam/nvl MI with independent spatial loci A/B on novel_obj."""
+"""CLI: novelty fam/nvl MI with independent spatial loci A/B on nvl_obj."""
 
 from __future__ import annotations
 
@@ -55,13 +55,13 @@ def main(argv: list[str] | None = None) -> int:
         kept = set(cohort["kept_ids"])  # type: ignore[arg-type]
 
         sessions = list(
-            iter_joined_sessions(nor_h5, kpms_h5, kept_ids=kept, phase_layer=args.phase_layer)
+            iter_joined_sessions(nor_h5, kpms_h5, kept_ids=kept, session=args.session)
         )
         bout_rows, bout_summary = build_bout_rows(
             nor_h5,
             kpms_h5,
             sessions,
-            condition_layers=("novel_obj", "identical_obj"),
+            trials=("nvl_obj", "id_obj"),
         )
         _write_csv(out_dir / "object_bout_features_loci.csv", list(BOUT_FIELDS), bout_rows)
         (out_dir / "bout_build_summary.json").write_text(
@@ -90,9 +90,9 @@ def main(argv: list[str] | None = None) -> int:
         mi_fields = [
             "animal_id",
             "sex",
-            "tx",
+            "condition",
             "cohort",
-            "phase_layer",
+            "session",
             "stim_var",
             "mi_type",
             "n_bouts",
@@ -109,9 +109,9 @@ def main(argv: list[str] | None = None) -> int:
         delta_fields = [
             "animal_id",
             "sex",
-            "tx",
+            "condition",
             "cohort",
-            "phase_layer",
+            "session",
             "nvl_nearest_hist_locus",
             "excess_fam",
             "excess_nvl",
@@ -161,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
 
         snapshot = {
             "status": "ok",
-            "phase_layer": args.phase_layer,
+            "session": args.session,
             "n_animals": len(delta_rows),
             "nvl_nearest_hist_locus_counts": tag_counts,
             "novelty": {

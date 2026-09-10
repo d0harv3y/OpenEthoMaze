@@ -77,13 +77,13 @@ def make_figure(
 ) -> None:
     bl = {r["animal_id"]: r for r in rows_bl}
     tx = {r["animal_id"]: r for r in rows_tx}
-    shared = sorted(set(bl) & set(tx))
+    shared = sorted(set(bl) & set(condition))
 
     d_bl = np.asarray([float(bl[a]["delta_excess_present_minus_absent"]) for a in shared])
     d_tx = np.asarray([float(tx[a]["delta_excess_present_minus_absent"]) for a in shared])
     d_change = d_tx - d_bl
     sex = [str(tx[a]["sex"]) for a in shared]
-    treat = [str(tx[a]["tx"]) for a in shared]
+    treat = [str(tx[a]["condition"]) for a in shared]
 
     plt.rcParams.update(
         {

@@ -36,7 +36,7 @@ from .defaults import (
     HYBRID_POINT_NAME,
 )
 from .paths import OUTPUT_H5
-from .io.file_discovery import TrialManifest, load_treatment_labels
+from .io.file_discovery import TrialManifest, load_condition_labels
 from .io.sleap_loader import (
     load_sleap_file,
     apply_jump_filter,
@@ -138,8 +138,8 @@ def _ram_exit_arm_index_for_pipeline(
 
 
 def _animal_notes_from_treatment_csv(manifest: TrialManifest) -> str:
-    """Resolve notes from ``inputs/treatment_labels.csv`` using animal_id then inferred_id."""
-    labels = load_treatment_labels()
+    """Resolve notes from ``inputs/condition_labels.csv`` using animal_id then inferred_id."""
+    labels = load_condition_labels()
     for k in (manifest.animal_id, manifest.inferred_id or ""):
         if k and k.strip() and k in labels:
             return labels[k].notes or ""
@@ -646,7 +646,7 @@ def _process_with_sleap(
         if amb_iti is not None:
             for b in amb_iti.movement_bouts:
                 nb = dict(b)
-                nb["trial_state"] = "iti_wait"
+                nb["trial_state"] = "wait"
                 nb["start_frame"] = seek_row + int(b["start_frame"])
                 nb["end_frame"] = seek_row + int(b["end_frame"])
                 combined_bouts.append(nb)
@@ -692,7 +692,7 @@ def _process_with_sleap(
             )
             band_summaries.append(
                 {
-                    "trial_state": "iti_wait",
+                    "trial_state": "wait",
                     "total_distance_m": amb_iti.total_distance_m,
                     "mean_speed_mps": amb_iti.mean_speed_mps,
                     "max_speed_mps": amb_iti.max_speed_mps,
@@ -827,7 +827,7 @@ def _process_with_sleap(
                     ram_geometry_payload=ram_geometry_payload,
                     fps=fps,
                     xy_list_heatmap=xy_all_nodes_iti if xy_all_nodes_iti else None,
-                    image_name="composite_iti_wait",
+                    image_name="composite_wait",
                     qc_attrs=qc_attrs,
                 )
 

@@ -16,10 +16,10 @@ def test_session_p_move_from_frame_counts() -> None:
     move = pd.DataFrame(
         {
             "animal_id": ["a", "a"],
-            "phase_layer": ["NOR_BL", "NOR_BL"],
-            "condition_layer": ["no_obj", "no_obj"],
+            "session": ["NOR_BL", "NOR_BL"],
+            "trial": ["no_obj", "no_obj"],
             "sex": ["F", "F"],
-            "tx": ["noSD", "noSD"],
+            "condition": ["noSD", "noSD"],
             "bout_frames": [10.0, 10.0],
             "bout_duration_s": [1.0, 1.0],
             "bout_mean_speed_mps": [0.2, 0.4],
@@ -29,10 +29,10 @@ def test_session_p_move_from_frame_counts() -> None:
     still = pd.DataFrame(
         {
             "animal_id": ["a"],
-            "phase_layer": ["NOR_BL"],
-            "condition_layer": ["no_obj"],
+            "session": ["NOR_BL"],
+            "trial": ["no_obj"],
             "sex": ["F"],
-            "tx": ["noSD"],
+            "condition": ["noSD"],
             "bout_frames": [20.0],
             "bout_duration_s": [2.0],
             "bout_mean_speed_mps": [0.01],
@@ -51,10 +51,10 @@ def test_presence_delta_is_right_minus_left() -> None:
     sess = pd.DataFrame(
         {
             "animal_id": ["a", "a"],
-            "phase_layer": ["NOR_BL", "NOR_BL"],
-            "condition_layer": ["no_obj", "identical_obj"],
+            "session": ["NOR_BL", "NOR_BL"],
+            "trial": ["no_obj", "id_obj"],
             "sex": ["F", "F"],
-            "tx": ["noSD", "noSD"],
+            "condition": ["noSD", "noSD"],
             "p_move": [0.4, 0.55],
             "n_move_bouts": [5, 6],
             "n_still_bouts": [5, 4],
@@ -68,7 +68,7 @@ def test_presence_delta_is_right_minus_left() -> None:
         }
     )
     p = paired_step_deltas(sess)
-    pr = p[p["step"] == "no_obj->identical"].iloc[0]
+    pr = p[p["step"] == "no_obj->id_obj"].iloc[0]
     np.testing.assert_allclose(float(pr["delta_p_move"]), 0.15)
 
 
@@ -79,10 +79,10 @@ def test_presence_ttest_hits_known_shift() -> None:
         rows.append(
             {
                 "animal_id": f"{sex}{i}",
-                "phase_layer": "NOR_BL",
-                "step": "no_obj->identical",
+                "session": "NOR_BL",
+                "step": "no_obj->id_obj",
                 "sex": sex,
-                "tx": "noSD",
+                "condition": "noSD",
                 "delta_p_move": 0.2,
                 "delta_median_move_duration_s": 0.0,
                 "delta_mean_move_speed_mps": 0.0,

@@ -8,13 +8,13 @@ from ...core.tasks import ARENA_TYPE_CIRCULAR
 from ..io.file_discovery import (
     DiscoveryResult,
     TrialManifest,
-    apply_treatment_labels,
+    apply_condition_labels,
     check_duplicates,
     discover_trials,
     load_manifest_csv,
-    load_treatment_labels,
+    load_condition_labels,
     save_manifest_csv,
-    update_treatment_labels_from_discovery,
+    update_condition_labels_from_discovery,
 )
 from ..work_items import SourceWorkItem
 
@@ -28,8 +28,8 @@ def manifest_to_work_item(manifest: TrialManifest) -> SourceWorkItem:
         metadata["inferred_id"] = manifest.inferred_id
     if manifest.sex:
         metadata["sex"] = manifest.sex
-    if manifest.tx:
-        metadata["tx"] = manifest.tx
+    if manifest.condition:
+        metadata["condition"] = manifest.condition
     if manifest.strain:
         metadata["strain"] = manifest.strain
     if manifest.experiment:
@@ -66,13 +66,13 @@ def discover_legacy_vast_work_items(
 __all__ = [
     "DiscoveryResult",
     "TrialManifest",
-    "apply_treatment_labels",
+    "apply_condition_labels",
     "check_duplicates",
     "discover_trials",
     "discover_legacy_vast_work_items",
     "load_manifest_csv",
-    "load_treatment_labels",
+    "load_condition_labels",
     "manifest_to_work_item",
     "save_manifest_csv",
-    "update_treatment_labels_from_discovery",
+    "update_condition_labels_from_discovery",
 ]

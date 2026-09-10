@@ -415,7 +415,7 @@ class TrialRecorder:
                     h5,
                     self.animal_id,
                     sex=animal_meta.sex,
-                    tx=animal_meta.tx,
+                    condition=animal_meta.condition,
                     strain=animal_meta.strain,
                     experiment=animal_meta.experiment,
                     researcher=animal_meta.researcher,

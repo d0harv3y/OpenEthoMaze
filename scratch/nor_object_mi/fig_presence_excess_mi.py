@@ -32,14 +32,14 @@ def make_figure(
     rows: list[dict[str, str]],
     *,
     out_stem: Path,
-    phase_layer: str = "NOR_TX",
+    session: str = "NOR_TX",
     dpi: int = 300,
 ) -> None:
     present = np.asarray([float(r["excess_present"]) for r in rows], dtype=np.float64)
     absent = np.asarray([float(r["excess_absent"]) for r in rows], dtype=np.float64)
     delta = np.asarray([float(r["delta_excess_present_minus_absent"]) for r in rows], dtype=np.float64)
     sexes = [str(r["sex"]) for r in rows]
-    txs = [str(r["tx"]) for r in rows]
+    txs = [str(r["condition"]) for r in rows]
 
     w_stat, w_p = stats.wilcoxon(delta, alternative="two-sided", zero_method="wilcox")
     n = len(delta)
@@ -169,7 +169,7 @@ def make_figure(
         ax2.spines[spine].set_visible(False)
 
     fig.suptitle(
-        f"Object presence increases syllable↔distance mutual information ({phase_layer})",
+        f"Object presence increases syllable↔distance mutual information ({session})",
         fontsize=11,
         fontweight="bold",
         color=ink,
@@ -178,7 +178,7 @@ def make_figure(
 
     # Footer caption outside axes
     caption = (
-        f"Pilot: NOR kpMS paramscan_s1-1e8_s2-1e5_ss-50 · {phase_layer} · spot keypoint · "
+        f"Pilot: NOR kpMS paramscan_s1-1e8_s2-1e5_ss-50 · {session} · spot keypoint · "
         "5 shared dist_any bins · circular-shift null (n_perm=100) · "
         "no_obj loci = 2-means of animal×phase id+nvl centers. Exploratory pilot."
     )
@@ -216,13 +216,13 @@ def main() -> int:
         "--phase-layer",
         type=str,
         default=None,
-        help="Override phase label in title (default: read from CSV phase_layer column)",
+        help="Override phase label in title (default: read from CSV session column)",
     )
     args = ap.parse_args()
     out = args.out_stem or (args.delta_csv.parent / "fig_presence_excess_mi")
     rows = _load_delta(args.delta_csv)
-    phase = args.phase_layer or (rows[0].get("phase_layer", "NOR_TX") if rows else "NOR_TX")
-    make_figure(rows, out_stem=out, phase_layer=str(phase))
+    phase = args.session or (rows[0].get("session", "NOR_TX") if rows else "NOR_TX")
+    make_figure(rows, out_stem=out, session=str(phase))
     return 0
 
 

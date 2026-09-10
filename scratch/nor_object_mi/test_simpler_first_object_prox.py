@@ -32,14 +32,14 @@ def _bout(
     d_fam: float,
     d_nvl: float,
     animal: str = "a",
-    cond: str = "novel_obj",
+    cond: str = "nvl_obj",
 ) -> dict:
     return {
         "animal_id": animal,
         "sex": "F",
-        "tx": "noSD",
-        "phase_layer": "NOR_TX",
-        "condition_layer": cond,
+        "condition": "noSD",
+        "session": "NOR_TX",
+        "trial": cond,
         "bout_frames": frames,
         "bout_mean_dist_fam_m": d_fam,
         "bout_mean_dist_nvl_m": d_nvl,
@@ -78,7 +78,7 @@ def test_animal_metrics_disjoint_prox() -> None:
             _bout(frames=70, d_fam=0.40, d_nvl=0.05),
         ]
     )
-    out = animal_object_prox_metrics(df, phase_layer="NOR_TX")
+    out = animal_object_prox_metrics(df, session="NOR_TX")
     assert len(out) == 1
     row = out.iloc[0]
     assert int(row["n_fam_frames"]) == 30
@@ -101,7 +101,7 @@ def test_animal_metrics_overlap_splits_inclusive_vs_exclusive() -> None:
             _bout(frames=40, d_fam=0.40, d_nvl=0.40),
         ]
     )
-    row = animal_object_prox_metrics(df, phase_layer="NOR_TX").iloc[0]
+    row = animal_object_prox_metrics(df, session="NOR_TX").iloc[0]
     assert int(row["n_fam_frames"]) == 30
     assert int(row["n_nvl_frames"]) == 40
     assert int(row["n_both_frames"]) == 10
@@ -112,14 +112,14 @@ def test_animal_metrics_overlap_splits_inclusive_vs_exclusive() -> None:
     assert abs(float(row["dr_exclusive"]) - 0.2) < 1e-12
 
 
-def test_ignores_identical_obj() -> None:
+def test_ignores_id_obj() -> None:
     df = pd.DataFrame(
         [
             _bout(frames=50, d_fam=0.05, d_nvl=0.40),
-            _bout(frames=999, d_fam=0.01, d_nvl=0.01, cond="identical_obj"),
+            _bout(frames=999, d_fam=0.01, d_nvl=0.01, cond="id_obj"),
         ]
     )
-    out = animal_object_prox_metrics(df, phase_layer="NOR_TX")
+    out = animal_object_prox_metrics(df, session="NOR_TX")
     assert len(out) == 1
     assert int(out.iloc[0]["n_sess_frames"]) == 50
 
@@ -131,7 +131,7 @@ def test_spacing_flags_sum_below_2r() -> None:
             _bout(frames=1, d_fam=0.20, d_nvl=0.20),  # sum 0.40 ≥ 0.20
         ]
     )
-    audit = _spacing_audit(df, phase_layer="NOR_TX", condition_layer="novel_obj")
+    audit = _spacing_audit(df, session="NOR_TX", trial="nvl_obj")
     assert audit["n_bouts_sum_lt_2r"] == 1
     assert abs(float(audit["min_d_fam_plus_d_nvl"]) - 0.10) < 1e-12
 
@@ -145,8 +145,8 @@ def test_animal_median_across_models_identity() -> None:
                     "model": model,
                     "animal_id": f"a{i}",
                     "sex": "F",
-                    "tx": "noSD",
-                    "phase_layer": "NOR_TX",
+                    "condition": "noSD",
+                    "session": "NOR_TX",
                     "dr_exclusive": dr,
                     "dr_inclusive": dr,
                     "frac_near_fam": 0.1,
@@ -168,8 +168,8 @@ def test_consensus_wilcoxon_hits_positive_dr() -> None:
             {
                 "animal_id": f"a{i}",
                 "sex": "F" if i < 10 else "M",
-                "tx": "noSD",
-                "phase_layer": "NOR_TX",
+                "condition": "noSD",
+                "session": "NOR_TX",
                 "dr_exclusive": 0.40,
                 "dr_inclusive": 0.40,
                 "frac_near_fam": 0.1,
@@ -193,8 +193,8 @@ def test_across_model_dispersion_iqr_on_known_dr() -> None:
                 "model": f"m{i}",
                 "animal_id": "a0",
                 "sex": "F",
-                "tx": "noSD",
-                "phase_layer": "NOR_TX",
+                "condition": "noSD",
+                "session": "NOR_TX",
                 "dr_exclusive": dr,
                 "dr_inclusive": dr,
                 "frac_near_fam": 0.1,

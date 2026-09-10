@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from nor_object_mi._pub_style import PHASES, SEX_ORDER
+from nor_object_mi._pub_style import SESSIONS, SEX_ORDER
 from nor_object_mi.info_dr_pause_delta import (
     DR_COL,
     DEFAULT_N_BINS,
@@ -71,7 +71,7 @@ def load_pause_mi_nvl(pause_mi_dir: Path, *, y_col: str = PAUSE_MI_COL) -> pd.Da
         raise ValueError(f"no pause_binary rows in {path}")
     if y_col not in sub.columns:
         raise ValueError(f"{y_col} not in pause_stim_delta_excess columns")
-    keys = ["animal_id", "sex", "tx", "phase_layer"]
+    keys = ["animal_id", "sex", "condition", "session"]
     extra = [c for c in ("mi_mm_fam", "excess_nvl", "delta_excess", "frac_pause_bouts") if c in sub.columns]
     out = sub[keys + [y_col, *extra]].copy()
     out["animal_id"] = out["animal_id"].astype(str)
@@ -86,21 +86,21 @@ def join_dr_pause_mi(
     *,
     y_col: str = PAUSE_MI_COL,
 ) -> pd.DataFrame:
-    keys = ["animal_id", "sex", "phase_layer"]
-    left = dr[keys + ["tx", DR_COL, "n_models"]].rename(columns={"n_models": "n_models_dr"}).copy()
+    keys = ["animal_id", "sex", "session"]
+    left = dr[keys + ["condition", DR_COL, "n_models"]].rename(columns={"n_models": "n_models_dr"}).copy()
     right_cols = [
         c
         for c in [y_col, "n_models", "mi_mm_fam", "excess_nvl", "delta_excess", "frac_pause_bouts"]
         if c in pause_mi.columns
     ]
-    right = pause_mi[keys + ["tx", *right_cols]].rename(columns={"n_models": "n_models_pause_mi"}).copy()
+    right = pause_mi[keys + ["condition", *right_cols]].rename(columns={"n_models": "n_models_pause_mi"}).copy()
     left["animal_id"] = left["animal_id"].astype(str)
     right["animal_id"] = right["animal_id"].astype(str)
-    out = left.merge(right, on=keys + ["tx"], how="inner")
+    out = left.merge(right, on=keys + ["condition"], how="inner")
     if out.empty:
         return out
     out["animal_id"] = out["animal_id"].astype(str)
-    return out.sort_values(keys + ["tx"]).reset_index(drop=True)
+    return out.sort_values(keys + ["condition"]).reset_index(drop=True)
 
 
 def info_cell(
@@ -168,13 +168,13 @@ def run_info_lattice(
 ) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     rows: list[dict[str, object]] = []
-    for phase in PHASES:
+    for phase in SESSIONS:
         for sex in SEX_ORDER:
-            g = joined[(joined["phase_layer"] == phase) & (joined["sex"] == sex)]
+            g = joined[(joined["session"] == phase) & (joined["sex"] == sex)]
             rec = info_cell(g, y_col=spec.y_col, n_bins=n_bins, n_perm=n_perm, rng=rng)
             rows.append(
                 {
-                    "phase_layer": phase,
+                    "session": phase,
                     "sex": sex,
                     "step": spec.step,
                     "step_label": spec.step_label,
@@ -182,7 +182,7 @@ def run_info_lattice(
                     "y_col": spec.y_col,
                     "x_metric": DR_COL,
                     "question": spec.question,
-                    "grain": "animal × phase × novel_obj; sex-stratified",
+                    "grain": "animal × phase × nvl_obj; sex-stratified",
                     "design": "between_animal_association",
                     "y_binary": spec.binary,
                     **rec,
@@ -203,7 +203,7 @@ def info_md(
 
 ## Question
 
-Within sex × phase on `novel_obj`, how many **bits** does knowing **pause bout MI on
+Within sex × phase on `nvl_obj`, how many **bits** does knowing **pause bout MI on
 the novel-side distance stream** reduce uncertainty about **object-prox DR**?
 
 Operation family: **INFO** (shared information). Not within-bout stim↔syll MI replay;

@@ -1,6 +1,6 @@
 """Presence steps on hysteresis move|still (no kpMS).
 
-Primary: no_obj → identical_obj. Protocol t of Δ vs 0 within sex.
+Primary: no_obj → id_obj. Protocol t of Δ vs 0 within sex.
 
 Regen (OpenEthoMaze repo root):
   uv run python scratch/nor_object_mi/simpler_first_locomotor_presence.py
@@ -35,9 +35,9 @@ from nor_object_mi.simpler_first_syll_ambulation_overlap import (  # noqa: E402
 USECOLS = (
     "animal_id",
     "raw_session",
-    "phase_layer",
-    "condition_layer",
-    "tx",
+    "session",
+    "trial",
+    "condition",
     "sex",
     "bout_frames",
     "bout_duration_s",
@@ -55,7 +55,7 @@ def _info_md() -> str:
 
 ## What this is
 
-Paired **presence** (`no_obj → identical_obj`) on the original movement|immobile
+Paired **presence** (`no_obj → id_obj`) on the original movement|immobile
 clock (spot-node hysteresis), not kpMS syllables. Two categories tile labeled
 frames: movement bouts vs immobile complement.
 

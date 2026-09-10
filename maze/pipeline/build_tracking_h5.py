@@ -103,7 +103,7 @@ def build_tracking_h5(
                 strain=trial.strain,
                 experiment=trial.experiment,
                 sex=trial.sex,
-                tx=trial.tx,
+                condition=trial.condition,
                 researcher=trial.researcher,
                 drug=trial.drug,
             )

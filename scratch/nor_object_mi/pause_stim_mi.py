@@ -1,6 +1,6 @@
 """Pause-syllable occupancy MI vs binned object proximity (original MI design).
 
-Within animal × phase × ``novel_obj`` bout stream:
+Within animal × phase × ``nvl_obj`` bout stream:
 
     I(pause_bout; stim_bin)
 
@@ -31,7 +31,7 @@ from nor_object_mi.compute_mi import (
     fit_shared_dist_bin_edges,
 )
 from nor_object_mi.info_dr_pause_delta import get_y_metric_spec, load_pause_y, spearman_pair
-from nor_object_mi.simpler_first_object_prox import PHASES as PHASE_TAGS
+from nor_object_mi.simpler_first_object_prox import SESSIONS as PHASE_TAGS
 from nor_object_mi.simpler_first_protocol_prologue import pearson_pair
 
 StimVar = str
@@ -58,7 +58,7 @@ def _streams_pause_binary(
     for row in rows:
         if str(row["animal_id"]) != animal_id:
             continue
-        if str(row.get("condition_layer", "")) != "novel_obj":
+        if str(row.get("trial", "")) != "nvl_obj":
             continue
         val = float(row[field])
         if not np.isfinite(val):
@@ -99,8 +99,8 @@ def _mi_row(
     return {
         "animal_id": aid,
         "sex": meta["sex"],
-        "tx": meta["tx"],
-        "phase_layer": meta["phase_layer"],
+        "condition": meta["condition"],
+        "session": meta["session"],
         "stim_var": stim,
         "mi_label": label,
         "n_bouts": n_bouts,
@@ -178,12 +178,12 @@ def compute_pause_and_full_mi(
 
 def delta_excess(mi: pd.DataFrame) -> pd.DataFrame:
     """Novelty contrast excess_I(nvl) - excess_I(fam) per animal × mi_label."""
-    need = {"animal_id", "sex", "tx", "phase_layer", "stim_var", "mi_label", "excess"}
+    need = {"animal_id", "sex", "condition", "session", "stim_var", "mi_label", "excess"}
     missing = need - set(mi.columns)
     if missing:
         raise ValueError(f"delta_excess missing columns: {sorted(missing)}")
     rows: list[dict[str, object]] = []
-    keys = ["animal_id", "sex", "tx", "phase_layer", "mi_label"]
+    keys = ["animal_id", "sex", "condition", "session", "mi_label"]
     for key_vals, g in mi.groupby(keys, sort=True):
         key_map = dict(zip(keys, key_vals if isinstance(key_vals, tuple) else (key_vals,)))
         fam = g[g["stim_var"] == "dist_fam"]
@@ -241,7 +241,7 @@ def join_pause_mi_composition(
     *,
     y_col: str,
 ) -> pd.DataFrame:
-    keys = ["animal_id", "sex", "tx", "phase_layer"]
+    keys = ["animal_id", "sex", "condition", "session"]
     comp_sub = comp[keys + [y_col]].copy()
     delta = delta.copy()
     delta["animal_id"] = delta["animal_id"].astype(str)
@@ -253,7 +253,7 @@ def join_pause_mi_composition(
 def association_table(joined: pd.DataFrame, *, y_col: str) -> pd.DataFrame:
     """Spearman / Pearson between pause MI scalars and composition Y by sex × phase."""
     rows: list[dict[str, object]] = []
-    for (phase, sex, label), g in joined.groupby(["phase_layer", "sex", "mi_label"], sort=True):
+    for (phase, sex, label), g in joined.groupby(["session", "sex", "mi_label"], sort=True):
         for x_col, x_name in (
             ("delta_excess", "delta_excess"),
             ("excess_nvl", "excess_nvl"),
@@ -263,7 +263,7 @@ def association_table(joined: pd.DataFrame, *, y_col: str) -> pd.DataFrame:
             pr = pearson_pair(g[x_col].to_numpy(), g[y_col].to_numpy())
             rows.append(
                 {
-                    "phase_layer": phase,
+                    "session": phase,
                     "sex": sex,
                     "mi_label": label,
                     "x_metric": x_name,
@@ -290,7 +290,7 @@ def default_out_dir(art_root: Path, model: str) -> Path:
 def info_md(*, model: str, pause_id: int, n_bins: int, n_perm: int) -> str:
     return f"""# Pause syllable occupancy MI vs binned object proximity
 
-**Claim:** within animal × phase on `novel_obj` bouts, compare
+**Claim:** within animal × phase on `nvl_obj` bouts, compare
 
 - `I(pause_binary; stim_bin)` — cluster-13 mapped id {pause_id} in model `{model}`
 - `I(full_alphabet; stim_bin)` — original pilot occupancy MI
@@ -311,18 +311,18 @@ def compare_archived_full_mi(
     delta: pd.DataFrame,
     archived_path: Path,
     *,
-    phase_layer: str = "NOR_TX",
+    session: str = "NOR_TX",
 ) -> pd.DataFrame:
     """Litmus: full-alphabet delta_excess vs archived mi_per_animal.csv (one phase)."""
     if not archived_path.exists():
         return pd.DataFrame()
     arch = pd.read_csv(archived_path)
     arch["animal_id"] = arch["animal_id"].astype(str)
-    arch = arch[(arch["phase_layer"] == phase_layer) & (arch["mi_type"] == "occupancy")].copy()
+    arch = arch[(arch["session"] == session) & (arch["mi_type"] == "occupancy")].copy()
     fam = arch[arch["stim_var"] == "dist_fam"].set_index("animal_id")["excess"]
     nvl = arch[arch["stim_var"] == "dist_nvl"].set_index("animal_id")["excess"]
     arch_delta = (nvl - fam).rename("archived_delta_excess")
-    ours = delta[(delta["phase_layer"] == phase_layer) & (delta["mi_label"] == "full_alphabet")].copy()
+    ours = delta[(delta["session"] == session) & (delta["mi_label"] == "full_alphabet")].copy()
     ours["animal_id"] = ours["animal_id"].astype(str)
     ours = ours.set_index("animal_id")["delta_excess"]
     joined = pd.concat([ours.rename("recomputed_delta_excess"), arch_delta], axis=1, join="inner")
@@ -352,10 +352,10 @@ def write_run(
     phase_tags: list[dict[str, str]] = []
     bin_payload: dict[str, object] = {}
 
-    for phase_layer, tag in PHASE_TAGS:
+    for session, tag in PHASE_TAGS:
         bout_path = find_bout_csv(art_root, model, tag)
         if bout_path is None:
-            phase_tags.append({"phase_layer": phase_layer, "tag": tag, "bout_csv": "", "status": "missing"})
+            phase_tags.append({"session": session, "tag": tag, "bout_csv": "", "status": "missing"})
             continue
         rows = load_bout_rows(bout_path)
         edges_path = find_bin_edges(art_root, model, tag)
@@ -373,7 +373,7 @@ def write_run(
         pause_parts.append(pause_df)
         full_parts.append(full_df)
         phase_tags.append(
-            {"phase_layer": phase_layer, "tag": tag, "bout_csv": str(bout_path), "status": "ok"}
+            {"session": session, "tag": tag, "bout_csv": str(bout_path), "status": "ok"}
         )
 
     if not pause_parts:

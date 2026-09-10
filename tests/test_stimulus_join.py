@@ -30,11 +30,11 @@ def _bout_row(**kwargs: str) -> dict[str, str]:
         "animal_id": "3243",
         "session": "S01",
         "trial": "T01",
-        "phase": "experimental",
+        "interval": "experimental",
         "exit_number": "1",
         "sex": "F",
         "strain": "wt",
-        "tx": "n/a",
+        "condition": "n/a",
         "experiment": "VASTcont",
         "drug": "n/a",
         "cohort": "",
@@ -120,7 +120,7 @@ def test_read_trial_stimulus_frames_expands_run_relative_legacy(tmp_path: Path) 
         xy = np.zeros(n_video, dtype=XY_ROW_DTYPE)
         xy["frame_index"] = np.arange(n_video, dtype=np.uint32)
         xy["trial_state"] = b"run"
-        xy["trial_state"][:run_start] = b"iti_wait"
+        xy["trial_state"][:run_start] = b"wait"
         xy["dist_to_exit_px"] = np.linspace(200.0, 50.0, n_video, dtype=np.float32)
         write_xy_table(g, "spot", xy, fps=30.0)
         n_run = n_video - run_start

@@ -84,21 +84,21 @@ def write_animal_label(
     db_path: Optional[Path],
     animal_id: str,
     sex: Optional[str] = None,
-    tx: Optional[str] = None,
+    condition: Optional[str] = None,
     strain: Optional[str] = None,
     experiment: Optional[str] = None,
     researcher: Optional[str] = None,
     drug: Optional[str] = None,
     notes: Optional[str] = None,
 ) -> None:
-    """Write treatment labels for an animal."""
+    """Write condition labels for an animal."""
     with open_db(db_path, "a") as h5:
         g_animal = h5[animal_id] if animal_id in h5 else h5.create_group(animal_id)
         write_group_attrs(
             g_animal,
             {
                 "sex": safe_str(sex) if sex is not None else None,
-                "tx": safe_str(tx) if tx is not None else None,
+                "condition": safe_str(condition) if condition is not None else None,
                 "strain": safe_str(strain) if strain is not None else None,
                 "experiment": safe_str(experiment) if experiment is not None else None,
                 "researcher": safe_str(researcher) if researcher is not None else None,
@@ -112,7 +112,7 @@ def read_animal_label(
     db_path: Optional[Path],
     animal_id: str,
 ) -> dict[str, str]:
-    """Read treatment labels for an animal."""
+    """Read condition labels for an animal."""
     try:
         with open_db(db_path, "r") as h5:
             if animal_id not in h5:
@@ -120,7 +120,7 @@ def read_animal_label(
             g_animal = h5[animal_id]
             return {
                 "sex": safe_str(g_animal.attrs.get("sex", "")),
-                "tx": safe_str(g_animal.attrs.get("tx", "")),
+                "condition": safe_str(g_animal.attrs.get("condition", "")),
                 "notes": safe_str(g_animal.attrs.get("notes", "")),
                 "strain": safe_str(g_animal.attrs.get("strain", "")),
                 "experiment": safe_str(g_animal.attrs.get("experiment", "")),
