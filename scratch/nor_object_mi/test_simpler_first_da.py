@@ -11,7 +11,7 @@ from nor_object_mi.simpler_first_da import (
     benjamini_hochberg,
     consistency_phase_pairs,
     da_tests_from_deltas,
-    da_tests_tx_sex_from_animal_deltas,
+    da_tests_condition_sex_from_animal_deltas,
     delta_p_and_bc_contrib,
     jaccard,
     paired_da_deltas,
@@ -170,7 +170,7 @@ def test_jaccard_and_consistency_within_model() -> None:
     assert int(s1["n_facets"]) == 3
 
 
-def test_da_tx_sex_stratum_does_not_pool() -> None:
+def test_da_condition_sex_stratum_does_not_pool() -> None:
     rows = []
     for i in range(8):
         for cond, frames in (
@@ -217,7 +217,7 @@ def test_da_tx_sex_stratum_does_not_pool() -> None:
         pair_col="trial",
     )
     dtab["model"] = "toy"
-    tests = da_tests_tx_sex_from_animal_deltas(dtab)
+    tests = da_tests_condition_sex_from_animal_deltas(dtab)
     f = tests[(tests["condition"] == "noSD") & (tests["sex"] == "F")]
     m = tests[(tests["condition"] == "GHSD") & (tests["sex"] == "M")]
     assert bool(f["hit_fdr05"].all())
@@ -226,7 +226,7 @@ def test_da_tx_sex_stratum_does_not_pool() -> None:
     assert str(pooled["sex"].iloc[0]) == "all"
 
 
-def test_da_tx_sex_phase_paired_cell_cols() -> None:
+def test_da_condition_sex_session_paired_cell_cols() -> None:
     rows = []
     for i in range(8):
         rows.append(
@@ -265,7 +265,7 @@ def test_da_tx_sex_phase_paired_cell_cols() -> None:
             }
         )
     dtab = pd.DataFrame(rows)
-    tests = da_tests_tx_sex_from_animal_deltas(
+    tests = da_tests_condition_sex_from_animal_deltas(
         dtab, cell_cols=("model", "trial", "session_step", "condition", "sex")
     )
     assert set(tests.columns) >= {"trial", "session_step", "hit_fdr05"}
@@ -322,7 +322,7 @@ def test_sex_pooled_cell_cols_separate_sexes_pool_tx() -> None:
                         "right": "id_obj",
                     }
                 )
-    tests = da_tests_tx_sex_from_animal_deltas(
+    tests = da_tests_condition_sex_from_animal_deltas(
         pd.DataFrame(rows),
         cell_cols=("model", "session", "step", "sex"),
     )

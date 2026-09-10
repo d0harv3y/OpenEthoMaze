@@ -4,7 +4,7 @@ Winner = argmax median_delta_p in da_syllable_tests_long (sex=all) at NOR_TX.
 Ids are not portable. Compare via syllable_prototypes_clustered.csv (cluster_id).
 
 Regen (OpenEthoMaze repo root):
-  uv run python scratch/nor_object_mi/fig_da_tx_argmax_kinematics.py
+  uv run python scratch/nor_object_mi/fig_da_condition_argmax_kinematics.py
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def _as_bool(s: pd.Series) -> pd.Series:
     return s.astype(str).str.lower().isin(("true", "1"))
 
 
-def tx_argmax_table(tests: pd.DataFrame, proto: pd.DataFrame) -> pd.DataFrame:
+def condition_argmax_table(tests: pd.DataFrame, proto: pd.DataFrame) -> pd.DataFrame:
     t = tests[tests["session"] == "NOR_TX"].copy()
     t["median_delta_p"] = pd.to_numeric(t["median_delta_p"], errors="coerce")
     t["hit"] = _as_bool(t["hit_fdr05"])
@@ -178,7 +178,7 @@ def fig_argmax_kinematics(winners: pd.DataFrame, proto: pd.DataFrame, out: Path,
         "Cluster 13 = long, slow, crooked bouts (pause/still-like)."
     )
     fig_legend_and_footnote(fig, handles, foot, dest=dest)
-    save_pdf_png(fig, out / "fig_da_tx_argmax_kinematics")
+    save_pdf_png(fig, out / "fig_da_condition_argmax_kinematics")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -191,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
     out = args.out_dir or (args.da_dir / "figures")
     tests = pd.read_csv(args.da_dir / "da_syllable_tests_long.csv")
     proto = pd.read_csv(args.sig_dir / "syllable_prototypes_clustered.csv")
-    w = tx_argmax_table(tests, proto)
+    w = condition_argmax_table(tests, proto)
     csv_path = args.da_dir / WINNER_CSV
     w.to_csv(csv_path, index=False)
     print(f"wrote {csv_path}  rows={len(w)}", flush=True)

@@ -196,7 +196,7 @@ def session_mask_table(labeled: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def paired_tx_minus_bl(sessions: pd.DataFrame) -> pd.DataFrame:
+def paired_condition_minus_bl(sessions: pd.DataFrame) -> pd.DataFrame:
     """TX − BL for each animal × condition × mask × metric."""
     bl = sessions[sessions["session"] == "NOR_BL"]
     tx = sessions[sessions["session"] == "NOR_TX"]

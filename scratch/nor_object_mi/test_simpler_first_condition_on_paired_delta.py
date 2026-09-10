@@ -6,12 +6,12 @@ import numpy as np
 import pandas as pd
 
 from nor_object_mi.simpler_first_presence import build_animal_condition_table
-from nor_object_mi.simpler_first_tx_on_paired_delta import (
+from nor_object_mi.simpler_first_condition_on_paired_delta import (
     agreement_da,
     agreement_shannon,
     da_cell_consensus_hit,
     da_consensus_min_hits,
-    da_tx_kruskal_from_deltas,
+    da_condition_kruskal_from_deltas,
     model_alphabet_k,
     run_condition_axis,
 )
@@ -29,7 +29,7 @@ def test_alphabet_k_and_consensus_threshold() -> None:
     assert da_cell_consensus_hit(3, 100) is False
 
 
-def _bouts_tx_sex_shift() -> pd.DataFrame:
+def _bouts_condition_sex_shift() -> pd.DataFrame:
     """F: noSD moves syllable 1→2 on presence; GHSD/RBSD flat. M flat."""
     rows: list[dict[str, object]] = []
     for i in range(9):
@@ -75,10 +75,10 @@ def _bouts_tx_sex_shift() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def test_da_tx_kruskal_detects_sex_specific_tx_effect() -> None:
+def test_da_condition_kruskal_detects_sex_specific_condition_effect() -> None:
     from nor_object_mi.simpler_first_da import paired_da_deltas
 
-    ac = build_animal_condition_table(_bouts_tx_sex_shift(), session="NOR_TX")
+    ac = build_animal_condition_table(_bouts_condition_sex_shift(), session="NOR_TX")
     dtab = paired_da_deltas(
         ac,
         step="no_obj->id_obj",
@@ -86,7 +86,7 @@ def test_da_tx_kruskal_detects_sex_specific_tx_effect() -> None:
         right="id_obj",
         pair_col="trial",
     )
-    tests = da_tx_kruskal_from_deltas(dtab, question="Q1")
+    tests = da_condition_kruskal_from_deltas(dtab, question="Q1")
     # apply BH within sex
     from nor_object_mi.simpler_first_da import apply_bh_grouped
 
@@ -100,15 +100,15 @@ def test_da_tx_kruskal_detects_sex_specific_tx_effect() -> None:
     assert not (np.isfinite(m1["p"].iloc[0]) and float(m1["p"].iloc[0]) < 0.05)
 
 
-def test_da_tx_anova_detects_sex_specific_tx_effect() -> None:
+def test_da_condition_anova_detects_sex_specific_condition_effect() -> None:
     """Mean-scale twin of the Kruskal litmus (same synthetic shift + tiny noise).
 
     Alexander–Govern needs positive within-arm variance; add ε so AG is defined.
     """
     from nor_object_mi.simpler_first_da import apply_bh_grouped, paired_da_deltas
-    from nor_object_mi.simpler_first_tx_on_paired_delta import da_tx_stage_b_from_deltas
+    from nor_object_mi.simpler_first_condition_on_paired_delta import da_condition_stage_b_from_deltas
 
-    ac = build_animal_condition_table(_bouts_tx_sex_shift(), session="NOR_TX")
+    ac = build_animal_condition_table(_bouts_condition_sex_shift(), session="NOR_TX")
     dtab = paired_da_deltas(
         ac,
         step="no_obj->id_obj",
@@ -121,7 +121,7 @@ def test_da_tx_anova_detects_sex_specific_tx_effect() -> None:
     dtab["delta_p"] = pd.to_numeric(dtab["delta_p"], errors="coerce") + rng.normal(
         0.0, 1e-4, size=len(dtab)
     )
-    tests = da_tx_stage_b_from_deltas(dtab, question="Q1", stage_b="anova")
+    tests = da_condition_stage_b_from_deltas(dtab, question="Q1", stage_b="anova")
     tests = apply_bh_grouped(tests, ("sex",))
     f1 = tests[(tests["sex"] == "F") & (tests["raw_syllable_id"] == 1)]
     m1 = tests[(tests["sex"] == "M") & (tests["raw_syllable_id"] == 1)]
@@ -134,7 +134,7 @@ def test_da_tx_anova_detects_sex_specific_tx_effect() -> None:
 
 
 def test_near_grain_empty_when_all_far() -> None:
-    bouts = _bouts_tx_sex_shift()
+    bouts = _bouts_condition_sex_shift()
     ac_near = build_animal_condition_table(
         bouts, session="NOR_TX", grain="near_0p10"
     )
@@ -238,7 +238,7 @@ def test_agreement_da_uses_alphabet_frac() -> None:
 
 
 def test_run_condition_axis_smoke() -> None:
-    ac = build_animal_condition_table(_bouts_tx_sex_shift(), session="NOR_TX")
+    ac = build_animal_condition_table(_bouts_condition_sex_shift(), session="NOR_TX")
     da, sc, da_d, sc_d = run_condition_axis(ac, grain="full_session")
     assert not da.empty
     assert set(da["sex"]) <= {"F", "M"}

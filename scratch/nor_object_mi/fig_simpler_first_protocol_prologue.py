@@ -155,7 +155,7 @@ def _fm_stats_lines(
     return lines
 
 
-def _draw_tx_violins(
+def _draw_condition_violins(
     ax,
     panel: pd.DataFrame,
     ycol: str,
@@ -280,7 +280,7 @@ def _engagement_grid(
                 # Prefer dispersion median if present (should match consensus Δ).
                 if "median" in panel.columns and panel["median"].notna().any():
                     panel[metric] = panel["median"].where(panel["median"].notna(), panel[metric])
-            _draw_tx_violins(
+            _draw_condition_violins(
                 ax,
                 panel,
                 metric,
@@ -373,7 +373,7 @@ def fig_dr_preference(animals: pd.DataFrame, tests: pd.DataFrame, out: Path, *, 
         for c, ph in enumerate(SESSIONS):
             ax = axes[r, c]
             panel = animals[animals["session"] == ph]
-            _draw_tx_violins(ax, panel, metric, rng, dest=dest)
+            _draw_condition_violins(ax, panel, metric, rng, dest=dest)
             ax.axhline(0.0, color="#bbbbbb", lw=0.7, ls="--", zorder=0)
             panel_stats_box(ax, _fm_stats_lines(tests, phase=ph, metric=metric), dest=dest)
             if r == 1:
@@ -682,7 +682,7 @@ def fig_dr_association(animals: pd.DataFrame, assoc: pd.DataFrame, out: Path, *,
     save_pdf_svg(fig, out / "fig_protocol_dr_association")
 
 
-def fig_tx_coda(
+def fig_condition_coda(
     dr_tests: pd.DataFrame,
     pr_tests: pd.DataFrame,
     out: Path,
@@ -746,7 +746,7 @@ def fig_tx_coda(
         ),
         y=-0.08,
     )
-    save_pdf_svg(fig, out / "fig_protocol_tx_coda")
+    save_pdf_svg(fig, out / "fig_protocol_condition_coda")
 
 
 def write_figures_md(out: Path) -> None:
@@ -775,7 +775,7 @@ Complementary to `INFO_protocol_prologue.md`. Dest = slides.
 | `fig_protocol_presence` | Objects appear → engagement | consensus deltas + across-model IQR; t within sex | violin + ±½IQR whiskers; F/M t box | D + I |
 | `fig_protocol_novelty_step` | Novelty step weaker | same; `id_obj->nvl_obj` | same | D + I |
 | `fig_protocol_dr_preference` | DR > 0 (original + object-prox) | DR animals; t within sex | 2×4 violin | D + I |
-| `fig_protocol_tx_coda` | Tx arms mostly miss | Welch ANOVA | hit/miss + p text | I |
+| `fig_protocol_condition_coda` | Tx arms mostly miss | Welch ANOVA | hit/miss + p text | I |
 
 
 ---
@@ -840,7 +840,7 @@ def main(argv: list[str] | None = None) -> int:
         dispersion_summary=disp_sum,
     )
     fig_dr_preference(animals, dr_tests, out, dest=dest)
-    fig_tx_coda(dr_tests, pr_tests, out, dest=dest)
+    fig_condition_coda(dr_tests, pr_tests, out, dest=dest)
     write_figures_md(out)
 
     stale = list(out.glob("fig_protocol_assoc_negctrl.*"))

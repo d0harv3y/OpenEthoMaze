@@ -259,7 +259,7 @@ def main() -> int:
     ap.add_argument(
         "--out-stem",
         type=Path,
-        default=root / "presence_phase_contrast" / "fig_presence_bl_tx_summary",
+        default=root / "presence_phase_contrast" / "fig_presence_bl_condition_summary",
     )
     args = ap.parse_args()
     make_figure(_load(args.bl_csv), _load(args.tx_csv), out_stem=args.out_stem)

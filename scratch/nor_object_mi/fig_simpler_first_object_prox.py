@@ -199,7 +199,7 @@ def _annotate_frac(ax, mat: np.ndarray, *, dest: str, vmin: float = 0.0, vmax: f
                 )
 
 
-def _draw_tx_violins(
+def _draw_condition_violins(
     ax,
     panel: pd.DataFrame,
     ycol: str,
@@ -388,7 +388,7 @@ def fig_frac_hit(agr: pd.DataFrame, out: Path, *, dest: str = "slides") -> None:
     save_pdf_png(fig, out / "fig_object_prox_frac_hit")
 
 
-def fig_tx_kruskal(tests: pd.DataFrame, out: Path, *, dest: str = "slides") -> None:
+def fig_condition_kruskal(tests: pd.DataFrame, out: Path, *, dest: str = "slides") -> None:
     ts = _begin(dest)
     kr = tests[(tests["test"] == "kruskal") & (tests["metric"] == "dr_exclusive")].copy()
     kr["hit"] = _as_bool(kr["hit_p05"])
@@ -417,7 +417,7 @@ def fig_tx_kruskal(tests: pd.DataFrame, out: Path, *, dest: str = "slides") -> N
         y=1.06,
     )
     fig_footnote(fig, _note(dest, FOOT_KR_DR, FOOT_KR_DR_S), y=-0.10)
-    save_pdf_png(fig, out / "fig_object_prox_tx_kruskal")
+    save_pdf_png(fig, out / "fig_object_prox_condition_kruskal")
 
 
 def fig_occupancy_kruskal(tests: pd.DataFrame, out: Path, *, dest: str = "slides") -> None:
@@ -572,7 +572,7 @@ def fig_violin_dr(
     for c, ph in enumerate(SESSIONS):
         ax = ax_list[c]
         panel = med[med["session"] == ph]
-        ns = _draw_tx_violins(ax, panel, "dr_exclusive", rng, dest=dest, iqr_col=iqr_col)
+        ns = _draw_condition_violins(ax, panel, "dr_exclusive", rng, dest=dest, iqr_col=iqr_col)
         ax.axhline(0.0, color="#bbbbbb", lw=0.7, ls="--", zorder=0)
         nlab = "n=" + "/".join(str(n) for n in ns)
         w = wx_all[wx_all["session"] == ph]
@@ -634,7 +634,7 @@ def fig_occupancy(animals: pd.DataFrame, cons: pd.DataFrame, out: Path, *, dest:
         for c, ph in enumerate(SESSIONS):
             ax = axes[c]
             panel = med[med["session"] == ph]
-            ns = _draw_tx_violins(ax, panel, met, rng, dest=dest)
+            ns = _draw_condition_violins(ax, panel, met, rng, dest=dest)
             if c == 0:
                 ax.set_ylabel(OCC_LAB[met], fontsize=ts["annotation"])
             nlab = "n=" + "/".join(str(n) for n in ns)
@@ -690,7 +690,7 @@ def main(argv: list[str] | None = None) -> int:
     cons = pd.read_csv(run / "object_prox_consensus_tests.csv")
     fig_overlap(ov, out, dest=dest)
     fig_frac_hit(agr, out, dest=dest)
-    fig_tx_kruskal(tests, out, dest=dest)
+    fig_condition_kruskal(tests, out, dest=dest)
     fig_occupancy_kruskal(tests, out, dest=dest)
     fig_consensus_wilcoxon(cons, out, dest=dest)
     fig_consensus_kruskal(cons, out, dest=dest)

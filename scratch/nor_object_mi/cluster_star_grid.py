@@ -2,7 +2,7 @@
 
 Default: one 4×6 crowd movie per multi-star cluster, using the model with the
 most bouts for that cluster's representative syllable (max ``n_bouts`` within
-model × cluster). Same NOR_TX / nvl_obj sampling as ``tx_argmax_grid``.
+model × cluster). Same NOR_TX / nvl_obj sampling as ``condition_argmax_grid``.
 
 Regen (repo root; needs ``--extra kpms``)::
 
@@ -27,9 +27,9 @@ _SCRATCH = Path(__file__).resolve().parents[1]
 if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
 
-from nor_object_mi.cluster_tx_kruskal import representative_cluster_ids  # noqa: E402
+from nor_object_mi.cluster_condition_kruskal import representative_cluster_ids  # noqa: E402
 from nor_object_mi.join_keys import filter_cohort, iter_joined_sessions  # noqa: E402
-from nor_object_mi.tx_argmax_grid import (  # noqa: E402
+from nor_object_mi.condition_argmax_grid import (  # noqa: E402
     CONDITION,
     DEFAULT_ENSEMBLE,
     DEFAULT_NOR,
@@ -44,7 +44,7 @@ DEFAULT_MI = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017\_nor_object_mi"
 )
 DEFAULT_DA = DEFAULT_MI / "simpler_first_da"
-DEFAULT_PP = DEFAULT_MI / "simpler_first_phase_paired"
+DEFAULT_PP = DEFAULT_MI / "simpler_first_session_paired"
 DEFAULT_SIG = DEFAULT_MI / "simpler_first_syllable_signatures"
 
 
@@ -168,8 +168,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     np.random.seed(int(args.seed))
-    da_csv = args.da_dir / "cluster_tx_kruskal_mean_model_p.csv"
-    pp_csv = args.pp_dir / "phase_paired_cluster_tx_kruskal_mean_model_p.csv"
+    da_csv = args.da_dir / "cluster_condition_kruskal_mean_model_p.csv"
+    pp_csv = args.pp_dir / "session_paired_cluster_condition_kruskal_mean_model_p.csv"
     proto = pd.read_csv(args.sig_dir / "syllable_prototypes_clustered.csv")
 
     if args.clusters:

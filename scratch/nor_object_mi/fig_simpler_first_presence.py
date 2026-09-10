@@ -45,7 +45,7 @@ from nor_object_mi.simpler_first_presence import (  # noqa: E402
     across_model_dispersion_summary,
     animal_median_across_models,
     consensus_tests,
-    restrict_tx_stratum,
+    restrict_condition_stratum,
 )
 
 DEFAULT_RUN = Path(
@@ -323,7 +323,7 @@ def _wilcoxon_hit_frac(sub: pd.DataFrame, phase: str, metric: str) -> float:
 
 def fig_frac_hit_by_sex(tests: pd.DataFrame, out: Path, *, wilcoxon: str = WILCOXON_POOLED) -> None:
     apply_style()
-    wx = restrict_tx_stratum(
+    wx = restrict_condition_stratum(
         tests[tests["test"] == "wilcoxon_signed_rank"], _wx_stratum(wilcoxon)
     )
     wx = wx[wx["sex"].isin(SEX_ORDER)]
@@ -418,7 +418,7 @@ def fig_median_delta(agr: pd.DataFrame, out: Path) -> None:
 def fig_paired_pilot(deltas: pd.DataFrame, tests: pd.DataFrame, out: Path, *, model: str) -> None:
     apply_style()
     dsub = deltas[(deltas["model"] == model) & (deltas["session"] == "NOR_TX")].copy()
-    tsub = restrict_tx_stratum(
+    tsub = restrict_condition_stratum(
         tests[
             (tests["model"] == model)
             & (tests["session"] == "NOR_TX")
@@ -560,7 +560,7 @@ FOOT_VIOLIN_COMPOSITION = (
 )
 
 
-def _draw_tx_violins(
+def _draw_condition_violins(
     ax, panel: pd.DataFrame, ycol: str, rng: np.random.Generator, *, iqr_col: str | None = None
 ) -> list[int]:
     """Strip + violin by tx. Optional ``iqr_col`` → ±½ IQR whiskers (salt)."""
@@ -669,9 +669,9 @@ def fig_delta_violins(
     n_models = int(deltas["model"].nunique())
     wx_rows = cons[cons["test"] == "wilcoxon_signed_rank"]
     if wilcoxon == WILCOXON_POOLED:
-        wx_ann = restrict_tx_stratum(wx_rows[wx_rows["sex"] == "all"], CONDITION_STRATUM_ALL)
+        wx_ann = restrict_condition_stratum(wx_rows[wx_rows["sex"] == "all"], CONDITION_STRATUM_ALL)
     else:
-        wx_ann = restrict_tx_stratum(wx_rows[wx_rows["sex"].isin(("F", "M"))], CONDITION_STRATUM_CONTROL)
+        wx_ann = restrict_condition_stratum(wx_rows[wx_rows["sex"].isin(("F", "M"))], CONDITION_STRATUM_CONTROL)
     kr = cons[cons["test"] == "kruskal"]
     salt_on = ["animal_id", "sex", "condition", "step", "session"]
     for met in METRICS:
@@ -687,7 +687,7 @@ def fig_delta_violins(
             for c, ph in enumerate(SESSIONS):
                 ax = axes[r, c]
                 panel = med[(med["step"] == step) & (med["session"] == ph)]
-                ns = _draw_tx_violins(ax, panel, col, rng, iqr_col=iqr_col)
+                ns = _draw_condition_violins(ax, panel, col, rng, iqr_col=iqr_col)
                 if c == 0:
                     ax.set_ylabel(f"{slabel}\nΔ (right − left)", fontsize=8)
                 if r == 0:
@@ -800,7 +800,7 @@ def _annotate_heatmap(ax, mat: np.ndarray) -> None:
                 )
 
 
-def fig_tx_kruskal(tests: pd.DataFrame, out: Path) -> None:
+def fig_condition_kruskal(tests: pd.DataFrame, out: Path) -> None:
     apply_style()
     kr = tests[tests["test"] == "kruskal"].copy()
     kr["hit"] = _as_bool(kr["hit_p05"])
@@ -839,12 +839,12 @@ def fig_tx_kruskal(tests: pd.DataFrame, out: Path) -> None:
         FOOT_KRUSKAL + STEP_GLOSS + " Kruskal metric names in tests_long are delta_*.",
         y=-0.10,
     )
-    save_pdf_png(fig, out / "fig_presence_tx_kruskal")
+    save_pdf_png(fig, out / "fig_presence_condition_kruskal")
 
 
 def fig_consensus_wilcoxon(cons: pd.DataFrame, out: Path) -> None:
     apply_style()
-    wx = restrict_tx_stratum(
+    wx = restrict_condition_stratum(
         cons[(cons["test"] == "wilcoxon_signed_rank") & (cons["sex"] == "all")],
         CONDITION_STRATUM_ALL,
     )
@@ -869,7 +869,7 @@ def fig_consensus_wilcoxon_by_sex(
     cons: pd.DataFrame, out: Path, *, wilcoxon: str = WILCOXON_POOLED
 ) -> None:
     apply_style()
-    wx = restrict_tx_stratum(
+    wx = restrict_condition_stratum(
         cons[cons["test"] == "wilcoxon_signed_rank"], _wx_stratum(wilcoxon)
     )
     wx = wx[wx["sex"].isin(SEX_ORDER)]
@@ -1054,7 +1054,7 @@ def main(argv: list[str] | None = None) -> int:
     fig_delta_violins(
         deltas, cons, out, salt=salt, salt_summary=salt_sum, wilcoxon=args.wilcoxon
     )
-    fig_tx_kruskal(tests, out)
+    fig_condition_kruskal(tests, out)
     fig_consensus_wilcoxon(cons, out)
     fig_consensus_wilcoxon_by_sex(cons, out, wilcoxon=args.wilcoxon)
     fig_consensus_kruskal(cons, out)

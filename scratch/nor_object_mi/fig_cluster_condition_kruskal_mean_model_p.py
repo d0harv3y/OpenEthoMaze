@@ -6,8 +6,8 @@ Sibling to the median-Δp Kruskal overviews:
     (default star = majority of models hit)
 
 Regen:
-  uv run python scratch/nor_object_mi/fig_cluster_tx_kruskal_mean_model_p.py
-  uv run python scratch/nor_object_mi/fig_cluster_tx_kruskal_mean_model_p.py --star any
+  uv run python scratch/nor_object_mi/fig_cluster_condition_kruskal_mean_model_p.py
+  uv run python scratch/nor_object_mi/fig_cluster_condition_kruskal_mean_model_p.py --star any
 """
 
 from __future__ import annotations
@@ -23,24 +23,24 @@ _SCRATCH = Path(__file__).resolve().parents[1]
 if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
 
-from nor_object_mi.cluster_tx_kruskal import (  # noqa: E402
+from nor_object_mi.cluster_condition_kruskal import (  # noqa: E402
     attach_cluster_ids as attach_da,
     representative_cluster_ids,
 )
-from nor_object_mi.cluster_tx_kruskal_phase_paired import (  # noqa: E402
+from nor_object_mi.cluster_condition_kruskal_session_paired import (  # noqa: E402
     attach_cluster_ids as attach_pp,
 )
-from nor_object_mi.cluster_tx_mean_model_p import (  # noqa: E402
+from nor_object_mi.cluster_condition_mean_model_p import (  # noqa: E402
     StarRule,
     aggregate_mean_p_models_as_family,
     kruskal_per_model_cluster_da,
     kruskal_per_model_cluster_pp,
 )
-from nor_object_mi.fig_cluster_tx_kruskal_overview import fig_overview  # noqa: E402
-from nor_object_mi.fig_cluster_tx_kruskal_phase_paired import (  # noqa: E402
+from nor_object_mi.fig_cluster_condition_kruskal_overview import fig_overview  # noqa: E402
+from nor_object_mi.fig_cluster_condition_kruskal_session_paired import (  # noqa: E402
     fig_cluster_overview as fig_pp_overview,
 )
-from nor_object_mi.simpler_first_phase_paired import paired_n_by_step  # noqa: E402
+from nor_object_mi.simpler_first_session_paired import paired_n_by_step  # noqa: E402
 
 DEFAULT_DA = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
@@ -48,7 +48,7 @@ DEFAULT_DA = Path(
 )
 DEFAULT_PP = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
-    r"\_nor_object_mi\simpler_first_phase_paired"
+    r"\_nor_object_mi\simpler_first_session_paired"
 )
 DEFAULT_SIG = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
@@ -110,7 +110,7 @@ def run_da(
     star: StarRule,
     reuse_per_model: bool = True,
 ) -> dict:
-    per_path = da_dir / "cluster_tx_kruskal_per_model.csv"
+    per_path = da_dir / "cluster_condition_kruskal_per_model.csv"
     if reuse_per_model and per_path.is_file():
         print(f"DA: reuse {per_path.name} ...", flush=True)
         per = pd.read_csv(per_path)
@@ -131,8 +131,8 @@ def run_da(
     )
     if "hit_fdr05_col" not in agg.columns:
         agg["hit_fdr05_col"] = False
-    agg.to_csv(da_dir / "cluster_tx_kruskal_mean_model_p.csv", index=False)
-    (da_dir / "INFO_cluster_tx_kruskal_mean_model_p.md").write_text(
+    agg.to_csv(da_dir / "cluster_condition_kruskal_mean_model_p.csv", index=False)
+    (da_dir / "INFO_cluster_condition_kruskal_mean_model_p.md").write_text(
         _info_md(design="DA presence/novelty/span × phase", star=star), encoding="utf-8"
     )
     fig_overview(
@@ -140,7 +140,7 @@ def run_da(
         da_dir,
         dest=dest,
         weighting="frame_share",
-        stem="fig_cluster_tx_kruskal_overview_mean_model_p",
+        stem="fig_cluster_condition_kruskal_overview_mean_model_p",
         suptitle=(
             "Mean per-model Kruskal p (Δp frame_share) ~ tx by cluster × phase  "
             f"(within sex; * = BH among tested models; absent = non-hit vs ensemble, star={star})"
@@ -166,7 +166,7 @@ def run_da(
         if not agg.empty and bool(agg["hit_fdr05"].any())
         else 0.0,
     }
-    (da_dir / "cluster_tx_kruskal_mean_model_p_summary.json").write_text(
+    (da_dir / "cluster_condition_kruskal_mean_model_p_summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8"
     )
     return summary
@@ -180,12 +180,12 @@ def run_pp(
     star: StarRule,
     reuse_per_model: bool = True,
 ) -> dict:
-    per_path = pp_dir / "phase_paired_cluster_tx_kruskal_per_model.csv"
+    per_path = pp_dir / "session_paired_cluster_condition_kruskal_per_model.csv"
     if reuse_per_model and per_path.is_file():
         print(f"PP: reuse {per_path.name} ...", flush=True)
         per = pd.read_csv(per_path)
         deltas = pd.read_csv(
-            pp_dir / "phase_paired_da_deltas_per_animal.csv",
+            pp_dir / "session_paired_da_deltas_per_animal.csv",
             usecols=["session_step", "animal_id"],
         )
         n_map = paired_n_by_step(deltas)
@@ -194,7 +194,7 @@ def run_pp(
         proto = pd.read_csv(sig_dir / "syllable_prototypes_clustered.csv")
         rep = representative_cluster_ids(proto, include_noise=True)
         deltas = pd.read_csv(
-            pp_dir / "phase_paired_da_deltas_per_animal.csv", usecols=list(PP_USECOLS)
+            pp_dir / "session_paired_da_deltas_per_animal.csv", usecols=list(PP_USECOLS)
         )
         n_map = paired_n_by_step(deltas)
         mapped = attach_pp(deltas, rep)
@@ -209,8 +209,8 @@ def run_pp(
     )
     if "hit_fdr05_col" not in agg.columns:
         agg["hit_fdr05_col"] = False
-    agg.to_csv(pp_dir / "phase_paired_cluster_tx_kruskal_mean_model_p.csv", index=False)
-    (pp_dir / "INFO_phase_paired_cluster_tx_kruskal_mean_model_p.md").write_text(
+    agg.to_csv(pp_dir / "session_paired_cluster_condition_kruskal_mean_model_p.csv", index=False)
+    (pp_dir / "INFO_session_paired_cluster_condition_kruskal_mean_model_p.md").write_text(
         _info_md(design="phase-paired condition × phase step", star=star), encoding="utf-8"
     )
     out = pp_dir / "figures"
@@ -220,7 +220,7 @@ def run_pp(
         out,
         dest=dest,
         n_map=n_map,
-        stem="fig_phase_paired_cluster_tx_kruskal_overview_mean_model_p",
+        stem="fig_session_paired_cluster_condition_kruskal_overview_mean_model_p",
         suptitle=(
             "Mean per-model paired Kruskal p (Δp frame_share) ~ tx by cluster × phase step  "
             f"(within sex; * = BH among tested models; absent = non-hit vs ensemble, star={star})"
@@ -234,7 +234,7 @@ def run_pp(
         ),
     )
     summary = {
-        "design": "phase_paired",
+        "design": "session_paired",
         "star_rule": star,
         "n_clusters": int(agg["cluster_id"].nunique()) if not agg.empty else 0,
         "n_per_model_rows": int(len(per)),
@@ -246,7 +246,7 @@ def run_pp(
         if not agg.empty and bool(agg["hit_fdr05"].any())
         else 0.0,
     }
-    (pp_dir / "phase_paired_cluster_tx_kruskal_mean_model_p_summary.json").write_text(
+    (pp_dir / "session_paired_cluster_condition_kruskal_mean_model_p_summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8"
     )
     return summary

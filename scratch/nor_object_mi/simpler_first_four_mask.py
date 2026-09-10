@@ -26,7 +26,7 @@ from nor_object_mi.four_mask import (  # noqa: E402
     gate_hits,
     hunt_tests,
     label_syllable_bouts,
-    paired_tx_minus_bl,
+    paired_condition_minus_bl,
     session_mask_table,
     session_rasters,
 )
@@ -121,8 +121,8 @@ def main(argv: list[str] | None = None) -> int:
     labeled = label_syllable_bouts(syll, rasters, r_m=float(args.near_m))
     sessions = session_mask_table(labeled)
     sessions.to_csv(out / "session_mask_scalars.csv", index=False)
-    paired = paired_tx_minus_bl(sessions)
-    paired.to_csv(out / "paired_tx_minus_bl.csv", index=False)
+    paired = paired_condition_minus_bl(sessions)
+    paired.to_csv(out / "paired_condition_minus_bl.csv", index=False)
     tests = hunt_tests(paired)
     tests.to_csv(out / "hunt_tests.csv", index=False)
     gates = gate_hits(tests)
@@ -137,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
         "n_session_mask_rows": int(len(sessions)),
         "n_paired": int(len(paired)),
         "n_tests": int(len(tests)),
-        "n_tx_specific": n_spec,
+        "n_condition_specific": n_spec,
         "not": ["investigation", "DA", "portable_ids"],
     }
     (out / "run_summary.json").write_text(json.dumps(blob, indent=2), encoding="utf-8")

@@ -52,7 +52,7 @@ from nor_object_mi.fig_simpler_first_syllable_signatures import (  # noqa: E402
     build_cluster_color_lookup,
     colors_for_cluster_ids,
 )
-from nor_object_mi.simpler_first_da import da_tests_tx_sex_from_animal_deltas  # noqa: E402
+from nor_object_mi.simpler_first_da import da_tests_condition_sex_from_animal_deltas  # noqa: E402
 
 DEFAULT_RUN = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
@@ -109,7 +109,7 @@ VOLCANO_STEM = {
     "NOR_REC11hr": "fig_da_volcano_rec11",
 }
 Y_CLIP = 4.0
-TXSEX_TESTS = "da_syllable_tests_tx_sex.csv"
+TXSEX_TESTS = "da_syllable_tests_condition_sex.csv"
 SEX_POOLED_TESTS = "da_syllable_tests_sex_pooled.csv"
 SEX_POOLED_CELL_COLS = ("model", "session", "step", "sex")
 SEX_LAB = {"F": "female", "M": "male"}
@@ -199,13 +199,13 @@ def _load_volcano_step_deltas(run: Path) -> pd.DataFrame:
     return dtab[dtab["step"].isin([s for s, _ in VOLCANO_STEPS])].copy()
 
 
-def load_or_build_tx_sex_tests(run: Path, *, rebuild: bool) -> pd.DataFrame:
+def load_or_build_condition_sex_tests(run: Path, *, rebuild: bool) -> pd.DataFrame:
     dest = run / TXSEX_TESTS
     if dest.exists() and not rebuild:
         return pd.read_csv(dest)
     print("building tx-sex Wilcoxon from per-animal delta_p (presence + novelty + span) ...", flush=True)
     dtab = _load_volcano_step_deltas(run)
-    tests = da_tests_tx_sex_from_animal_deltas(dtab, progress=True)
+    tests = da_tests_condition_sex_from_animal_deltas(dtab, progress=True)
     tests.to_csv(dest, index=False)
     print(f"wrote {dest}  rows={len(tests)}", flush=True)
     return tests
@@ -221,7 +221,7 @@ def load_or_build_sex_pooled_tests(run: Path, *, rebuild: bool) -> pd.DataFrame:
         flush=True,
     )
     dtab = _load_volcano_step_deltas(run)
-    tests = da_tests_tx_sex_from_animal_deltas(
+    tests = da_tests_condition_sex_from_animal_deltas(
         dtab, cell_cols=SEX_POOLED_CELL_COLS, progress=True
     )
     tests.to_csv(dest, index=False)
@@ -1141,7 +1141,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--rebuild-tx-sex",
         action="store_true",
-        help="Recompute da_syllable_tests_tx_sex.csv from per-animal Δp",
+        help="Recompute da_syllable_tests_condition_sex.csv from per-animal Δp",
     )
     ap.add_argument(
         "--ladder-only",
@@ -1173,7 +1173,7 @@ def main(argv: list[str] | None = None) -> int:
     cluster_lookup, cluster_ids, listed = load_cluster_lookup(args.sig_dir)
 
     if args.ladder_overlay_by_sex:
-        txsex = load_or_build_tx_sex_tests(run, rebuild=args.rebuild_tx_sex)
+        txsex = load_or_build_condition_sex_tests(run, rebuild=args.rebuild_condition_sex)
         sex_pooled = load_or_build_sex_pooled_tests(run, rebuild=args.rebuild_sex_pooled)
         for sex in SEX_ORDER:
             pooled_s = attach_cluster_ids_to_tests(filter_tests_by_sex(sex_pooled, sex), args.sig_dir)
@@ -1204,7 +1204,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         return 0
 
-    txsex = load_or_build_tx_sex_tests(run, rebuild=args.rebuild_tx_sex)
+    txsex = load_or_build_condition_sex_tests(run, rebuild=args.rebuild_condition_sex)
     tests_all = pd.read_csv(run / "da_syllable_tests_long.csv")
     step_keep = [s for s, _ in VOLCANO_STEPS]
     pooled = tests_all[tests_all["step"].isin(step_keep)]

@@ -254,7 +254,7 @@ def wilcoxon_control_arm_rows(
     return rows
 
 
-def restrict_tx_stratum(
+def restrict_condition_stratum(
     df: pd.DataFrame, stratum: str = CONDITION_STRATUM_ALL
 ) -> pd.DataFrame:
     """Keep Wilcoxon/Kruskal rows for one tx pooling rule. Missing column = legacy."""
@@ -446,7 +446,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
     """
     rows: list[dict[str, object]] = []
     n_models = int(med["n_models"].iloc[0]) if len(med) else 0
-    empty_tx_med = {"median_noSD": "", "median_GHSD": "", "median_RBSD": ""}
+    empty_condition_med = {"median_noSD": "", "median_GHSD": "", "median_RBSD": ""}
     for (phase, step), g in med.groupby(["session", "step"], sort=False):
         for m in AGREE_METRICS:
             col = f"delta_{m}"
@@ -463,7 +463,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
                     "hit_p05": bool(np.isfinite(rec["p"]) and float(rec["p"]) < 0.05),
                     "n_models": n_models,
                     "tx_stratum": CONDITION_STRATUM_ALL,
-                    **empty_tx_med,
+                    **empty_condition_med,
                 }
             )
             for sex in SEX_ORDER:
@@ -479,7 +479,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
                         "hit_p05": bool(np.isfinite(rec_s["p"]) and float(rec_s["p"]) < 0.05),
                         "n_models": n_models,
                         "tx_stratum": CONDITION_STRATUM_ALL,
-                        **empty_tx_med,
+                        **empty_condition_med,
                     }
                 )
             rows.extend(
@@ -490,7 +490,7 @@ def consensus_tests(med: pd.DataFrame) -> pd.DataFrame:
                         "session": phase,
                         "step": step,
                         "n_models": n_models,
-                        **empty_tx_med,
+                        **empty_condition_med,
                     },
                 )
             )
@@ -1002,7 +1002,7 @@ def main(argv: list[str] | None = None) -> int:
 # Names used by tests / figures (keep both spellings).
 CONDITION_STRATUM_ALL = CONDITION_STRATUM_ALL
 CONDITION_STRATUM_CONTROL = CONDITION_STRATUM_CONTROL
-restrict_tx_stratum = restrict_tx_stratum
+restrict_condition_stratum = restrict_condition_stratum
 wilcoxon_control_arm_rows = wilcoxon_control_arm_rows
 
 

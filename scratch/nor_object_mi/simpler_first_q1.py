@@ -91,7 +91,7 @@ def animal_delta_prox(
     return pd.DataFrame(rows)
 
 
-def _tx_samples_within_sex(
+def _condition_samples_within_sex(
     animals: pd.DataFrame, *, metric: str, sex: str
 ) -> dict[str, np.ndarray]:
     by_tx: dict[str, np.ndarray] = {}
@@ -107,7 +107,7 @@ def kruskal_within_sex(animals: pd.DataFrame, *, metric: str = "delta_prox") -> 
     """Within-sex k-group rank test (Kruskal–Wallis) across tx."""
     out: list[dict[str, object]] = []
     for sex in SEX_ORDER:
-        by_tx = _tx_samples_within_sex(animals, metric=metric, sex=sex)
+        by_tx = _condition_samples_within_sex(animals, metric=metric, sex=sex)
         samples = [by_tx[t] for t in CONDITION_ORDER]
         n_ok = all(s.size >= 2 for s in samples)
         if n_ok:
@@ -146,7 +146,7 @@ def anova_within_sex(animals: pd.DataFrame, *, metric: str = "delta_prox") -> pd
     """
     out: list[dict[str, object]] = []
     for sex in SEX_ORDER:
-        by_tx = _tx_samples_within_sex(animals, metric=metric, sex=sex)
+        by_tx = _condition_samples_within_sex(animals, metric=metric, sex=sex)
         samples = [by_tx[t] for t in CONDITION_ORDER]
         n_ok = all(s.size >= 2 for s in samples)
         if n_ok:
@@ -258,7 +258,7 @@ def run_q1(bout_csv: Path, out_dir: Path) -> dict[str, object]:
     verdict = judge_q1(tests)
     out_dir.mkdir(parents=True, exist_ok=True)
     animals.to_csv(out_dir / "q1_animal_delta_prox.csv", index=False)
-    tests.to_csv(out_dir / "q1_within_sex_tx_kruskal.csv", index=False)
+    tests.to_csv(out_dir / "q1_within_sex_condition_kruskal.csv", index=False)
     fig_delta_prox(animals, tests, out_dir / "fig_q1_delta_prox")
     summary = {
         "status": "ok",

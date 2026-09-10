@@ -18,7 +18,7 @@ def _load(path: Path) -> dict[str, dict[str, str]]:
         return {str(r["animal_id"]): r for r in csv.DictReader(f)}
 
 
-def _tx_tests(
+def _condition_tests(
     rows: list[dict[str, object]],
     *,
     sex_stratum: str,
@@ -97,13 +97,13 @@ def _run_by_sex(rows: list[dict[str, object]], *, phase_label: str) -> list[dict
     out: list[dict[str, object]] = []
     for sex in ("F", "M"):
         subset = [r for r in rows if str(r.get("sex", "")) == sex]
-        for row in _tx_tests(subset, sex_stratum=sex):
+        for row in _condition_tests(subset, sex_stratum=sex):
             row = dict(row)
             row["phase"] = phase_label
             row["metric"] = Metric
             out.append(row)
     # also pooled sexes for reference
-    for row in _tx_tests(rows, sex_stratum="all"):
+    for row in _condition_tests(rows, sex_stratum="all"):
         row = dict(row)
         row["phase"] = phase_label
         row["metric"] = Metric
@@ -225,7 +225,7 @@ def main() -> int:
             w.writerow(row)
 
     pool_fields = ["animal_id", "sex", "condition", "delta_bl", "delta_tx", Metric]
-    with (args.out_dir / "delta_bl_tx_mean_per_animal.csv").open("w", newline="", encoding="utf-8") as f:
+    with (args.out_dir / "delta_bl_condition_mean_per_animal.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=pool_fields)
         w.writeheader()
         for row in rows_pool:

@@ -192,7 +192,7 @@ def load_animal_condition_all_phases(art: Path, *, r_m: float = NEAR_R_M) -> pd.
     return pd.concat(parts, ignore_index=True)
 
 
-def run_model_phase_paired(
+def run_model_session_paired(
     ac: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Scalar tests + DA for one model's animal × phase × condition table."""
@@ -443,7 +443,7 @@ def agreement_table_noSD_by_sex(tests: pd.DataFrame) -> pd.DataFrame:
 
 
 def _copy_dictionary(out: Path) -> None:
-    tag = "phase_paired"
+    tag = "session_paired"
     src = Path(__file__).with_name(f"INFO_{tag}.md")
     if not src.exists():
         return
@@ -486,17 +486,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--from-deltas",
         action="store_true",
-        help="Rebuild scalar tests from phase_paired_deltas_per_animal.csv (no bout reload)",
+        help="Rebuild scalar tests from session_paired_deltas_per_animal.csv (no bout reload)",
     )
     args = ap.parse_args(argv)
 
     art_root = args.ensemble_root / "_nor_object_mi"
-    out = args.out_dir or (art_root / "simpler_first_phase_paired")
+    out = args.out_dir or (art_root / "simpler_first_session_paired")
     out.mkdir(parents=True, exist_ok=True)
     _copy_dictionary(out)
 
     if args.from_deltas:
-        delta_path = out / "phase_paired_deltas_per_animal.csv"
+        delta_path = out / "session_paired_deltas_per_animal.csv"
         if not delta_path.exists():
             raise SystemExit(f"missing {delta_path}")
         print(f"rebuild scalar tests from {delta_path}", flush=True)
@@ -521,14 +521,14 @@ def main(argv: list[str] | None = None) -> int:
                 r["model"] = model
             rows.extend(recs)
         tests_df = pd.DataFrame(rows)
-        tests_path = out / "phase_paired_tests_long.csv"
+        tests_path = out / "session_paired_tests_long.csv"
         tests_df.to_csv(tests_path, index=False)
         agree = agreement_table(tests_df)
-        agree_path = out / "phase_paired_agreement_by_model.csv"
+        agree_path = out / "session_paired_agreement_by_model.csv"
         if not agree.empty:
             agree.to_csv(agree_path, index=False)
         agree_ctrl = agreement_table_noSD_by_sex(tests_df)
-        agree_ctrl_path = out / "phase_paired_agreement_noSD_by_sex.csv"
+        agree_ctrl_path = out / "session_paired_agreement_noSD_by_sex.csv"
         if not agree_ctrl.empty:
             agree_ctrl.to_csv(agree_ctrl_path, index=False)
         models = sorted(tests_df["model"].unique().tolist())
@@ -568,7 +568,7 @@ def main(argv: list[str] | None = None) -> int:
         if ac.empty:
             print(f"  MISSING bouts for {model}", flush=True)
             continue
-        scalar_tests, scalar_deltas, da_tests, da_deltas = run_model_phase_paired(ac)
+        scalar_tests, scalar_deltas, da_tests, da_deltas = run_model_session_paired(ac)
         if not scalar_tests.empty:
             scalar_tests.insert(0, "model", model)
             all_scalar_tests.append(scalar_tests)
@@ -584,25 +584,25 @@ def main(argv: list[str] | None = None) -> int:
 
     tests_df = pd.concat(all_scalar_tests, ignore_index=True) if all_scalar_tests else pd.DataFrame()
     da_df = pd.concat(all_da_tests, ignore_index=True) if all_da_tests else pd.DataFrame()
-    tests_path = out / "phase_paired_tests_long.csv"
-    da_path = out / "phase_paired_da_tests_long.csv"
+    tests_path = out / "session_paired_tests_long.csv"
+    da_path = out / "session_paired_da_tests_long.csv"
     tests_df.to_csv(tests_path, index=False)
     da_df.to_csv(da_path, index=False)
     if all_scalar_deltas:
         pd.concat(all_scalar_deltas, ignore_index=True).to_csv(
-            out / "phase_paired_deltas_per_animal.csv", index=False
+            out / "session_paired_deltas_per_animal.csv", index=False
         )
     if all_da_deltas:
         pd.concat(all_da_deltas, ignore_index=True).to_csv(
-            out / "phase_paired_da_deltas_per_animal.csv", index=False
+            out / "session_paired_da_deltas_per_animal.csv", index=False
         )
 
     agree = agreement_table(tests_df)
-    agree_path = out / "phase_paired_agreement_by_model.csv"
+    agree_path = out / "session_paired_agreement_by_model.csv"
     if not agree.empty:
         agree.to_csv(agree_path, index=False)
     agree_ctrl = agreement_table_noSD_by_sex(tests_df)
-    agree_ctrl_path = out / "phase_paired_agreement_noSD_by_sex.csv"
+    agree_ctrl_path = out / "session_paired_agreement_noSD_by_sex.csv"
     if not agree_ctrl.empty:
         agree_ctrl.to_csv(agree_ctrl_path, index=False)
 
@@ -612,8 +612,8 @@ def main(argv: list[str] | None = None) -> int:
     da_persist = syllable_persistence(
         da_df, facet_col="session_step", group_cols=("model", "trial")
     )
-    da_pair_path = out / "phase_paired_da_consistency_step_pairs.csv"
-    da_persist_path = out / "phase_paired_da_syllable_persistence.csv"
+    da_pair_path = out / "session_paired_da_consistency_step_pairs.csv"
+    da_persist_path = out / "session_paired_da_syllable_persistence.csv"
     if not da_pairs.empty:
         da_pairs.to_csv(da_pair_path, index=False)
     if not da_persist.empty:
@@ -681,7 +681,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-run_model_phase_paired = run_model_phase_paired
+run_model_session_paired = run_model_session_paired
 SCALAR_METRICS = SCALAR_METRICS
 PHASE_STEPS = PHASE_STEPS
 PHASE_STEP_NAMES = PHASE_STEP_NAMES

@@ -24,13 +24,13 @@ from nor_object_mi.syllable_spatial_heatmap import (  # noqa: E402
     GrainKey,
     TxOverlayGrainKey,
     all_grains,
-    all_tx_overlay_grains,
+    all_condition_overlay_grains,
     batch_grains,
-    batch_tx_overlay_grains,
+    batch_condition_overlay_grains,
     run_grain,
-    run_tx_overlay_grain,
+    run_condition_overlay_grain,
     write_shared_cluster_legend,
-    write_tx_legend,
+    write_condition_legend,
 )
 
 DEFAULT_NOR = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\my_NOR_results.h5")
@@ -50,10 +50,10 @@ DEFAULT_OUT_CLUSTER13 = Path(
 )
 DEFAULT_OUT_CLUSTER13_TX = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
-    r"\_nor_object_mi\syllable_spatial_heatmaps_cluster13_tx_overlay"
+    r"\_nor_object_mi\syllable_spatial_heatmaps_cluster13_condition_overlay"
 )
 LEGEND_STEM = "fig_syllable_spatial_cluster_legend"
-TX_LEGEND_STEM = "fig_syllable_spatial_tx_legend"
+TX_LEGEND_STEM = "fig_syllable_spatial_condition_legend"
 
 
 def _info_md(*, keep_clusters: list[int] | None, overlay_tx: bool) -> str:
@@ -192,9 +192,9 @@ def main(argv: list[str] | None = None) -> int:
     phase_filter = tuple(args.phases) if args.phases else None
     if args.overlay_tx:
         if args.all:
-            grains: list[TxOverlayGrainKey] = all_tx_overlay_grains()
+            grains: list[TxOverlayGrainKey] = all_condition_overlay_grains()
         elif args.batch:
-            grains = batch_tx_overlay_grains(args.batch[0], args.batch[1], phases=phase_filter)
+            grains = batch_condition_overlay_grains(args.batch[0], args.batch[1], phases=phase_filter)
         elif args.grain:
             grains = [
                 TxOverlayGrainKey(args.grain[0], args.grain[1], args.grain[2])
@@ -217,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     for i, g in enumerate(grains, 1):
         print(f"[{i}/{len(grains)}] {g.slug()}", flush=True)
         if args.overlay_tx:
-            summary, cids, colors = run_tx_overlay_grain(
+            summary, cids, colors = run_condition_overlay_grain(
                 g,
                 nor_h5_path=args.nor_h5,
                 ensemble_root=args.ensemble_root,
@@ -256,7 +256,7 @@ def main(argv: list[str] | None = None) -> int:
     if legend_ids:
         if args.overlay_tx:
             legend_path = out / f"{TX_LEGEND_STEM}.png"
-            write_tx_legend(legend_path)
+            write_condition_legend(legend_path)
         else:
             legend_path = out / f"{LEGEND_STEM}.png"
             write_shared_cluster_legend(

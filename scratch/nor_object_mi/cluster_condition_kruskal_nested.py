@@ -6,11 +6,11 @@ import numpy as np
 import pandas as pd
 
 from nor_object_mi._pub_style import SEX_ORDER
-from nor_object_mi.cluster13_tx_delta import kruskal_condition
-from nor_object_mi.cluster_tx_kruskal import cluster_syllable_ids
+from nor_object_mi.cluster13_condition_delta import kruskal_condition
+from nor_object_mi.cluster_condition_kruskal import cluster_syllable_ids
 from nor_object_mi.nested_da_delta import COND_STEP_LAB
 from nor_object_mi.simpler_first_da import DA_STEPS, apply_bh_grouped
-from nor_object_mi.simpler_first_phase_paired import PHASE_STEP_NAMES, STEP_LAB
+from nor_object_mi.simpler_first_session_paired import PHASE_STEP_NAMES, STEP_LAB
 
 
 def attach_model_cluster_deltas_nested(deltas: pd.DataFrame, cmap: pd.DataFrame) -> pd.DataFrame:

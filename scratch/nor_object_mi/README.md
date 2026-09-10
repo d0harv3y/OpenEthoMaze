@@ -170,10 +170,10 @@ uv run python scratch/nor_object_mi/simpler_first_da.py
 **Between-phase, same condition** (paired phases, condition held):
 
 ```powershell
-uv run python scratch/nor_object_mi/simpler_first_phase_paired.py
+uv run python scratch/nor_object_mi/simpler_first_session_paired.py
 ```
 
-Litmus: `uv run pytest scratch/nor_object_mi/test_simpler_first_presence.py scratch/nor_object_mi/test_simpler_first_da.py scratch/nor_object_mi/test_simpler_first_phase_paired.py scratch/nor_object_mi/test_simpler_first_object_prox.py scratch/nor_object_mi/test_simpler_first_classic_dr.py scratch/nor_object_mi/test_simpler_first_ambulation_clocks.py -q`
+Litmus: `uv run pytest scratch/nor_object_mi/test_simpler_first_presence.py scratch/nor_object_mi/test_simpler_first_da.py scratch/nor_object_mi/test_simpler_first_session_paired.py scratch/nor_object_mi/test_simpler_first_object_prox.py scratch/nor_object_mi/test_simpler_first_classic_dr.py scratch/nor_object_mi/test_simpler_first_ambulation_clocks.py -q`
 
 ## Condition ladder (fam-side / nvl-side)
 

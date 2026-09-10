@@ -16,7 +16,7 @@ import pandas as pd
 from scipy import stats
 
 from nor_object_mi._pub_style import SESSIONS, SEX_ORDER
-from nor_object_mi.cluster13_tx_delta import (
+from nor_object_mi.cluster13_condition_delta import (
     STEP_LAB,
     STEPS,
     animal_median_delta_p,

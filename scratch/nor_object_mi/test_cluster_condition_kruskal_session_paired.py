@@ -11,7 +11,7 @@ _SCRATCH = Path(__file__).resolve().parents[1]
 if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
 
-from nor_object_mi.cluster_tx_kruskal_phase_paired import (  # noqa: E402
+from nor_object_mi.cluster_condition_kruskal_session_paired import (  # noqa: E402
     PHASE_STEPS,
     animal_median_delta_p_by_cluster,
     attach_cluster_ids,
@@ -40,7 +40,7 @@ def test_kruskal_grid_shape() -> None:
 
 
 def test_syllable_pp_kruskal_panel_bh() -> None:
-    from nor_object_mi.cluster_tx_kruskal_phase_paired import (
+    from nor_object_mi.cluster_condition_kruskal_session_paired import (
         PHASE_STEPS,
         kruskal_by_syllable_trial_session_step_sex,
     )

@@ -25,7 +25,7 @@ from nor_object_mi.nearest_prox_mi import default_sig_dir, label_for_row, load_c
 from nor_object_mi.pause_stim_mi import find_bout_csv, load_bout_rows
 from nor_object_mi.simpler_first_da import apply_bh
 from nor_object_mi.simpler_first_object_prox import CONDITION, SESSIONS as PHASE_TAGS
-from nor_object_mi.simpler_first_phase_paired import list_paramscan_models
+from nor_object_mi.simpler_first_session_paired import list_paramscan_models
 
 DEFAULT_N_PERM = 9999
 QUESTION_DOMINANT = "info_sex_vs_dominant_cluster"

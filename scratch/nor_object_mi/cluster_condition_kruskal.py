@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from nor_object_mi._pub_style import SESSIONS, SEX_ORDER
-from nor_object_mi.cluster13_tx_delta import STEPS, kruskal_condition
+from nor_object_mi.cluster13_condition_delta import STEPS, kruskal_condition
 from nor_object_mi.simpler_first_da import apply_bh_grouped, jaccard
 
 NOISE_CLUSTER = -1

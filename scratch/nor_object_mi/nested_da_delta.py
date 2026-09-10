@@ -14,7 +14,7 @@ from __future__ import annotations
 import pandas as pd
 
 from nor_object_mi.simpler_first_da import DA_STEPS
-from nor_object_mi.simpler_first_phase_paired import PHASE_STEPS, PHASE_STEP_NAMES
+from nor_object_mi.simpler_first_session_paired import PHASE_STEPS, PHASE_STEP_NAMES
 from nor_object_mi.simpler_first_presence import STEPS
 
 PAIR_KEYS = ("model", "animal_id", "raw_syllable_id", "sex", "condition")
@@ -127,8 +127,8 @@ def load_condition_step_first_order(da_dir) -> pd.DataFrame:
 
 
 def load_session_step_first_order(pp_dir) -> pd.DataFrame:
-    """1st-order phase-step Δp at each condition (``simpler_first_phase_paired``)."""
-    path = pp_dir / "phase_paired_da_deltas_per_animal.csv"
+    """1st-order phase-step Δp at each condition (``simpler_first_session_paired``)."""
+    path = pp_dir / "session_paired_da_deltas_per_animal.csv"
     df = pd.read_csv(path)
     if "session_step" not in df.columns:
         df = df.assign(session_step=df["step"].astype(str))

@@ -4,7 +4,7 @@ Panel BH family = cluster × phase within each sex × step panel.
 Column BH family = clusters within each sex × step × phase.
 
 Regen (OpenEthoMaze repo root):
-  uv run python scratch/nor_object_mi/fig_cluster_tx_kruskal_overview.py
+  uv run python scratch/nor_object_mi/fig_cluster_condition_kruskal_overview.py
 """
 
 from __future__ import annotations
@@ -34,8 +34,8 @@ from nor_object_mi._pub_style import (  # noqa: E402
     text_on_cmap,
     type_scale,
 )
-from nor_object_mi.cluster13_tx_delta import STEP_LAB, STEPS
-from nor_object_mi.cluster_tx_kruskal import (  # noqa: E402
+from nor_object_mi.cluster13_condition_delta import STEP_LAB, STEPS
+from nor_object_mi.cluster_condition_kruskal import (  # noqa: E402
     animal_delta_p_by_model,
     animal_median_delta_p_by_cluster,
     attach_cluster_ids,
@@ -47,7 +47,7 @@ from nor_object_mi.cluster_tx_kruskal import (  # noqa: E402
     order_cluster_ids,
     representative_cluster_ids,
 )
-from nor_object_mi.fig_cluster_tx_kruskal_common import (  # noqa: E402
+from nor_object_mi.fig_cluster_condition_kruskal_common import (  # noqa: E402
     cluster_y_labels,
     fdr_mark,
     fig_hit_cooccurrence,
@@ -233,7 +233,7 @@ def fig_overview(
     *,
     dest: str,
     weighting: str,
-    stem: str = "fig_cluster_tx_kruskal_overview",
+    stem: str = "fig_cluster_condition_kruskal_overview",
     suptitle: str | None = None,
     footnote_extra: str | None = None,
 ) -> None:
@@ -287,7 +287,7 @@ def fig_overview(
 def _info_cluster_model_md(*, weighting: str, cluster_id: int) -> str:
     return f"""# INFO — cluster-{cluster_id} model × phase Kruskal overview
 
-Same 6-panel layout as `fig_cluster_tx_kruskal_overview`, rows = kpMS **model**
+Same 6-panel layout as `fig_cluster_condition_kruskal_overview`, rows = kpMS **model**
 (each model's cluster-{cluster_id} syllable(s), median-merged when >1).
 
 **Composition weighting:** `{weighting}` — {_weighting_label(weighting)}.
@@ -353,7 +353,7 @@ def fig_cluster_model_overview(
         y=0.01,
         color=MUTE,
     )
-    save_pdf_png(fig, out / f"fig_cluster{lab}_model_tx_kruskal_overview")
+    save_pdf_png(fig, out / f"fig_cluster{lab}_model_condition_kruskal_overview")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -386,9 +386,9 @@ def main(argv: list[str] | None = None) -> int:
     med = animal_median_delta_p_by_cluster(mapped)
     kr = kruskal_by_cluster_session_step_sex(med)
     med.to_csv(out / "cluster_animal_median_delta_p.csv", index=False)
-    kr.to_csv(out / "cluster_tx_kruskal.csv", index=False)
+    kr.to_csv(out / "cluster_condition_kruskal.csv", index=False)
     rep.to_csv(out / "cluster_representative_ids.csv", index=False)
-    (out / "INFO_cluster_tx_kruskal.md").write_text(_info_md(weighting=weighting), encoding="utf-8")
+    (out / "INFO_cluster_condition_kruskal.md").write_text(_info_md(weighting=weighting), encoding="utf-8")
     fig_overview(kr, out, dest=args.dest, weighting=weighting)
 
     hit_sum = summarize_hit_clusters(kr)
@@ -396,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
     hit_mat, jac = fig_hit_cooccurrence(
         kr,
         out,
-        stem="fig_cluster_tx_kruskal_hit_cooccurrence",
+        stem="fig_cluster_condition_kruskal_hit_cooccurrence",
         dest=args.dest,
         panel_cols=("sex", "step"),
         locus_col="session",
@@ -409,8 +409,8 @@ def main(argv: list[str] | None = None) -> int:
         ),
         hit_col="hit_fdr05",
     )
-    hit_mat.to_csv(out / "cluster_tx_kruskal_hit_loci.csv")
-    jac.to_csv(out / "cluster_tx_kruskal_hit_jaccard.csv")
+    hit_mat.to_csv(out / "cluster_condition_kruskal_hit_loci.csv")
+    jac.to_csv(out / "cluster_condition_kruskal_hit_jaccard.csv")
 
     summary = {
         "weighting": weighting,
@@ -441,7 +441,7 @@ def main(argv: list[str] | None = None) -> int:
         "clusters_col_only_hit": hit_sum["clusters_col_only_hit"],
         "clusters_any_hit": hit_sum["clusters_any_hit"],
     }
-    (out / "cluster_tx_kruskal_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (out / "cluster_condition_kruskal_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2), flush=True)
 
     print("cluster 13 model-level ...", flush=True)
@@ -450,9 +450,9 @@ def main(argv: list[str] | None = None) -> int:
     med13 = animal_delta_p_by_model(mapped13)
     kr13 = kruskal_by_model_session_step_sex(med13)
     med13.to_csv(out / "cluster13_model_animal_delta_p.csv", index=False)
-    kr13.to_csv(out / "cluster13_model_tx_kruskal.csv", index=False)
+    kr13.to_csv(out / "cluster13_model_condition_kruskal.csv", index=False)
     cmap13.to_csv(out / "cluster13_syllable_map.csv", index=False)
-    (out / "INFO_cluster13_model_tx_kruskal.md").write_text(
+    (out / "INFO_cluster13_model_condition_kruskal.md").write_text(
         _info_cluster_model_md(weighting=weighting, cluster_id=13), encoding="utf-8"
     )
     fig_cluster_model_overview(kr13, out, dest=args.dest, weighting=weighting, cluster_id=13)
@@ -469,13 +469,13 @@ def main(argv: list[str] | None = None) -> int:
             kr_m = kruskal_by_model_session_step_sex(med_m)
             lab = "noise" if cid < 0 else str(cid)
             med_m.to_csv(drill_dir / f"cluster{lab}_model_animal_delta_p.csv", index=False)
-            kr_m.to_csv(drill_dir / f"cluster{lab}_model_tx_kruskal.csv", index=False)
+            kr_m.to_csv(drill_dir / f"cluster{lab}_model_condition_kruskal.csv", index=False)
             cmap.to_csv(drill_dir / f"cluster{lab}_syllable_map.csv", index=False)
             fig_cluster_model_overview(
                 kr_m, drill_dir, dest=args.dest, weighting=weighting, cluster_id=cid
             )
         summary["model_drilldown_clusters"] = drill_ids
-        (out / "cluster_tx_kruskal_summary.json").write_text(
+        (out / "cluster_condition_kruskal_summary.json").write_text(
             json.dumps(summary, indent=2), encoding="utf-8"
         )
     return 0

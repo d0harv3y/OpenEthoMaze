@@ -5,7 +5,7 @@
 
 Regen (OpenEthoMaze repo root):
   uv run python scratch/nor_object_mi/simpler_first_nested_da.py
-  uv run python scratch/nor_object_mi/fig_cluster_tx_kruskal_nested.py
+  uv run python scratch/nor_object_mi/fig_cluster_condition_kruskal_nested.py
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from nor_object_mi._pub_style import (  # noqa: E402
     text_on_cmap,
     type_scale,
 )
-from nor_object_mi.cluster_tx_kruskal_nested import (  # noqa: E402
+from nor_object_mi.cluster_condition_kruskal_nested import (  # noqa: E402
     animal_delta_p_by_model_nested,
     attach_model_cluster_deltas_nested,
     cluster_syllable_ids,
@@ -45,7 +45,7 @@ from nor_object_mi.nested_da_delta import (  # noqa: E402
     paired_n_by_outer_step,
 )
 from nor_object_mi.simpler_first_da import DA_STEPS  # noqa: E402
-from nor_object_mi.simpler_first_phase_paired import (  # noqa: E402
+from nor_object_mi.simpler_first_session_paired import (  # noqa: E402
     PAIRED_FOOT_LEAD,
     PHASE_STEP_NAMES,
     STEP_LAB,
@@ -258,7 +258,7 @@ def fig_nested_b_model_overview(
         y=0.01,
         color=MUTE,
     )
-    save_pdf_png(fig, out / "fig_nested_b_cluster13_model_tx_kruskal_overview")
+    save_pdf_png(fig, out / "fig_nested_b_cluster13_model_condition_kruskal_overview")
 
 
 def fig_nested_c_model_overview(
@@ -329,7 +329,7 @@ def fig_nested_c_model_overview(
         y=0.005,
         color=MUTE,
     )
-    save_pdf_png(fig, out / "fig_nested_c_cluster13_model_tx_kruskal_overview")
+    save_pdf_png(fig, out / "fig_nested_c_cluster13_model_condition_kruskal_overview")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -353,7 +353,7 @@ def main(argv: list[str] | None = None) -> int:
     med_b = animal_delta_p_by_model_nested(mapped_b, axis="session_on_trial")
     kr_b = kruskal_by_model_session_on_trial_sex(med_b)
     med_b.to_csv(args.nested_dir / "nested_b_cluster13_model_animal_delta_p.csv", index=False)
-    kr_b.to_csv(args.nested_dir / "nested_b_cluster13_model_tx_kruskal.csv", index=False)
+    kr_b.to_csv(args.nested_dir / "nested_b_cluster13_model_condition_kruskal.csv", index=False)
     fig_nested_b_model_overview(kr_b, out, dest=args.dest, n_map=n_b)
 
     print("(c) trial_on_session model overview ...", flush=True)
@@ -364,7 +364,7 @@ def main(argv: list[str] | None = None) -> int:
     med_c = animal_delta_p_by_model_nested(mapped_c, axis="trial_on_session")
     kr_c = kruskal_by_model_trial_on_session_sex(med_c)
     med_c.to_csv(args.nested_dir / "nested_c_cluster13_model_animal_delta_p.csv", index=False)
-    kr_c.to_csv(args.nested_dir / "nested_c_cluster13_model_tx_kruskal.csv", index=False)
+    kr_c.to_csv(args.nested_dir / "nested_c_cluster13_model_condition_kruskal.csv", index=False)
     fig_nested_c_model_overview(kr_c, out, dest=args.dest, n_map=n_c, n_inner=n_c_inner)
 
     summary = {

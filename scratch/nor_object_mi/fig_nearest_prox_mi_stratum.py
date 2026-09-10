@@ -216,7 +216,7 @@ def fig_agreement_kruskal(agreement: pd.DataFrame, out: Path, *, n_models: int =
         y=-0.02,
         color=MUTE,
     )
-    stem = out / "fig_nearest_prox_tx_kruskal_agreement"
+    stem = out / "fig_nearest_prox_condition_kruskal_agreement"
     save_pdf_png(fig, stem)
     fig.savefig(stem.with_suffix(".png"), dpi=180, bbox_inches="tight")
     plt.close(fig)

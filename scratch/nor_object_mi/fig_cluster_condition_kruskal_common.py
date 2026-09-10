@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from nor_object_mi._pub_style import INK, MUTE, apply_style, fig_footnote, save_pdf_png, type_scale
-from nor_object_mi.cluster_tx_kruskal import (
+from nor_object_mi.cluster_condition_kruskal import (
     cluster_axis_label,
     clusters_with_any_hit,
     hit_locus_matrix,

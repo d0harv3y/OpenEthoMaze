@@ -12,7 +12,7 @@ _SCRATCH = Path(__file__).resolve().parents[1]
 if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
 
-from nor_object_mi.cluster13_tx_delta import (  # noqa: E402
+from nor_object_mi.cluster13_condition_delta import (  # noqa: E402
     animal_median_delta_p,
     filter_mapped_deltas,
     kruskal_condition,
@@ -81,9 +81,9 @@ def test_kruskal_separated_groups_hits() -> None:
     np.testing.assert_allclose(rec["median_RBSD"], 0.20)
 
 
-def test_tx_sex_positions_six_slots() -> None:
-    from nor_object_mi.fig_cluster13_tx_delta import _tx_sex_position  # noqa: WPS433
+def test_condition_sex_positions_six_slots() -> None:
+    from nor_object_mi.fig_cluster13_condition_delta import _condition_sex_position  # noqa: WPS433
 
-    assert _tx_sex_position("noSD", "F") == 0.0
-    assert _tx_sex_position("noSD", "M") == 1.0
-    assert _tx_sex_position("RBSD", "M") == 5.0
+    assert _condition_sex_position("noSD", "F") == 0.0
+    assert _condition_sex_position("noSD", "M") == 1.0
+    assert _condition_sex_position("RBSD", "M") == 5.0

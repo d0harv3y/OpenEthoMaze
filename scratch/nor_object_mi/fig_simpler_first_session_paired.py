@@ -1,10 +1,10 @@
 """Publication figures for between-phase paired contrasts (condition held).
 
-Reads only CSVs listed in INFO_phase_paired.md. Pairing axis is phase, not
+Reads only CSVs listed in INFO_session_paired.md. Pairing axis is phase, not
 condition — not the presence-step figures.
 
 Regen (OpenEthoMaze repo root):
-  uv run python scratch/nor_object_mi/fig_simpler_first_phase_paired.py
+  uv run python scratch/nor_object_mi/fig_simpler_first_session_paired.py
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ from nor_object_mi.fig_simpler_first_presence import (  # noqa: E402
     WILCOXON_NOSD,
     WILCOXON_POOLED,
     _attach_iqr,
-    _draw_tx_violins,
+    _draw_condition_violins,
 )
 from nor_object_mi.simpler_first_presence import (  # noqa: E402
     CONTROL_CONDITION,
@@ -65,8 +65,8 @@ from nor_object_mi.fig_simpler_first_da import (  # noqa: E402
     load_cluster_lookup,
     write_volcano_ladder_overlay_legend,
 )
-from nor_object_mi.simpler_first_da import da_tests_tx_sex_from_animal_deltas  # noqa: E402
-from nor_object_mi.simpler_first_phase_paired import (  # noqa: E402
+from nor_object_mi.simpler_first_da import da_tests_condition_sex_from_animal_deltas  # noqa: E402
+from nor_object_mi.simpler_first_session_paired import (  # noqa: E402
     PAIRED_FOOT_LEAD,
     PHASE_STEP_NAMES as PHASE_STEPS,
     STEP_LAB,
@@ -80,7 +80,7 @@ from nor_object_mi.simpler_first_q1 import kruskal_within_sex  # noqa: E402
 
 DEFAULT_RUN = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
-    r"\_nor_object_mi\simpler_first_phase_paired"
+    r"\_nor_object_mi\simpler_first_session_paired"
 )
 DEFAULT_SIG = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
@@ -130,7 +130,7 @@ FOOT_DA_VOLCANO = (
     "Filled = BH q < 0.05 within model × condition × phase-step × tx × sex. "
     "Not a Kruskal across tx. Ids not matched across alphabets. y = uncorrected p, clip 4."
 )
-TXSEX_TESTS = "phase_paired_da_tests_tx_sex.csv"
+TXSEX_TESTS = "session_paired_da_tests_condition_sex.csv"
 DA_CELL_COLS = ("model", "trial", "session_step", "condition", "sex")
 PHASE_VOLCANO_STEPS = tuple((s, STEP_LAB[s]) for s in PHASE_STEPS)
 LADDER_COND_TAG = {
@@ -139,16 +139,16 @@ LADDER_COND_TAG = {
     "nvl_obj": "nvl_obj",
 }
 VOLCANO_STEM = {
-    "no_obj": "fig_phase_paired_da_volcano_no_obj",
-    "id_obj": "fig_phase_paired_da_volcano_identical",
-    "nvl_obj": "fig_phase_paired_da_volcano_novel",
+    "no_obj": "fig_session_paired_da_volcano_no_obj",
+    "id_obj": "fig_session_paired_da_volcano_identical",
+    "nvl_obj": "fig_session_paired_da_volcano_novel",
 }
-LADDER_OVERLAY_STEM = "fig_phase_paired_da_volcano_ladder_overlay"
-LADDER_STEM_PREFIX = "fig_phase_paired_da_volcano_ladder"
+LADDER_OVERLAY_STEM = "fig_session_paired_da_volcano_ladder_overlay"
+LADDER_STEM_PREFIX = "fig_session_paired_da_volcano_ladder"
 VIOLIN_METRICS = ("frac_near", "mean_dist_any_m")
 VIOLIN_STEM = {
-    "frac_near": "fig_phase_paired_violin_frac_near",
-    "mean_dist_any_m": "fig_phase_paired_violin_mean_dist",
+    "frac_near": "fig_session_paired_violin_frac_near",
+    "mean_dist_any_m": "fig_session_paired_violin_mean_dist",
 }
 VIOLIN_DELTA_COLS = ("delta_frac_near", "delta_mean_dist_any_m")
 FOOT_VIOLIN_PREFIX = (
@@ -235,7 +235,7 @@ def fig_frac_hit(agr: pd.DataFrame, out: Path, *, n_map: dict[str, int]) -> None
         y=1.06,
     )
     fig_footnote(fig, _foot_with_n(FOOT, n_map), y=-0.10)
-    save_pdf_png(fig, out / "fig_phase_paired_frac_hit")
+    save_pdf_png(fig, out / "fig_session_paired_frac_hit")
 
 
 def fig_median_delta(agr: pd.DataFrame, out: Path, *, n_map: dict[str, int]) -> None:
@@ -274,10 +274,10 @@ def fig_median_delta(agr: pd.DataFrame, out: Path, *, n_map: dict[str, int]) -> 
         ),
         y=-0.04,
     )
-    save_pdf_png(fig, out / "fig_phase_paired_median_delta")
+    save_pdf_png(fig, out / "fig_session_paired_median_delta")
 
 
-def fig_tx_kruskal(tests: pd.DataFrame, out: Path, *, n_map: dict[str, int]) -> None:
+def fig_condition_kruskal(tests: pd.DataFrame, out: Path, *, n_map: dict[str, int]) -> None:
     apply_style()
     kr = tests[tests["test"] == "kruskal"].copy()
     kr["hit"] = _as_bool(kr["hit_p05"])
@@ -312,7 +312,7 @@ def fig_tx_kruskal(tests: pd.DataFrame, out: Path, *, n_map: dict[str, int]) -> 
         y=1.02,
     )
     fig_footnote(fig, _foot_with_n(FOOT_KR, n_map), y=-0.04)
-    save_pdf_png(fig, out / "fig_phase_paired_tx_kruskal")
+    save_pdf_png(fig, out / "fig_session_paired_condition_kruskal")
 
 
 def animal_median_novel(deltas: pd.DataFrame) -> pd.DataFrame:
@@ -356,7 +356,7 @@ def fig_novel_violins(
         for c, st in enumerate(PHASE_STEPS):
             ax = axes[c]
             panel = med[med["session_step"] == st]
-            ns = _draw_tx_violins(ax, panel, col, rng, iqr_col=iqr_col)
+            ns = _draw_condition_violins(ax, panel, col, rng, iqr_col=iqr_col)
             if c == 0:
                 ax.set_ylabel("Δ (right − left)", fontsize=8)
             ax.set_title(step_axis_label(st, n_map), loc="left", fontweight="bold", color=INK, fontsize=8)
@@ -466,7 +466,7 @@ def fig_da_n_hit(tests: pd.DataFrame, out: Path, *, n_map: dict[str, int]) -> No
         y=1.06,
     )
     fig_footnote(fig, _foot_with_n(FOOT_DA, n_map), y=-0.12)
-    save_pdf_png(fig, out / "fig_phase_paired_da_n_hit_fdr05")
+    save_pdf_png(fig, out / "fig_session_paired_da_n_hit_fdr05")
 
 
 def fig_da_jaccard(cons: pd.DataFrame, out: Path, *, n_map: dict[str, int]) -> None:
@@ -513,7 +513,7 @@ def fig_da_jaccard(cons: pd.DataFrame, out: Path, *, n_map: dict[str, int]) -> N
         ),
         y=-0.12,
     )
-    save_pdf_png(fig, out / "fig_phase_paired_da_jaccard")
+    save_pdf_png(fig, out / "fig_session_paired_da_jaccard")
 
 
 def fig_da_persistence(pers: pd.DataFrame, out: Path, *, model: str, n_map: dict[str, int]) -> None:
@@ -548,7 +548,7 @@ def fig_da_persistence(pers: pd.DataFrame, out: Path, *, model: str, n_map: dict
         y=1.06,
     )
     fig_footnote(fig, _foot_with_n(FOOT_DA, n_map), y=-0.12)
-    save_pdf_png(fig, out / "fig_phase_paired_da_persistence_pilot")
+    save_pdf_png(fig, out / "fig_session_paired_da_persistence_pilot")
 
 
 def _normalize_da_axes(tests: pd.DataFrame) -> pd.DataFrame:
@@ -561,15 +561,15 @@ def _normalize_da_axes(tests: pd.DataFrame) -> pd.DataFrame:
     return t
 
 
-def load_or_build_tx_sex_tests(run: Path, *, rebuild: bool) -> pd.DataFrame:
+def load_or_build_condition_sex_tests(run: Path, *, rebuild: bool) -> pd.DataFrame:
     dest = run / TXSEX_TESTS
     if dest.exists() and not rebuild:
         return pd.read_csv(dest)
-    delta_path = run / "phase_paired_da_deltas_per_animal.csv"
+    delta_path = run / "session_paired_da_deltas_per_animal.csv"
     if not delta_path.exists():
         raise FileNotFoundError(
             f"Need {delta_path.name} to build tx x sex DA tests "
-            "(runner: simpler_first_phase_paired.py --write-da-deltas)"
+            "(runner: simpler_first_session_paired.py --write-da-deltas)"
         )
     print("building tx x sex Wilcoxon from per-animal delta_p (between-phase paired) ...", flush=True)
     usecols = [
@@ -588,7 +588,7 @@ def load_or_build_tx_sex_tests(run: Path, *, rebuild: bool) -> pd.DataFrame:
         "right",
     ]
     dtab = pd.read_csv(delta_path, usecols=usecols)
-    tests = da_tests_tx_sex_from_animal_deltas(dtab, cell_cols=DA_CELL_COLS, progress=True)
+    tests = da_tests_condition_sex_from_animal_deltas(dtab, cell_cols=DA_CELL_COLS, progress=True)
     tests.to_csv(dest, index=False)
     print(f"wrote {dest}  rows={len(tests)}", flush=True)
     return tests
@@ -727,7 +727,7 @@ def fig_volcano_condition(
     save_pdf_png(fig, out / VOLCANO_STEM[condition])
 
 
-def write_phase_paired_volcano_ladders(
+def write_session_paired_volcano_ladders(
     pooled: pd.DataFrame,
     strat: pd.DataFrame,
     out: Path,
@@ -813,7 +813,7 @@ def _volcano_step_tuples(n_map: dict[str, int]) -> tuple[tuple[str, str], ...]:
 
 
 def _load_pair_n_map(run: Path) -> dict[str, int]:
-    p = run / "phase_paired_deltas_per_animal.csv"
+    p = run / "session_paired_deltas_per_animal.csv"
     if not p.exists():
         return {}
     d = pd.read_csv(p, usecols=["session_step", "animal_id"])
@@ -841,7 +841,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--rebuild-tx-sex",
         action="store_true",
-        help="Recompute phase_paired_da_tests_tx_sex.csv from per-animal Δp",
+        help="Recompute session_paired_da_tests_condition_sex.csv from per-animal Δp",
     )
     ap.add_argument(
         "--ladder-only",
@@ -865,8 +865,8 @@ def main(argv: list[str] | None = None) -> int:
     da_only = args.volcano_only or args.ladder_only or args.ladder_overlay_only or args.da_volcano_ladder_only
 
     if da_only:
-        txsex = load_or_build_tx_sex_tests(run, rebuild=args.rebuild_tx_sex)
-        pooled_raw = pd.read_csv(run / "phase_paired_da_tests_long.csv")
+        txsex = load_or_build_condition_sex_tests(run, rebuild=args.rebuild_condition_sex)
+        pooled_raw = pd.read_csv(run / "session_paired_da_tests_long.csv")
         pooled = attach_cluster_ids_to_tests(
             _normalize_da_axes(pooled_raw), args.sig_dir
         )
@@ -893,7 +893,7 @@ def main(argv: list[str] | None = None) -> int:
                     strat, out, condition=cond, dest=args.dest, xlim=xlim, n_map=n_map
                 )
         if args.ladder_only or args.da_volcano_ladder_only:
-            write_phase_paired_volcano_ladders(pooled, strat, out / "volcano_ladder", **ladder_kw)
+            write_session_paired_volcano_ladders(pooled, strat, out / "volcano_ladder", **ladder_kw)
         if args.ladder_overlay_only or args.da_volcano_ladder_only:
             for cond in TRIALS:
                 fig_volcano_ladder_overlay_phase(
@@ -912,26 +912,26 @@ def main(argv: list[str] | None = None) -> int:
             write_volcano_ladder_overlay_legend(
                 out,
                 dest=args.dest,
-                stem="fig_phase_paired_da_volcano_ladder_overlay_legend",
+                stem="fig_session_paired_da_volcano_ladder_overlay_legend",
             )
         return 0
 
-    agr = pd.read_csv(run / "phase_paired_agreement_by_model.csv")
-    tests = pd.read_csv(run / "phase_paired_tests_long.csv")
-    deltas = pd.read_csv(run / "phase_paired_deltas_per_animal.csv")
-    da_tests = pd.read_csv(run / "phase_paired_da_tests_long.csv")
-    da_cons = pd.read_csv(run / "phase_paired_da_consistency_step_pairs.csv")
-    da_pers = pd.read_csv(run / "phase_paired_da_syllable_persistence.csv")
+    agr = pd.read_csv(run / "session_paired_agreement_by_model.csv")
+    tests = pd.read_csv(run / "session_paired_tests_long.csv")
+    deltas = pd.read_csv(run / "session_paired_deltas_per_animal.csv")
+    da_tests = pd.read_csv(run / "session_paired_da_tests_long.csv")
+    da_cons = pd.read_csv(run / "session_paired_da_consistency_step_pairs.csv")
+    da_pers = pd.read_csv(run / "session_paired_da_syllable_persistence.csv")
     salt_keys = ("animal_id", "sex", "condition", "session_step", "trial")
     salt = across_model_dispersion(deltas, keys=salt_keys)
     salt_sum = across_model_dispersion_summary(
         salt, group_keys=("trial", "session_step", "metric")
     )
-    salt.to_csv(run / "phase_paired_across_model_dispersion.csv", index=False)
-    salt_sum.to_csv(run / "phase_paired_across_model_dispersion_summary.csv", index=False)
+    salt.to_csv(run / "session_paired_across_model_dispersion.csv", index=False)
+    salt_sum.to_csv(run / "session_paired_across_model_dispersion_summary.csv", index=False)
     fig_frac_hit(agr, out, n_map=n_map)
     fig_median_delta(agr, out, n_map=n_map)
-    fig_tx_kruskal(tests, out, n_map=n_map)
+    fig_condition_kruskal(tests, out, n_map=n_map)
     fig_novel_violins(
         deltas, out, n_map=n_map, salt=salt, salt_summary=salt_sum, wilcoxon=args.wilcoxon
     )

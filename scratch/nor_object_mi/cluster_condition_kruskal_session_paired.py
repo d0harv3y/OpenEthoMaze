@@ -1,6 +1,6 @@
 """Kruskal Δp ~ tx for between-phase paired DA (condition held).
 
-Mirrors ``cluster13_tx_delta`` / ``cluster_tx_kruskal`` but pairing axis = phase
+Mirrors ``cluster13_condition_delta`` / ``cluster_condition_kruskal`` but pairing axis = phase
 and facet = trial (not condition steps × NOR phase).
 """
 
@@ -10,15 +10,15 @@ import numpy as np
 import pandas as pd
 
 from nor_object_mi._pub_style import SEX_ORDER
-from nor_object_mi.cluster13_tx_delta import _iqr, kruskal_condition
-from nor_object_mi.cluster_tx_kruskal import (
+from nor_object_mi.cluster13_condition_delta import _iqr, kruskal_condition
+from nor_object_mi.cluster_condition_kruskal import (
     attach_column_bh,
     cluster_syllable_ids,
     order_cluster_ids,
     representative_cluster_ids,
 )
 from nor_object_mi.simpler_first_da import apply_bh, apply_bh_grouped
-from nor_object_mi.simpler_first_phase_paired import PHASE_STEP_NAMES as PHASE_STEPS, STEP_LAB
+from nor_object_mi.simpler_first_session_paired import PHASE_STEP_NAMES as PHASE_STEPS, STEP_LAB
 
 
 def attach_cluster_ids(deltas: pd.DataFrame, rep: pd.DataFrame) -> pd.DataFrame:

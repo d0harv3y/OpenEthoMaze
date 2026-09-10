@@ -32,7 +32,7 @@ from nor_object_mi.pause_stim_mi import (
 )
 from nor_object_mi.simpler_first_da import apply_bh
 from nor_object_mi.simpler_first_object_prox import NEAR_R_M
-from nor_object_mi.simpler_first_phase_paired import list_paramscan_models
+from nor_object_mi.simpler_first_session_paired import list_paramscan_models
 from nor_object_mi.simpler_first_q1 import SEX_ORDER, CONDITION_ORDER, kruskal_within_sex
 
 NEAREST_FAM = 0

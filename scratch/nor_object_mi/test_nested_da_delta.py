@@ -11,14 +11,14 @@ _SCRATCH = Path(__file__).resolve().parents[1]
 if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
 
-from nor_object_mi.cluster_tx_kruskal_nested import (  # noqa: E402
+from nor_object_mi.cluster_condition_kruskal_nested import (  # noqa: E402
     animal_delta_p_by_model_nested,
     kruskal_by_model_trial_on_session_sex,
     kruskal_by_model_session_on_trial_sex,
 )
 from nor_object_mi.nested_da_delta import compose_nested_deltas  # noqa: E402
 from nor_object_mi.simpler_first_da import DA_STEPS  # noqa: E402
-from nor_object_mi.simpler_first_phase_paired import PHASE_STEP_NAMES  # noqa: E402
+from nor_object_mi.simpler_first_session_paired import PHASE_STEP_NAMES  # noqa: E402
 
 
 def _first_order_condition_step() -> pd.DataFrame:

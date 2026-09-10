@@ -122,8 +122,8 @@ Out: `…/_nor_object_mi/simpler_first_da/`
 Same animal, **condition held**, pair phases (BL→TX, TX→REC3hr, REC3hr→REC11hr,
 BL→REC11hr). Not the old phase grid (tx Kruskal inside each phase).
 
-Runner: `uv run python scratch/nor_object_mi/simpler_first_phase_paired.py`
-Figures: `uv run python scratch/nor_object_mi/fig_simpler_first_phase_paired.py`
+Runner: `uv run python scratch/nor_object_mi/simpler_first_session_paired.py`
+Figures: `uv run python scratch/nor_object_mi/fig_simpler_first_session_paired.py`
 
-Out: `…/_nor_object_mi/simpler_first_phase_paired/`
-Dictionary: `INFO_phase_paired.md`
+Out: `…/_nor_object_mi/simpler_first_session_paired/`
+Dictionary: `INFO_session_paired.md`

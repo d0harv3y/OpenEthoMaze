@@ -37,7 +37,7 @@ def _p_text(p: float) -> str:
     return f"p = {p:.3f}"
 
 
-def _within_sex_tx_kruskal(
+def _within_sex_condition_kruskal(
     rows: list[dict[str, str]],
     *,
     left_key: str,
@@ -162,8 +162,8 @@ def _ladder_panel(
     _, p12 = stats.wilcoxon(d12, alternative="two-sided", zero_method="wilcox")
     _, p02 = stats.wilcoxon(d02, alternative="two-sided", zero_method="wilcox")
 
-    tx_no_id = _within_sex_tx_kruskal(rows, left_key=keys[0], right_key=keys[1])
-    tx_id_obj = _within_sex_tx_kruskal(rows, left_key=keys[1], right_key=keys[2])
+    tx_no_id = _within_sex_condition_kruskal(rows, left_key=keys[0], right_key=keys[1])
+    tx_id_obj = _within_sex_condition_kruskal(rows, left_key=keys[1], right_key=keys[2])
 
     def _sex_line(label: str, tests: list[dict[str, object]]) -> str:
         bits = []

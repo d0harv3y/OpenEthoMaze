@@ -5,8 +5,8 @@ sessions. raw_syllable_id is model-local; labels include cluster_id.
 
 Regen (OpenEthoMaze repo root; needs --extra kpms)::
 
-    uv run python scratch/nor_object_mi/tx_argmax_grid.py
-    uv run python scratch/nor_object_mi/tx_argmax_grid.py --model paramscan_s1-1e8_s2-1e5_ss-50
+    uv run python scratch/nor_object_mi/condition_argmax_grid.py
+    uv run python scratch/nor_object_mi/condition_argmax_grid.py --model paramscan_s1-1e8_s2-1e5_ss-50
 """
 
 from __future__ import annotations
@@ -195,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
     np.random.seed(int(args.seed))
     out = args.out_dir or (args.da_dir / "grid_movies")
     out.mkdir(parents=True, exist_ok=True)
-    (out / "INFO_tx_argmax_grid.md").write_text(_info_md(), encoding="utf-8")
+    (out / "INFO_condition_argmax_grid.md").write_text(_info_md(), encoding="utf-8")
 
     winners = _winners_novelty(args.da_dir)
     if args.model:
@@ -254,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
             vix = {k: vix[k] for k in results}
             video_paths = {k: video_paths[k] for k in results}
             safe = model.replace("paramscan_", "")
-            dest = out / f"grid_tx_argmax_{safe}_syll{sid}_cluster{cid}.mp4"
+            dest = out / f"grid_condition_argmax_{safe}_syll{sid}_cluster{cid}.mp4"
             try:
                 n_inst = _render_one(
                     results=results,

@@ -131,7 +131,7 @@ def restack(art_root: Path) -> tuple[list[dict[str, object]], dict[str, object]]
                 for r in tests:
                     if r["test"] == "wilcoxon_signed_rank":
                         w.writerow(r)
-            with (out_dir / "ladder_within_sex_tx_kruskal.csv").open(
+            with (out_dir / "ladder_within_sex_condition_kruskal.csv").open(
                 "w", newline="", encoding="utf-8"
             ) as f:
                 w = csv.DictWriter(f, fieldnames=list(LADDER_TEST_FIELDS), extrasaction="ignore")

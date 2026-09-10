@@ -1,11 +1,11 @@
 """Compose second-order paired DA Δp_k from existing 1st-order packs.
 
 (b) session_on_trial: from ``simpler_first_da/da_syllable_deltas_per_animal.csv``
-(c) trial_on_session: from ``simpler_first_phase_paired/phase_paired_da_deltas_per_animal.csv``
+(c) trial_on_session: from ``simpler_first_session_paired/session_paired_da_deltas_per_animal.csv``
 
 Regen (OpenEthoMaze repo root):
   uv run python scratch/nor_object_mi/simpler_first_nested_da.py
-  uv run python scratch/nor_object_mi/fig_cluster_tx_kruskal_nested.py
+  uv run python scratch/nor_object_mi/fig_cluster_condition_kruskal_nested.py
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ DEFAULT_DA = Path(
 )
 DEFAULT_PP = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
-    r"\_nor_object_mi\simpler_first_phase_paired"
+    r"\_nor_object_mi\simpler_first_session_paired"
 )
 
 
@@ -77,7 +77,7 @@ Stage B (cluster-13 model overview): Kruskal Δ²p ~ tx within sex — **not** W
 | File | Role |
 | ---- | ---- |
 | `../simpler_first_da/da_syllable_deltas_per_animal.csv` | 1st-order condition-step |
-| `../simpler_first_phase_paired/phase_paired_da_deltas_per_animal.csv` | 1st-order phase-step |
+| `../simpler_first_session_paired/session_paired_da_deltas_per_animal.csv` | 1st-order phase-step |
 
 ## Outputs
 
@@ -88,7 +88,7 @@ Stage B (cluster-13 model overview): Kruskal Δ²p ~ tx within sex — **not** W
 | `nested_b_paired_n.json` | paired n by phase step |
 | `nested_c_paired_n.json` | paired n by condition step |
 
-Figures: `fig_cluster_tx_kruskal_nested.py` → `figures/fig_nested_*_cluster13_model_tx_kruskal_overview.*`
+Figures: `fig_cluster_condition_kruskal_nested.py` → `figures/fig_nested_*_cluster13_model_condition_kruskal_overview.*`
 """
 
 

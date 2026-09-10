@@ -32,7 +32,7 @@ from nor_object_mi.simpler_first_da import (  # noqa: E402
     apply_bh_grouped,
     paired_da_deltas,
 )
-from nor_object_mi.simpler_first_phase_paired import PHASE_STEPS  # noqa: E402
+from nor_object_mi.simpler_first_session_paired import PHASE_STEPS  # noqa: E402
 from nor_object_mi.simpler_first_presence import (  # noqa: E402
     TRIALS,
     GRAINS,
@@ -43,7 +43,7 @@ from nor_object_mi.simpler_first_presence import (  # noqa: E402
     build_animal_condition_table,
 )
 from nor_object_mi.simpler_first_q1 import LOCKED, anova_within_sex, kruskal_within_sex  # noqa: E402
-from nor_object_mi.simpler_first_tx_extras import (  # noqa: E402
+from nor_object_mi.simpler_first_condition_extras import (  # noqa: E402
     BC_METRIC,
     COMPOSITION_METRICS,
     ENGAGEMENT_METRICS,
@@ -194,7 +194,7 @@ def _kruskal_rows_from_animal_delta(
     )
 
 
-def da_tx_stage_b_from_deltas(
+def da_condition_stage_b_from_deltas(
     dtab: pd.DataFrame, *, question: str, stage_b: str = "kruskal"
 ) -> pd.DataFrame:
     """Per-syllable within-sex Stage-B on delta_p (no BH yet)."""
@@ -213,9 +213,9 @@ def da_tx_stage_b_from_deltas(
     return pd.DataFrame(rows)
 
 
-def da_tx_kruskal_from_deltas(dtab: pd.DataFrame, *, question: str) -> pd.DataFrame:
+def da_condition_kruskal_from_deltas(dtab: pd.DataFrame, *, question: str) -> pd.DataFrame:
     """Backward-compatible alias -> Stage-B Kruskal on delta_p."""
-    return da_tx_stage_b_from_deltas(dtab, question=question, stage_b="kruskal")
+    return da_condition_stage_b_from_deltas(dtab, question=question, stage_b="kruskal")
 
 
 def run_condition_da(
@@ -241,10 +241,10 @@ def run_condition_da(
             dtab["grain"] = grain
             dtab["weighting"] = weighting
             dtab["axis"] = "condition_within_phase"
-            dtab["question"] = "Q1_tx_on_condition_delta_p"
+            dtab["question"] = "Q1_condition_on_condition_delta_p"
             da_delta_parts.append(dtab)
-            da_tests = da_tx_stage_b_from_deltas(
-                da_dtab, question="Q1_tx_on_condition_delta_p", stage_b=stage_b
+            da_tests = da_condition_stage_b_from_deltas(
+                da_dtab, question="Q1_condition_on_condition_delta_p", stage_b=stage_b
             )
             if da_tests.empty:
                 continue
@@ -288,10 +288,10 @@ def run_phase_da(
             dtab["grain"] = grain
             dtab["weighting"] = weighting
             dtab["axis"] = "phase_within_condition"
-            dtab["question"] = "Q3_tx_on_phase_delta_p"
+            dtab["question"] = "Q3_condition_on_phase_delta_p"
             da_delta_parts.append(dtab)
-            da_tests = da_tx_stage_b_from_deltas(
-                da_dtab, question="Q3_tx_on_phase_delta_p", stage_b=stage_b
+            da_tests = da_condition_stage_b_from_deltas(
+                da_dtab, question="Q3_condition_on_phase_delta_p", stage_b=stage_b
             )
             if da_tests.empty:
                 continue
@@ -413,7 +413,7 @@ def _copy_dictionary(out: Path) -> None:
     # Point "These files" at the actual out folder name.
     folder = out.name
     text, _n2 = re.subn(
-        r"(simpler_first_tx_on_paired_delta)(_parametric)?/",
+        r"(simpler_first_condition_on_paired_delta)(_parametric)?/",
         f"{folder}/",
         text,
         count=1,
@@ -497,9 +497,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.out_dir is not None:
         out = args.out_dir
     elif args.stage_b == "anova":
-        out = art_root / "simpler_first_tx_on_paired_delta_parametric"
+        out = art_root / "simpler_first_condition_on_paired_delta_parametric"
     else:
-        out = art_root / "simpler_first_tx_on_paired_delta"
+        out = art_root / "simpler_first_condition_on_paired_delta"
     out.mkdir(parents=True, exist_ok=True)
     _copy_dictionary(out)
 

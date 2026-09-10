@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
             [r for r in tests if r["test"] == "wilcoxon_signed_rank"],
         )
         _write_csv(
-            out_dir / "ladder_within_sex_tx_kruskal.csv",
+            out_dir / "ladder_within_sex_condition_kruskal.csv",
             list(LADDER_TEST_FIELDS),
             [r for r in tests if r["test"] == "kruskal"],
         )

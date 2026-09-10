@@ -13,7 +13,7 @@ import pandas as pd
 from scipy import stats
 
 from nor_object_mi.simpler_first_da import apply_bh_grouped
-from nor_object_mi.simpler_first_phase_paired import PHASE_STEPS
+from nor_object_mi.simpler_first_session_paired import PHASE_STEPS
 from nor_object_mi.simpler_first_presence import (
     TRIALS,
     SESSIONS,
@@ -259,7 +259,7 @@ def run_phase_scalars(
                 scal,
                 value_col=BC_METRIC,
                 metric_name=BC_METRIC,
-                question="tx_on_phase_paired_BC",
+                question="tx_on_session_paired_BC",
                 stage_b=stage_b,
             ):
                 cond_rows.append(
@@ -386,7 +386,7 @@ def consensus_animal_stage_b(
                 g,
                 value_col=col,
                 metric_name=metric_name,
-                question="consensus_animal_tx_on_delta",
+                question="consensus_animal_condition_on_delta",
                 stage_b=stage_b,
             ):
                 rows.append(

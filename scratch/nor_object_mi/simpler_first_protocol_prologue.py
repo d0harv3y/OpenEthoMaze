@@ -456,7 +456,7 @@ above 0 — and is the novelty step (`identical→novel`) as strong as presence?
 | `figures/fig_protocol_presence.{{pdf,svg}}` | presence engagement | one-sample t within sex |
 | `figures/fig_protocol_novelty_step.{{pdf,svg}}` | novelty step | one-sample t within sex |
 | `figures/fig_protocol_dr_preference.{{pdf,svg}}` | original + object-prox DR | one-sample t within sex |
-| `figures/fig_protocol_tx_coda.{{pdf,svg}}` | Welch ANOVA by tx | hit/miss + p |
+| `figures/fig_protocol_condition_coda.{{pdf,svg}}` | Welch ANOVA by tx | hit/miss + p |
 | `figures/FIGURES.md` | visual-encoding map | slides dest |
 
 

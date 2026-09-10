@@ -4,7 +4,7 @@ Rows = frac_near / mean_dist / richness / shannon (paired Δ).
 Cell = mean uncorrected Kruskal p across models; * = majority BH across models in cell.
 
 Regen:
-  uv run python scratch/nor_object_mi/fig_scalar_tx_kruskal_mean_model_p.py
+  uv run python scratch/nor_object_mi/fig_scalar_condition_kruskal_mean_model_p.py
 """
 
 from __future__ import annotations
@@ -33,10 +33,10 @@ from nor_object_mi._pub_style import (  # noqa: E402
     text_on_cmap,
     type_scale,
 )
-from nor_object_mi.cluster_tx_kruskal_phase_paired import PHASE_STEPS
-from nor_object_mi.cluster_tx_mean_model_p import StarRule
-from nor_object_mi.fig_cluster_tx_kruskal_common import fdr_mark
-from nor_object_mi.scalar_tx_mean_model_p import (  # noqa: E402
+from nor_object_mi.cluster_condition_kruskal_session_paired import PHASE_STEPS
+from nor_object_mi.cluster_condition_mean_model_p import StarRule
+from nor_object_mi.fig_cluster_condition_kruskal_common import fdr_mark
+from nor_object_mi.scalar_condition_mean_model_p import (  # noqa: E402
     METRIC_LAB,
     SCALAR_METRICS,
     aggregate_scalar_da,
@@ -44,7 +44,7 @@ from nor_object_mi.scalar_tx_mean_model_p import (  # noqa: E402
     kruskal_per_model_scalar_da,
     kruskal_per_model_scalar_pp,
 )
-from nor_object_mi.simpler_first_phase_paired import (  # noqa: E402
+from nor_object_mi.simpler_first_session_paired import (  # noqa: E402
     footnote_paired_n,
     paired_n_by_step,
     step_axis_labels,
@@ -56,7 +56,7 @@ DEFAULT_PRESENCE = Path(
 )
 DEFAULT_PP = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
-    r"\_nor_object_mi\simpler_first_phase_paired"
+    r"\_nor_object_mi\simpler_first_session_paired"
 )
 NLP_VMAX = 4.0
 DA_PANELS = (
@@ -195,7 +195,7 @@ def fig_da(kr: pd.DataFrame, out: Path, *, dest: str, star: str) -> None:
         y=0.02,
         color=MUTE,
     )
-    save_pdf_png(fig, out / "fig_presence_scalar_tx_kruskal_overview_mean_model_p")
+    save_pdf_png(fig, out / "fig_presence_scalar_condition_kruskal_overview_mean_model_p")
 
 
 def fig_pp(kr: pd.DataFrame, out: Path, *, dest: str, star: str, n_map: dict[str, int]) -> None:
@@ -240,7 +240,7 @@ def fig_pp(kr: pd.DataFrame, out: Path, *, dest: str, star: str, n_map: dict[str
         y=0.02,
         color=MUTE,
     )
-    save_pdf_png(fig, out / "fig_phase_paired_scalar_tx_kruskal_overview_mean_model_p")
+    save_pdf_png(fig, out / "fig_session_paired_scalar_condition_kruskal_overview_mean_model_p")
 
 
 def _info(design: str, star: str) -> str:
@@ -275,10 +275,10 @@ def main(argv: list[str] | None = None) -> int:
         print("presence scalars: Kruskal per model ...", flush=True)
         deltas = pd.read_csv(args.presence_dir / "presence_step_deltas_per_animal.csv")
         per = kruskal_per_model_scalar_da(deltas)
-        per.to_csv(args.presence_dir / "presence_scalar_tx_kruskal_per_model.csv", index=False)
+        per.to_csv(args.presence_dir / "presence_scalar_condition_kruskal_per_model.csv", index=False)
         agg = aggregate_scalar_da(per, star=star)
-        agg.to_csv(args.presence_dir / "presence_scalar_tx_kruskal_mean_model_p.csv", index=False)
-        (args.presence_dir / "INFO_presence_scalar_tx_kruskal_mean_model_p.md").write_text(
+        agg.to_csv(args.presence_dir / "presence_scalar_condition_kruskal_mean_model_p.csv", index=False)
+        (args.presence_dir / "INFO_presence_scalar_condition_kruskal_mean_model_p.md").write_text(
             _info("presence steps (condition ladder within phase)", star), encoding="utf-8"
         )
         fig_dir = args.presence_dir / "figures"
@@ -293,27 +293,27 @@ def main(argv: list[str] | None = None) -> int:
                 m: int(agg.loc[agg["metric"] == m, "hit_fdr05"].sum()) for m in SCALAR_METRICS
             },
         }
-        (args.presence_dir / "presence_scalar_tx_kruskal_mean_model_p_summary.json").write_text(
+        (args.presence_dir / "presence_scalar_condition_kruskal_mean_model_p_summary.json").write_text(
             json.dumps(summary, indent=2), encoding="utf-8"
         )
         summaries.append(summary)
 
     if args.only in ("pp", "both"):
         print("phase-paired scalars: Kruskal per model ...", flush=True)
-        deltas = pd.read_csv(args.pp_dir / "phase_paired_deltas_per_animal.csv")
+        deltas = pd.read_csv(args.pp_dir / "session_paired_deltas_per_animal.csv")
         n_map = paired_n_by_step(deltas)
         per = kruskal_per_model_scalar_pp(deltas)
-        per.to_csv(args.pp_dir / "phase_paired_scalar_tx_kruskal_per_model.csv", index=False)
+        per.to_csv(args.pp_dir / "session_paired_scalar_condition_kruskal_per_model.csv", index=False)
         agg = aggregate_scalar_pp(per, star=star)
-        agg.to_csv(args.pp_dir / "phase_paired_scalar_tx_kruskal_mean_model_p.csv", index=False)
-        (args.pp_dir / "INFO_phase_paired_scalar_tx_kruskal_mean_model_p.md").write_text(
+        agg.to_csv(args.pp_dir / "session_paired_scalar_condition_kruskal_mean_model_p.csv", index=False)
+        (args.pp_dir / "INFO_session_paired_scalar_condition_kruskal_mean_model_p.md").write_text(
             _info("phase-paired (condition held)", star), encoding="utf-8"
         )
         fig_dir = args.pp_dir / "figures"
         fig_dir.mkdir(parents=True, exist_ok=True)
         fig_pp(agg, fig_dir, dest=args.dest, star=star, n_map=n_map)
         summary = {
-            "design": "phase_paired",
+            "design": "session_paired",
             "star_rule": star,
             "n_agg_cells": int(len(agg)),
             "n_hit_fdr05_cells": int(agg["hit_fdr05"].sum()),
@@ -321,7 +321,7 @@ def main(argv: list[str] | None = None) -> int:
                 m: int(agg.loc[agg["metric"] == m, "hit_fdr05"].sum()) for m in SCALAR_METRICS
             },
         }
-        (args.pp_dir / "phase_paired_scalar_tx_kruskal_mean_model_p_summary.json").write_text(
+        (args.pp_dir / "session_paired_scalar_condition_kruskal_mean_model_p_summary.json").write_text(
             json.dumps(summary, indent=2), encoding="utf-8"
         )
         summaries.append(summary)

@@ -11,7 +11,7 @@ from nor_object_mi.four_mask import (
     hunt_tests,
     mask_name,
     near_flag,
-    paired_tx_minus_bl,
+    paired_condition_minus_bl,
     session_mask_table,
 )
 
@@ -55,7 +55,7 @@ def test_session_mask_table_frac_and_shannon() -> None:
     assert not np.isfinite(float(empty["shannon_bits"]))
 
 
-def test_gate_hits_tx_specific_requires_novel_fdr_and_miss() -> None:
+def test_gate_hits_condition_specific_requires_novel_fdr_and_miss() -> None:
     rows = []
     for sex in ("F", "M"):
         for mask in MASKS:
@@ -168,7 +168,7 @@ def test_paired_inner_join_bl_tx() -> None:
             "shannon_bits": [1.0, 1.5, 2.0, 2.1],
         }
     )
-    p = paired_tx_minus_bl(sess)
+    p = paired_condition_minus_bl(sess)
     assert len(p) == 2
     sn = p[p["mask"] == "still_near"].iloc[0]
     np.testing.assert_allclose(float(sn["delta_frac_mask"]), 0.1)

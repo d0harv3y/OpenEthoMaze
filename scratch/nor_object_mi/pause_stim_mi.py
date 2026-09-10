@@ -431,7 +431,7 @@ def write_run(
         "join_files": join_paths,
     }
     if not litmus.empty:
-        summary["litmus_tx_max_abs_diff"] = float(litmus["abs_diff"].max())
-        summary["litmus_tx_n"] = int(len(litmus))
+        summary["litmus_condition_max_abs_diff"] = float(litmus["abs_diff"].max())
+        summary["litmus_condition_n"] = int(len(litmus))
     (out_dir / "run_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary

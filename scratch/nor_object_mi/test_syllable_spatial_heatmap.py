@@ -7,7 +7,7 @@ import numpy as np
 from nor_object_mi.syllable_spatial_heatmap import (
     GrainKey,
     TxOverlayGrainKey,
-    all_tx_overlay_grains,
+    all_condition_overlay_grains,
     batch_grains,
     composite_dwell_overlay,
     needs_novel_alignment,
@@ -64,11 +64,11 @@ def test_draw_rotation_notation_writes_pixels() -> None:
     assert not np.array_equal(img[10:25, 8:90], np.full((15, 82, 3), 200, dtype=np.uint8))
 
 
-def test_draw_tx_notation_upper_right() -> None:
-    from nor_object_mi.syllable_spatial_heatmap import draw_tx_notation
+def test_draw_condition_notation_upper_right() -> None:
+    from nor_object_mi.syllable_spatial_heatmap import draw_condition_notation
 
     img = np.full((40, 200, 3), 200, dtype=np.uint8)
-    draw_tx_notation(img, "noSD")
+    draw_condition_notation(img, "noSD")
     # left stays blank; right corner changes
     assert np.array_equal(img[10:25, 0:40], np.full((15, 40, 3), 200, dtype=np.uint8))
     assert not np.array_equal(img[10:25, 150:195], np.full((15, 45, 3), 200, dtype=np.uint8))
@@ -146,20 +146,20 @@ def test_composite_tints_high_dwell_pixel() -> None:
     assert int(out[0, 0, 0]) == 255
 
 
-def test_tx_overlay_grain_slug_and_count() -> None:
+def test_condition_overlay_grain_slug_and_count() -> None:
     g = TxOverlayGrainKey("NOR_BL", "nvl_obj", "M")
     assert g.slug() == "NOR_BL__nvl_obj__M__all_tx"
-    assert len(all_tx_overlay_grains()) == 24  # 4 phases × 3 cond × 2 sex
+    assert len(all_condition_overlay_grains()) == 24  # 4 phases × 3 cond × 2 sex
 
 
-def test_tx_colors_match_violin_hex() -> None:
+def test_condition_colors_match_violin_hex() -> None:
     colors = tx_colors_bgr()
     assert set(colors) == {"noSD", "GHSD", "RBSD"}
     # noSD #1b9e77 → BGR (119, 158, 27)
     assert colors["noSD"] == (119, 158, 27)
 
 
-def test_tx_overlay_composite_mixes_two_tx_colors() -> None:
+def test_condition_overlay_composite_mixes_two_condition_colors() -> None:
     bg = np.zeros((8, 8, 3), dtype=np.uint8)
     colors = tx_colors_bgr()
     dwell = {

@@ -3,10 +3,10 @@
 Cross-model consensus heatmaps + n-hit strips + pilot tx-median lollipops
 + scalar / PERMANOVA / arm / consensus-animal / grain-contrast panels.
 
-Reads CSVs listed in INFO_tx_on_paired_delta.md.
+Reads CSVs listed in INFO_condition_on_paired_delta.md.
 
 Regen (OpenEthoMaze repo root):
-  uv run python scratch/nor_object_mi/fig_simpler_first_tx_on_paired_delta.py
+  uv run python scratch/nor_object_mi/fig_simpler_first_condition_on_paired_delta.py
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ from nor_object_mi._pub_style import (  # noqa: E402
 
 DEFAULT_RUN = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
-    r"\_nor_object_mi\simpler_first_tx_on_paired_delta"
+    r"\_nor_object_mi\simpler_first_condition_on_paired_delta"
 )
 GRAINS = ("full_session", "near_0p10")
 GRAIN_LAB = {"full_session": "full session", "near_0p10": "near 0.10 m"}
@@ -300,7 +300,7 @@ def fig_q1_agreement(agr: pd.DataFrame, out: Path) -> None:
         y=1.02,
     )
     fig_footnote(fig, FEET['q1'], y=-0.05)
-    save_pdf_png(fig, out / "fig_tx_q1_da_condition_agreement")
+    save_pdf_png(fig, out / "fig_condition_q1_da_condition_agreement")
 
 
 def fig_q2_agreement(agr: pd.DataFrame, out: Path) -> None:
@@ -342,7 +342,7 @@ def fig_q2_agreement(agr: pd.DataFrame, out: Path) -> None:
         y=1.02,
     )
     fig_footnote(fig, FEET['q2'], y=-0.05)
-    save_pdf_png(fig, out / "fig_tx_q2_shannon_condition_agreement")
+    save_pdf_png(fig, out / "fig_condition_q2_shannon_condition_agreement")
 
 
 def fig_q3_agreement(agr: pd.DataFrame, out: Path) -> None:
@@ -390,7 +390,7 @@ def fig_q3_agreement(agr: pd.DataFrame, out: Path) -> None:
         y=1.02,
     )
     fig_footnote(fig, FEET['q3'], y=-0.05)
-    save_pdf_png(fig, out / "fig_tx_q3_da_phase_agreement")
+    save_pdf_png(fig, out / "fig_condition_q3_da_phase_agreement")
 
 
 def fig_q4_agreement(agr: pd.DataFrame, out: Path) -> None:
@@ -432,7 +432,7 @@ def fig_q4_agreement(agr: pd.DataFrame, out: Path) -> None:
         y=1.02,
     )
     fig_footnote(fig, FEET['q4'], y=-0.05)
-    save_pdf_png(fig, out / "fig_tx_q4_shannon_phase_agreement")
+    save_pdf_png(fig, out / "fig_condition_q4_shannon_phase_agreement")
 
 
 def fig_q1_n_hit(tests: pd.DataFrame, out: Path, *, grain: str) -> None:
@@ -490,7 +490,7 @@ def fig_q1_n_hit(tests: pd.DataFrame, out: Path, *, grain: str) -> None:
         y=1.03,
     )
     fig_footnote(fig, FEET['n_hit'] + f" Grain = {grain}.", y=-0.06)
-    save_pdf_png(fig, out / f"fig_tx_q1_n_hit_fdr05_{grain}")
+    save_pdf_png(fig, out / f"fig_condition_q1_n_hit_fdr05_{grain}")
 
 
 def fig_q3_n_hit(tests: pd.DataFrame, out: Path, *, grain: str) -> None:
@@ -550,7 +550,7 @@ def fig_q3_n_hit(tests: pd.DataFrame, out: Path, *, grain: str) -> None:
         y=1.03,
     )
     fig_footnote(fig, FEET['n_hit'] + f" Grain = {grain}.", y=-0.06)
-    save_pdf_png(fig, out / f"fig_tx_q3_n_hit_fdr05_{grain}")
+    save_pdf_png(fig, out / f"fig_condition_q3_n_hit_fdr05_{grain}")
 
 
 def _pick_pilot_cell(agr: pd.DataFrame) -> dict[str, str]:
@@ -640,7 +640,7 @@ def fig_q1_lollipop_pilot(
         y=1.02,
     )
     fig_footnote(fig, FEET['lolli'], y=-0.08)
-    save_pdf_png(fig, out / "fig_tx_q1_lollipop_pilot")
+    save_pdf_png(fig, out / "fig_condition_q1_lollipop_pilot")
 
 
 def fig_scalar_condition_agreement(agr: pd.DataFrame, out: Path) -> None:
@@ -690,7 +690,7 @@ def fig_scalar_condition_agreement(agr: pd.DataFrame, out: Path) -> None:
         y=1.01,
     )
     fig_footnote(fig, FEET['scalar'], y=-0.02)
-    save_pdf_png(fig, out / "fig_tx_scalar_condition_agreement")
+    save_pdf_png(fig, out / "fig_condition_scalar_condition_agreement")
 
 
 def fig_scalar_phase_agreement(agr: pd.DataFrame, out: Path) -> None:
@@ -740,7 +740,7 @@ def fig_scalar_phase_agreement(agr: pd.DataFrame, out: Path) -> None:
         y=1.01,
     )
     fig_footnote(fig, FEET['scalar'], y=-0.02)
-    save_pdf_png(fig, out / "fig_tx_scalar_phase_agreement")
+    save_pdf_png(fig, out / "fig_condition_scalar_phase_agreement")
 
 
 def fig_da_bout_count_agreement(agr: pd.DataFrame, out: Path) -> None:
@@ -786,7 +786,7 @@ def fig_da_bout_count_agreement(agr: pd.DataFrame, out: Path) -> None:
         y=1.02,
     )
     fig_footnote(fig, FEET['q1'] + " This figure is bout_count, not frame_share.", y=-0.05)
-    save_pdf_png(fig, out / "fig_tx_q1_da_condition_agreement_bout_count")
+    save_pdf_png(fig, out / "fig_condition_q1_da_condition_agreement_bout_count")
 
 
 def fig_permanova_agreement(tests: pd.DataFrame, out: Path) -> None:
@@ -835,7 +835,7 @@ def fig_permanova_agreement(tests: pd.DataFrame, out: Path) -> None:
         y=1.02,
     )
     fig_footnote(fig, FEET['perm'], y=-0.05)
-    save_pdf_png(fig, out / "fig_tx_permanova_endpoint_agreement")
+    save_pdf_png(fig, out / "fig_condition_permanova_endpoint_agreement")
 
 
 def fig_arm_agreement(arm: pd.DataFrame, out: Path, *, metric: str = "delta_shannon_bits") -> None:
@@ -887,7 +887,7 @@ def fig_arm_agreement(arm: pd.DataFrame, out: Path, *, metric: str = "delta_shan
         y=1.02,
     )
     fig_footnote(fig, FEET['arm_foot'], y=-0.05)
-    save_pdf_png(fig, out / "fig_tx_arm_contrasts_condition_agreement")
+    save_pdf_png(fig, out / "fig_condition_arm_contrasts_condition_agreement")
 
 
 def fig_consensus_animal(tests: pd.DataFrame, out: Path) -> None:
@@ -940,7 +940,7 @@ def fig_consensus_animal(tests: pd.DataFrame, out: Path) -> None:
         y=1.01,
     )
     fig_footnote(fig, FEET['cons'], y=-0.02)
-    save_pdf_png(fig, out / "fig_tx_consensus_animal_condition")
+    save_pdf_png(fig, out / "fig_condition_consensus_animal_condition")
 
 
 def fig_grain_contrast_scalar(tests: pd.DataFrame, out: Path) -> None:
@@ -1006,7 +1006,7 @@ def fig_grain_contrast_scalar(tests: pd.DataFrame, out: Path) -> None:
         y=1.01,
     )
     fig_footnote(fig, FEET['gc'], y=-0.02)
-    save_pdf_png(fig, out / "fig_tx_grain_contrast_scalar_condition")
+    save_pdf_png(fig, out / "fig_condition_grain_contrast_scalar_condition")
 
 
 def fig_grain_contrast_da(tests: pd.DataFrame, out: Path) -> None:
@@ -1069,7 +1069,7 @@ def fig_grain_contrast_da(tests: pd.DataFrame, out: Path) -> None:
         y=1.05,
     )
     fig_footnote(fig, FEET['gc'], y=-0.10)
-    save_pdf_png(fig, out / "fig_tx_grain_contrast_da_condition")
+    save_pdf_png(fig, out / "fig_condition_grain_contrast_da_condition")
 
 
 def _write_figures_md(out: Path) -> None:
@@ -1080,7 +1080,7 @@ def _write_figures_md(out: Path) -> None:
     arm = FEET.get("arm", "Mann-Whitney")
     text = f"""# Figures — tx-on-paired-delta lattice (Q1-Q4 + extras)
 
-Complementary to `INFO_tx_on_paired_delta.md`. Visual-encoding map only.
+Complementary to `INFO_condition_on_paired_delta.md`. Visual-encoding map only.
 
 Stage-B for this figure set: `{sb}` ({scale}).
 
@@ -1089,7 +1089,7 @@ Stage-B for this figure set: `{sb}` ({scale}).
 | --------------- | -------------------------------------------------------------------- |
 | These files     | next to this `FIGURES.md`                                            |
 | Generated       | {today}                                                              |
-| How regenerated | `uv run python scratch/nor_object_mi/fig_simpler_first_tx_on_paired_delta.py --run-dir <run>` |
+| How regenerated | `uv run python scratch/nor_object_mi/fig_simpler_first_condition_on_paired_delta.py --run-dir <run>` |
 
 
 ## Core (Q1-Q4, frame_share)
@@ -1097,13 +1097,13 @@ Stage-B for this figure set: `{sb}` ({scale}).
 
 | Stem | Question | Source -> columns | Encoding | D / I |
 | ---- | -------- | ----------------- | -------- | ----- |
-| `fig_tx_q1_da_condition_agreement` | Q1 model consensus | `tx_da_condition_agreement.csv` -> `frac_model_consensus_hit` | heatmap grain x sex; phase x condition-step | I (cell-level) |
-| `fig_tx_q2_shannon_condition_agreement` | Q2 model consensus | `tx_shannon_condition_agreement.csv` -> `frac_hit` | same layout | I |
-| `fig_tx_q3_da_phase_agreement` | Q3 model consensus | `tx_da_phase_agreement.csv` -> `frac_model_consensus_hit` | heatmap grain x sex; condition x phase-step | I |
-| `fig_tx_q4_shannon_phase_agreement` | Q4 model consensus | `tx_shannon_phase_agreement.csv` -> `frac_hit` | same layout | I |
-| `fig_tx_q1_n_hit_fdr05_{{grain}}` | Q1 n hits / model | `tx_da_condition_tests_long.csv` -> `hit_fdr05` | strip + median | I count |
-| `fig_tx_q3_n_hit_fdr05_{{grain}}` | Q3 n hits / model | `tx_da_phase_tests_long.csv` -> `hit_fdr05` | strip + median | I count |
-| `fig_tx_q1_lollipop_pilot` | Q1 pilot tx locations | tests long -> `{loc}_{{tx}}` on FDR hits | lollipop / range | I set, D locations |
+| `fig_condition_q1_da_condition_agreement` | Q1 model consensus | `tx_da_condition_agreement.csv` -> `frac_model_consensus_hit` | heatmap grain x sex; phase x condition-step | I (cell-level) |
+| `fig_condition_q2_shannon_condition_agreement` | Q2 model consensus | `tx_shannon_condition_agreement.csv` -> `frac_hit` | same layout | I |
+| `fig_condition_q3_da_phase_agreement` | Q3 model consensus | `tx_da_phase_agreement.csv` -> `frac_model_consensus_hit` | heatmap grain x sex; condition x phase-step | I |
+| `fig_condition_q4_shannon_phase_agreement` | Q4 model consensus | `tx_shannon_phase_agreement.csv` -> `frac_hit` | same layout | I |
+| `fig_condition_q1_n_hit_fdr05_{{grain}}` | Q1 n hits / model | `tx_da_condition_tests_long.csv` -> `hit_fdr05` | strip + median | I count |
+| `fig_condition_q3_n_hit_fdr05_{{grain}}` | Q3 n hits / model | `tx_da_phase_tests_long.csv` -> `hit_fdr05` | strip + median | I count |
+| `fig_condition_q1_lollipop_pilot` | Q1 pilot tx locations | tests long -> `{loc}_{{tx}}` on FDR hits | lollipop / range | I set, D locations |
 
 
 ## Extras
@@ -1111,14 +1111,14 @@ Stage-B for this figure set: `{sb}` ({scale}).
 
 | Stem | Extra | Source -> columns | Encoding | D / I |
 | ---- | ----- | ----------------- | -------- | ----- |
-| `fig_tx_scalar_condition_agreement` | scalar lattice (cond) | `tx_scalar_condition_agreement.csv` -> `frac_hit` | metric x sex; phase x step | I |
-| `fig_tx_scalar_phase_agreement` | scalar lattice (phase) | `tx_scalar_phase_agreement.csv` -> `frac_hit` | metric x sex; cond x phase-step | I |
-| `fig_tx_q1_da_condition_agreement_bout_count` | bout_count DA | `tx_da_condition_agreement.csv` -> `frac_model_consensus_hit` | grain x sex heatmaps | I |
-| `fig_tx_permanova_endpoint_agreement` | PERMANOVA | `tx_permanova_endpoint_tests_long.csv` -> `hit_fdr05` | grain x sex; phase x condition | I |
-| `fig_tx_arm_contrasts_condition_agreement` | arm ({arm}) | `tx_arm_contrasts_condition_long.csv` -> `hit_fdr05` | sex x contrast; phase x step | I |
-| `fig_tx_consensus_animal_condition` | consensus animal | `tx_consensus_animal_condition_tests_long.csv` -> `hit_fdr05` | metric x sex heatmaps | I |
-| `fig_tx_grain_contrast_scalar_condition` | near-full scalars | `tx_grain_contrast_scalar_condition_tests_long.csv` -> `hit_fdr05` | metric x sex | I |
-| `fig_tx_grain_contrast_da_condition` | near-full DA | `tx_grain_contrast_da_condition_tests_long.csv` -> >=4% alphabet | sex heatmaps | I |
+| `fig_condition_scalar_condition_agreement` | scalar lattice (cond) | `tx_scalar_condition_agreement.csv` -> `frac_hit` | metric x sex; phase x step | I |
+| `fig_condition_scalar_phase_agreement` | scalar lattice (phase) | `tx_scalar_phase_agreement.csv` -> `frac_hit` | metric x sex; cond x phase-step | I |
+| `fig_condition_q1_da_condition_agreement_bout_count` | bout_count DA | `tx_da_condition_agreement.csv` -> `frac_model_consensus_hit` | grain x sex heatmaps | I |
+| `fig_condition_permanova_endpoint_agreement` | PERMANOVA | `tx_permanova_endpoint_tests_long.csv` -> `hit_fdr05` | grain x sex; phase x condition | I |
+| `fig_condition_arm_contrasts_condition_agreement` | arm ({arm}) | `tx_arm_contrasts_condition_long.csv` -> `hit_fdr05` | sex x contrast; phase x step | I |
+| `fig_condition_consensus_animal_condition` | consensus animal | `tx_consensus_animal_condition_tests_long.csv` -> `hit_fdr05` | metric x sex heatmaps | I |
+| `fig_condition_grain_contrast_scalar_condition` | near-full scalars | `tx_grain_contrast_scalar_condition_tests_long.csv` -> `hit_fdr05` | metric x sex | I |
+| `fig_condition_grain_contrast_da_condition` | near-full DA | `tx_grain_contrast_da_condition_tests_long.csv` -> >=4% alphabet | sex heatmaps | I |
 
 
 ## Notes

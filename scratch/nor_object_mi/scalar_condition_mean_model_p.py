@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 
 from nor_object_mi._pub_style import SESSIONS, SEX_ORDER
-from nor_object_mi.cluster13_tx_delta import STEPS, kruskal_condition
-from nor_object_mi.cluster_tx_kruskal_phase_paired import TRIALS, PHASE_STEPS
-from nor_object_mi.cluster_tx_mean_model_p import StarRule, aggregate_mean_p_models_as_family
+from nor_object_mi.cluster13_condition_delta import STEPS, kruskal_condition
+from nor_object_mi.cluster_condition_kruskal_session_paired import TRIALS, PHASE_STEPS
+from nor_object_mi.cluster_condition_mean_model_p import StarRule, aggregate_mean_p_models_as_family
 
 SCALAR_METRICS = ("frac_near", "mean_dist_any_m", "richness", "shannon_bits")
 METRIC_LAB = {

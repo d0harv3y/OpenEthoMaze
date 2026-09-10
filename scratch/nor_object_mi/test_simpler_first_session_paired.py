@@ -5,10 +5,10 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from nor_object_mi.simpler_first_phase_paired import (
+from nor_object_mi.simpler_first_session_paired import (
     overlay_step_suptitle_parts,
     paired_n_by_step,
-    run_model_phase_paired,
+    run_model_session_paired,
     step_arrow_emph,
 )
 from nor_object_mi.simpler_first_presence import (
@@ -147,7 +147,7 @@ def test_condition_held_ignores_other_condition_shares() -> None:
         ],
         ignore_index=True,
     )
-    scalar_tests, scalar_deltas, da_tests, _da_deltas = run_model_phase_paired(ac)
+    scalar_tests, scalar_deltas, da_tests, _da_deltas = run_model_session_paired(ac)
     novel = scalar_deltas[
         (scalar_deltas["trial"] == "nvl_obj")
         & (scalar_deltas["step"] == "BL->TX")

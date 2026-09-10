@@ -253,8 +253,8 @@ def run_q2(bout_csv: Path, out_dir: Path) -> dict[str, object]:
     verdict = judge_q2(k_rich, k_h, perm)
     out_dir.mkdir(parents=True, exist_ok=True)
     meta.to_csv(out_dir / "q2_animal_composition_scalars.csv", index=False)
-    tests.to_csv(out_dir / "q2_within_sex_tx_kruskal.csv", index=False)
-    perm.to_csv(out_dir / "q2_within_sex_tx_permanova_braycurtis.csv", index=False)
+    tests.to_csv(out_dir / "q2_within_sex_condition_kruskal.csv", index=False)
+    perm.to_csv(out_dir / "q2_within_sex_condition_permanova_braycurtis.csv", index=False)
     np.savez_compressed(
         out_dir / "q2_compositions.npz",
         P=P,

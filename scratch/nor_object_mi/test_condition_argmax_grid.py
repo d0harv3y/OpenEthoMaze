@@ -9,7 +9,7 @@ _SCRATCH = Path(__file__).resolve().parents[1]
 if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
 
-from nor_object_mi.tx_argmax_grid import dummy_coordinates, kpms_key_to_mp4  # noqa: E402
+from nor_object_mi.condition_argmax_grid import dummy_coordinates, kpms_key_to_mp4  # noqa: E402
 
 import numpy as np
 

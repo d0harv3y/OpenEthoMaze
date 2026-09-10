@@ -89,7 +89,7 @@ def test_dispersion_summary_by_sex_splits_n_animals() -> None:
     assert int(pooled[pooled["metric"] == "delta_frac_near"]["n_animals"].iloc[0]) == 2
 
 
-def test_across_model_dispersion_accepts_phase_paired_keys() -> None:
+def test_across_model_dispersion_accepts_session_paired_keys() -> None:
     rows = []
     for i, d in enumerate((0.10, 0.20, 0.30)):
         rows.append(

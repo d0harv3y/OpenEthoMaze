@@ -39,13 +39,13 @@ from nor_object_mi._pub_style import (  # noqa: E402
     text_on_cmap,
     type_scale,
 )
-from nor_object_mi.cluster13_tx_delta import STEP_LAB
-from nor_object_mi.cluster_tx_kruskal import (  # noqa: E402
+from nor_object_mi.cluster13_condition_delta import STEP_LAB
+from nor_object_mi.cluster_condition_kruskal import (  # noqa: E402
     da_locus_labels,
     filter_presence_novelty,
     kruskal_by_syllable_da_locus_sex,
 )
-from nor_object_mi.cluster_tx_kruskal_phase_paired import (  # noqa: E402
+from nor_object_mi.cluster_condition_kruskal_session_paired import (  # noqa: E402
     COND_LAB,
     STEP_LAB as PP_STEP_LAB,
     kruskal_by_syllable_trial_session_step_sex,
@@ -58,7 +58,7 @@ DEFAULT_DA = Path(
 )
 DEFAULT_PP = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
-    r"\_nor_object_mi\simpler_first_phase_paired"
+    r"\_nor_object_mi\simpler_first_session_paired"
 )
 DEFAULT_SIG = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
@@ -322,7 +322,7 @@ def main(argv: list[str] | None = None) -> int:
     da = pd.read_csv(args.da_dir / "da_syllable_deltas_per_animal.csv", usecols=list(DA_USECOLS))
     da = filter_presence_novelty(da)
     pp = pd.read_csv(
-        args.pp_dir / "phase_paired_da_deltas_per_animal.csv", usecols=list(PP_USECOLS)
+        args.pp_dir / "session_paired_da_deltas_per_animal.csv", usecols=list(PP_USECOLS)
     )
     models = sorted(set(da["model"].astype(str)) & set(pp["model"].astype(str)))
     if args.model:

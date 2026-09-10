@@ -4,7 +4,7 @@ One figure per kpMS model. Δp from `da_syllable_deltas_per_animal.csv`
 (frame_share and/or bout_count sibling folders).
 
 Regen (OpenEthoMaze repo root):
-  uv run python scratch/nor_object_mi/fig_model_syllable_tx_kruskal_overview.py --weighting both
+  uv run python scratch/nor_object_mi/fig_model_syllable_condition_kruskal_overview.py --weighting both
 """
 
 from __future__ import annotations
@@ -30,12 +30,12 @@ from nor_object_mi._pub_style import (  # noqa: E402
     save_png,
     type_scale,
 )
-from nor_object_mi.cluster13_tx_delta import STEP_LAB, STEPS
-from nor_object_mi.cluster_tx_kruskal import (  # noqa: E402
+from nor_object_mi.cluster13_condition_delta import STEP_LAB, STEPS
+from nor_object_mi.cluster_condition_kruskal import (  # noqa: E402
     filter_presence_novelty,
     kruskal_by_syllable_session_step_sex,
 )
-from nor_object_mi.fig_cluster_tx_kruskal_overview import (  # noqa: E402
+from nor_object_mi.fig_cluster_condition_kruskal_overview import (  # noqa: E402
     PANELS,
     _imshow_row_phase,
     _row_phase_mats,
@@ -88,8 +88,8 @@ Every cell shows uncorrected Kruskal p; `*` marks BH hits.
 
 | File | Role |
 |------|------|
-| `model_syllable_tx_kruskal.csv` | all models long |
-| `fig_model_syllable_tx_kruskal_<model>.{{pdf,svg,png}}` | one overview per model |
+| `model_syllable_condition_kruskal.csv` | all models long |
+| `fig_model_syllable_condition_kruskal_<model>.{{pdf,svg,png}}` | one overview per model |
 """
 
 
@@ -164,8 +164,8 @@ def redraw_from_csv(
     dest: str,
     models: list[str] | None,
 ) -> int:
-    out = da_dir / "model_syllable_tx_kruskal"
-    csv_path = out / "model_syllable_tx_kruskal.csv"
+    out = da_dir / "model_syllable_condition_kruskal"
+    csv_path = out / "model_syllable_condition_kruskal.csv"
     if not csv_path.is_file():
         raise SystemExit(f"missing {csv_path}; run without --figures-only first")
     long = pd.read_csv(csv_path)
@@ -176,13 +176,13 @@ def redraw_from_csv(
         missing = want - set(all_models)
         if missing:
             raise SystemExit(f"models not in csv: {sorted(missing)}")
-    (out / "INFO_model_syllable_tx_kruskal.md").write_text(
+    (out / "INFO_model_syllable_condition_kruskal.md").write_text(
         _info_md(weighting=weighting), encoding="utf-8"
     )
     for i, model in enumerate(all_models, start=1):
         print(f"  redraw [{i}/{len(all_models)}] {model}", flush=True)
         kr = long[long["model"] == model]
-        stem = out / f"fig_model_syllable_tx_kruskal_{model}"
+        stem = out / f"fig_model_syllable_condition_kruskal_{model}"
         fig_model_overview(kr, stem, model=model, weighting=weighting, dest=dest)
     return len(all_models)
 
@@ -194,9 +194,9 @@ def run_one_da_dir(
     dest: str,
     models: list[str] | None,
 ) -> dict[str, object]:
-    out = da_dir / "model_syllable_tx_kruskal"
+    out = da_dir / "model_syllable_condition_kruskal"
     out.mkdir(parents=True, exist_ok=True)
-    (out / "INFO_model_syllable_tx_kruskal.md").write_text(
+    (out / "INFO_model_syllable_condition_kruskal.md").write_text(
         _info_md(weighting=weighting), encoding="utf-8"
     )
     print(f"reading deltas from {da_dir} (weighting={weighting}) ...", flush=True)
@@ -217,7 +217,7 @@ def run_one_da_dir(
         kr = kruskal_by_syllable_session_step_sex(sub)
         kr.insert(0, "model", model)
         kr_parts.append(kr)
-        stem = out / f"fig_model_syllable_tx_kruskal_{model}"
+        stem = out / f"fig_model_syllable_condition_kruskal_{model}"
         fig_model_overview(kr, stem, model=model, weighting=weighting, dest=dest)
         panel_hits[model] = {
             f"{sex}_{STEP_LAB[step]}": int(
@@ -227,7 +227,7 @@ def run_one_da_dir(
             for step in STEPS
         }
     long = pd.concat(kr_parts, ignore_index=True) if kr_parts else pd.DataFrame()
-    long.to_csv(out / "model_syllable_tx_kruskal.csv", index=False)
+    long.to_csv(out / "model_syllable_condition_kruskal.csv", index=False)
     summary = {
         "weighting": weighting,
         "da_dir": str(da_dir),
@@ -261,7 +261,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--figures-only",
         action="store_true",
-        help="Redraw from existing model_syllable_tx_kruskal.csv (skip Kruskal)",
+        help="Redraw from existing model_syllable_condition_kruskal.csv (skip Kruskal)",
     )
     ap.add_argument("--dest", choices=("slides", "paper"), default="slides")
     args = ap.parse_args(argv)

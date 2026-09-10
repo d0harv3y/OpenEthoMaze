@@ -322,7 +322,7 @@ def ladder_wilcoxon_steps_long(
     return out
 
 
-def ladder_within_sex_tx_kruskal_long(
+def ladder_within_sex_condition_kruskal_long(
     ladder_rows: Sequence[Mapping[str, object]],
 ) -> list[dict[str, object]]:
     """Long-form within-sex Kruskal–Wallis on ladder step Δ across treatments."""
@@ -376,7 +376,7 @@ def ladder_within_sex_tx_kruskal_long(
 
 def ladder_tests_long(ladder_rows: Sequence[Mapping[str, object]]) -> list[dict[str, object]]:
     """Wilcoxon (pooled + within-sex) and within-sex tx Kruskal in one long table."""
-    return ladder_wilcoxon_steps_long(ladder_rows) + ladder_within_sex_tx_kruskal_long(ladder_rows)
+    return ladder_wilcoxon_steps_long(ladder_rows) + ladder_within_sex_condition_kruskal_long(ladder_rows)
 
 
 def summarize_side_tags(ladder_rows: Sequence[Mapping[str, object]]) -> dict[str, object]:

@@ -1,14 +1,14 @@
 """Phase-paired equivalents of cluster-13 / cluster Kruskal overview figures.
 
-Outputs (under ``simpler_first_phase_paired/``):
-  fig_phase_paired_cluster13_tx_delta
-  fig_phase_paired_cluster13_tx_delta_by_sex
-  fig_phase_paired_cluster13_model_tx_kruskal_overview
-  fig_phase_paired_cluster_tx_kruskal_overview
+Outputs (under ``simpler_first_session_paired/``):
+  fig_session_paired_cluster13_condition_delta
+  fig_session_paired_cluster13_condition_delta_by_sex
+  fig_session_paired_cluster13_model_condition_kruskal_overview
+  fig_session_paired_cluster_condition_kruskal_overview
 
 Regen (OpenEthoMaze repo root):
-  uv run python scratch/nor_object_mi/fig_cluster_tx_kruskal_phase_paired.py
-  uv run python scratch/nor_object_mi/fig_cluster_tx_kruskal_phase_paired.py --by-sex-violin-only
+  uv run python scratch/nor_object_mi/fig_cluster_condition_kruskal_session_paired.py
+  uv run python scratch/nor_object_mi/fig_cluster_condition_kruskal_session_paired.py --by-sex-violin-only
 """
 
 from __future__ import annotations
@@ -41,18 +41,18 @@ from nor_object_mi._pub_style import (  # noqa: E402
     condition_sex_legend_handles,
     type_scale,
 )
-from nor_object_mi.simpler_first_phase_paired import (  # noqa: E402
+from nor_object_mi.simpler_first_session_paired import (  # noqa: E402
     PAIRED_FOOT_LEAD,
     footnote_paired_n,
     paired_n_by_step,
     step_axis_label,
     step_axis_labels,
 )
-from nor_object_mi.cluster_tx_kruskal import (  # noqa: E402
+from nor_object_mi.cluster_condition_kruskal import (  # noqa: E402
     clusters_with_any_hit,
     order_cluster_ids,
 )
-from nor_object_mi.cluster_tx_kruskal_phase_paired import (  # noqa: E402
+from nor_object_mi.cluster_condition_kruskal_session_paired import (  # noqa: E402
     COND_LAB,
     TRIALS,
     PHASE_STEPS,
@@ -69,8 +69,8 @@ from nor_object_mi.cluster_tx_kruskal_phase_paired import (  # noqa: E402
     kruskal_by_model_trial_session_step_sex,
     representative_cluster_ids,
 )
-from nor_object_mi.fig_cluster13_tx_delta import _draw_tx_sex_violins  # noqa: E402
-from nor_object_mi.fig_cluster_tx_kruskal_common import (  # noqa: E402
+from nor_object_mi.fig_cluster13_condition_delta import _draw_condition_sex_violins  # noqa: E402
+from nor_object_mi.fig_cluster_condition_kruskal_common import (  # noqa: E402
     cluster_y_labels,
     fdr_mark,
     fig_hit_cooccurrence,
@@ -79,7 +79,7 @@ from nor_object_mi.fig_cluster_tx_kruskal_common import (  # noqa: E402
 
 DEFAULT_PP = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
-    r"\_nor_object_mi\simpler_first_phase_paired"
+    r"\_nor_object_mi\simpler_first_session_paired"
 )
 DEFAULT_DA = Path(
     r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
@@ -126,7 +126,7 @@ def _neglog10_p(p: float) -> float:
     return float(min(NLP_VMAX, max(0.0, -np.log10(p))))
 
 
-def _draw_tx_violins(
+def _draw_condition_violins(
     ax,
     panel: pd.DataFrame,
     ycol: str,
@@ -272,7 +272,7 @@ def _imshow_kruskal(
     return im
 
 
-def fig_cluster13_tx_delta(
+def fig_cluster13_condition_delta(
     med: pd.DataFrame,
     kr: pd.DataFrame,
     out: Path,
@@ -304,7 +304,7 @@ def fig_cluster13_tx_delta(
         wspace=0.34 if by_sex else 0.28,
     )
     rng = np.random.default_rng(0)
-    draw_violins = _draw_tx_sex_violins if by_sex else _draw_tx_violins
+    draw_violins = _draw_condition_sex_violins if by_sex else _draw_condition_violins
     violin_axes = []
     for i, cond in enumerate(TRIALS):
         for j, step in enumerate(PHASE_STEPS):
@@ -357,13 +357,13 @@ def fig_cluster13_tx_delta(
         violin_note = (
             "Six violins = separate KDE per tx × sex (F then M within each tx; shared y-axis). "
         )
-        stem = "fig_phase_paired_cluster13_tx_delta_by_sex"
+        stem = "fig_session_paired_cluster13_condition_delta_by_sex"
     else:
         suptitle = (
             "Within-animal paired pause syllable Δp_k by tx  (cluster 13; Kruskal within sex)"
         )
         violin_note = "Violin = KDE by tx (sexes in the same KDE). "
-        stem = "fig_phase_paired_cluster13_tx_delta"
+        stem = "fig_session_paired_cluster13_condition_delta"
     fig.suptitle(
         suptitle,
         fontsize=ts["suptitle"],
@@ -474,7 +474,7 @@ def fig_cluster_overview(
     *,
     dest: str,
     n_map: dict[str, int],
-    stem: str = "fig_phase_paired_cluster_tx_kruskal_overview",
+    stem: str = "fig_session_paired_cluster_condition_kruskal_overview",
     suptitle: str | None = None,
     footnote_extra: str | None = None,
 ) -> None:
@@ -588,9 +588,9 @@ def fig_cluster_model_overview(
         color=MUTE,
     )
     stem = (
-        "fig_phase_paired_cluster13_model_tx_kruskal_overview"
+        "fig_session_paired_cluster13_model_condition_kruskal_overview"
         if cluster_id == 13
-        else f"fig_phase_paired_cluster{lab}_model_tx_kruskal_overview"
+        else f"fig_session_paired_cluster{lab}_model_condition_kruskal_overview"
     )
     save_pdf_png(fig, out / stem)
 
@@ -608,7 +608,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--by-sex-violin-only",
         action="store_true",
-        help="Emit only fig_phase_paired_cluster13_tx_delta_by_sex (default: both violin variants)",
+        help="Emit only fig_session_paired_cluster13_condition_delta_by_sex (default: both violin variants)",
     )
     ap.add_argument(
         "--skip-drilldowns",
@@ -623,17 +623,17 @@ def main(argv: list[str] | None = None) -> int:
     print("cluster 13 violin strip ...", flush=True)
     ids = pd.read_csv(args.da_dir / "duration_band_vs_da.csv", usecols=["model", "raw_syllable_id"])
     deltas = pd.read_csv(
-        args.pp_dir / "phase_paired_da_deltas_per_animal.csv", usecols=list(DELTA_USECOLS)
+        args.pp_dir / "session_paired_da_deltas_per_animal.csv", usecols=list(DELTA_USECOLS)
     )
     n_map = paired_n_by_step(deltas)
     mapped13 = filter_mapped_deltas(deltas, ids)
     med13 = animal_median_delta_p(mapped13)
     kr13 = kruskal_by_trial_session_step_sex(med13)
-    med13.to_csv(args.pp_dir / "phase_paired_cluster13_animal_median_delta_p.csv", index=False)
-    kr13.to_csv(args.pp_dir / "phase_paired_cluster13_tx_kruskal.csv", index=False)
+    med13.to_csv(args.pp_dir / "session_paired_cluster13_animal_median_delta_p.csv", index=False)
+    kr13.to_csv(args.pp_dir / "session_paired_cluster13_condition_kruskal.csv", index=False)
     if not args.by_sex_violin_only:
-        fig_cluster13_tx_delta(med13, kr13, out, dest=args.dest, n_map=n_map, by_sex=False)
-    fig_cluster13_tx_delta(med13, kr13, out, dest=args.dest, n_map=n_map, by_sex=True)
+        fig_cluster13_condition_delta(med13, kr13, out, dest=args.dest, n_map=n_map, by_sex=False)
+    fig_cluster13_condition_delta(med13, kr13, out, dest=args.dest, n_map=n_map, by_sex=True)
     if args.by_sex_violin_only:
         print("by-sex violin only; skipping cluster overviews.", flush=True)
         return 0
@@ -644,9 +644,9 @@ def main(argv: list[str] | None = None) -> int:
     mapped = attach_cluster_ids(deltas, rep)
     med = animal_median_delta_p_by_cluster(mapped)
     kr = kruskal_by_cluster_trial_session_step_sex(med)
-    med.to_csv(args.pp_dir / "phase_paired_cluster_animal_median_delta_p.csv", index=False)
-    kr.to_csv(args.pp_dir / "phase_paired_cluster_tx_kruskal.csv", index=False)
-    rep.to_csv(args.pp_dir / "phase_paired_cluster_representative_ids.csv", index=False)
+    med.to_csv(args.pp_dir / "session_paired_cluster_animal_median_delta_p.csv", index=False)
+    kr.to_csv(args.pp_dir / "session_paired_cluster_condition_kruskal.csv", index=False)
+    rep.to_csv(args.pp_dir / "session_paired_cluster_representative_ids.csv", index=False)
     fig_cluster_overview(kr, out, dest=args.dest, n_map=n_map)
 
     hit_sum = summarize_hit_clusters(kr)
@@ -654,7 +654,7 @@ def main(argv: list[str] | None = None) -> int:
     hit_mat, jac = fig_hit_cooccurrence(
         kr,
         out,
-        stem="fig_phase_paired_cluster_tx_kruskal_hit_cooccurrence",
+        stem="fig_session_paired_cluster_condition_kruskal_hit_cooccurrence",
         dest=args.dest,
         panel_cols=("sex", "trial"),
         locus_col="session_step",
@@ -667,12 +667,12 @@ def main(argv: list[str] | None = None) -> int:
         ),
         hit_col="hit_fdr05",
     )
-    hit_mat.to_csv(args.pp_dir / "phase_paired_cluster_tx_kruskal_hit_loci.csv")
-    jac.to_csv(args.pp_dir / "phase_paired_cluster_tx_kruskal_hit_jaccard.csv")
+    hit_mat.to_csv(args.pp_dir / "session_paired_cluster_condition_kruskal_hit_loci.csv")
+    jac.to_csv(args.pp_dir / "session_paired_cluster_condition_kruskal_hit_jaccard.csv")
     hit_mat_col, jac_col = fig_hit_cooccurrence(
         kr,
         out,
-        stem="fig_phase_paired_cluster_tx_kruskal_hit_cooccurrence_col",
+        stem="fig_session_paired_cluster_condition_kruskal_hit_cooccurrence_col",
         dest=args.dest,
         panel_cols=("sex", "trial"),
         locus_col="session_step",
@@ -684,17 +684,17 @@ def main(argv: list[str] | None = None) -> int:
         ),
         hit_col="hit_fdr05_col",
     )
-    hit_mat_col.to_csv(args.pp_dir / "phase_paired_cluster_tx_kruskal_hit_loci_col.csv")
-    jac_col.to_csv(args.pp_dir / "phase_paired_cluster_tx_kruskal_hit_jaccard_col.csv")
+    hit_mat_col.to_csv(args.pp_dir / "session_paired_cluster_condition_kruskal_hit_loci_col.csv")
+    jac_col.to_csv(args.pp_dir / "session_paired_cluster_condition_kruskal_hit_jaccard_col.csv")
 
     print("cluster 13 model overview ...", flush=True)
     cmap13 = cluster_syllable_ids(proto, cluster_id=13)
     mapped_m = attach_model_cluster_deltas(deltas, cmap13)
     med_m = animal_delta_p_by_model(mapped_m)
     kr_m = kruskal_by_model_trial_session_step_sex(med_m)
-    med_m.to_csv(args.pp_dir / "phase_paired_cluster13_model_animal_delta_p.csv", index=False)
-    kr_m.to_csv(args.pp_dir / "phase_paired_cluster13_model_tx_kruskal.csv", index=False)
-    cmap13.to_csv(args.pp_dir / "phase_paired_cluster13_syllable_map.csv", index=False)
+    med_m.to_csv(args.pp_dir / "session_paired_cluster13_model_animal_delta_p.csv", index=False)
+    kr_m.to_csv(args.pp_dir / "session_paired_cluster13_model_condition_kruskal.csv", index=False)
+    cmap13.to_csv(args.pp_dir / "session_paired_cluster13_syllable_map.csv", index=False)
     fig_cluster13_model_overview(kr_m, out, dest=args.dest, n_map=n_map)
 
     drill_ids = [c for c in clusters_with_any_hit(kr) if c != 13]
@@ -709,7 +709,7 @@ def main(argv: list[str] | None = None) -> int:
             kr_d = kruskal_by_model_trial_session_step_sex(med_d)
             lab = "noise" if cid < 0 else str(cid)
             med_d.to_csv(drill_dir / f"cluster{lab}_model_animal_delta_p.csv", index=False)
-            kr_d.to_csv(drill_dir / f"cluster{lab}_model_tx_kruskal.csv", index=False)
+            kr_d.to_csv(drill_dir / f"cluster{lab}_model_condition_kruskal.csv", index=False)
             cmap.to_csv(drill_dir / f"cluster{lab}_syllable_map.csv", index=False)
             fig_cluster_model_overview(
                 kr_d, drill_dir, dest=args.dest, n_map=n_map, cluster_id=cid
@@ -743,7 +743,7 @@ def main(argv: list[str] | None = None) -> int:
         "clusters_any_hit": hit_sum["clusters_any_hit"],
         "model_drilldown_clusters": drill_ids,
     }
-    (args.pp_dir / "phase_paired_cluster_tx_kruskal_summary.json").write_text(
+    (args.pp_dir / "session_paired_cluster_condition_kruskal_summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8"
     )
     print(json.dumps(summary, indent=2), flush=True)

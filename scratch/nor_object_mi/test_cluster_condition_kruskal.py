@@ -11,7 +11,7 @@ _SCRATCH = Path(__file__).resolve().parents[1]
 if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
 
-from nor_object_mi.cluster_tx_kruskal import (  # noqa: E402
+from nor_object_mi.cluster_condition_kruskal import (  # noqa: E402
     animal_delta_p_by_model,
     animal_median_delta_p_by_cluster,
     attach_cluster_ids,
@@ -76,7 +76,7 @@ def test_kruskal_grid_shape() -> None:
 
 def test_column_bh_looser_than_panel_on_toy() -> None:
     """Many tiny p's in one column: column family can hit when panel family does not."""
-    from nor_object_mi.cluster_tx_kruskal import attach_column_bh
+    from nor_object_mi.cluster_condition_kruskal import attach_column_bh
     from nor_object_mi.simpler_first_da import apply_bh_grouped
 
     rows = []
@@ -110,7 +110,7 @@ def test_column_bh_looser_than_panel_on_toy() -> None:
 
 
 def test_hit_jaccard_identity() -> None:
-    from nor_object_mi.cluster_tx_kruskal import hit_locus_matrix, pairwise_row_jaccard
+    from nor_object_mi.cluster_condition_kruskal import hit_locus_matrix, pairwise_row_jaccard
 
     kr = pd.DataFrame(
         {
@@ -147,7 +147,7 @@ def test_syllable_kruskal_grid_shape() -> None:
 
 
 def test_da_locus_labels_match_cooccurrence_order() -> None:
-    from nor_object_mi.cluster_tx_kruskal import da_locus_labels
+    from nor_object_mi.cluster_condition_kruskal import da_locus_labels
     from nor_object_mi._pub_style import SESSIONS
 
     labs = da_locus_labels()

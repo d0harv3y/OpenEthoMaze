@@ -40,7 +40,7 @@ from nor_object_mi.join_keys import (  # noqa: E402
 from nor_object_mi.pseudo_loci import loci_for_animal_phase  # noqa: E402
 from nor_object_mi.spot_xy import object_centers_px, spot_xy_px  # noqa: E402
 from nor_object_mi._pub_style import CONDITION_COLOR, CONDITION_ORDER  # noqa: E402
-from nor_object_mi.tx_argmax_grid import kpms_key_to_mp4  # noqa: E402
+from nor_object_mi.condition_argmax_grid import kpms_key_to_mp4  # noqa: E402
 
 try:
     import cv2
@@ -357,7 +357,7 @@ def draw_rotation_notation(
     _put_outlined_text(img_bgr, f"rot180: {n_rotated}/{n_sessions}", (8, 22))
 
 
-def draw_tx_notation(img_bgr: np.ndarray, condition: str) -> None:
+def draw_condition_notation(img_bgr: np.ndarray, condition: str) -> None:
     """Upper-right: treatment stratum for this grain."""
     if not HAS_CV2:
         return
@@ -691,7 +691,7 @@ def accumulate_cluster_dwell(
     return dwell, stats
 
 
-def accumulate_tx_dwell(
+def accumulate_condition_dwell(
     nor_h5: h5py.File,
     ensemble_root: Path,
     sessions: list[SessionSpec],
@@ -792,7 +792,7 @@ def accumulate_tx_dwell(
 
     stats["grid_h"] = int(ch)
     stats["grid_w"] = int(cw)
-    stats["n_tx_with_mass"] = int(sum(1 for g in dwell.values() if float(g.sum()) > 0))
+    stats["n_condition_with_mass"] = int(sum(1 for g in dwell.values() if float(g.sum()) > 0))
     stats["total_dwell_s"] = float(sum(float(g.sum()) for g in dwell.values()))
     stats["dwell_s_by_tx"] = {condition: float(dwell[condition].sum()) for condition in CONDITION_ORDER}
     return dwell, stats
@@ -905,7 +905,7 @@ def write_shared_cluster_legend(
     plt.close(fig)
 
 
-def write_tx_legend(path: Path) -> None:
+def write_condition_legend(path: Path) -> None:
     """Shared tx swatch legend (violin CONDITION_COLOR: green / orange / purple)."""
     import matplotlib.pyplot as plt
 
@@ -956,7 +956,7 @@ def batch_grains(
     ]
 
 
-def all_tx_overlay_grains() -> list[TxOverlayGrainKey]:
+def all_condition_overlay_grains() -> list[TxOverlayGrainKey]:
     grains: list[TxOverlayGrainKey] = []
     for phase in SESSIONS:
         for cond in sorted(CONDITIONS):
@@ -967,7 +967,7 @@ def all_tx_overlay_grains() -> list[TxOverlayGrainKey]:
     return grains
 
 
-def batch_tx_overlay_grains(
+def batch_condition_overlay_grains(
     trial: str,
     sex: str,
     *,
@@ -1072,7 +1072,7 @@ def run_grain(
     draw_loci_markers(composite, markers)
     n_rotated = int(sum(1 for s in sessions if s.rotate_180))
     draw_rotation_notation(composite, n_rotated=n_rotated, n_sessions=len(sessions))
-    draw_tx_notation(composite, grain.condition)
+    draw_condition_notation(composite, grain.condition)
     if keep_clusters is not None and len(keep_clusters) == 1:
         only = next(iter(keep_clusters))
         _put_outlined_text(composite, f"cluster {only}", (8, 44), scale=0.5)
@@ -1108,7 +1108,7 @@ def run_grain(
     return summary, cluster_ids, colors
 
 
-def run_tx_overlay_grain(
+def run_condition_overlay_grain(
     grain: TxOverlayGrainKey,
     *,
     nor_h5_path: Path,
@@ -1154,7 +1154,7 @@ def run_tx_overlay_grain(
     )
 
     with h5py.File(nor_h5_path, "r") as nor_h5:
-        dwell, dwell_stats = accumulate_tx_dwell(
+        dwell, dwell_stats = accumulate_condition_dwell(
             nor_h5,
             ensemble_root,
             sessions,

@@ -11,7 +11,7 @@ _SCRATCH = Path(__file__).resolve().parents[1]
 if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
 
-from nor_object_mi.scalar_tx_mean_model_p import (  # noqa: E402
+from nor_object_mi.scalar_condition_mean_model_p import (  # noqa: E402
     aggregate_scalar_da,
     kruskal_per_model_scalar_da,
 )

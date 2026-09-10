@@ -298,7 +298,7 @@ def da_tests_from_deltas(dtab: pd.DataFrame) -> pd.DataFrame:
     return apply_bh(pd.DataFrame(rows))
 
 
-def da_tests_tx_sex_from_animal_deltas(
+def da_tests_condition_sex_from_animal_deltas(
     dtab: pd.DataFrame,
     *,
     cell_cols: tuple[str, ...] = ("model", "session", "step", "condition", "sex"),
@@ -322,7 +322,7 @@ def da_tests_tx_sex_from_animal_deltas(
     }
     missing = [c for c in need if c not in dtab.columns]
     if missing:
-        raise ValueError(f"da_tests_tx_sex_from_animal_deltas missing columns: {missing}")
+        raise ValueError(f"da_tests_condition_sex_from_animal_deltas missing columns: {missing}")
     if dtab.empty:
         return pd.DataFrame()
     keys = list(cell_cols) + ["raw_syllable_id"]

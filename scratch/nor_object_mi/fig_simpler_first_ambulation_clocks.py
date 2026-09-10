@@ -95,7 +95,7 @@ def _as_bool(s: pd.Series) -> pd.Series:
     return s.astype(str).str.lower().isin(("true", "1"))
 
 
-def _legend_tx_sex(fig, *, dest: str, bbox=(1.0, 1.04)) -> None:
+def _legend_condition_sex(fig, *, dest: str, bbox=(1.0, 1.04)) -> None:
     ts = type_scale(dest)
     ms = 8 if dest == "slides" else 6
     handles = [Line2D([0], [0], marker="o", color="none", markerfacecolor=CONDITION_COLOR[t], markersize=ms, label=t) for t in CONDITION_ORDER] + [
@@ -176,7 +176,7 @@ def _scatter_grid(
                 color=INK,
                 bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="#dddddd", lw=0.6),
             )
-    _legend_tx_sex(fig, dest=dest)
+    _legend_condition_sex(fig, dest=dest)
     fig.suptitle(title, fontsize=ts["suptitle"], fontweight="bold", color=INK, y=1.04)
     fig_footnote(fig, footnote, y=-0.06)
     save_pdf_png(fig, out / stem)

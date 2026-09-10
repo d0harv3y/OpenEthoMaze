@@ -183,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
             by_tx[condition].append(val)
             by_sex_tx[f"{sex}|{tx}"].append(val)
         tx_medians = {k: float(np.median(v)) for k, v in sorted(by_tx.items())}
-        sex_tx_medians = {k: float(np.median(v)) for k, v in sorted(by_sex_tx.items())}
+        sex_condition_medians = {k: float(np.median(v)) for k, v in sorted(by_sex_tx.items())}
 
         summary = {
             "status": "ok",
@@ -208,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
             "n_mi_rows": len(mi_rows),
             "n_delta_animals": len(delta_rows),
             "tx_median_delta_excess": tx_medians,
-            "sex_tx_median_delta_excess": sex_tx_medians,
+            "sex_condition_median_delta_excess": sex_condition_medians,
             "group_tests": group_tests,
             "bout_summary": bout_summary,
         }
@@ -222,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
                     "n_bout_rows": len(bout_rows),
                     "n_delta_animals": len(delta_rows),
                     "tx_median_delta_excess": tx_medians,
-                    "sex_tx_median_delta_excess": sex_tx_medians,
+                    "sex_condition_median_delta_excess": sex_condition_medians,
                     "group_tests": group_tests,
                 },
                 indent=2,

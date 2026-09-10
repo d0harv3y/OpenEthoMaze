@@ -4,8 +4,8 @@ Violins + salt (across-model IQR whiskers). Companion heatmaps: Kruskal within s
 BH family = 24 cells (3 steps × 4 phases × 2 sexes: presence / novelty / span).
 
 Regen (OpenEthoMaze repo root):
-  uv run python scratch/nor_object_mi/fig_cluster13_tx_delta.py
-  uv run python scratch/nor_object_mi/fig_cluster13_tx_delta.py --by-sex-violin-only
+  uv run python scratch/nor_object_mi/fig_cluster13_condition_delta.py
+  uv run python scratch/nor_object_mi/fig_cluster13_condition_delta.py --by-sex-violin-only
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ from nor_object_mi._pub_style import (  # noqa: E402
     condition_sex_legend_handles,
     type_scale,
 )
-from nor_object_mi.cluster13_tx_delta import (  # noqa: E402
+from nor_object_mi.cluster13_condition_delta import (  # noqa: E402
     STEPS,
     STEP_LAB,
     animal_median_delta_p,
@@ -87,8 +87,8 @@ Kruskal–Wallis: those animal values ~ tx, **within sex**. BH family = 24 cells
 | `duration_band_vs_da.csv` | mapped id per model |
 | `da_syllable_deltas_per_animal.csv` | animal Δp |
 
-Figures: `fig_cluster13_tx_delta` (3 violins: tx pooled across sex) and
-`fig_cluster13_tx_delta_by_sex` (6 violins: F then M within each condition).
+Figures: `fig_cluster13_condition_delta` (3 violins: tx pooled across sex) and
+`fig_cluster13_condition_delta_by_sex` (6 violins: F then M within each condition).
 
 ## Not
 
@@ -112,11 +112,11 @@ def _neglog10_p(p: float) -> float:
     return float(min(NLP_VMAX, max(0.0, -np.log10(p))))
 
 
-def _tx_sex_position(condition: str, sex: str) -> float:
+def _condition_sex_position(condition: str, sex: str) -> float:
     return float(CONDITION_ORDER.index(condition) * len(SEX_ORDER) + SEX_ORDER.index(sex))
 
 
-def _draw_tx_violins(
+def _draw_condition_violins(
     ax,
     panel: pd.DataFrame,
     ycol: str,
@@ -206,7 +206,7 @@ def _draw_tx_violins(
         ax.set_xticklabels([])
 
 
-def _draw_tx_sex_violins(
+def _draw_condition_sex_violins(
     ax,
     panel: pd.DataFrame,
     ycol: str,
@@ -219,13 +219,13 @@ def _draw_tx_sex_violins(
     """Six violins per panel: F then M within each tx (separate KDEs, shared y-axis)."""
     ts = type_scale(dest)
     n_tx = len(CONDITION_ORDER)
-    positions = [_tx_sex_position(t, s) for t in CONDITION_ORDER for s in SEX_ORDER]
+    positions = [_condition_sex_position(t, s) for t in CONDITION_ORDER for s in SEX_ORDER]
     bodies: list[np.ndarray] = []
     body_pos: list[float] = []
     body_color: list[str] = []
     for t in CONDITION_ORDER:
         for s in SEX_ORDER:
-            pos = _tx_sex_position(t, s)
+            pos = _condition_sex_position(t, s)
             sub = panel[(panel["condition"] == t) & (panel["sex"] == s)]
             y = sub[ycol].to_numpy(dtype=float)
             iqr = (
@@ -379,7 +379,7 @@ def fig_strip_b(med: pd.DataFrame, kr: pd.DataFrame, out: Path, *, dest: str, by
         wspace=0.34 if by_sex else 0.28,
     )
     rng = np.random.default_rng(0)
-    draw_violins = _draw_tx_sex_violins if by_sex else _draw_tx_violins
+    draw_violins = _draw_condition_sex_violins if by_sex else _draw_condition_violins
     violin_axes = []
     for i, step in enumerate(STEPS):
         for j, phase in enumerate(SESSIONS):
@@ -433,7 +433,7 @@ def fig_strip_b(med: pd.DataFrame, kr: pd.DataFrame, out: Path, *, dest: str, by
             "(presence / novelty / span). Color = −log₁₀(p). "
             "Not Wilcoxon vs 0; not alphabet-wide DA FDR."
         )
-        stem = "fig_cluster13_tx_delta_by_sex"
+        stem = "fig_cluster13_condition_delta_by_sex"
     else:
         suptitle = "Pause syllable Δp by tx  (cluster_id 13; violin + salt; Kruskal within sex)"
         footnote = (
@@ -443,7 +443,7 @@ def fig_strip_b(med: pd.DataFrame, kr: pd.DataFrame, out: Path, *, dest: str, by
             "in the 24-cell family (presence / novelty / span). Color = −log₁₀(p). "
             "Not Wilcoxon vs 0; not alphabet-wide DA FDR."
         )
-        stem = "fig_cluster13_tx_delta"
+        stem = "fig_cluster13_condition_delta"
     fig.suptitle(
         suptitle,
         fontsize=ts["suptitle"],
@@ -467,7 +467,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--by-sex-violin-only",
         action="store_true",
-        help="Emit only fig_cluster13_tx_delta_by_sex (default: both variants)",
+        help="Emit only fig_cluster13_condition_delta_by_sex (default: both variants)",
     )
     args = ap.parse_args(argv)
 
@@ -480,8 +480,8 @@ def main(argv: list[str] | None = None) -> int:
     med = animal_median_delta_p(mapped)
     kr = kruskal_by_session_step_sex(med)
     med.to_csv(out / "cluster13_animal_median_delta_p.csv", index=False)
-    kr.to_csv(out / "cluster13_tx_kruskal.csv", index=False)
-    (out / "INFO_cluster13_tx_delta.md").write_text(_info_md(), encoding="utf-8")
+    kr.to_csv(out / "cluster13_condition_kruskal.csv", index=False)
+    (out / "INFO_cluster13_condition_delta.md").write_text(_info_md(), encoding="utf-8")
     if not args.by_sex_violin_only:
         fig_strip_b(med, kr, out, dest=args.dest, by_sex=False)
     fig_strip_b(med, kr, out, dest=args.dest, by_sex=True)
@@ -493,7 +493,7 @@ def main(argv: list[str] | None = None) -> int:
         "n_kruskal_fdr": int(kr["hit_fdr05"].sum()) if "hit_fdr05" in kr.columns else 0,
         "family": "phase x step x sex",
     }
-    (out / "cluster13_tx_delta_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (out / "cluster13_condition_delta_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2), flush=True)
     print(
         kr[["session", "step", "sex", "n", "p", "q_bh", "hit_fdr05"]].to_string(index=False),

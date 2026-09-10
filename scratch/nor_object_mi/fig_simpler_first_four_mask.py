@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--run-dir", type=Path, default=DEFAULT_RUN)
     ap.add_argument("--dest", choices=("slides", "paper"), default="slides")
     args = ap.parse_args(argv)
-    paired = pd.read_csv(args.run_dir / "paired_tx_minus_bl.csv")
+    paired = pd.read_csv(args.run_dir / "paired_condition_minus_bl.csv")
     gates = pd.read_csv(args.run_dir / "gate_hits.csv")
     fig_delta_frac(paired, gates, args.run_dir / "fig_four_mask_delta_frac", dest=args.dest)
     print(f"Wrote {args.run_dir / 'fig_four_mask_delta_frac.pdf'}", flush=True)

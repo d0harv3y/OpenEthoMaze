@@ -107,7 +107,7 @@ def _as_bool(s: pd.Series) -> pd.Series:
     return s.astype(str).str.lower().isin(("true", "1"))
 
 
-def _draw_tx_violins(ax, panel: pd.DataFrame, ycol: str, rng: np.random.Generator, *, dest: str) -> list[int]:
+def _draw_condition_violins(ax, panel: pd.DataFrame, ycol: str, rng: np.random.Generator, *, dest: str) -> list[int]:
     ts = type_scale(dest)
     positions = list(range(len(CONDITION_ORDER)))
     bodies: list[np.ndarray] = []
@@ -186,7 +186,7 @@ def fig_violin(paired: pd.DataFrame, tests: pd.DataFrame, out: Path, *, dest: st
     for c, ph in enumerate(SESSIONS):
         ax = ax_list[c]
         panel = paired[paired["session"] == ph]
-        ns = _draw_tx_violins(ax, panel, "dr_classic", rng, dest=dest)
+        ns = _draw_condition_violins(ax, panel, "dr_classic", rng, dest=dest)
         ax.axhline(0.0, color="#bbbbbb", lw=0.7, ls="--", zorder=0)
         nlab = "n=" + "/".join(str(n) for n in ns)
         w = wx[wx["session"] == ph]
