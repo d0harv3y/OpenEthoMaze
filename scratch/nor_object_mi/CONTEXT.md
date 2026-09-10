@@ -3,7 +3,7 @@
 Glossary for the NOR + kpMS simpler-first analysis. Folder map:
 `sack/datas/impress/moseq_251017/_nor_object_mi/README.md`.
 Code: `scratch/nor_object_mi/`.
-Analysis nouns (Shannon, DA, grain): `Documents/work/vocab/CONTEXT.md`.
+Analysis nouns (Shannon, DA, grain): `docs/vocab/CONTEXT.md`.
 
 ## Language
 

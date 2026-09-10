@@ -68,7 +68,7 @@ kpMS = keypoint-MoSeq.
 
 For **one atomic condition step × one atomic phase step**, (b) and (c) yield the **same** Δ²p_k per animal and the **same** paired n (four-endpoint intersection). Nesting order **commutes** — the 2×2 algebra is one interaction contrast; heatmaps differ only in **which axis is faceted vs columned**. Do **not** report (b) and (c) as independent findings; pick one layout for the claim.
 
-Vocab: `Documents/work/vocab/CONTEXT.md` (nested pairing on two axes), `FORMULAS.md` (second-order paired change), `STATS.md` / `INTERPRET.md` (two pairing axes).
+Vocab: `docs/vocab/CONTEXT.md` (nested pairing on two axes), `FORMULAS.md` (second-order paired change), `STATS.md` / `INTERPRET.md` (two pairing axes).
 
 Stage B (cluster-13 model overview): Kruskal Δ²p ~ tx within sex — **not** Wilcoxon vs 0.
 

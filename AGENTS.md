@@ -1,6 +1,6 @@
 # Agent guide — OpenEthoMaze
 
-Concise map for Cursor agents working on this repo. Master plan: [docs/rescue_plan.md](docs/rescue_plan.md). Phase prompts: [docs/phase_c_agent_prompt.md](docs/phase_c_agent_prompt.md), [docs/phase_d_agent_prompt.md](docs/phase_d_agent_prompt.md). **Tracking v2 + multi-stream kpMS:** [docs/tracking_kpms_master_plan.md](docs/tracking_kpms_master_plan.md), [docs/phase_t_agent_prompt.md](docs/phase_t_agent_prompt.md), [docs/phase_wsl_agent_prompt.md](docs/phase_wsl_agent_prompt.md).
+Concise map for Cursor agents working on this repo. Master plan: [docs/rescue_plan.md](docs/rescue_plan.md). Phase prompts: [docs/phase_c_agent_prompt.md](docs/phase_c_agent_prompt.md), [docs/phase_d_agent_prompt.md](docs/phase_d_agent_prompt.md). **Tracking v2 + multi-stream kpMS:** [docs/tracking_kpms_master_plan.md](docs/tracking_kpms_master_plan.md), [docs/phase_t_agent_prompt.md](docs/phase_t_agent_prompt.md), [docs/phase_wsl_agent_prompt.md](docs/phase_wsl_agent_prompt.md). **Analysis vocab / stats cheat-sheet:** [docs/vocab/](docs/vocab/) (`CONTEXT.md`, `STATS.md`, `FORMULAS.md`, `INTERPRET.md`, `PROTOCOL-STRATA.md`).
 
 ## Install (uv)
 
