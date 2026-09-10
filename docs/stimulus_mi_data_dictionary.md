@@ -8,7 +8,7 @@ Pipeline overview: [`stimulus_mi_contract.md`](stimulus_mi_contract.md).
 
 - **KL** / **D_KL** — Kullback–Leibler divergence; **H(·)** — Shannon entropy
 - **kpMS** — keypoint-MoSeq (per-frame pose syllable rows)
-- **ITI** / **`iti`** — inter-trial interval (`wait` bouts, mapped to `iti` in MI tables)
+- **ITI** — inter-trial interval (prose); wire interval value is `wait`
 - **MLE** — maximum-likelihood estimate; **OLS** — ordinary least squares (linear regression)
 - **FDR** — false discovery rate; **BH** — Benjamini–Hochberg correction
 - **PWM** — pulse-width modulation; **px** — pixels
@@ -22,7 +22,7 @@ Pipeline overview: [`stimulus_mi_contract.md`](stimulus_mi_contract.md).
 Command that produced the full set:  
 `uv run maze-compute-stimulus-mi --kpms-root … --per-trial --sliced-tests --trial-nulls`
 
-**Confound (all MI tables):** delivered duty is a deterministic function of distance-to-exit; mutual information *I* conflates stimulus response with goal proximity. **ITI control:** use `iti × duty` as the clean negative control; `iti × dist` may clear the null because distance varies systematically during `wait` (exit opposite start) — see [contract § Confound](stimulus_mi_contract.md#confound-report-in-all-outputs).
+**Confound (all MI tables):** delivered duty is a deterministic function of distance-to-exit; mutual information *I* conflates stimulus response with goal proximity. **Wait-interval control:** use `wait × duty` as the clean negative control; `wait × dist` may clear the null because distance varies systematically during `wait` (exit opposite start) — see [contract § Confound](stimulus_mi_contract.md#confound-report-in-all-outputs).
 
 **What *I* is:**
 
@@ -41,11 +41,11 @@ Units: bits (log₂). Not KL divergence between the two marginals alone.
 |------|-------|-----------------|-----------|
 | `stimulus_bout_features.csv` | 1 bout | ~199k | `maze-join-stimulus-bouts` |
 | `stimulus_bin_edges.json` | cohort codebook | 1 object | written once / reused |
-| `mi_per_animal.csv` | animal × phase × stim × mi_type | 328 (= 41×2×2×2) | always |
+| `mi_per_animal.csv` | animal × interval × stim × mi_type | 328 (= 41×2×2×2) | always |
 | `group_mi_tests.csv` | marginal group test on `mi_mm` | 24 | always |
 | `group_mi_excess_tests.csv` | marginal group test on `excess` | 24 | always |
 | `mi_per_trial.csv` | animal × trial × … | 14701 | `--per-trial` |
-| `mi_trial_animal_summaries.csv` | animal × phase × stim × mi_type | 328 | `--per-trial` |
+| `mi_trial_animal_summaries.csv` | animal × interval × stim × mi_type | 328 | `--per-trial` |
 | `group_mi_when_tests.csv` | marginal when-metric test | 12 or 24 | `--per-trial` (± `--trial-nulls`) |
 | `group_mi_sliced_tests.csv` | sliced simple-effect test | 192 or 336 | `--sliced-tests` |
 | `join_stimulus_bouts_summary.json` | run metadata | 1 | join |
@@ -57,12 +57,12 @@ Units: bits (log₂). Not KL divergence between the two marginals alone.
 
 | Field | Allowed values | Meaning |
 |-------|----------------|---------|
-| `phase` **(MI tables)** | `run`, `iti` | From bout majority state: `run` vs `wait` (mapped to `iti`). **Not** the manifest column also named `phase`. |
+| `interval` | `run`, `wait` | Within-trial band from bout majority state. Legacy MI tables may still say `iti` for `wait`. |
 | `stim_var` | `duty`, `dist` | Stimulus scalar → global bins |
 | `mi_type` | `occupancy`, `transition` | `I(syll; stim)` vs `I(next; stim | current)` |
 | `sex` | `F`, `M` | |
 | `strain` | `wt`, `tg` | Genotype (wild-type / transgenic); group tests label factor `genotype` |
-| `tx` | `RBSF-1`, `n/a` (blank→`n/a`) | Treatment |
+| `condition` | `RBSF-1`, `n/a` (blank→`n/a`) | Animal-level condition arm |
 
 **Primary analysis cells** (when-tests + sliced-tests):  
 `interval=run` ∧ `mi_type=occupancy` ∧ `stim_var ∈ {duty, dist}`.
@@ -122,12 +122,12 @@ Duty/dist may be asymmetric if edited by hand; MI still uses whatever edges are 
 
 ## 3. `mi_per_animal.csv`
 
-One row = one animal’s **pooled** MI for one `(phase, stim_var, mi_type)` cell (all that animal’s trials pooled).
+One row = one animal’s **pooled** MI for one `(interval, stim_var, mi_type)` cell (all that animal’s trials pooled).
 
 | Column | Units | Description |
 |--------|-------|-------------|
-| `animal_id`, `sex`, `strain`, `tx` | | Strata |
-| `phase`, `stim_var`, `mi_type` | | Slice keys (MI `phase`) |
+| `animal_id`, `sex`, `strain`, `condition` | | Strata |
+| `interval`, `stim_var`, `mi_type` | | Slice keys |
 | `n_bouts` | count | Bouts in this cell |
 | `H_stim` | bits | Marginal entropy of stim bins |
 | `H_syll` | bits | Marginal entropy of syllables (or next-syll for transition setup) |
@@ -138,7 +138,7 @@ One row = one animal’s **pooled** MI for one `(phase, stim_var, mi_type)` cell
 | `null_perm_mean` | bits | Mean under bin-label permutation |
 | `null_perm_p` | [0,1] | Right-tail p vs permutation (loose) |
 | `excess` | bits | `mi_mm − null_circ_mean` |
-| `wait_control_flag` | 0/1 | 1 if `interval=iti` and `mi_mm` clears circular null — treat as warning (esp. `stim_var=dist`) |
+| `wait_control_flag` | 0/1 | 1 if `interval=wait` (legacy: iti) and `mi_mm` clears circular null — treat as warning (esp. `stim_var=dist`) |
 
 ---
 
@@ -148,9 +148,9 @@ Marginal Mann–Whitney U (2 levels) or Kruskal–Wallis (>2) on **per-animal `m
 
 | Column | Description |
 |--------|-------------|
-| `factor` | `sex`, `genotype` (=strain), or `tx` |
+| `factor` | `sex`, `genotype` (=strain), or `condition` |
 | `level_a`, `level_b` | Compared levels (`(all)` if Kruskal–Wallis) |
-| `phase`, `stim_var`, `mi_type` | Full factorial (includes iti) |
+| `interval`, `stim_var`, `mi_type` | Full factorial (includes wait) |
 | `n_a`, `n_b` | Animals per arm |
 | `median_a`, `median_b` | Median `mi_mm` |
 | `stat`, `p` | Test statistic and p-value |
@@ -166,15 +166,15 @@ Same columns as §4. Mann–Whitney U / Kruskal–Wallis on per-animal **`excess
 
 ## 5. `mi_per_trial.csv` (`--per-trial`)
 
-One row = MI for one trial in one `(phase, stim_var, mi_type)` cell. Full factorial.
+One row = MI for one trial in one `(interval, stim_var, mi_type)` cell. Full factorial.
 
 | Column | Units | Description |
 |--------|-------|-------------|
-| `animal_id`, `sex`, `strain`, `tx` | | Strata |
+| `animal_id`, `sex`, `strain`, `condition` | | Strata |
 | `session`, `trial`, `trial_key` | | Trial identity |
 | `trial_ord` | int ≥0 | Career order within animal (parsed numeric session/trial suffixes) |
-| `cum_run_bouts` | count | Cumulative run-phase bouts through this trial (inclusive) |
-| `phase`, `stim_var`, `mi_type` | | Slice keys |
+| `cum_run_bouts` | count | Cumulative run-interval bouts through this trial (inclusive) |
+| `interval`, `stim_var`, `mi_type` | | Slice keys |
 | `n_bouts`, `H_stim`, `H_syll`, `mi_raw`, `mi_mm` | | Same semantics as pooled, trial-local |
 | `null_circ_mean`, `null_circ_p` | | Filled only with `--trial-nulls` (circular; uses `--n-perm`, default 1000); else empty / NaN |
 | `excess` | bits | `mi_mm − null_circ_mean` when nulls on; else empty / NaN |
@@ -185,12 +185,12 @@ Optional eligibility gates (off by default): `--min-run-bouts`, `--min-h-stim`.
 
 ## 6. `mi_trial_animal_summaries.csv`
 
-One row = trajectory summaries for one animal × `(phase, stim_var, mi_type)` from that animal’s trial rows.
+One row = trajectory summaries for one animal × `(interval, stim_var, mi_type)` from that animal’s trial rows.
 
 | Column | Units | Description |
 |--------|-------|-------------|
-| `animal_id`, `sex`, `strain`, `tx` | | Strata |
-| `phase`, `stim_var`, `mi_type` | | Slice keys |
+| `animal_id`, `sex`, `strain`, `condition` | | Strata |
+| `interval`, `stim_var`, `mi_type` | | Slice keys |
 | `n_trials` | count | Trials contributing |
 | `mean_mi_mm`, `median_mi_mm` | bits | Across trials (trial MI is upward-biased vs pooled — prefer slopes/deltas for “when”) |
 | `mean_n_bouts`, `mean_H_stim` | | Diagnostics |
@@ -212,7 +212,7 @@ Marginal group tests on **when-metrics**, **primary cells only** (`run` × occup
 | Column | Description |
 |--------|-------------|
 | `factor`, `level_a`, `level_b` | Same as §4 |
-| `phase`, `stim_var`, `mi_type` | Primary cells |
+| `interval`, `stim_var`, `mi_type` | Primary cells |
 | `metric` | Which summary column was tested (see below) |
 | `n_a`, `n_b`, `median_a`, `median_b`, `stat`, `p`, `q_bh`, `test` | Test output |
 
@@ -237,10 +237,10 @@ One-hold and two-hold **simple effects** on primary cells. Arm omitted if n < 5.
 | Column | Description |
 |--------|-------------|
 | `fdr_family` | `A` / `B` / `C` / `D` (see below) |
-| `hold_sex`, `hold_strain`, `hold_tx` | Held-fixed strata; **blank = not held** |
-| `contrast_factor` | `sex`, `genotype`, or `tx` |
+| `hold_sex`, `hold_strain`, `hold_condition` | Held-fixed strata; **blank = not held** |
+| `contrast_factor` | `sex`, `genotype`, or `condition` |
 | `level_a`, `level_b` | Levels compared within the slice |
-| `phase`, `stim_var`, `mi_type` | Primary cells |
+| `interval`, `stim_var`, `mi_type` | Primary cells |
 | `metric` | Endpoint tested |
 | `n_a`, `n_b`, `median_a`, `median_b`, `stat`, `p` | Test |
 | `q_bh` | Benjamini–Hochberg (BH) FDR-adjusted q **within** `fdr_family`; blank for exploratory rows |
@@ -260,7 +260,7 @@ When `--trial-nulls` is on, **raw** slope/delta metrics are still emitted with `
 **Hold depth**
 
 - **One-hold:** exactly one of `hold_*` filled (e.g. genotype contrast with `hold_sex=M`).
-- **Two-hold:** two filled (e.g. genotype with `hold_sex=M` and `hold_tx=RBSF-1`).
+- **Two-hold:** two filled (e.g. genotype with `hold_sex=M` and `hold_condition=RBSF-1`).
 
 This run: **192** rows without nulls, **336** with nulls.
 
@@ -274,7 +274,7 @@ Join coverage: input/output row counts, trials seen/joined/skipped, experiment f
 
 ### `compute_stimulus_mi_summary.json`
 
-Compute coverage: `n_animals`, `n_mi_rows`, `n_group_tests`, `n_wait_control_flags`, `iti_flagged[]`, paths, `per_trial`, `trial_nulls`, `n_trial_mi_rows`, `n_trial_animal_summaries`, `n_when_group_tests`, `n_sliced_group_tests`, confound note.
+Compute coverage: `n_animals`, `n_mi_rows`, `n_group_tests`, `n_wait_control_flags`, `wait_flagged[]`, paths, `per_trial`, `trial_nulls`, `n_trial_mi_rows`, `n_trial_animal_summaries`, `n_when_group_tests`, `n_sliced_group_tests`, confound note.
 
 ---
 
@@ -282,7 +282,7 @@ Compute coverage: `n_animals`, `n_mi_rows`, `n_group_tests`, `n_wait_control_fla
 
 1. `stimulus_bin_edges.json` — codebook  
 2. `mi_per_animal.csv` + `group_mi_tests.csv` + `group_mi_excess_tests.csv` — is coupling present? marginal strata?  
-3. Quarantine `wait_control_flag` / iti×dist  
+3. Quarantine `wait_control_flag` / wait×dist  
 4. `mi_trial_animal_summaries.csv` + `group_mi_when_tests.csv` — does coupling **change** over career?  
 5. `group_mi_sliced_tests.csv` — conditional simple effects; prefer `q_bh` within family over raw `p`  
 6. `mi_per_trial.csv` — only for trajectory plots / QC (quality control)  

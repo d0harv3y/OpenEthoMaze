@@ -77,7 +77,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Comma-separated strain values to drop (default: ? and blank)",
     )
     ap.add_argument("--drop-blank-sex", action=argparse.BooleanOptionalAction, default=True)
-    ap.add_argument("--tx", type=str, default=None, help="Optional comma-separated tx filter")
+    ap.add_argument(
+        "--condition",
+        type=str,
+        default=None,
+        help="Optional comma-separated condition filter",
+    )
     ap.add_argument(
         "--verify-h5",
         action="store_true",

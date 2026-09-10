@@ -113,7 +113,7 @@ bash scripts/wsl_kpms_multi_stream_apply_sweep.sh
 
 ---
 
-## Incremental cohort updates (new animals / tx labels)
+## Incremental cohort updates (new animals / condition labels)
 
 **Fit checkpoints are not invalidated** when you add trials. You only need to (1) extend the tracking H5 + manifest, then (2) **append** apply for new trials.
 
@@ -136,7 +136,7 @@ uv run maze-legacy-db build-kpms-h5 \
 - **Existing trials:** `tracking/anatomical` and `tracking/blob` are **skipped** by default (`keep_live` / no `--overwrite-pose`).
 - **New trials** (the 4 animals): pose + blob written when `.slp` / video exist.
 - **Manifest CSV** beside the H5 is **regenerated for the full discovered cohort** (`trial_manifest_kpms_tracking.csv`).
-- **Animal `tx` / `sex` attrs** on H5 animal groups are refreshed from labels.
+- **Animal `condition` / `sex` attrs** on H5 animal groups are refreshed from labels.
 
 Label-only refresh (no new tracking writes):
 

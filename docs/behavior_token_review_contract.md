@@ -93,21 +93,21 @@ Grid review is **required** for ethological naming (pose-shaped classes like gro
 
 ## Summarize outputs (phased)
 
-All tables include a `phase` column: `run` \| `iti`. CLI defaults to `--phase run`; `--phase all` emits both.
+All tables include an `interval` column: `run` \| `wait`. CLI defaults to `--phase run` (interval filter); `--phase all` emits both.
 
-**Strata keys:** `(session, tx, sex, strain)` from manifest / treatment labels (same join as `block-ethogram-exports`).
+**Strata keys:** `(session, condition, sex, strain)` from manifest / condition labels (same join as `block-ethogram-exports`).
 
 ### Phase 1 — `occupancy.csv`
 
-Fraction of phase time (or bout count) per token or ethology per stratum.
+Fraction of interval time (or bout count) per token or ethology per stratum.
 
 | Column | Description |
 |--------|-------------|
 | `grain` | `token` \| `ethology` |
 | `label` | `behavior_token` int or `behavior_name` string |
-| `phase` | `run` \| `iti` |
-| `session`, `tx`, `sex`, `strain` | Strata |
-| `occupancy_fraction` | Label time / phase time in stratum |
+| `interval` | `run` \| `wait` |
+| `session`, `condition`, `sex`, `strain` | Strata |
+| `occupancy_fraction` | Label time / interval time in stratum |
 | `n_trials`, `n_animals` | Coverage |
 
 ### Phase 2 — `occupancy_by_session.csv`
@@ -129,7 +129,7 @@ Grill decisions (2026-07-06):
 | Q3 | `behavior_token_labels.csv` canonical per-token map |
 | Q4 | Grid cells: unified overlay + keypoints-only fallback; bout ± 1 s |
 | Q5 | Summarize phased: occupancy → session trends → transitions |
-| Q6 | `phase` column (`run` / `iti`); default `run` |
+| Q6 | `interval` column (`run` / `wait`); default `run` |
 | Q7 | Token stats always; ethology stats gated (`--allow-partial` for drafts) |
 | Q8 | Per-seed fit; portable `behavior_name` strings across seeds |
 | Q9 | Fit-scoped labels; refit = re-curate |

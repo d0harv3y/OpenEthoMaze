@@ -20,7 +20,7 @@ Evidence is **moderate for existence of the motif**, **thin for a single shared 
 
 ## What “our cluster 13” is (local context)
 
-In this repo, **cluster 13** is an HDBSCAN `cluster_id=13` over kpMS syllable prototypes, labeled **pause/still-like**, described as **long, slow, crooked bouts**. It appears as a treatment-pooled differential abundance (DA) winner on the NOR_TX novelty step; analyses live under `scratch/nor_object_mi/` (e.g. `cluster13_tx_delta.py`, crowd movies of sampled bouts). This note does **not** re-derive that DA claim — it only maps the motif to external ethology.
+In this repo, **cluster 13** is an HDBSCAN `cluster_id=13` over kpMS syllable prototypes, labeled **pause/still-like**, described as **long, slow, crooked bouts**. It appears as a treatment-pooled differential abundance (DA) winner on the NOR_TX novelty step; analyses live under `scratch/nor_object_mi/` (e.g. `cluster13_condition_delta.py`, crowd movies of sampled bouts). This note does **not** re-derive that DA claim — it only maps the motif to external ethology.
 
 ---
 
