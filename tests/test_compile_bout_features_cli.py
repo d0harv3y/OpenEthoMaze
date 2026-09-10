@@ -17,8 +17,8 @@ from maze.pipeline.io.file_discovery import TrialManifest
 def test_subset_config_skips_condition_labels_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     csv_path = tmp_path / "manifest.csv"
     csv_path.write_text(
-        "animal_id,session,trial,phase,sex,strain,tx\n"
-        "3243,S01,T01,experimental,F,tg,RBSF\n",
+        "animal_id,session,trial,sex,strain,condition\n"
+        "3243,S01,T01,F,tg,RBSF\n",
         encoding="utf-8",
     )
 
@@ -119,8 +119,8 @@ def test_manifest_stratify_fields() -> None:
     assert fields["animal_id"] == "3245"
     assert fields["sex"] == "F"
     assert fields["exit_number"] == "3"
-    assert fields["phase"] == "experimental"
     assert fields["is_habituation"] == "0"
+    assert "phase" not in fields
 
 
 def test_resolve_tracking_h5_prefers_explicit_path(tmp_path: Path) -> None:

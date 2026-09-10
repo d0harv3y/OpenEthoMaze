@@ -377,14 +377,14 @@ def export_trial_summary(
         if not include_mistrials and (metrics.get("mistrial_reason") or "").strip():
             continue
 
-        # Get animal label for experiment, strain, sex, researcher, drug, treatment
+        # Get animal label for experiment, strain, sex, researcher, drug, condition
         labels = read_animal_label(db_path, key.animal_id)
         experiment = labels.get("experiment", "")
         strain = labels.get("strain", "")
         sex = labels.get("sex", "")
         researcher = labels.get("researcher", "")
         drug = labels.get("drug", "")
-        treatment = labels.get("condition", "")
+        condition = labels.get("condition", "")
 
         # Format session with appropriate prefix
         session = _format_session(key)
@@ -406,7 +406,7 @@ def export_trial_summary(
             "sex": sex,
             "researcher": researcher,
             "drug": drug,
-            "treatment": treatment,
+            "condition": condition,
             "exit#": _format_value(exit_num) if _is_valid_value(exit_num) else "",
             "sleap_model_path": metrics.get("sleap_model_path") or "",
             "trajectory_source": metrics.get("trajectory_source") or HYBRID_POINT_NAME,
@@ -442,7 +442,7 @@ def export_trial_summary(
         "sex",
         "researcher",
         "drug",
-        "treatment",
+        "condition",
         "exit#",
         "sleap_model_path",
         "trajectory_source",
@@ -473,7 +473,7 @@ def export_mistrial_summary(
     """
     Export trials that have a mistrial_reason set (missing data, no tracking, etc.).
 
-    Output CSV columns: animal_id, phase, session, trial, mistrial_reason
+    Output CSV columns: animal_id, session, trial, mistrial_reason
     Only includes rows where mistrial_reason is non-empty.
     Prints a short summary (total count and count by reason).
     """
@@ -506,7 +506,6 @@ def export_mistrial_summary(
                 rows.append(
                     {
                         "animal_id": key.animal_id,
-                        "phase": key.phase,
                         "session": key.session,
                         "trial": key.trial,
                         "mistrial_reason": reason,
@@ -516,7 +515,7 @@ def export_mistrial_summary(
             except Exception:
                 continue
 
-    fieldnames = ["animal_id", "phase", "session", "trial", "mistrial_reason"]
+    fieldnames = ["animal_id", "session", "trial", "mistrial_reason"]
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -647,7 +646,7 @@ def export_all_for_dbs(
                 sex = labels.get("sex", "")
                 researcher = labels.get("researcher", "")
                 drug = labels.get("drug", "")
-                treatment = labels.get("condition", "")
+                condition = labels.get("condition", "")
                 session = _format_session(key)
                 trial_str = key.trial
                 if include_mistrials and (metrics.get("mistrial_reason") or "").strip():
@@ -663,7 +662,7 @@ def export_all_for_dbs(
                     "sex": sex,
                     "researcher": researcher,
                     "drug": drug,
-                    "treatment": treatment,
+                    "condition": condition,
                     "exit#": _format_value(exit_num) if _is_valid_value(exit_num) else "",
                     "sleap_model_path": metrics.get("sleap_model_path") or "",
                     "trajectory_source": metrics.get("trajectory_source") or HYBRID_POINT_NAME,
@@ -693,7 +692,6 @@ def export_all_for_dbs(
                     mistrial_rows_by_task.setdefault(task_name, []).append(
                         {
                             "animal_id": key.animal_id,
-                            "phase": key.phase,
                             "session": key.session,
                             "trial": key.trial,
                             "mistrial_reason": reason,
@@ -710,7 +708,7 @@ def export_all_for_dbs(
         "sex",
         "researcher",
         "drug",
-        "treatment",
+        "condition",
         "exit#",
         "sleap_model_path",
         "trajectory_source",
@@ -726,7 +724,7 @@ def export_all_for_dbs(
         )
 
     exports: dict[str, Path] = {}
-    fieldnames_m = ["animal_id", "phase", "session", "trial", "mistrial_reason"]
+    fieldnames_m = ["animal_id", "session", "trial", "mistrial_reason"]
     for task_name in tasks_sorted:
         suffix = _task_suffix(task_name)
         summary_csv = output_dir / f"trial_summary_{suffix}.csv"

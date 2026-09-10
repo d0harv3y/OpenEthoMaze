@@ -63,10 +63,16 @@ def _load_manifest_rows(
     researcher: str,
     sessions: Sequence[str],
 ) -> pd.DataFrame:
-    # keep_default_na=False: manifest uses literal "n/a" for treatment (not pandas NA).
+    # keep_default_na=False: manifest uses literal "n/a" for condition (not pandas NA).
     df = pd.read_csv(manifest_path, keep_default_na=False)
+    if "phase" in df.columns:
+        phase_mask = df["phase"].astype(str) == phase
+    else:
+        sess_u = df["session"].astype(str).str.strip().str.upper()
+        hab = sess_u.str.startswith("H")
+        phase_mask = hab if phase == "habituation" else ~hab
     mask = (
-        (df["phase"].astype(str) == phase)
+        phase_mask
         & (df["session"].isin(sessions))
         & (df["researcher"].astype(str) == researcher)
     )

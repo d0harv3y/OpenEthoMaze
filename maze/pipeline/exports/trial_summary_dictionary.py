@@ -168,10 +168,10 @@ _TRIAL_SUMMARY_IDENTITY_COLUMNS: tuple[tuple[str, str, str, str], ...] = (
         "Drug label from animal manifest when present.",
     ),
     (
-        "treatment",
+        "condition",
         "text",
         "",
-        "Treatment label (manifest key ``tx``) from animal manifest when present.",
+        "Condition label (sleep-deprivation arm / assay arm) from animal manifest when present.",
     ),
     (
         "exit#",

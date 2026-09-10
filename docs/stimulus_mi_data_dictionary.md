@@ -83,12 +83,11 @@ One row = one syllable **bout** with mean stimulus over its kpMS rows.
 | `animal_id` | str | Subject |
 | `session` | str | Session label (`S01`…`S05`) |
 | `trial` | str | Trial within session (`T01`…) |
-| `phase` | str | **Manifest** phase (here: `experimental`) — not MI `run`/`iti` |
 | `exit_number` | str/int | Exit id from manifest |
-| `sex`, `strain`, `tx` | str | Strata |
+| `sex`, `strain`, `condition` | str | Animal strata |
 | `experiment` | str | e.g. `VASTcont`, `VASTalt` |
 | `drug`, `cohort`, `researcher` | str | Manifest labels (may be blank) |
-| `is_habituation` | 0/1 | Habituation trial flag |
+| `is_habituation` | 0/1 | Habituation trial flag (infer from `session` prefix when CSV omits legacy `phase`) |
 | `raw_syllable_id` | int | kpMS syllable id for this bout |
 | `bout_index` | int | 0-based bout index within trial |
 | `row_start` | int | Inclusive kpMS row index |

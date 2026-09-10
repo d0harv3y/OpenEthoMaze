@@ -48,7 +48,6 @@ BALANCE_COLUMN_CHOICES: frozenset[str] = frozenset(
         "sex",
         "condition",
         "cohort",
-        "phase",
         "strain",
         "experiment",
         "drug",
@@ -66,7 +65,6 @@ STRATIFY_LABEL_COLUMNS: tuple[str, ...] = (
     "animal_id",
     "session",
     "trial",
-    "phase",
     "exit_number",
     "sex",
     "strain",
@@ -83,9 +81,7 @@ def manifest_stratify_fields(manifest: TrialManifest) -> dict[str, str]:
     """Manifest stratification labels as string values for bout CSV rows."""
     out: dict[str, str] = {}
     for name in STRATIFY_LABEL_COLUMNS:
-        if name == "phase":
-            out[name] = manifest.phase
-        elif name == "is_habituation":
+        if name == "is_habituation":
             out[name] = "1" if manifest.is_habituation else "0"
         elif name == "exit_number":
             out[name] = "" if manifest.exit_number is None else str(int(manifest.exit_number))
@@ -229,10 +225,7 @@ def _normalize_label(value: str | None) -> str:
 def _stratum_key(m: TrialManifest, columns: tuple[str, ...]) -> tuple[str, ...]:
     parts: list[str] = []
     for col in columns:
-        if col == "phase":
-            parts.append(_normalize_label(m.phase))
-        else:
-            parts.append(_normalize_label(getattr(m, col, None)))
+        parts.append(_normalize_label(getattr(m, col, None)))
     return tuple(parts)
 
 

@@ -60,7 +60,6 @@ def mistrial_action_hint(reason: str) -> str:
 @dataclass(frozen=True)
 class QcTrialRow:
     animal_id: str
-    phase: str
     session: str
     trial: str
     mistrial_reason: str
@@ -148,7 +147,6 @@ def collect_qc_summary(
                 summary.mistrial_rows.append(
                     QcTrialRow(
                         animal_id=key.animal_id,
-                        phase=key.phase,
                         session=key.session,
                         trial=key.trial,
                         mistrial_reason=reason,
@@ -190,7 +188,6 @@ def export_qc_mistrial_csv(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
         "animal_id",
-        "phase",
         "session",
         "trial",
         "mistrial_reason",
@@ -205,7 +202,6 @@ def export_qc_mistrial_csv(
             writer.writerow(
                 {
                     "animal_id": row.animal_id,
-                    "phase": row.phase,
                     "session": row.session,
                     "trial": row.trial,
                     "mistrial_reason": row.mistrial_reason,

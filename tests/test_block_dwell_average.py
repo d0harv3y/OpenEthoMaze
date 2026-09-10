@@ -76,12 +76,12 @@ def test_average_block_dwell_keeps_sessions_separate_for_same_animal() -> None:
     assert np.isclose(float(grid[0, 0]), 2.0)
 
 
-def test_load_manifest_rows_keeps_literal_na_treatment(tmp_path: Path) -> None:
+def test_load_manifest_rows_keeps_literal_na_condition(tmp_path: Path) -> None:
     manifest = tmp_path / "manifest.csv"
     manifest.write_text(
-        "animal_id,session,trial,phase,sex,strain,condition,researcher\n"
-        "1,S01,T01,experimental,F,wt,n/a,Emma|Hayden\n"
-        "2,S01,T01,experimental,M,tg,RBSF,Emma|Hayden\n",
+        "animal_id,session,trial,sex,strain,condition,researcher\n"
+        "1,S01,T01,F,wt,n/a,Emma|Hayden\n"
+        "2,S01,T01,M,tg,RBSF,Emma|Hayden\n",
         encoding="utf-8",
     )
     rows = _load_manifest_rows(

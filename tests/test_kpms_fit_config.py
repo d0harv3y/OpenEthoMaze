@@ -40,7 +40,7 @@ def test_fit_run_config_from_args() -> None:
         random_seed = 7
         include_habituation = True
         exclude_experimental = False
-        balance_by = "sex,phase"
+        balance_by = "sex,condition"
         no_enrich_labels = True
         force_new = True
         pose_stream = "blob"
@@ -56,7 +56,7 @@ def test_fit_run_config_from_args() -> None:
     assert cfg.force_new is True
     assert cfg.use_float32 is True
     assert cfg.enrich_from_condition_labels is False
-    assert cfg.balance_columns == ("sex", "phase")
+    assert cfg.balance_columns == ("sex", "condition")
     assert cfg.fit.seed == 7
     assert resolve_kpms_project_dir(cfg.project_dir, cfg.pose_stream) == Path(
         "/proj/blob"

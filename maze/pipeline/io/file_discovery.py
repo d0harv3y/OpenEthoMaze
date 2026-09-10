@@ -192,6 +192,21 @@ class TrialManifest:
         return self.inferred_id if self.inferred_id else self.animal_id
 
 
+def _session_looks_habituation(session: str) -> bool:
+    """Infer habituation from session wire (``H*`` / ``hS*``); else experimental."""
+    return str(session).strip().upper().startswith("H")
+
+
+def _is_habituation_from_manifest_row(row: dict[str, str]) -> bool:
+    """Prefer legacy CSV ``phase`` when present; else infer from ``session`` prefix."""
+    phase = (row.get("phase") or "").strip().lower()
+    if phase == "habituation":
+        return True
+    if phase == "experimental":
+        return False
+    return _session_looks_habituation(row.get("session", ""))
+
+
 def _parse_manifest_bool(value: str | None) -> bool:
     if value is None:
         return False
@@ -1300,20 +1315,21 @@ def load_manifest_csv(
                 timestamp = None
             h5_frames = row.get("h5_n_frames", "").strip()
             vid_frames = row.get("video_n_frames", "").strip()
+            is_hab = _is_habituation_from_manifest_row(row)
             manifests.append(
                 TrialManifest(
                     animal_id=row["animal_id"],
                     session=(
                         _normalize_habituation_session(
                             row["session"],
-                            (row.get("phase", "") == "habituation"),
+                            is_hab,
                         )[0]
                     ),
                     trial=row["trial"],
                     input_h5_path=Path(row.get("input_h5_path", "")),
                     video_path=Path(video_path) if video_path else None,
                     sleap_path=Path(sleap_path) if sleap_path else None,
-                    is_habituation=(row.get("phase", "") == "habituation"),
+                    is_habituation=is_hab,
                     original_session=row.get("original_session") or None,
                     timestamp=timestamp,
                     h5_n_frames=int(h5_frames) if h5_frames.isdigit() else None,
@@ -1323,7 +1339,7 @@ def load_manifest_csv(
                     strain=_cell(row, "strain"),
                     experiment=_cell(row, "experiment"),
                     sex=_cell(row, "sex"),
-                    condition=_cell(row, "condition") or _cell(row, "condition"),
+                    condition=_cell(row, "condition") or _cell(row, "tx"),
                     drug=_cell(row, "drug"),
                     inferred_id=_cell(row, "inferred_id"),
                     kpms_recording_key=_cell(row, "kpms_recording_key"),
