@@ -266,7 +266,12 @@ def _run_fit_body(
 
     coordinates, confidences, bodyparts, skipped = build_kpms_inputs(manifests, pre_cfg)
     if not coordinates:
-        raise RuntimeError("No usable trajectories after preprocessing.")
+        examples = "; ".join(skipped[:10]) if skipped else "(no skip reasons recorded)"
+        raise RuntimeError(
+            "No usable trajectories after preprocessing. "
+            f"n_manifests={len(manifests)} n_skipped={len(skipped)}. "
+            f"examples: {examples}"
+        )
 
     data, metadata = kpms.format_data(
         coordinates,

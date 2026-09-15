@@ -95,8 +95,14 @@ def finalize_kpms_recording_with_frame_indices(
 
 
 def _manifest_input_h5_path(manifest: TrialManifest) -> Path | None:
+    """Return a declared cohort/trial H5 path, or None when unset.
+
+    ``TrialManifest.input_h5_path`` uses ``Path("")`` as the empty sentinel; on
+    Windows/POSIX that becomes ``Path(".")``, which must not count as a declared
+    H5 (otherwise SLEAP-only manifests are skipped as ``missing_h5_pose``).
+    """
     raw = str(getattr(manifest, "input_h5_path", "") or "").strip()
-    if not raw:
+    if not raw or raw in {".", "./"}:
         return None
     return Path(raw)
 

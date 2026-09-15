@@ -82,6 +82,68 @@ def test_build_kpms_inputs_skips_sleap_when_input_h5_set(tmp_path: Path) -> None
     assert skipped == ["1-S01-T01:missing_h5_pose"]
 
 
+def test_manifest_empty_input_h5_path_is_unset() -> None:
+    from maze.kpms.preprocess import _manifest_input_h5_path
+
+    for sentinel in (Path(""), Path("."), Path("./")):
+        m = TrialManifest(
+            animal_id="1",
+            session="S01",
+            trial="T01",
+            input_h5_path=sentinel,
+            sleap_path=None,
+        )
+        assert _manifest_input_h5_path(m) is None
+
+
+def test_build_kpms_inputs_sleap_when_input_h5_empty(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """SLEAP-only CSV rows use empty input_h5_path (Path('') -> '.'); must not block."""
+    from maze.pipeline.io.sleap_loader import TraceData
+
+    sleap = tmp_path / "pose.h5.slp"
+    sleap.write_bytes(b"placeholder")
+    t = 10
+
+    def _fake_load(_path: Path) -> TraceData:
+        traces = {
+            name: {
+                "x": np.full(t, 50.0 + i, dtype=np.float64),
+                "y": np.full(t, 60.0 + i, dtype=np.float64),
+                "score": np.full(t, 0.95, dtype=np.float64),
+                "visible": np.ones(t, dtype=bool),
+            }
+            for i, name in enumerate(STANDARD_NODE_NAMES)
+        }
+        return TraceData(
+            traces=traces,
+            node_names=list(STANDARD_NODE_NAMES),
+            n_frames=t,
+            source_path=_path,
+        )
+
+    monkeypatch.setattr("maze.kpms.preprocess.load_sleap_file", _fake_load)
+
+    manifest = TrialManifest(
+        animal_id="3013",
+        session="NOR1",
+        trial="T01",
+        input_h5_path=Path(""),
+        sleap_path=sleap,
+        kpms_recording_key="NOR1-3013",
+    )
+    coordinates, confidences, bodyparts, skipped = build_kpms_inputs(
+        [manifest],
+        KpmsPreprocessConfig(min_fragment_frames=4),
+    )
+    assert skipped == []
+    assert list(coordinates) == ["NOR1-3013"]
+    assert coordinates["NOR1-3013"].shape[0] >= 4
+    assert bodyparts == list(STANDARD_NODE_NAMES)
+    assert confidences["NOR1-3013"].shape[1] == len(STANDARD_NODE_NAMES)
+
+
 def test_build_kpms_inputs_skips_without_pose_or_sleap(tmp_path: Path) -> None:
     db = tmp_path / "empty.h5"
     with h5py.File(db, "w") as h5:
