@@ -6,8 +6,12 @@ from maze.kpms.fit_config import FitConfig
 from maze.kpms.paramscan import (
     DEFAULT_STAGE1_KAPPA,
     NOR_NUM_STATES,
+    NOR_PER_ANIMAL_CONF_THRESHOLD,
+    NOR_PER_ANIMAL_STAGE1_KAPPA,
     NOR_STAGE2_KAPPA,
     VAST_CONF_THRESHOLDS,
+    animal_paramscan_model_name,
+    iter_nor_per_animal_paramscan_grid,
     iter_vast_conf_paramscan_grid,
     kappa_token,
     paramscan_model_name,
@@ -17,8 +21,23 @@ from maze.kpms.paramscan import (
 def test_kappa_token_nor_values() -> None:
     assert kappa_token(1e4) == "1e4"
     assert kappa_token(3e4) == "3e4"
+    assert kappa_token(10**4.5) == "3e4"
     assert kappa_token(1e5) == "1e5"
     assert kappa_token(1e8) == "1e8"
+    assert NOR_STAGE2_KAPPA[1] == 10**4.5
+    assert kappa_token(NOR_STAGE2_KAPPA[1]) == "3e4"
+
+
+def test_nor_per_animal_grid_is_9_jobs() -> None:
+    jobs = list(iter_nor_per_animal_paramscan_grid())
+    assert len(jobs) == 9
+    assert all(j.stage1_kappa == NOR_PER_ANIMAL_STAGE1_KAPPA for j in jobs)
+    assert all(j.conf_threshold == NOR_PER_ANIMAL_CONF_THRESHOLD for j in jobs)
+    names = {j.model_name for j in jobs}
+    assert len(names) == 9
+    tagged = animal_paramscan_model_name("3015", jobs[0])
+    assert tagged.startswith("3015_paramscan_")
+    assert "s2-1e4" in tagged or "s2-3e4" in tagged or "s2-1e5" in tagged
 
 
 def test_paramscan_model_name_vast_conf_suffix() -> None:
