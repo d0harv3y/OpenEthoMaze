@@ -1,0 +1,10 @@
+[Unit]
+Description=bhvr-cam MQTT presence announce
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/bhvr-cam.env
+# python3 explicit so deploy via sudo tee works without chmod NOPASSWD
+ExecStart=/usr/bin/python3 /usr/local/bin/bhvr-cam-announce

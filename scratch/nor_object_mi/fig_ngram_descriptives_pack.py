@@ -447,7 +447,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--ensemble-root",
         type=Path,
-        default=Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"),
+        default=Path(r"D:\sack\datas\impress\moseq_251017"),
     )
     ap.add_argument("--mine-root", type=Path, default=None)
     ap.add_argument("--out-dir", type=Path, default=None)

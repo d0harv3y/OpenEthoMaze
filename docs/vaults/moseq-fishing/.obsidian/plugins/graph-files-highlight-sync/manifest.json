@@ -1,0 +1,10 @@
+{
+	"id": "graph-files-highlight-sync",
+	"name": "Graph Files Highlight Sync",
+	"version": "1.4.2",
+	"minAppVersion": "1.4.0",
+	"description": "Highlights a note in the graph view when you hover over it in the file explorer — or every note in a folder when you hover the folder.",
+	"author": "jakdab",
+	"authorUrl": "https://github.com/jakdab",
+	"isDesktopOnly": false
+}

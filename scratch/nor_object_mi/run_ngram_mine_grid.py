@@ -74,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--kpms-root",
         type=Path,
-        default=Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"),
+        default=Path(r"D:\sack\datas\impress\moseq_251017"),
     )
     p.add_argument(
         "--out-root",

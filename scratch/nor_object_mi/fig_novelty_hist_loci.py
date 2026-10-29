@@ -185,7 +185,7 @@ def make_figure(rows: list[dict[str, str]], *, out_stem: Path, session: str, dpi
 
 def main() -> int:
     root = Path(
-        r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+        r"D:\sack\datas\impress\moseq_251017"
         r"\_nor_object_mi\paramscan_s1-1e8_s2-1e5_ss-50"
     )
     ap = argparse.ArgumentParser(description=__doc__)

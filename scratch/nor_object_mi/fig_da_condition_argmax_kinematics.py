@@ -30,11 +30,11 @@ from nor_object_mi._pub_style import (  # noqa: E402
 )
 
 DEFAULT_DA = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_da"
 )
 DEFAULT_SIG = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_syllable_signatures"
 )
 STEPS = (

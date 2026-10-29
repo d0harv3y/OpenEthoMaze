@@ -1,0 +1,54 @@
+# Copy to config.yaml on the NVR (not committed with secrets).
+
+# Prefer SSD when mounted (`/media/admin/random/bhvr`); else `/data/bhvr`.
+# On NVR: python3 ~/deploy/bhvr-nvr/scripts/patch_kiosk_data_root.py
+data_root: /data/bhvr
+
+# Root that contains deploy/bhvr-cam (soft USB push source).
+# Default: $HOME/OpenEthoMaze if present, else $HOME when $HOME/deploy/bhvr-cam exists.
+# cam_bundle_git_root: /home/admin/OpenEthoMaze
+
+# Science ask defaults (session Start modal). 4:3 Standard/Lite — grill 11 / task 13.
+# standard = 1296×972 (2×2 bin); lite = 640×480 (heavy bin). No 16:9 crop.
+default_profile: standard
+profiles:
+  - standard
+  - lite
+
+# Opportunistic soft fps default when modal omitted; session soft_fps wins.
+# Achieved rate is pts/fps.json — not a meta claim.
+record:
+  soft_fps: 20
+  bitrate_kbps: 2500
+
+nvr_id: bhvr-nvr0
+species_default: Mus musculus
+
+mqtt:
+  host: 127.0.0.1
+  port: 1883
+  topic: bhvr/cam/+/state
+  stale_after_s: 180
+
+owned_camera_ids: []
+
+ssh_user: admin
+ssh_identity_file: /home/admin/.ssh/id_ed25519_bhvr
+
+# Live preview (multi-tile idle OK). Idle encode is always Lite@10 (grill Q16 B);
+# width/height/fps below are ignored for geometry — kept for transport knobs only.
+# transport: whep | udp | mpegts | webrtc | ssh_annex_b
+# udp_port is the *base*: bhvr-camN → UDP (udp_port+N).
+# whep_ingest: cam_mpegts | nvr_annexb
+max_live_full_while_recording: 1
+preview:
+  transport: whep
+  whep_ingest: nvr_annexb
+  udp_port: 15550
+  mediamtx_http: http://127.0.0.1:8889
+  nvr_host: 192.168.7.1
+  # OV5647 1080p30 + --flush needs ≥4 (2 halves pts fps to ~15). Prefer 6.
+  buffer_count: 6
+  # Record→live tee depth (64 KiB chunks). Higher absorbs short browser stalls;
+  # chronically behind still drops (and adds lag). Default 512 (~32 MiB/cam max).
+  tee_queue_max: 512

@@ -37,7 +37,7 @@ from nor_object_mi.nearest_prox_mi import (  # noqa: E402
     default_out_dir,
 )
 
-ROOT = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+ROOT = Path(r"D:\sack\datas\impress\moseq_251017")
 ART_ROOT = ROOT / "_nor_object_mi"
 
 LABEL_TITLES: dict[LabelKind, str] = {

@@ -20,7 +20,7 @@ if str(_SCRATCH) not in sys.path:
 from nor_object_mi.fig_simpler_first_info_dr_pause import fig_heatmaps, fig_scatter  # noqa: E402
 from nor_object_mi.info_dr_pause_bout_mi import SPEC, default_out_dir  # noqa: E402
 
-ROOT = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+ROOT = Path(r"D:\sack\datas\impress\moseq_251017")
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -30,7 +30,7 @@ from nor_object_mi.pause_stim_mi import (  # noqa: E402
     write_run,
 )
 
-ROOT = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+ROOT = Path(r"D:\sack\datas\impress\moseq_251017")
 ART_ROOT = ROOT / "_nor_object_mi"
 DEFAULT_DA = ART_ROOT / "simpler_first_da"
 

@@ -1,0 +1,10 @@
+[Unit]
+Description=bhvr-nvr MQTT broker UDP beacon (one-shot)
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/bhvr-broker-beacon --once
+# Allow kiosk user to trigger without full root if you add polkit later.
+User=root

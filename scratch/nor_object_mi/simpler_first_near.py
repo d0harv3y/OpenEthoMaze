@@ -330,7 +330,7 @@ def run_phase_near(
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    root = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+    root = Path(r"D:\sack\datas\impress\moseq_251017")
     ap.add_argument("--ensemble-root", type=Path, default=root)
     ap.add_argument("--model", type=str, default=str(LOCKED["model"]))
     ap.add_argument("--r-m", type=float, default=NEAR_R_M)

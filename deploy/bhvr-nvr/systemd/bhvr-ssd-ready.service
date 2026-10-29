@@ -1,0 +1,15 @@
+[Unit]
+Description=bhvr SSD ready (mkdir bhvr + patch kiosk data_root)
+After=media-admin-random.mount
+Requires=media-admin-random.mount
+Before=bhvr-kiosk-web.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=60
+ExecStart=/usr/local/sbin/bhvr-ssd-post-mount
+
+[Install]
+WantedBy=multi-user.target
+WantedBy=media-admin-random.mount

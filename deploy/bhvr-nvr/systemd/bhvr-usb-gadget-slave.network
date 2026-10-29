@@ -1,0 +1,8 @@
+# Enslave every CDC ECM / RNDIS gadget NIC into br-bhvr.
+# Replaces single-iface 192.168.7.1 on usb0 only (broke usb1+).
+[Match]
+Driver=cdc_ether rndis_host
+
+[Network]
+Bridge=br-bhvr
+ConfigureWithoutCarrier=yes

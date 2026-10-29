@@ -1,0 +1,19 @@
+[Unit]
+Description=bhvr session SSD (LABEL=random, NTFS)
+Documentation=file:///home/admin/deploy/bhvr-nvr/scripts/remount_ssd.sh
+# External disk: do not Require — boot must succeed if SSD unplugged.
+After=dev-disk-by\x2dlabel-random.device
+Wants=dev-disk-by\x2dlabel-random.device
+Before=bhvr-kiosk-web.service bhvr-ssd-ready.service
+Conflicts=umount.target
+
+[Mount]
+What=/dev/disk/by-label/random
+Where=/media/admin/random
+Type=ntfs3
+# force: dirty NTFS after NVR reboot / unclean unplug (same as remount_ssd.sh)
+Options=force,uid=1000,gid=1000,umask=022
+TimeoutSec=30
+
+[Install]
+WantedBy=multi-user.target

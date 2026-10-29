@@ -224,12 +224,17 @@ def paired_da_deltas(
         base: dict[str, object] = {
             "animal_id": aid,
             "sex": str(L.loc[aid, "sex"]),
-            "condition": str(L.loc[aid, "condition"]),
             "step": step,
             "left": left,
             "right": right,
             "braycurtis": bc,
         }
+        # NOR tables carry ``condition``; VAST uses strain×tx (joined later).
+        if "condition" in L.columns:
+            base["condition"] = str(L.loc[aid, "condition"])
+        for col in ("strain", "tx", "phase_layer", "trial_window"):
+            if col in L.columns:
+                base[col] = str(L.loc[aid, col])
         if extra_phase:
             base["session"] = str(L.loc[aid, "session"])
         if extra_cond:
@@ -593,7 +598,7 @@ def _copy_dictionary(out: Path, *, weighting: str) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    root = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+    root = Path(r"D:\sack\datas\impress\moseq_251017")
     ap.add_argument("--ensemble-root", type=Path, default=root)
     ap.add_argument(
         "--model",

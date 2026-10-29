@@ -18,7 +18,7 @@ if str(_SCRATCH) not in sys.path:
 from vast_moseq.cohort_meta import DEFAULT_MANIFEST, load_animal_meta  # noqa: E402
 
 DEFAULT_CSV = Path(
-    r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq"
+    r"D:\sack\AZ-SD-VAST-moseq"
     r"\syllable_bout_kinematics\syllable_bout_kinematics.csv"
 )
 

@@ -30,10 +30,10 @@ from nor_object_mi.fig_simpler_first_syllable_signatures import (  # noqa: E402
 )
 
 DEFAULT_DESC = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017\_syllable_descriptives"
+    r"D:\sack\datas\impress\moseq_251017\_syllable_descriptives"
 )
 DEFAULT_SIG = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_syllable_signatures"
 )
 UNMAPPED_COLOR = "#e8e8e8"
@@ -147,6 +147,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--desc-dir", type=Path, default=DEFAULT_DESC)
     ap.add_argument("--sig-dir", type=Path, default=DEFAULT_SIG)
     ap.add_argument("--no-duration-text", action="store_true")
+    ap.add_argument(
+        "--exclude-ct",
+        type=str,
+        default="",
+        help="Comma-separated conf_threshold values to drop from model rows",
+    )
     args = ap.parse_args(argv)
 
     plt.rcParams.update(
@@ -164,8 +170,12 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     out = args.desc_dir
-    model_df = pd.read_csv(out / "model_summary_clean.csv")
-    count_df = pd.read_csv(out / "syllable_counts_clean.csv")
+    model_df = pd.read_csv(out / "model_summary_clean.csv", dtype={"ct": str})
+    count_df = pd.read_csv(out / "syllable_counts_clean.csv", dtype={"ct": str})
+    exclude_ct = {x.strip() for x in str(args.exclude_ct).split(",") if x.strip()}
+    if exclude_ct and "ct" in model_df.columns:
+        model_df = model_df[~model_df["ct"].isin(exclude_ct)].reset_index(drop=True)
+        count_df = count_df[~count_df["ct"].isin(exclude_ct)].reset_index(drop=True)
     proto = pd.read_csv(args.sig_dir / "syllable_prototypes_clustered.csv")
     summary = pd.read_csv(args.sig_dir / "cluster_summary.csv")
     lookup, cluster_ids, listed = build_cluster_color_lookup(summary)

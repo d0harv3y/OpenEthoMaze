@@ -131,7 +131,7 @@ def main() -> int:
         "--summary-csv",
         type=Path,
         default=Path(
-            r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+            r"D:\sack\datas\impress\moseq_251017"
             r"\_nor_object_mi\presence_grid_summary.csv"
         ),
     )

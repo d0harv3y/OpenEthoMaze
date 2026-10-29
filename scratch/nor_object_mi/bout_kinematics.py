@@ -42,6 +42,19 @@ _SS_RE = re.compile(r"_ss-(\d+)(?:_|$)")
 SESSIONS: tuple[str, ...] = ("NOR_BL", "NOR_TX", "NOR_REC3hr", "NOR_REC11hr")
 CONDITIONS: frozenset[str] = frozenset({"nvl_obj", "id_obj", "no_obj"})
 
+# Shape-of-bout extras (alphabet-equating poke); still physical units.
+DEFAULT_STILL_SPEED_MPS: float = 0.02
+
+SHAPE_FIELDS: tuple[str, ...] = (
+    "bout_peak_speed_mps",
+    "bout_time_to_peak_frac",
+    "bout_accel_decel_asym",
+    "bout_speed_duty_still",
+    "bout_nose_tail_delta_m",
+    "bout_heading_turn_rate_p90",
+    "bout_curvature_proxy",
+)
+
 KINEMATICS_FIELDS: tuple[str, ...] = (
     "model",
     "ss",
@@ -73,6 +86,7 @@ KINEMATICS_FIELDS: tuple[str, ...] = (
     "bout_valid_frame_frac",
     "bout_mean_nose_tail_m",
     "bout_iqr_nose_tail_m",
+    *SHAPE_FIELDS,
     "bout_mean_dist_any_m",
     "bout_mean_dist_fam_m",
     "bout_mean_dist_nvl_m",
@@ -150,7 +164,7 @@ def nose_tail_length_m(session: h5py.Group) -> tuple[np.ndarray, float]:
     nx, ny, nv = _node_xy(sleap, "nose")
     tx, ty, tv = _node_xy(sleap, "tail")
     ppm = pixels_per_meter(session)
-    ok = nv & tv & np.isfinite(nx) & np.isfinite(ny) & np.isfinite(condition) & np.isfinite(ty)
+    ok = nv & tv & np.isfinite(nx) & np.isfinite(ny) & np.isfinite(tx) & np.isfinite(ty)
     out = np.full(nx.shape, np.nan, dtype=np.float64)
     out[ok] = np.hypot(nx[ok] - tx[ok], ny[ok] - ty[ok]) / ppm
     return out, ppm
@@ -170,6 +184,70 @@ def _bout_sum(arr: np.ndarray, start: int, end: int) -> float:
     if finite.size == 0:
         return float("nan")
     return float(np.sum(finite))
+
+
+def bout_shape_scalars(
+    speed: np.ndarray,
+    abs_dheading: np.ndarray,
+    nose_tail: np.ndarray,
+    *,
+    still_speed_mps: float = DEFAULT_STILL_SPEED_MPS,
+) -> dict[str, float]:
+    """Shape-of-bout scalars from per-frame series (one bout slice).
+
+    Complements mean/IQR summaries: peak timing, accel/decel asymmetry,
+    still duty cycle, elongation *change*, turn-rate tail, curvature proxy.
+    """
+    speed = np.asarray(speed, dtype=np.float64).ravel()
+    abs_dh = np.asarray(abs_dheading, dtype=np.float64).ravel()
+    nt = np.asarray(nose_tail, dtype=np.float64).ravel()
+    n = int(speed.shape[0])
+    nan = float("nan")
+    out = {
+        "bout_peak_speed_mps": nan,
+        "bout_time_to_peak_frac": nan,
+        "bout_accel_decel_asym": nan,
+        "bout_speed_duty_still": nan,
+        "bout_nose_tail_delta_m": nan,
+        "bout_heading_turn_rate_p90": nan,
+        "bout_curvature_proxy": nan,
+    }
+    if n <= 0:
+        return out
+
+    fin_s = np.isfinite(speed)
+    if fin_s.any():
+        s_ok = speed[fin_s]
+        peak = float(np.max(s_ok))
+        out["bout_peak_speed_mps"] = peak
+        # First index of peak among finite frames, as fraction of bout length.
+        peak_i = int(np.flatnonzero(fin_s)[int(np.argmax(s_ok))])
+        out["bout_time_to_peak_frac"] = float(peak_i) / float(max(n - 1, 1))
+        out["bout_speed_duty_still"] = float(np.mean(s_ok < float(still_speed_mps)))
+
+        dspeed = np.diff(speed)
+        d_ok = dspeed[np.isfinite(dspeed)]
+        if d_ok.size:
+            rise = float(np.mean(np.clip(d_ok, 0.0, None)))
+            fall = float(np.mean(np.clip(-d_ok, 0.0, None)))
+            denom = rise + fall
+            out["bout_accel_decel_asym"] = (
+                float((rise - fall) / denom) if denom > 0 else 0.0
+            )
+
+    fin_nt = nt[np.isfinite(nt)]
+    if fin_nt.size:
+        out["bout_nose_tail_delta_m"] = float(np.max(fin_nt) - np.min(fin_nt))
+
+    fin_dh = abs_dh[np.isfinite(abs_dh)]
+    if fin_dh.size:
+        out["bout_heading_turn_rate_p90"] = float(np.percentile(fin_dh, 90))
+
+    mean_speed = float(np.nanmean(speed)) if fin_s.any() else nan
+    mean_dh = float(np.nanmean(abs_dh)) if fin_dh.size else nan
+    if np.isfinite(mean_speed) and np.isfinite(mean_dh) and mean_speed > 1e-9:
+        out["bout_curvature_proxy"] = float(mean_dh / mean_speed)
+    return out
 
 
 def _align_len(*arrays: np.ndarray) -> tuple[np.ndarray, ...]:
@@ -330,6 +408,7 @@ def _kinematics_row(
     d_a: np.ndarray,
     d_b: np.ndarray,
     ambiguous_threshold_mps: float,
+    still_speed_mps: float = DEFAULT_STILL_SPEED_MPS,
 ) -> dict[str, object]:
     speed_sl = speed[start:end]
     dh_sl = abs_dh[start:end]
@@ -343,6 +422,9 @@ def _kinematics_row(
     mean_speed = float(np.mean(finite_speed)) if finite_speed.size else float("nan")
     finite_dh = dh_sl[np.isfinite(dh_sl)]
     mean_dh = float(np.mean(finite_dh)) if finite_dh.size else float("nan")
+    shape = bout_shape_scalars(
+        speed_sl, dh_sl, nt_sl, still_speed_mps=still_speed_mps
+    )
     return {
         "model": model,
         "ss": ss,
@@ -376,6 +458,7 @@ def _kinematics_row(
         ),
         "bout_mean_nose_tail_m": _bout_mean(nose_tail, start, end),
         "bout_iqr_nose_tail_m": bout_iqr(nt_sl),
+        **shape,
         "bout_mean_dist_any_m": _bout_mean(d_any, start, end),
         "bout_mean_dist_fam_m": _bout_mean(d_fam, start, end),
         "bout_mean_dist_nvl_m": _bout_mean(d_nvl, start, end),
@@ -393,8 +476,13 @@ def build_kinematics_bout_rows(
     min_bout_frames: int | None = None,
     loci_cache: Mapping[tuple[str, str], np.ndarray] | None = None,
     ambiguous_threshold_mps: float = DEFAULT_AMBIGUOUS_BOUT_SPEED_IQR_MPS,
+    include_proximity: bool = True,
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
-    """Collapse kpMS syllables to bouts; attach spot/heading kinematics + proximity."""
+    """Collapse kpMS syllables to bouts; attach spot/heading kinematics + proximity.
+
+    ``include_proximity=False`` skips object/pseudo-loci distances (NaN columns) —
+    much faster for alphabet-equating feature builds that only need kinematics.
+    """
     rows: list[dict[str, object]] = []
     cache: dict[tuple[str, str], np.ndarray] = dict(loci_cache or {})
     ss = model_num_states(model)
@@ -425,9 +513,13 @@ def build_kinematics_bout_rows(
             speed = spot_speed_mps(x_m, y_m, valid, fps)
             step_m = spot_step_length_m(x_m, y_m, valid)
 
-            d_any, d_fam, d_nvl, d_a, d_b, _src = proximity_channels(
-                nor_h5, sg, js, loci_cache=cache
-            )
+            if include_proximity:
+                d_any, d_fam, d_nvl, d_a, d_b, _src = proximity_channels(
+                    nor_h5, sg, js, loci_cache=cache
+                )
+            else:
+                d_any = _nan_like(x_m)
+                d_fam = d_nvl = d_a = d_b = d_any
 
             (
                 syll,
@@ -462,61 +554,30 @@ def build_kinematics_bout_rows(
             xy = np.column_stack([x_m, y_m])
 
             for bout_index, (sid, start, end) in enumerate(syllable_runs(syll)):
-                speed_sl = speed[start:end]
-                dh_sl = abs_dh[start:end]
-                nt_sl = nose_tail[start:end]
-                h_sl = heading[start:end]
-                valid_sl = valid[start:end]
-                n_frames = int(end - start)
-                speed_iqr = bout_iqr(speed_sl)
-                mean_sin, mean_cos = circular_mean_sin_cos(h_sl)
-                finite_speed = speed_sl[np.isfinite(speed_sl)]
-                mean_speed = float(np.mean(finite_speed)) if finite_speed.size else float("nan")
-                finite_dh = dh_sl[np.isfinite(dh_sl)]
-                mean_dh = float(np.mean(finite_dh)) if finite_dh.size else float("nan")
-
                 rows.append(
-                    {
-                        "model": model,
-                        "ss": ss,
-                        "kpms_key": js.kpms_key,
-                        "animal_id": js.animal_id,
-                        "raw_session": js.raw_session,
-                        "session": js.session,
-                        "trial": js.trial,
-                        "condition": js.condition,
-                        "sex": js.sex,
-                        "cohort": js.cohort,
-                        "bout_index": bout_index,
-                        "raw_syllable_id": int(sid),
-                        "row_start": int(start),
-                        "row_end_exclusive": int(end),
-                        "bout_frames": n_frames,
-                        "fps": fps,
-                        "bout_duration_s": float(n_frames) / float(fps) if fps > 0 else float("nan"),
-                        "bout_mean_speed_mps": mean_speed,
-                        "bout_iqr_speed_mps": speed_iqr,
-                        "bout_path_length_m": _bout_sum(step_m, start, end),
-                        "bout_straightness": bout_straightness(xy[start:end]),
-                        "bout_mean_abs_dheading": mean_dh,
-                        "bout_iqr_abs_dheading": bout_iqr(dh_sl),
-                        "bout_net_dheading_rad": bout_net_dheading_rad(h_sl),
-                        "bout_mean_heading_sin": mean_sin,
-                        "bout_mean_heading_cos": mean_cos,
-                        "ambiguous": int(
-                            bout_ambiguous(speed_iqr, threshold_mps=ambiguous_threshold_mps)
-                        ),
-                        "bout_valid_frame_frac": (
-                            float(np.mean(valid_sl.astype(np.float64))) if n_frames else float("nan")
-                        ),
-                        "bout_mean_nose_tail_m": _bout_mean(nose_tail, start, end),
-                        "bout_iqr_nose_tail_m": bout_iqr(nt_sl),
-                        "bout_mean_dist_any_m": _bout_mean(d_any, start, end),
-                        "bout_mean_dist_fam_m": _bout_mean(d_fam, start, end),
-                        "bout_mean_dist_nvl_m": _bout_mean(d_nvl, start, end),
-                        "bout_mean_dist_obj_a_m": _bout_mean(d_a, start, end),
-                        "bout_mean_dist_obj_b_m": _bout_mean(d_b, start, end),
-                    }
+                    _kinematics_row(
+                        js=js,
+                        model=model,
+                        ss=ss,
+                        bout_index=bout_index,
+                        raw_syllable_id=int(sid),
+                        start=start,
+                        end=end,
+                        fps=fps,
+                        speed=speed,
+                        step_m=step_m,
+                        heading=heading,
+                        abs_dh=abs_dh,
+                        xy=xy,
+                        valid=valid,
+                        nose_tail=nose_tail,
+                        d_any=d_any,
+                        d_fam=d_fam,
+                        d_nvl=d_nvl,
+                        d_a=d_a,
+                        d_b=d_b,
+                        ambiguous_threshold_mps=ambiguous_threshold_mps,
+                    )
                 )
             n_ok += 1
         except Exception as exc:  # noqa: BLE001 — scratch: record and continue
@@ -535,6 +596,7 @@ def build_kinematics_bout_rows(
         "ss": ss,
         "n_bout_rows": len(rows),
         "n_sessions_ok": n_ok,
+        "include_proximity": bool(include_proximity),
         "n_skip_condition": n_skip_cond,
         "n_skip_phase": n_skip_phase,
         "n_skip_error": n_skip_err,
@@ -791,3 +853,18 @@ def discover_paramscan_models(ensemble_root: Path | str) -> list[str]:
         if p.is_dir() and (p / "results.h5").is_file():
             names.append(p.name)
     return names
+
+
+def discover_per_animal_paramscan_models(
+    ensemble_root: Path | str,
+) -> list[tuple[str, Path]]:
+    """Discover nested per-animal fits: ``{cohort}/{animal}/anatomical/*_paramscan_*/``.
+
+    Returns ``(model_folder_name, results.h5 path)`` sorted by path.
+    """
+    root = Path(ensemble_root)
+    found: list[tuple[str, Path]] = []
+    for results in sorted(root.glob("exp*/*/anatomical/*_paramscan_*/results.h5")):
+        if results.is_file():
+            found.append((results.parent.name, results))
+    return found

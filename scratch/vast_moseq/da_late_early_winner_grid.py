@@ -50,13 +50,13 @@ from vast_moseq.regen_syllable_bout_kinematics import (  # noqa: E402
 )
 from vast_moseq.vast_syllable_kruskal import pick_late_early_winners  # noqa: E402
 
-DEFAULT_DA = Path(r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq\_da_trial_windows")
+DEFAULT_DA = Path(r"D:\sack\AZ-SD-VAST-moseq\_da_trial_windows")
 DEFAULT_SIG = Path(
-    r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq\syllable_signatures"
+    r"D:\sack\AZ-SD-VAST-moseq\syllable_signatures"
     r"\syllable_prototypes_clustered.csv"
 )
 DEFAULT_VIDEO_REMAP_FROM = r"E:\videos"
-DEFAULT_VIDEO_REMAP_TO = r"C:\Users\admin\Documents\work\sack\datas\videos"
+DEFAULT_VIDEO_REMAP_TO = r"D:\sack\datas\videos"
 WINNER_CSV = "da_late_early_s05_winners.csv"
 N_BODY = 8
 BASE_WINDOW_SIZE = 384

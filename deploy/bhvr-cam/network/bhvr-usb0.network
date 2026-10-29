@@ -1,0 +1,18 @@
+# Cam-side: DHCP client on CDC ECM usb0 (no static IPs).
+# Prefer this over NetworkManager for gadget — NM often misses hotplug.
+[Match]
+Name=usb0
+
+[Link]
+RequiredForOnline=no
+
+[Network]
+DHCP=yes
+IPv6AcceptRA=no
+
+[DHCPv4]
+RouteMetric=100
+UseRoutes=yes
+UseGateway=yes
+UseDNS=no
+UseHostname=no

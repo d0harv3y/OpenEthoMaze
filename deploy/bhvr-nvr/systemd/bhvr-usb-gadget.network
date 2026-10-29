@@ -1,0 +1,5 @@
+# DEPRECATED single-iface layout — kept empty-match so old installs that
+# still copy this filename do not fight the bridge.
+# Active config: bhvr-usb-br.netdev + bhvr-usb-br.network + bhvr-usb-gadget-slave.network
+[Match]
+Name=bhvr-usb-gadget-legacy-disabled-do-not-match

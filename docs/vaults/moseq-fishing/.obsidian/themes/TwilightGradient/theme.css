@@ -1,0 +1,460 @@
+/***** TWILIGHT GRADIENT THEME FOR OBSIDIAN *****/
+/* Astronomical blue-hour gradient: midnight navy zenith -> thin ember band.
+ * Stops (zenith to horizon):
+ * #020B2A #041538 #0A2451 #113A73 #1A5B99
+ * #2D7DB6 #4EA6CF #7DB8C9 #E59A63 #6A4A42
+ * Dark-only theme.
+ *
+ * Section Index
+ * 1. Palette Variables (body)
+ * 2. Theme Overrides (.theme-dark)
+ * 3. Ember-glow workspace background
+ * 4. Headings
+ * 5. Links
+ * 6. Tags
+ * 7. Code
+ * 8. Tables
+ * 9. Lists & Tasks
+ * 10. Embeds & Callouts
+ * 11. Navigation & Sidebar
+ * 12. Graph View
+ * 13. Misc UI
+ */
+
+/* ================================================================
+   1. PALETTE VARIABLES
+   ================================================================ */
+body {
+    /* Twilight stops, zenith -> horizon */
+    --tw-zenith:        #020B2A;
+    --tw-midnight:      #041538;
+    --tw-indigo:        #0A2451;
+    --tw-cobalt:        #113A73;
+    --tw-azure:         #1A5B99;
+    --tw-cerulean:      #2D7DB6;
+    --tw-glow-cyan:     #4EA6CF;
+    --tw-haze:          #7DB8C9;
+    --tw-ember:         #F09A56;
+    --tw-amber:         #E59A63;
+    --tw-earth:         #6A4A42;
+
+    /* Derived text tones (mixed for on-navy readability) */
+    --tw-paper:         #F0E9D8;
+    --tw-muted:         #9DB4C6;
+    --tw-faint:         #55708C;
+
+    --font-monospace: "Hack Nerd Font", "Source Code Pro", monospace;
+    -webkit-font-smoothing: auto;
+}
+
+/* ================================================================
+   2. THEME OVERRIDES — dark only
+   ================================================================ */
+.theme-dark {
+    /* Backgrounds */
+    --background-primary:             var(--tw-zenith);
+    --background-primary-alt:         var(--tw-midnight);
+    --background-secondary:           var(--tw-midnight);
+    --background-secondary-alt:       var(--tw-indigo);
+    --background-modifier-border:     var(--tw-cobalt);
+    --background-modifier-form-field: var(--tw-indigo);
+    --background-modifier-hover:      var(--tw-indigo);
+    --background-modifier-active-hover: var(--tw-cobalt);
+
+    /* Text */
+    --text-normal:        var(--tw-paper);
+    --text-muted:         var(--tw-muted);
+    --text-faint:         var(--tw-faint);
+    --text-on-accent:     var(--tw-zenith);
+    --text-on-accent-inverted: var(--tw-paper);
+    --text-error:         #F0665F;
+    --text-warning:       var(--tw-ember);
+    --text-success:       var(--tw-glow-cyan);
+
+    /* Interactive accent (ember band) */
+    --interactive-accent:       var(--tw-amber);
+    --interactive-accent-hsl:   24, 71%, 64%;
+    --interactive-accent-hover:  var(--tw-ember);
+
+    /* Links */
+    --link-color:                var(--tw-glow-cyan);
+    --link-color-hover:          var(--tw-haze);
+    --link-decoration:           none;
+    --link-decoration-hover:     underline;
+    --link-external-color:       var(--tw-haze);
+    --link-external-color-hover: var(--tw-glow-cyan);
+    --link-external-decoration:  none;
+    --link-unresolved-color:     var(--tw-ember);
+    --link-unresolved-opacity:   0.85;
+    --link-unresolved-decoration-style: dashed;
+
+    /* Headings: ember -> amber -> cyan haze down the levels */
+    --h1-color: var(--tw-ember);
+    --h2-color: var(--tw-amber);
+    --h3-color: var(--tw-glow-cyan);
+    --h4-color: var(--tw-haze);
+    --h5-color: var(--tw-cerulean);
+    --h6-color: var(--tw-muted);
+
+    /* Tags */
+    --tag-color:            var(--tw-glow-cyan);
+    --tag-color-hover:      var(--tw-haze);
+    --tag-background:       rgba(78, 166, 207, 0.12);
+    --tag-background-hover: rgba(78, 166, 207, 0.24);
+    --tag-border-color:     rgba(78, 166, 207, 0.35);
+    --tag-border-color-hover: rgba(125, 184, 201, 0.6);
+    --tag-decoration:       none;
+    --tag-padding-x:        6px;
+    --tag-padding-y:        1px;
+    --tag-radius:           2px;
+
+    /* Code */
+    --code-normal:      var(--tw-ember);
+    --code-background:  var(--tw-midnight);
+    --code-comment:     var(--tw-faint);
+    --code-function:    var(--tw-glow-cyan);
+    --code-keyword:     var(--tw-amber);
+    --code-operator:    var(--tw-haze);
+    --code-property:    var(--tw-amber);
+    --code-punctuation: var(--tw-muted);
+    --code-string:      var(--tw-cerulean);
+    --code-tag:         var(--tw-azure);
+    --code-value:       var(--tw-ember);
+    --code-important:   var(--tw-ember);
+
+    /* Inline title */
+    --inline-title-color: var(--tw-ember);
+
+    /* Highlights & selections */
+    --text-highlight-bg:   rgba(229, 154, 99, 0.28);
+    --text-selection:      rgba(78, 166, 207, 0.22);
+    --flashing-background: rgba(240, 154, 86, 0.35);
+
+    /* Navigation */
+    --nav-item-color:             var(--tw-muted);
+    --nav-item-color-hover:       var(--tw-paper);
+    --nav-item-color-active:      var(--tw-ember);
+    --nav-item-background-hover:  var(--tw-indigo);
+    --nav-item-background-active: var(--tw-indigo);
+    --nav-indentation-guide-color: var(--tw-cobalt);
+
+    /* Toggle / checkbox */
+    --toggle-thumb-color:       var(--tw-cobalt);
+    --toggle-border-width:      1px;
+    --checkbox-color:           var(--tw-amber);
+    --checkbox-color-hover:     var(--tw-ember);
+    --checkbox-border-color:    var(--tw-amber);
+    --checkbox-border-color-hover: var(--tw-ember);
+    --checklist-done-color:     var(--tw-faint);
+    --checklist-done-decoration: line-through;
+
+    /* Graph */
+    --graph-line:             var(--tw-azure);
+    --graph-node:             var(--tw-glow-cyan);
+    --graph-node-focused:     var(--tw-ember);
+    --graph-node-tag:         var(--tw-amber);
+    --graph-node-attachment:  var(--tw-haze);
+    --graph-node-unresolved:  var(--tw-faint);
+
+    /* Divider / hr */
+    --hr-color: var(--tw-cobalt);
+
+    /* Blockquote */
+    --blockquote-border-color: var(--tw-azure);
+
+    /* Bold & italic */
+    --bold-color:   var(--tw-amber);
+    --italic-color: var(--tw-haze);
+
+    /* Scrollbar */
+    --scrollbar-bg:               var(--tw-zenith);
+    --scrollbar-thumb-bg:         var(--tw-cobalt);
+    --scrollbar-active-thumb-bg:  var(--tw-azure);
+
+    /* Tabs */
+    --tab-text-color:                 var(--tw-muted);
+    --tab-text-color-active:          var(--tw-paper);
+    --tab-text-color-focused:         var(--tw-paper);
+    --tab-text-color-focused-active:  var(--tw-ember);
+    --tab-background-active:          var(--tw-zenith);
+
+    /* Titlebar + status bar */
+    --titlebar-background:         var(--tw-zenith);
+    --titlebar-background-focused: var(--tw-midnight);
+
+    /* Indentation guides */
+    --indentation-guide-color:        var(--tw-cobalt);
+    --indentation-guide-color-active: var(--tw-glow-cyan);
+
+    /* Cursor (vim mode) */
+    --cursor: var(--tw-ember);
+
+    /* Callouts */
+    --callout-info:    var(--tw-glow-cyan);
+    --callout-todo:    var(--tw-glow-cyan);
+    --callout-tip:     var(--tw-haze);
+    --callout-success: var(--tw-cerulean);
+    --callout-warning: var(--tw-ember);
+    --callout-error:   #F0665F;
+    --callout-bug:     var(--tw-amber);
+    --callout-example: var(--tw-amber);
+    --callout-quote:   var(--tw-muted);
+
+    /* Canvas preset colors (ember / amber / haze / cerulean / azure / earth) */
+    --canvas-color-1: 240, 154, 86;
+    --canvas-color-2: 229, 154, 99;
+    --canvas-color-3: 125, 184, 201;
+    --canvas-color-4: 78, 166, 207;
+    --canvas-color-5: 26, 91, 153;
+    --canvas-color-6: 106, 74, 66;
+}
+
+/* ================================================================
+   3. EMBER-GLOW WORKSPACE BACKGROUND
+   Subtle horizon glow pinned to the bottom of the main split,
+   echoing the source gradient without hurting readability.
+   ================================================================ */
+.theme-dark .workspace-split.mod-root {
+    background:
+        radial-gradient(120% 45% at 50% 100%,
+            rgba(240, 154, 86, 0.10) 0%,
+            rgba(240, 154, 86, 0.00) 55%
+        ),
+        linear-gradient(to bottom,
+            var(--tw-zenith) 0%,
+            var(--tw-midnight) 60%,
+            var(--tw-indigo) 100%
+        );
+}
+
+.theme-dark .status-bar {
+    background: linear-gradient(to right,
+        var(--tw-midnight) 0%,
+        var(--tw-indigo) 70%,
+        rgba(229, 154, 99, 0.25) 100%
+    );
+}
+
+/* ================================================================
+   4. HEADINGS
+   ================================================================ */
+.cm-header-1, .markdown-rendered h1 { font-weight: 600; }
+.cm-header-2, .markdown-rendered h2 { font-weight: 600; }
+.cm-header-3, .markdown-rendered h3 { font-weight: 500; }
+.cm-header-4, .markdown-rendered h4 { font-weight: 500; }
+.cm-header-5, .markdown-rendered h5 { font-weight: 500; }
+.cm-header-6, .markdown-rendered h6 { font-weight: 500; }
+
+/* ================================================================
+   5. LINKS
+   internal=glow cyan, external=haze, unresolved=ember dashed
+   ================================================================ */
+.cm-hmd-internal-link,
+.internal-link {
+    color: var(--tw-glow-cyan);
+    text-decoration: none;
+}
+.cm-hmd-internal-link:hover,
+.internal-link:hover {
+    color: var(--tw-haze);
+    text-decoration: underline;
+}
+
+a.external-link,
+.cm-url,
+.cm-link {
+    color: var(--tw-haze);
+}
+a.external-link:hover {
+    color: var(--tw-glow-cyan);
+}
+
+.is-unresolved,
+.internal-link.is-unresolved {
+    color: var(--tw-ember);
+    opacity: 0.85;
+}
+
+/* ================================================================
+   6. TAGS
+   ================================================================ */
+.tag {
+    font-weight: 500;
+    color: var(--tag-color);
+    background-color: var(--tag-background);
+    border: 1px solid var(--tag-border-color);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.tag:hover,
+.tag:focus-visible {
+    color: var(--tag-color-hover);
+    background-color: var(--tag-background-hover);
+    border-color: var(--tag-border-color-hover);
+    text-decoration: none;
+    opacity: 1;
+}
+
+/* ================================================================
+   7. CODE
+   ================================================================ */
+code[class*="language-"],
+pre[class*="language-"] {
+    text-shadow: none;
+}
+
+.markdown-source-view.mod-cm6 .cm-line.HyperMD-codeblock {
+    line-height: 1.4em;
+}
+
+.markdown-rendered pre,
+.markdown-source-view.mod-cm6 .HyperMD-codeblock-begin,
+.markdown-source-view.mod-cm6 .HyperMD-codeblock-end {
+    border: 1px solid var(--tw-cobalt);
+    border-radius: 4px;
+}
+
+/* ================================================================
+   8. TABLES
+   ================================================================ */
+th {
+    font-weight: 600;
+    color: var(--tw-amber);
+}
+
+thead {
+    border-bottom: 2px solid var(--background-modifier-border);
+}
+
+.markdown-rendered tbody tr:nth-child(even) {
+    background-color: rgba(10, 36, 81, 0.45);
+}
+
+/* ================================================================
+   9. LISTS & TASKS
+   ================================================================ */
+input.task-list-item-checkbox {
+    border: 1px solid var(--checkbox-border-color);
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+input.task-list-item-checkbox:checked {
+    background-color: var(--checkbox-color);
+    box-shadow: inset 0 0 0 2px var(--background-primary);
+}
+
+.markdown-rendered .list-bullet::after,
+.markdown-source-view.mod-cm6 .list-bullet::after {
+    background-color: var(--tw-azure);
+}
+
+/* ================================================================
+   10. EMBEDS & CALLOUTS
+   ================================================================ */
+.markdown-embed-title {
+    font-weight: 600;
+    color: var(--tw-glow-cyan);
+}
+
+.markdown-embed {
+    padding-left: 10px;
+    padding-right: 10px;
+    margin-left: 10px;
+    margin-right: 10px;
+    border-left: 2px solid var(--tw-azure);
+}
+
+.markdown-rendered .callout,
+.markdown-source-view.mod-cm6 .callout {
+    --callout-border-width: 1px;
+    --callout-border-opacity: 1;
+    background-color: var(--tw-midnight);
+}
+
+/* ================================================================
+   11. NAVIGATION & SIDEBAR
+   ================================================================ */
+.view-header-title {
+    font-weight: 700;
+}
+
+.workspace-leaf-header-title {
+    font-weight: 600;
+}
+
+.nav-file-title {
+    border-radius: 0;
+}
+
+.nav-file-title.is-active {
+    color: var(--tw-ember);
+}
+
+.nav-folder-title-content {
+    color: var(--tw-muted);
+}
+
+.nav-file-tag {
+    color: var(--tw-glow-cyan);
+}
+
+/* ================================================================
+   12. GRAPH VIEW
+   ================================================================ */
+.graph-view.color-circle,
+.graph-view.color-fill-highlight,
+.graph-view.color-line-highlight {
+    color: var(--interactive-accent);
+}
+
+.graph-view.color-text {
+    color: var(--text-normal);
+}
+
+.graph-view.color-fill-unresolved {
+    color: var(--tw-faint);
+    opacity: 0.6;
+}
+
+/* ================================================================
+   13. MISC UI
+   ================================================================ */
+hr,
+.markdown-rendered hr {
+    border-color: var(--hr-color);
+}
+
+blockquote,
+.markdown-rendered blockquote {
+    border-left: 2px solid var(--blockquote-border-color);
+    color: var(--tw-muted);
+    background: rgba(10, 36, 81, 0.35);
+    border-radius: 0 4px 4px 0;
+}
+
+mark,
+.cm-highlight {
+    background-color: var(--text-highlight-bg);
+    color: var(--tw-paper);
+    border-radius: 2px;
+}
+
+::selection {
+    background: var(--text-selection);
+}
+
+.workspace-tab-header.is-active {
+    box-shadow: inset 0 2px 0 0 var(--tw-ember);
+}
+
+.modal,
+.prompt {
+    border: 1px solid var(--tw-cobalt);
+}
+
+.suggestion-item.is-selected {
+    background-color: var(--tw-indigo);
+}

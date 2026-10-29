@@ -79,11 +79,11 @@ from nor_object_mi.simpler_first_session_paired import (  # noqa: E402
 from nor_object_mi.simpler_first_q1 import kruskal_within_sex  # noqa: E402
 
 DEFAULT_RUN = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_session_paired"
 )
 DEFAULT_SIG = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_syllable_signatures"
 )
 TRIALS = ("no_obj", "id_obj", "nvl_obj")
@@ -624,7 +624,7 @@ def fig_volcano_condition(
     for r, (step, slab) in enumerate(PHASE_VOLCANO_STEPS):
         for c, tx in enumerate(CONDITION_ORDER):
             ax = axes[r, c]
-            cell = t[(t["step"] == step) & (t["condition"] == condition)]
+            cell = t[(t["step"] == step) & (t["condition"] == tx)]
             n_hit = int(cell["hit"].sum())
             n_pt = int(len(cell))
             letter = letters[r * 3 + c]
@@ -638,7 +638,7 @@ def fig_volcano_condition(
                 color=INK,
                 width=36,
             )
-            color = CONDITION_COLOR[condition]
+            color = CONDITION_COLOR[tx]
             for is_hit, s, alpha, z in (
                 (False, miss_s, 0.40, 2),
                 (True, hit_s, 0.90, 3),
@@ -865,7 +865,7 @@ def main(argv: list[str] | None = None) -> int:
     da_only = args.volcano_only or args.ladder_only or args.ladder_overlay_only or args.da_volcano_ladder_only
 
     if da_only:
-        txsex = load_or_build_condition_sex_tests(run, rebuild=args.rebuild_condition_sex)
+        txsex = load_or_build_condition_sex_tests(run, rebuild=args.rebuild_tx_sex)
         pooled_raw = pd.read_csv(run / "session_paired_da_tests_long.csv")
         pooled = attach_cluster_ids_to_tests(
             _normalize_da_axes(pooled_raw), args.sig_dir
@@ -888,14 +888,16 @@ def main(argv: list[str] | None = None) -> int:
             facet_tag=LADDER_COND_TAG,
         )
         if args.volcano_only or args.da_volcano_ladder_only:
-            for cond in TRIALS:
+            trials_present = sorted(set(strat["trial"].astype(str)) & set(TRIALS))
+            for cond in trials_present:
                 fig_volcano_condition(
                     strat, out, condition=cond, dest=args.dest, xlim=xlim, n_map=n_map
                 )
         if args.ladder_only or args.da_volcano_ladder_only:
             write_session_paired_volcano_ladders(pooled, strat, out / "volcano_ladder", **ladder_kw)
         if args.ladder_overlay_only or args.da_volcano_ladder_only:
-            for cond in TRIALS:
+            trials_present = sorted(set(strat["trial"].astype(str)) & set(TRIALS))
+            for cond in trials_present:
                 fig_volcano_ladder_overlay_phase(
                     pooled,
                     strat,

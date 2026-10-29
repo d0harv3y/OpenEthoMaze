@@ -49,7 +49,7 @@ from nor_object_mi.simpler_first_presence import (  # noqa: E402
 )
 
 DEFAULT_RUN = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_presence_steps"
 )
 METRICS = ("frac_near", "mean_dist_any_m", "richness", "shannon_bits")

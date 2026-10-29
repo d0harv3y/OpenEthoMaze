@@ -22,6 +22,22 @@ def _session_object_centers_px(session: h5py.Group) -> list[np.ndarray]:
     return out
 
 
+def _h5_attr(node: h5py.Group, *names: str) -> str:
+    for name in names:
+        if name in node.attrs:
+            return str(node.attrs.get(name) or "")
+    return ""
+
+
+_TRIAL_WIRE = {
+    "novel_obj": "nvl_obj",
+    "identical_obj": "id_obj",
+    "nvl_obj": "nvl_obj",
+    "id_obj": "id_obj",
+    "no_obj": "no_obj",
+}
+
+
 def collect_phase_object_centers_px(
     nor_h5: h5py.File,
     animal_id: str,
@@ -36,9 +52,12 @@ def collect_phase_object_centers_px(
     wanted = set(trials)
     for raw in nor_h5[animal_id].keys():
         sg = nor_h5[animal_id][raw]
-        if str(sg.attrs.get("session", "") or "") != session:
+        pl = _h5_attr(sg, "session", "phase_layer")
+        if pl != session:
             continue
-        if str(sg.attrs.get("trial", "") or "") not in wanted:
+        trial_raw = _h5_attr(sg, "trial", "condition_layer")
+        trial = _TRIAL_WIRE.get(trial_raw, trial_raw)
+        if trial not in wanted:
             continue
         pts.extend(_session_object_centers_px(sg))
     if not pts:

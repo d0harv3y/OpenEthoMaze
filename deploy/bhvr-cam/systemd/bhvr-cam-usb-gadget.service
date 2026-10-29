@@ -1,0 +1,15 @@
+[Unit]
+Description=bhvr-cam USB gadget CDC ECM (usb0 for NVR tether)
+DefaultDependencies=no
+After=systemd-modules-load.service local-fs.target
+Before=NetworkManager.service network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/bhvr-cam-usb-gadget start
+ExecStop=/usr/local/bin/bhvr-cam-usb-gadget stop
+
+[Install]
+WantedBy=multi-user.target

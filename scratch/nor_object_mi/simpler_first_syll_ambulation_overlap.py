@@ -34,19 +34,19 @@ from nor_object_mi.syll_ambulation_overlap import (  # noqa: E402
 
 CONDITION = "nvl_obj"
 DEFAULT_SYLL = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_syllable_kinematics\syllable_bout_kinematics.csv"
 )
 DEFAULT_MOVE = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_movement_kinematics\movement_bout_kinematics.csv"
 )
 DEFAULT_STILL = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_movement_kinematics\immobile_bout_kinematics.csv"
 )
 DEFAULT_OUT = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_syll_ambulation_overlap"
 )
 

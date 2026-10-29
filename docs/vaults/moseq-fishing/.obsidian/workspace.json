@@ -1,0 +1,247 @@
+{
+  "main": {
+    "id": "7d104817c845fef3",
+    "type": "split",
+    "children": [
+      {
+        "id": "ddce6bde8349328a",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "c7b69e7246c2327c",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "21f2c20805f9ef03",
+    "type": "split",
+    "children": [
+      {
+        "id": "c54ec2d8286a0fd2",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "93482c54a92c21d8",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "e1c3caf2478009b2",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "68fef9038d05a7ff",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 407.5
+  },
+  "right": {
+    "id": "1be69d654cdc713c",
+    "type": "split",
+    "children": [
+      {
+        "id": "309a1117e94daf98",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "d8c28f60558ff631",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "questions/Q5 BoutGrammar Honesty Pass.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "6450c1a611177330",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "questions/Q5 BoutGrammar Honesty Pass.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "f7445f21cdc9ed12",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "e0dc65a7aad87300",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "3f041996a86dad39",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "questions/Q5 BoutGrammar Honesty Pass.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          },
+          {
+            "id": "7bb84a15031dcafa",
+            "type": "leaf",
+            "state": {
+              "type": "footnotes",
+              "state": {},
+              "icon": "lucide-file-signature",
+              "title": "Footnotes"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "graph:Open graph view": false,
+      "obsidian-excalidraw-plugin:New drawing": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "bases:Create new base": false,
+      "command-palette:Open command palette": false,
+      "switcher:Open quick switcher": false
+    }
+  },
+  "active": "c7b69e7246c2327c",
+  "lastOpenFiles": [
+    "questions/V DR Physio Null.md",
+    "hypotheses/H Physio Coupling.md",
+    "questions/V Composition Companion Partial.md",
+    "Claims.base",
+    "assays/nor-impress/Motion Sequencing DR Framed Report.md",
+    "assays/nor-impress/runs/Run DR Framed Deck Exemplar.md",
+    "families/F NGramSeq-B.md",
+    "families/F ProxComp Per-Scalar.md",
+    "questions/V ProxComp Per-Scalar Null.md",
+    "assays/nor-impress/runs/Run ProxComp Per-Scalar.md",
+    "families/F ProxComp Per-Scalar Score Contract.md",
+    "families/F NGramSeq-A.md",
+    "families/F ProxComp-A.md",
+    "assays/nor-impress/runs/Run ProxComp.md",
+    "assays/nor-impress/runs/Run QuadComp.md",
+    "assays/nor-impress/runs/Run Prox Quad Per Model.md",
+    "hypotheses/H Alphabet Equating.md",
+    "questions/V Composition Step Fishing.md",
+    "questions/V ProxComp Null.md",
+    "questions/V QuadComp Null.md",
+    "assays/nor-impress/runs/Run Prox Quad Session Step Figs.md",
+    "assays/nor-impress/runs/Run Prox Quad Comp Figs.md",
+    "questions/V Prox Quad Per Animal Exploratory.md",
+    "questions/V Prox Quad SessDelta Null.md",
+    "assays/nor-impress/runs/Run Alphabet Equate Soft Shape.md",
+    "2026-10-07.md",
+    "Untitled.canvas",
+    "shared/Litmus Ladder.md",
+    "Runs.base",
+    "attachments/fig_v_composition_step_da_nhits_clusters_by_sex_condition.svg",
+    "attachments/fig_v_composition_step_da_nhits_by_sex_condition.svg",
+    "Verdicts.base",
+    "shared/add_frontmatter.py",
+    "attachments/fig_v_assay_dr_vs0.svg",
+    "attachments/fig_v_dr_physio_null_nor_tx_L.png",
+    "attachments/fig_v_protocol_step_frac_still_level.svg",
+    "attachments/fig_v_composition_step_da_volcano_tx.png",
+    "attachments/fig_v_composition_step_da_nhits.png",
+    "attachments/fig_v_composition_step_shannon_session.svg",
+    "attachments/fig_v_protocol_step_session_scalar_agreement.svg",
+    "attachments/fig_v_composition_step_da_agreement.svg",
+    "families",
+    "estimands",
+    "hypotheses",
+    "theories",
+    "assays/nor-impress/runs",
+    "assays/nor-impress"
+  ]
+}

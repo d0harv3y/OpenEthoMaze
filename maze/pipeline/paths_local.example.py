@@ -23,7 +23,7 @@ DATA_DIRS: list[Path] = [DATA_DIR]
 VIDEO_PATH_PREFIX_REMAPS: list[tuple[str, str]] = [
     (
         r"E:\videos\vibration maze",
-        r"C:\Users\admin\Documents\work\sack\datas\videos\vibration maze",
+        r"D:\sack\datas\videos\vibration maze",
     ),
 ]
 

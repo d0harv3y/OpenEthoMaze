@@ -32,7 +32,7 @@ from nor_object_mi._pub_style import (  # noqa: E402
 )
 from nor_object_mi.info_sex_cluster import default_out_dir  # noqa: E402
 
-ROOT = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+ROOT = Path(r"D:\sack\datas\impress\moseq_251017")
 
 
 def _neglog10_p(p: float) -> float:

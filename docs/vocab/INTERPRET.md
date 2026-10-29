@@ -25,7 +25,7 @@ charted / `ladder-only` as in FORMULAS.md.
 
 Does **not** say how evenly they were used. Two windows can share S and differ totally in H.
 
-**Abundance uncertainty** (`shannon_bits`) — D, charted
+**Abundance uncertainty** / **entropy** $H(p)$ (`shannon_bits`) — D, charted
 
 | | |
 |--|--|
@@ -34,7 +34,19 @@ Does **not** say how evenly they were used. Two windows can share S and differ t
 | Low | peaked: a few labels dominate |
 | High | flatter: a random frame is harder to guess |
 
+**Entropy = uncertainty** here: bits of surprise about **which category** under this window $p$. Not conditional entropy; not MI; not total **variance** of a numeric trait.
+
 Compare $H$ only at the same grain **and** similar $S$ / $K$. Rise in $H$ can be more categories **or** more evenness. Hill ${}^{1}D = 2^{H}$ is “how many equal categories would give this $H$” ($1$ = peaked, $S$ = perfectly even).
+
+**Conditional entropy** $H(Y \mid X)$ — D, UNCERTAINTY; bout chart `H_next_given_curr`
+
+| | |
+|--|--|
+| Range | $0 \ldots \log_2 K$ bits for $K$ next states (bout case); $H_{\mathrm{norm}} = H / \log_2 K$ for cross-alphabet |
+| Low | $Y$ predictable once $X$ is known |
+| High | knowing $X$ barely shrinks uncertainty in $Y$ |
+
+General object; **transition instance** is $H(\mathrm{next} \mid \mathrm{current})$ from $P(\mathrm{next}\mid\mathrm{current})$ — see § TRANSITION below. $I(X;Y) = H(Y) - H(Y \mid X)$.
 
 **Dominance / Hill q=2** — D, `ladder-only`
 
@@ -193,6 +205,8 @@ Rank procedures are rank **by name** (`wilcoxon_`, `kruskal_`, `mannwhitney_`, `
 
 **Multiplicity-corrected** (`q_bh`, `hit_fdr05`): after many related tests in one **family**, BH FDR q; primary DA hit `q_bh < 0.05`. Same underlying tests; different decision rule. q is not effect size and is not comparable across families.
 
+**FWER cousins (not our DA primary):** Bonferroni = any-false-hit in a declared family. **Tukey HSD** (“Tukey adjustment”) = FWER for all pairwise **mean** contrasts after classical one-way ANOVA among $k$ groups. Not FDR. Not the omnibus Kruskal / Welch ANOVA. Not Dunn/Conover (those are rank post-hocs). Our arm-contrast BH is still FDR-style within that arm family — do not call it Tukey.
+
 A tiny p with a tiny median Δ is still a small move. A large $F$ / $H$ with p = 0.3 is **not** a hit. Do not compare $H$ to ANOVA’s $F$ as if they were the same statistic.
 
 **Signed-rank statistic $T$** (Wilcoxon; token `wilcoxon_`) — I companion, charted
@@ -283,7 +297,21 @@ Two panels (presence vs novelty). Shared x-limits across phase stems so Δp scal
 
 Association of **ranks**, not of the raw $\Delta p$ scale. **Cousin:** Pearson $r$ (`pearson_`) on the raw scale — different token.
 
-## INFO / VOLATILITY / MODEL
+## TRANSITION / INFO / RESIDUAL / VOLATILITY / MODEL
+
+**Transition law** $P(\mathrm{next}\mid\mathrm{current})$ — D (row-stochastic $P_{ij}$; often Laplace $\alpha=1$). Each row = distribution over next labels given current $i$. Diagonal mass on bout streams is smoothing only (raw self-transitions are zero by construction). Not entropy on window $p$. Equations: [FORMULAS.md](FORMULAS.md) § TRANSITION.
+
+**$H(\mathrm{next}\mid\mathrm{current})$** (`H_next_given_curr`) — D; instance of conditional entropy above. Count-robust relative to TV-to-ref (see FORMULAS count-confound note).
+
+**Total variation (TV)** of $P$ vs reference $Q$ (`trans_dist_to_nosd_ref`) — D, DIFFERENCE between laws
+
+| | |
+|--|--|
+| Range | $0 \ldots 1$ |
+| 0 | identical transition matrices (on declared support) |
+| High | animal’s $P$ far from pooled ref |
+
+**Total variation**, not **total variance** ($\sigma^2$). Sparse animals → nearer-uniform $P$ → TV can inflate — **never** without a transition-count check.
 
 **Shared information** $I(X; Y)$ — D estimate (bits), `ladder-only` in moseq_251017 (VAST MI path)
 
@@ -293,15 +321,47 @@ Association of **ranks**, not of the raw $\Delta p$ scale. **Cousin:** Pearson $
 | 0 | independent (plug-in can be slightly off-zero) |
 | High | knowing one shrinks uncertainty in the other a lot |
 
-Not a composition distance. Occupancy vs transition are different questions. Miller–Madow `mi_mm` is a bias-adjusted estimate, still D until you test it.
+Not a composition distance. Occupancy MI vs transition MI ($I(\mathrm{next};\mathrm{stim}\mid\mathrm{current})$) vs $H(\mathrm{next}\mid\mathrm{current})$ are different questions. Miller–Madow `mi_mm` is a bias-adjusted estimate, still D until you test it.
 
-**Temporal compositional variability** — D, `ladder-only`
+**Model residual** $e = y - \hat y$ (`resid_*`) — D leftover; I when tested by groups
 
-Meaning follows the **named distance + summary** (mean consecutive BC ≠ cumulative turnover). High = the unit’s composition moved a lot over time. Independent of Shannon-at-each-time (state now vs movement).
+| | |
+|--|--|
+| Range | same units as $Y$; often centered near 0 within the fit stratum |
+| ≈ 0 | $Y$ well predicted by the declared $X$s for this unit |
+| Large \|e\| | $Y$ far from what speed / still / near (or other $X$s) would predict |
+| Sign | above (+) or below (−) the fitted surface |
+
+NOR residual litmus tokens: `resid_shannon_bits`, `resid_H_next_given_curr`, `resid_pair_MI`. Meaning is **only** relative to the named regression. A residual that still separates `condition` is leftover signal beyond those covariates; a null on residuals means the raw $Y$’s condition story was redundant with Layer A (collinearity demo: raw p can collapse after residualization).
+
+**Not** conditional entropy. **Not** TV. **Not** FDR. See [FORMULAS.md](FORMULAS.md) § RESIDUAL.
+
+**Temporal compositional variability** (alias: **volatility**; token `volatility_`) — D, `ladder-only`
+
+Meaning follows the **named distance + summary** (mean consecutive BC ≠ cumulative turnover). High = the unit’s composition moved a lot over time. Independent of Shannon-at-each-time (state now vs movement). Resistance / recovery are related trajectory claims, not synonyms. See [CONTEXT.md](CONTEXT.md) § Volatility.
 
 **Trajectory class model** (LCMM) — I, `ladder-only`
 
 Class index is a **model construct**, not a verified subtype. Posterior probability near 1 = the model is sure of its assignment, not that biology has two kinds of mouse.
+
+## TIME-TO-EVENT
+
+**Kaplan–Meier** $\hat{S}(t)$ (token `kaplan_meier_`) — D, `ladder-only`
+
+| | |
+|--|--|
+| Range | $0 \ldots 1$; step down only at **event** times |
+| 1 | nobody has had the event yet |
+| Low / 0 | most units have had the event by this $t$ |
+| Flat then drop | waiting, then events |
+
+**Right-censoring:** trial ended without the event → still in the risk set until then; **not** an event at $T_{\max}$. Mean of observed latencies that drop the never-happened rows is biased high or low depending on how you recode — do not substitute that for $\hat S$.
+
+**Median time-to-event** — D companion: time $\hat S$ crosses 0.5. Undefined if the curve stays above 0.5 (too few events).
+
+**Log-rank p** — I, `ladder-only`: curves differ under the null of identical survival. Not magnitude. k-group form exists; pairwise still needs a declared family.
+
+**Not** `frac_near` / occupancy (time-in-state). **Not** volatility. Intended maze home: **RAM** latencies (first correct / first error / complete) with incomplete trials censored.
 
 ## Pose construction
 

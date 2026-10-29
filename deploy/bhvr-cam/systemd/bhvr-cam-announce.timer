@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodic bhvr-cam MQTT announce
+
+[Timer]
+OnBootSec=30s
+# 0.1 Hz env/presence announce; HTU SMA ring is AVG_N samples at this period.
+OnUnitActiveSec=10s
+AccuracySec=1s
+Unit=bhvr-cam-announce.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,21 @@
+# NVR address + DHCP on the cam gadget bridge (not on individual usbN).
+[Match]
+Name=br-bhvr
+
+[Link]
+RequiredForOnline=no
+
+[Network]
+ConfigureWithoutCarrier=yes
+Address=192.168.7.1/24
+DHCPServer=yes
+IPForward=no
+# wlan0 stays the uplink — no DNS/default route here.
+
+[DHCPServer]
+PoolOffset=10
+PoolSize=40
+DefaultLeaseTimeSec=1h
+MaxLeaseTimeSec=4h
+EmitDNS=no
+EmitRouter=yes

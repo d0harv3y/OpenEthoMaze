@@ -7,7 +7,7 @@ by ``(model, raw_syllable_id)``, then clusters prototypes across the five
 Regen:
   uv run python scratch/vast_moseq/regen_syllable_signatures.py
   uv run python scratch/nor_object_mi/fig_simpler_first_syllable_signatures.py \\
-    --run-dir C:/Users/admin/Documents/work/sack/AZ-SD-VAST-moseq/syllable_signatures
+    --run-dir D:/sack/AZ-SD-VAST-moseq/syllable_signatures
 """
 
 from __future__ import annotations
@@ -33,10 +33,10 @@ from nor_object_mi.simpler_first_syllable_signatures import (  # noqa: E402
 )
 
 DEFAULT_KIN = Path(
-    r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq"
+    r"D:\sack\AZ-SD-VAST-moseq"
     r"\syllable_bout_kinematics\syllable_bout_kinematics.csv"
 )
-DEFAULT_OUT = Path(r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq\syllable_signatures")
+DEFAULT_OUT = Path(r"D:\sack\AZ-SD-VAST-moseq\syllable_signatures")
 
 
 def _info_md() -> str:

@@ -13,6 +13,8 @@ if str(_SCRATCH) not in sys.path:
 
 from nor_object_mi.bout_kinematics import (  # noqa: E402
     KINEMATICS_FIELDS,
+    SHAPE_FIELDS,
+    bout_shape_scalars,
     immobile_spans_from_movement,
     model_num_states,
     spans_from_movement_recs,
@@ -24,6 +26,7 @@ from nor_object_mi.bout_kinematics import (  # noqa: E402
 def test_model_num_states() -> None:
     assert model_num_states("paramscan_s1-1e8_s2-1e5_ss-50") == 50
     assert model_num_states("paramscan_ss-10_extra") == 10
+    assert model_num_states("paramscan_s1-1e7_s2-1e4_ss-50_ct-0.2") == 50
     assert not np.isfinite(model_num_states("nope"))
 
 
@@ -90,6 +93,29 @@ def test_kinematics_fields_include_speed_and_heading() -> None:
     assert "bout_mean_speed_mps" in KINEMATICS_FIELDS
     assert "bout_mean_abs_dheading" in KINEMATICS_FIELDS
     assert "raw_syllable_id" in KINEMATICS_FIELDS
+    for c in SHAPE_FIELDS:
+        assert c in KINEMATICS_FIELDS
+
+
+def test_bout_shape_peak_and_still_duty() -> None:
+    # ramp then hold: peak at last frame; still duty = 0
+    speed = np.array([0.05, 0.10, 0.20, 0.40], dtype=np.float64)
+    dh = np.array([0.1, 0.1, 0.2, 0.2], dtype=np.float64)
+    nt = np.array([0.08, 0.09, 0.10, 0.11], dtype=np.float64)
+    s = bout_shape_scalars(speed, dh, nt, still_speed_mps=0.02)
+    assert s["bout_peak_speed_mps"] == 0.40
+    assert s["bout_time_to_peak_frac"] == 1.0
+    assert s["bout_speed_duty_still"] == 0.0
+    assert abs(s["bout_nose_tail_delta_m"] - 0.03) < 1e-12
+    assert s["bout_accel_decel_asym"] > 0  # only rises
+
+
+def test_bout_shape_still_duty() -> None:
+    speed = np.array([0.0, 0.01, 0.05, 0.0], dtype=np.float64)
+    dh = np.ones(4) * 0.05
+    nt = np.ones(4) * 0.1
+    s = bout_shape_scalars(speed, dh, nt, still_speed_mps=0.02)
+    assert abs(s["bout_speed_duty_still"] - 0.75) < 1e-12
 
 
 def test_align_truncation_lengths() -> None:

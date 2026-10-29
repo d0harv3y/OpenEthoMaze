@@ -33,15 +33,15 @@ from nor_object_mi._pub_style import (  # noqa: E402
 from nor_object_mi.duration_band import MAX_FREQ_RANK, pick_duration_band  # noqa: E402
 
 DEFAULT_COUNTS = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_syllable_descriptives\syllable_counts_clean.csv"
 )
 DEFAULT_PROTO = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_syllable_signatures\syllable_prototypes_clustered.csv"
 )
 DEFAULT_DA = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_da"
 )
 K_COLOR = {50: "#1b9e77", 75: "#d95f02", 100: "#7570b3"}

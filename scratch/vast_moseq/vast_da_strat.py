@@ -1,4 +1,8 @@
-"""Stratified Wilcoxon DA tests for VAST cohort (tx × sex × strain)."""
+"""Stratified Wilcoxon DA tests for VAST cohort (tx × sex × strain).
+
+Accepts wire ``session`` + ``trial_step``/``session_step``, or legacy
+``phase_layer`` + ``step``.
+"""
 
 from __future__ import annotations
 
@@ -10,12 +14,40 @@ from nor_object_mi.simpler_first_da import apply_bh_grouped
 from vast_moseq.cohort_meta import norm_tx
 
 
+def _normalize_step_frame(dtab: pd.DataFrame) -> tuple[pd.DataFrame, str, str]:
+    """Return (frame, hold_col, step_col) with wire names."""
+    out = dtab.copy()
+    if "session" not in out.columns and "phase_layer" in out.columns:
+        out = out.rename(columns={"phase_layer": "session"})
+    if "trial_window" not in out.columns and "condition_layer" in out.columns:
+        out = out.rename(columns={"condition_layer": "trial_window"})
+
+    if "session_step" in out.columns:
+        step_col = "session_step"
+        hold_col = "trial_window"
+    elif "trial_step" in out.columns:
+        step_col = "trial_step"
+        hold_col = "session"
+    elif "step" in out.columns:
+        # Legacy trial-window DA used bare ``step`` + ``phase_layer``.
+        out = out.rename(columns={"step": "trial_step"})
+        step_col = "trial_step"
+        hold_col = "session"
+    else:
+        raise ValueError("need trial_step, session_step, or legacy step")
+
+    if hold_col not in out.columns:
+        raise ValueError(f"missing hold column {hold_col!r}")
+    return out, hold_col, step_col
+
+
 def da_tests_cohort_strat_from_deltas(dtab: pd.DataFrame, *, progress: bool = False) -> pd.DataFrame:
-    """Wilcoxon + BH per syllable inside each model × phase × step × tx × sex × strain."""
+    """Wilcoxon + BH per syllable inside each model × hold × step × tx × sex × strain."""
+    out, hold_col, step_col = _normalize_step_frame(dtab)
     need = {
         "model",
-        "phase_layer",
-        "step",
+        hold_col,
+        step_col,
         "tx",
         "sex",
         "strain",
@@ -25,15 +57,14 @@ def da_tests_cohort_strat_from_deltas(dtab: pd.DataFrame, *, progress: bool = Fa
         "p_right",
         "bc_contrib_frac",
     }
-    missing = [c for c in need if c not in dtab.columns]
+    missing = [c for c in need if c not in out.columns]
     if missing:
         raise ValueError(f"da_tests_cohort_strat_from_deltas missing columns: {missing}")
-    if dtab.empty:
+    if out.empty:
         return pd.DataFrame()
 
-    out = dtab.copy()
     out["tx"] = out["tx"].map(norm_tx)
-    keys = ["model", "phase_layer", "step", "tx", "sex", "strain", "raw_syllable_id"]
+    keys = ["model", hold_col, step_col, "tx", "sex", "strain", "raw_syllable_id"]
     has_left = "left" in out.columns
     has_right = "right" in out.columns
     cols = list(keys) + ["delta_p", "p_left", "p_right", "bc_contrib_frac"]
@@ -82,8 +113,8 @@ def da_tests_cohort_strat_from_deltas(dtab: pd.DataFrame, *, progress: bool = Fa
         n_fin = int(np.sum(finite))
         row: dict[str, object] = {
             "model": str(rec_key[0]),
-            "phase_layer": str(rec_key[1]),
-            "step": str(rec_key[2]),
+            hold_col: str(rec_key[1]),
+            step_col: str(rec_key[2]),
             "tx": str(rec_key[3]),
             "sex": str(rec_key[4]),
             "strain": str(rec_key[5]),
@@ -107,6 +138,6 @@ def da_tests_cohort_strat_from_deltas(dtab: pd.DataFrame, *, progress: bool = Fa
         rows.append(row)
 
     tests = pd.DataFrame(rows)
-    tests = apply_bh_grouped(tests, ["model", "phase_layer", "step", "tx", "sex", "strain"])
+    tests = apply_bh_grouped(tests, ["model", hold_col, step_col, "tx", "sex", "strain"])
     tests["hit_p05"] = pd.to_numeric(tests["p"], errors="coerce") < 0.05
     return tests

@@ -43,7 +43,7 @@ from vast_moseq.vast_syllable_kruskal import (  # noqa: E402
     pick_late_early_winners,
 )
 
-DEFAULT_DA = Path(r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq\_da_trial_windows")
+DEFAULT_DA = Path(r"D:\sack\AZ-SD-VAST-moseq\_da_trial_windows")
 DELTA_USECOLS = (
     "model",
     "animal_id",

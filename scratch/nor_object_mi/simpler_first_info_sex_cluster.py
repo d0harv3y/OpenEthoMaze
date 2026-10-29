@@ -20,7 +20,7 @@ from nor_object_mi.info_sex_cluster import (  # noqa: E402
     write_run,
 )
 
-ROOT = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+ROOT = Path(r"D:\sack\datas\impress\moseq_251017")
 ART_ROOT = ROOT / "_nor_object_mi"
 
 

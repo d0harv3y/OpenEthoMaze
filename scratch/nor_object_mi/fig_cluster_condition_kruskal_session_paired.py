@@ -78,15 +78,15 @@ from nor_object_mi.fig_cluster_condition_kruskal_common import (  # noqa: E402
 )
 
 DEFAULT_PP = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_session_paired"
 )
 DEFAULT_DA = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_da"
 )
 DEFAULT_SIG = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_syllable_signatures"
 )
 DELTA_USECOLS = (

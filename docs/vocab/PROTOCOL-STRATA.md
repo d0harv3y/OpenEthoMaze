@@ -69,6 +69,8 @@ Other animal strata (unchanged roles): `sex`, `strain`, `drug`.
 | `interval` | `run`, `wait` (when used) | — |
 | `condition` | `noSD`, `GHSD`, `RBSD` | Same arms as NOR. |
 
+Time-to-event (latency to first correct arm / first error / trial complete, with right-censoring when the event never fires) is the planned **Kaplan–Meier** home — [STATS.md](STATS.md) § Time-to-event; still `ladder-only` until a runner exists.
+
 H5 paths remain `/{animal}/{session}/{trial}` conceptually; **campaign B does not rewrite historical H5 groups**.
 
 ## Cutover
@@ -121,7 +123,7 @@ H5 paths remain `/{animal}/{session}/{trial}` conceptually; **campaign B does no
 | `iti`, `iti_wait`, file suffix `_iti` | `wait` (interval) |
 | `NoSD` | `noSD` |
 | RAM session `SD` | `TX` |
-| NOR boss aliases `NOR1` / `NOR2` | map per local export notes onto `session` (often BL vs TX) — do not revive as columns |
+| NOR boss aliases `NOR1` … `NOR4` | **NOR IMPRESS only** — map onto wire `session` then drop as columns; see [NOR-IMPRESS-BOSS-SESSION-MAP.md](NOR-IMPRESS-BOSS-SESSION-MAP.md). Do not reuse for other datasets |
 
 ### Optional prose only (not columns)
 

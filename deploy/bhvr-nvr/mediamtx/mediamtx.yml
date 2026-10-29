@@ -1,0 +1,44 @@
+# bhvr NVR MediaMTX — multi-cam live (grill 11 / task 12)
+# Cam publishes MPEG-TS UDP → path; kiosk Chromium reads WHEP on :8889;
+# native tiles can read RTSP on :8554 (mpv/ffplay litmus).
+# Port map: bhvr-camN → UDP 15550+N (cam0=:15550, cam1=:15551, …).
+
+logLevel: info
+logDestinations: [stdout]
+
+# RTSP read enabled for native-tile litmus (mpv/ffplay) alongside WHEP.
+rtsp: true
+rtspAddress: :8554
+rtmp: false
+hls: false
+srt: false
+moq: false
+playback: false
+
+webrtc: true
+webrtcAddress: :8889
+webrtcEncryption: false
+webrtcAllowOrigins: ["http://127.0.0.1:8080", "http://localhost:8080", "*"]
+# Filled/overridden at install with 127.0.0.1 + usb0 + wlan0.
+webrtcAdditionalHosts: [127.0.0.1, 192.168.7.1]
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: :8189
+
+# One MediaMTX path per MQTT cam id. Cam1 migrated off shared :15550 → :15551.
+paths:
+  bhvr-cam0:
+    source: udp+mpegts://0.0.0.0:15550
+  bhvr-cam1:
+    source: udp+mpegts://0.0.0.0:15551
+  bhvr-cam2:
+    source: udp+mpegts://0.0.0.0:15552
+  bhvr-cam3:
+    source: udp+mpegts://0.0.0.0:15553
+  bhvr-cam4:
+    source: udp+mpegts://0.0.0.0:15554
+  bhvr-cam5:
+    source: udp+mpegts://0.0.0.0:15555
+  bhvr-cam6:
+    source: udp+mpegts://0.0.0.0:15556
+  bhvr-cam7:
+    source: udp+mpegts://0.0.0.0:15557

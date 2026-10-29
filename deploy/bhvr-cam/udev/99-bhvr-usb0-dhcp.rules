@@ -1,0 +1,3 @@
+# When gadget usb0 appears, ask networkd to (re)configure DHCP.
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="usb0", \
+  TAG+="systemd", ENV{SYSTEMD_WANTS}="bhvr-cam-usb0-dhcp.service"

@@ -51,6 +51,18 @@ NOR/ele leftovers       drop hab|exp phase column
 
 **Compatibility bar:** after migration, `list_trials` / `TrialKey` / `load_manifest_csv` / feedback+xy join / kpMS recording keys resolve without legacy-only branches *for this file*. Temporary read shims may remain for unre-migrated files until cutover completes.
 
+## Design north star — Neurodata Without Borders (NWB)
+
+When this migration *does* run, endeavour to align the frozen ultra-legacy (and any new export path) with **[NWB](https://nwb-schema.readthedocs.io/en/latest/index.html)** (Neurodata Without Borders) rather than inventing a third OEM-only dialect.
+
+Practical reading for this ticket:
+
+- Prefer mapping concepts onto NWB types where they already exist (`Subject`, `TimeIntervals` / epochs, behavior `SpatialSeries` / `Position`, `ProcessingModule`, external video via `ImageSeries`, …) instead of freeform `/animal/session/trial/` trees alone.
+- OEM wire names (`session` → `trial` → `interval`, animal strata) should remain the **analysis vocabulary**; NWB is the **on-disk interchange** target for the frozen DB where feasible.
+- Full byte-identical NWB compliance may be phased (ndx extension for maze-specific feedback / kpMS ethogram if core types are insufficient). Document gaps rather than fake compliance.
+- Spec entry point: https://nwb-schema.readthedocs.io/en/latest/index.html
+- **Potential OEM add-in:** [NeuroConv](https://neuroconv.readthedocs.io/) (`neuroconv` / [catalystneuro/neuroconv](https://github.com/catalystneuro/neuroconv)) — convert / combine streams into NWB with format `DataInterface`s (behavior gallery already includes SLEAP, DeepLabCut, video). Prefer a thin OEM→NeuroConv interface over a one-off `pynwb` writer if/when we export. Not installed today; declare as an optional `uv` extra only after a spike proves fit.
+
 ## Open design questions (answer before coding)
 
 1. **Scope of “all”:** which on-disk H5 roots are in (lab drives, sack, ele, IMPRESS)? Inventory first.
@@ -59,6 +71,7 @@ NOR/ele leftovers       drop hab|exp phase column
 4. **Partial trials / mistrials:** keep as-is with current mistrial attrs; no re-analyze in migrator.
 5. **Verification:** litmus set — open N trials, compare key datasets (xy length, feedback align, syllable keys) pre/post; checksums.
 6. **Delivery:** single file vs sharded by assay (`ultra_legacy_vast.h5`, …) still “one dialect.”
+7. **NWB depth:** native `.nwb` via `pynwb` / **NeuroConv** vs NWB-shaped groups inside a multi-animal H5 vs export-on-demand adapter from current OEM layout.
 
 ## Suggested milestones (when un-deferred)
 
@@ -70,10 +83,11 @@ NOR/ele leftovers       drop hab|exp phase column
 
 ## Acceptance (sketch)
 
-- [ ] One (or few assay-sharded) ultra-legacy H5(s) with **current** group/attr names only.
+- [ ] One (or few assay-sharded) ultra-legacy H5(s) with **current** group/attr names only — **or** NWB / NWB-export layout per the north-star note above.
 - [ ] Documented provenance map `source_h5 + old_path → new_path`.
 - [ ] Same analysis entrypoints run on ultra-legacy and a modern cohort without legacy column forks.
 - [ ] Explicit “do not mutate” note in AGENTS / paths docs.
+- [ ] Written gap list vs [NWB schema](https://nwb-schema.readthedocs.io/en/latest/index.html) (what maps cleanly vs needs `ndx-*` / LabMetaData).
 
 ---
 

@@ -33,7 +33,7 @@ from nor_object_mi.info_dr_pause_delta import (  # noqa: E402
     y_metric_choices,
 )
 
-ROOT = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+ROOT = Path(r"D:\sack\datas\impress\moseq_251017")
 DEFAULT_OBJECT_PROX = ROOT / "_nor_object_mi" / "simpler_first_object_prox_0p10"
 DEFAULT_DA = ROOT / "_nor_object_mi" / "simpler_first_da"
 

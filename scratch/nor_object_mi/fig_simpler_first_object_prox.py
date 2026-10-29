@@ -51,7 +51,7 @@ from nor_object_mi.simpler_first_object_prox import (  # noqa: E402
     animal_median_across_models,
 )
 
-DEFAULT_RUN = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017" r"\_nor_object_mi\simpler_first_object_prox_0p10")
+DEFAULT_RUN = Path(r"D:\sack\datas\impress\moseq_251017" r"\_nor_object_mi\simpler_first_object_prox_0p10")
 NLP_VMAX = 4.0
 SEX_LAB = {"F": "female", "M": "male"}
 R2_M = 0.20

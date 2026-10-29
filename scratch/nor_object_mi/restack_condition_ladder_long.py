@@ -169,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--art-root",
         type=Path,
-        default=Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017\_nor_object_mi"),
+        default=Path(r"D:\sack\datas\impress\moseq_251017\_nor_object_mi"),
     )
     ap.add_argument("--out-csv", type=Path, default=None)
     args = ap.parse_args(argv)

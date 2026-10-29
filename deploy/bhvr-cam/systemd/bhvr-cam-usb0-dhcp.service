@@ -1,0 +1,18 @@
+[Unit]
+Description=bhvr-cam refresh DHCP on usb0 after gadget bind
+After=bhvr-cam-usb-gadget.service systemd-networkd.service
+Requires=bhvr-cam-usb-gadget.service
+Wants=systemd-networkd.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=20
+# Give ECM carrier a moment, then force link up + networkd DHCP.
+ExecStartPre=/bin/sleep 1
+ExecStartPre=/sbin/ip link set usb0 up
+# reconfigure waits on DHCP; cap so install/SSH never hangs forever.
+ExecStart=/bin/timeout 15 /bin/networkctl reconfigure usb0
+ExecStartPost=-/bin/systemctl try-restart bhvr-cam-announce.service
+
+[Install]
+WantedBy=multi-user.target

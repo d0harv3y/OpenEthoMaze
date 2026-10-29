@@ -20,11 +20,23 @@ $$
 
 **Abundance uncertainty** (D, UNCERTAINTY) — charted as `shannon_bits`
 
+Alias: **entropy** $H(p)$ — average uncertainty (bits) about which category under this **one** composition $p$. Entropy = uncertainty in our vocab for a declared categorical law; not sample **variance** ($\sigma^2$); not conditional entropy; not MI.
+
 $$
 H(p) = -\sum_{k : p_k > 0} p_k \log_2(p_k)
 $$
 
 Effective number of equally abundant categories (Hill order 1): ${}^{1}D = 2^{H}$ when $H$ is in bits. Evenness is not $H$: $J = H / \log_2(S)$ when $S > 1$.
+
+**Conditional entropy** (D, UNCERTAINTY) — general form; bout instance charted as `H_next_given_curr` (§ TRANSITION)
+
+Leftover uncertainty in $Y$ after knowing $X$. Identity with MI: $I(X;Y) = H(Y) - H(Y \mid X)$.
+
+$$
+H(Y \mid X) = -\sum_x \pi(x) \sum_y P(y \mid x) \log_2 P(y \mid x)
+$$
+
+Occupancy uses marginal $H(p)$ on window $p$. Transition uses $Y=\mathrm{next}$, $X=\mathrm{current}$ on the bout stream — see § TRANSITION.
 
 **Dominance / Hill q=2** (D, UNCERTAINTY) — `ladder-only`
 
@@ -94,6 +106,50 @@ $$
 $$
 
 If you instead difference on phase first ($\delta_p(c) = M_{c, p_r} - M_{c, p_\ell}$) then across condition, expansion gives the **same four-term** sum — nesting order **commutes** for this 2×2. Same paired $n$ (all four cells). Heatmaps that facet by condition-step vs by phase-step are **transposes** of one lattice, not two estimands. k-group rank on $\Delta^2 M$ by tx (Stage B) targets the same cell either way.
+
+## TRANSITION (bout P(next | current) scalars)
+
+Bout stream = run-length labels, so consecutive bouts differ by construction — raw diagonal transition counts are zero and diagonal mass in P is smoothing only.
+
+**Transition law** $P(\mathrm{next} \mid \mathrm{current})$ (D) — the row-stochastic matrix $P_{ij} = P(\mathrm{next}=j \mid \mathrm{current}=i)$
+
+Estimated from consecutive-bout counts with Laplace $\alpha = 1.0$ per possible next state. Each row is a conditional distribution over next labels given current $i$. Not Shannon on window occupancy $p$.
+
+**Conditional entropy of next bout** $H(\mathrm{next} \mid \mathrm{current})$ (D, UNCERTAINTY) — charted as `H_next_given_curr`
+
+Special case of $H(Y \mid X)$ (§ COUNT / UNCERTAINTY): $Y=\mathrm{next}$, $X=\mathrm{current}$, $\pi_i$ = row marginals / total transitions.
+
+$$
+H(\mathrm{next} \mid \mathrm{current}) = -\sum_i \pi_i \sum_j P_{ij}\log_2 P_{ij}, \qquad \pi_i = \mathrm{row}_i / \mathrm{total}
+$$
+
+Bits; max $\log_2 K$ for $K$ states. Count-robust ($|r| \approx 0.1$ with transition count). Size-adjusted companion for cross-alphabet comparison (per-animal fits): $H_{\mathrm{norm}} = H / \log_2 K$.
+
+**Total variation (TV) distance** between two transition laws (D) — charted as `trans_dist_to_nosd_ref`
+
+Formal name: **total variation** — not **total variance** ($\sum (x_i-\bar x)^2$). Half the L1 mass between two matrices on the same $(i,j)$ support:
+
+$$
+\mathrm{TV}(P, Q) = \tfrac{1}{2}\sum_{i,j}|P^{\mathrm{animal}}_{ij} - Q^{\mathrm{ref}}_{ij}|
+$$
+
+$P$ animal-specific; reference $Q$ pools one arm (e.g. sex-pooled noSD) at the same grain, smoothed once. **Count-confound warning:** fewer transitions → nearer-uniform $P$ → larger TV (verified $r \approx -0.9$ within sex × condition). Never read without a count check or a fixed transition budget.
+
+**Pairwise mutual information** (D) — charted as `pair_MI`
+
+$$
+I(X_1;X_2) = \sum p(x_1,x_2)\log_2\frac{p}{p_x p_y} \quad \text{(bits)}
+$$
+
+Joint over consecutive-bout pairs at a **fixed transition budget** (same $M$ pairs per animal, seeded resample); Laplace $\alpha = 1.0$ on the joint; marginals from the smoothed joint. Reference-free: no pooled law, no in-sample bias. Dependence strength between adjacent bouts — distinct from $H(\mathrm{next} \mid \mathrm{current})$.
+
+**Bigram repertoire width** (D, COUNT) — charted as `bigram_richness`
+
+$$
+R = \#\{\text{distinct bigrams in the $M$-pair draw}\}
+$$
+
+Raw counts, no smoothing. Same fixed budget as the MI draw. Count-confound-free by construction (identical $M$ for every animal).
 
 ## DIFFERENCE
 
@@ -321,7 +377,7 @@ $$
 q_{(i)} = \min_{j \ge i}\, \min\!\left(1,\, \frac{m\, p_{(j)}}{j}\right)
 $$
 
-Primary hit: `hit_fdr05` = $q_{\mathrm{bh}} < 0.05$. Family for DA = `model × phase × step` (finite-p syllables only). Bonferroni FWER uses $m p_{(i)}$ (chance of **any** false hit) — stricter, not what we primary. Not a bias correction of the estimator. Not an effect size.
+Primary hit: `hit_fdr05` = $q_{\mathrm{bh}} < 0.05$. Family for DA = `model × phase × step` (finite-p syllables only). Bonferroni FWER uses $m p_{(i)}$ (chance of **any** false hit) — stricter, not what we primary. **Tukey HSD** is a different FWER post-hoc: all pairwise **means** after classical one-way ANOVA among $k$ groups (`tukey_`; ladder-only here) — not BH, not Kruskal post-hoc, not our DA primary. Not a bias correction of the estimator. Not an effect size.
 
 **Volcano** (DA display) — charted. x = $\mathrm{median}(\Delta p_k)$ (effect size). y = evidence:
 
@@ -360,7 +416,7 @@ I(X; Y)
 \end{aligned}
 $$
 
-Occupancy: $I(\mathrm{syll}; \mathrm{stim\_bin})$. Transition: $I(\mathrm{next}; \mathrm{stim} \mid \mathrm{current})$ =
+Uses marginal $H(\cdot)$ and joint/conditional entropies (§ COUNT / UNCERTAINTY; bout $H(\mathrm{next}\mid\mathrm{current})$ § TRANSITION). Occupancy: $I(\mathrm{syll}; \mathrm{stim\_bin})$. Transition: $I(\mathrm{next}; \mathrm{stim} \mid \mathrm{current})$ =
 
 $$
 H(\mathrm{cur}, \mathrm{stim}) + H(\mathrm{cur}, \mathrm{next}) - H(\mathrm{cur}) - H(\mathrm{cur}, \mathrm{stim}, \mathrm{next})
@@ -368,13 +424,43 @@ $$
 
 Finite-sample entropy bias (Miller–Madow, bits): add $(K - 1) / (2 n \ln 2)$ per entropy, with sign as in the plug-in combination (`mi_mm`). Units: bits. Shared information ≠ composition DIFFERENCE.
 
+## RESIDUAL
+
+**Model residual** (D leftover; group tests on residuals = I) — token prefix `resid_`. NOR residual litmus (`simpler_first_residual_litmus`): charted there as `resid_shannon_bits`, `resid_H_next_given_curr`, `resid_pair_MI`.
+
+Fit a declared model of outcome $Y$ on covariates $X$ within a stratum; residual is observation minus fitted value:
+
+$$
+e_i = y_i - \hat{y}_i
+$$
+
+OLS example (within sex at a declared grain): $Y \sim \mathrm{mean\_speed\_mps} + \mathrm{frac\_still} + \mathrm{frac\_near\_nvl}$, then $e = Y - \hat Y$. Downstream Kruskal on $e$ by `condition` is I under a declared family (e.g. Residual-A).
+
+**Not** conditional entropy $H(Y \mid X)$ (information leftover). **Not** Miller–Madow (estimator bias). **Not** FDR. Always name $Y$, $X$s, fit, and stratum. See [CONTEXT.md](CONTEXT.md) § Residual.
+
 ## VOLATILITY / MODEL
 
-**Temporal compositional variability** (D) — `ladder-only` as a named statistic in the moseq folder. Build a time series of DIFFERENCE scalars (name distance vs dissimilarity), then summarize: mean consecutive change, variability of change, or cumulative turnover. Abundance uncertainty at each time is not volatility.
+**Temporal compositional variability** (D) — `ladder-only` as a named statistic in the moseq folder. Alias: **volatility** (`volatility_`). Build a time series of DIFFERENCE scalars (name distance vs dissimilarity), then summarize: mean consecutive change, variability of change, or cumulative turnover. Abundance uncertainty at each time is not volatility. Always name representation + formula + summary — see [CONTEXT.md](CONTEXT.md) § Volatility.
 
 Resistance / recovery: movement during / after a perturbation — related, not synonyms.
 
 **Trajectory class model** (I) — `ladder-only`. Alias: **LCMM**. Mixed-effects longitudinal model with latent trajectory classes. No single diversity/distance formula. Classes are model constructs.
+
+## TIME-TO-EVENT
+
+**Kaplan–Meier survival** (D) — `ladder-only`. Token: `kaplan_meier_`. Intended first maze home: **RAM** (radial-arm maze) latencies; also NOR/VAST first-contact clocks.
+
+Declare event and clock. Right-censor when the event has not occurred by last observation. At distinct event times $t_i$, $n_i$ still at risk, $d_i$ events:
+
+$$
+\hat{S}(t) = \prod_{t_i \le t} \left(1 - \frac{d_i}{n_i}\right)
+$$
+
+$\hat{S}(0) = 1$. Step function (flat between events). Censoring times do not drop the product; they shrink $n_i$ afterward.
+
+**Log-rank** (I) — `ladder-only`. Token: `logrank_`. Tests whether survival curves differ across groups. Not an effect size. Median time-to-event (smallest $t$ with $\hat{S}(t) \le 0.5$) is the D companion when the curve reaches 0.5.
+
+Not occupancy; not Wilcoxon on recoded “never = $T_{\max}$” without a declared censoring model; not Cox unless named later.
 
 ## Composition construction (pose)
 
@@ -399,4 +485,4 @@ $$
 | bout-duration descriptives                                                                            | `_syllable_descriptives`                                      |
 
 
-Not charted there: log-ratio transform / difference, phylogenetic difference, feature- or distance-space projection, trajectory class models, volatility summaries, stimulus shared information (VAST kpMS MI path).
+Not charted there: log-ratio transform / difference, phylogenetic difference, feature- or distance-space projection, trajectory class models, volatility summaries, stimulus shared information (VAST kpMS MI path), Kaplan–Meier / log-rank time-to-event (RAM starter).

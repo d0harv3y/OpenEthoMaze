@@ -20,6 +20,8 @@ Batch tools live in the installed package as **`maze.cli`** modules (or **`maze.
 | `maze-export-ram-trial-manifest` | `maze.cli.export_ram_trial_manifest_csv` | core |
 | `maze-fix-ele-h5-session-animal-ids` | `maze.cli.fix_ele_h5_session_animal_ids` | core |
 | `maze-sleap-nn-batch-inference` | `maze.cli.sleap_nn_batch_inference` | `sleap` |
+| `maze-of-floor-quad` | `maze.cli.of_floor_quad` | core |
+| `maze-of-mask-video` | `maze.cli.of_mask_video` | core |
 | `maze-langfuse-demo` | `maze.cli.langfuse_demo` | optional Langfuse env |
 | `maze-daq` / `maze-ram-daq` | acquisition `__main__` | `gui` |
 | `maze-local-service` | `local_service.__main__` | `local-service` |
@@ -48,6 +50,8 @@ Per [docs/rescue_plan.md](../docs/rescue_plan.md) § Scripts classification.
 | **Maintained (shim)** | `overlay_slp_bout_pipeline.py` | SLP bout overlay pipeline |
 | **Maintained (shim)** | `fix_ele_h5_session_animal_ids.py` | One-off H5 ID repair |
 | **Maintained (shim)** | `sleap_nn_batch_inference.py` | Batch SLEAP-NN (`--extra sleap`) |
+| **Maintained (shim)** | `of_floor_quad.py` | Per-video open-field floor quadrilateral + review images |
+| **Maintained (shim)** | `of_mask_video.py` | Zero the four corner triangles outside one floor quadrilateral |
 | **Demo** | `demos/langfuse_demo.py` → `maze-langfuse-demo` | Langfuse trace demo; not for production pipelines |
 | **Frozen** | `archive/**` | Legacy one-offs; do not extend or install |
 

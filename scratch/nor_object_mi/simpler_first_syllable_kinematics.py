@@ -30,8 +30,8 @@ from nor_object_mi.bout_kinematics import (  # noqa: E402
 from nor_object_mi.join_keys import filter_cohort, iter_joined_sessions  # noqa: E402
 from nor_object_mi.ngram_decisions import DEFAULT_MIN_BOUT_FRAMES_CLEAN  # noqa: E402
 
-DEFAULT_NOR = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\my_NOR_results.h5")
-DEFAULT_ENSEMBLE = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+DEFAULT_NOR = Path(r"D:\sack\datas\impress\my_NOR_results.h5")
+DEFAULT_ENSEMBLE = Path(r"D:\sack\datas\impress\moseq_251017")
 
 
 def _write_csv(path: Path, fieldnames: Sequence[str], rows: list[dict[str, object]]) -> None:

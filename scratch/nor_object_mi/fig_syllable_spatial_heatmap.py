@@ -6,6 +6,7 @@ Regen (OpenEthoMaze repo root; needs opencv + videos on disk):
   uv run python scratch/nor_object_mi/fig_syllable_spatial_heatmap.py --grain NOR_BL nvl_obj M noSD
   uv run python scratch/nor_object_mi/fig_syllable_spatial_heatmap.py --all --cluster-id 13
   uv run python scratch/nor_object_mi/fig_syllable_spatial_heatmap.py --all --cluster-id 13 --overlay-tx
+  uv run python scratch/nor_object_mi/fig_syllable_spatial_heatmap.py --batch nvl_obj F --overlay-tx --model paramscan_s1-1e7_s2-3e4_ss-100
 """
 
 from __future__ import annotations
@@ -33,23 +34,23 @@ from nor_object_mi.syllable_spatial_heatmap import (  # noqa: E402
     write_condition_legend,
 )
 
-DEFAULT_NOR = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\my_NOR_results.h5")
-DEFAULT_ENSEMBLE = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+DEFAULT_NOR = Path(r"D:\sack\datas\impress\my_NOR_results.h5")
+DEFAULT_ENSEMBLE = Path(r"D:\sack\datas\impress\moseq_251017")
 DEFAULT_SIG = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_syllable_signatures\syllable_prototypes_clustered.csv"
 )
-DEFAULT_VIDEO = Path(r"C:\Users\admin\Documents\work\sack\datas\impress")
+DEFAULT_VIDEO = Path(r"D:\sack\datas\impress")
 DEFAULT_OUT = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\syllable_spatial_heatmaps"
 )
 DEFAULT_OUT_CLUSTER13 = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\syllable_spatial_heatmaps_cluster13"
 )
 DEFAULT_OUT_CLUSTER13_TX = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\syllable_spatial_heatmaps_cluster13_condition_overlay"
 )
 LEGEND_STEM = "fig_syllable_spatial_cluster_legend"
@@ -161,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--overlay-tx",
         action="store_true",
-        help="Pool all tx in one image; color by treatment (requires --cluster-id)",
+        help="Pool all tx in one image; color by treatment (optional --cluster-id filter)",
     )
     ap.add_argument("--frame-stride", type=int, default=DEFAULT_FRAME_STRIDE)
     ap.add_argument("--bg-frame-stride", type=int, default=None)
@@ -169,9 +170,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--vmax-s", type=float, default=None)
     ap.add_argument("--max-sessions", type=int, default=None, help="Debug cap per grain")
     args = ap.parse_args(argv)
-
-    if args.overlay_tx and not args.cluster_id:
-        ap.error("--overlay-tx requires --cluster-id")
 
     keep = frozenset(int(c) for c in args.cluster_id) if args.cluster_id else None
     if args.out_dir is not None:

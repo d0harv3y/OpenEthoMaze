@@ -45,7 +45,7 @@ USECOLS = (
     "bout_mean_dist_any_m",
 )
 DEFAULT_OUT = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_locomotor_presence"
 )
 

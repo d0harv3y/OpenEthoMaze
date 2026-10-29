@@ -201,7 +201,7 @@ def main() -> int:
         "--delta-csv",
         type=Path,
         default=Path(
-            r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+            r"D:\sack\datas\impress\moseq_251017"
             r"\_nor_object_mi\paramscan_s1-1e8_s2-1e5_ss-50\presence"
             r"\mi_delta_presence_per_animal.csv"
         ),

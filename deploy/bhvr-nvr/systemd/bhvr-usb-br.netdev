@@ -1,0 +1,5 @@
+# Bridge for N+ cam CDC ECM gadgets (usb0, usb1, …).
+# One L2 domain → one 192.168.7.1/24 + DHCP for the whole fleet.
+[NetDev]
+Name=br-bhvr
+Kind=bridge

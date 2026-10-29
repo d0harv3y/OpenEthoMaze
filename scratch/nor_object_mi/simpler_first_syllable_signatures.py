@@ -27,7 +27,7 @@ if str(_SCRATCH) not in sys.path:
 from maze.kpms.behavior_ethogram.cluster import zscore_features  # noqa: E402
 
 DEFAULT_KIN = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_syllable_kinematics\syllable_bout_kinematics.csv"
 )
 

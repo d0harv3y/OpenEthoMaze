@@ -60,7 +60,9 @@ def main(argv: list[str] | None = None) -> int:
         (out_dir / "cohort_filter.json").write_text(json.dumps(cohort, indent=2), encoding="utf-8")
         kept = set(cohort["kept_ids"])  # type: ignore[arg-type]
         sessions = list(
-            iter_joined_sessions(nor_h5, kpms_h5, kept_ids=kept, session=args.session)
+            iter_joined_sessions(
+                nor_h5, kpms_h5, kept_ids=kept, session=args.phase_layer
+            )
         )
         bout_rows, bout_summary = build_ladder_bout_rows(
             nor_h5,
@@ -145,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
         tags = summarize_side_tags(ladder_rows)
         summary = {
             "status": "ok",
-            "session": args.session,
+            "session": args.phase_layer,
             "question": "condition ladder on hist-tagged fam/nvl sides",
             "n_perm": args.n_perm,
             "seed": args.seed,
@@ -161,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(
                 {
                     "status": "ok",
-                    "session": args.session,
+                    "session": args.phase_layer,
                     "n_ladder_animals": len(ladder_rows),
                     **tags,
                     "step_tests": steps,

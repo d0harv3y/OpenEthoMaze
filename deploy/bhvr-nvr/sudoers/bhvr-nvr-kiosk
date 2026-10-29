@@ -1,0 +1,11 @@
+# bhvr-nvr — scoped NOPASSWD for Kiosk settings Apply actions (grill Q21=A).
+# Install on NVR (as root):
+#   sudo install -m 440 deploy/bhvr-nvr/sudoers/bhvr-nvr-kiosk /etc/sudoers.d/bhvr-nvr-kiosk
+#   sudo visudo -cf /etc/sudoers.d/bhvr-nvr-kiosk
+#
+# Do NOT run the whole kiosk as root. Paths match Raspberry Pi OS Bookworm.
+
+admin ALL=(ALL) NOPASSWD: /usr/bin/nmcli
+admin ALL=(ALL) NOPASSWD: /bin/mount, /usr/bin/mount, /bin/umount, /usr/bin/umount
+admin ALL=(ALL) NOPASSWD: /usr/bin/tee, /bin/mkdir, /usr/bin/mkdir, /bin/chmod, /usr/bin/chmod
+admin ALL=(ALL) NOPASSWD: /bin/systemctl, /usr/bin/systemctl

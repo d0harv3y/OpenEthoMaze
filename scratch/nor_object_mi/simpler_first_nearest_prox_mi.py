@@ -30,7 +30,7 @@ from nor_object_mi.nearest_prox_mi import (  # noqa: E402
 from nor_object_mi.pause_stim_mi import DEFAULT_MODEL  # noqa: E402
 from nor_object_mi.simpler_first_object_prox import NEAR_R_M  # noqa: E402
 
-ROOT = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+ROOT = Path(r"D:\sack\datas\impress\moseq_251017")
 ART_ROOT = ROOT / "_nor_object_mi"
 
 

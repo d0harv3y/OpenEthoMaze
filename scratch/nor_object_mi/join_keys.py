@@ -13,6 +13,19 @@ _SESSION_RE = re.compile(
     r"(NOR[1-4])\s+(NVL\s+OBJ|ID\s+OBJ|NO\s+OBJ)",
     re.IGNORECASE,
 )
+# Bare recog / apply keys: ``NOR1 NVL OBJ Arena … <animal_id> HH-MM`` (no D:- prefix).
+_BARE_KEY_RE = re.compile(
+    r"^(NOR[1-4])\s+(NVL\s+OBJ|ID\s+OBJ|NO\s+OBJ)\s+Arena\s+\d+\s+.+?\s+(\d{4})\s+(\d{1,2}-\d{2})$",
+    re.IGNORECASE,
+)
+_TRIAL_WIRE = {
+    "novel_obj": "nvl_obj",
+    "identical_obj": "id_obj",
+    "nvl_obj": "nvl_obj",
+    "id_obj": "id_obj",
+    "no_obj": "no_obj",
+    "habituation": "habituation",
+}
 
 
 @dataclass(frozen=True)
@@ -35,35 +48,54 @@ def _h5_attr(node: Any, *names: str) -> str:
     return ""
 
 
+def _raw_session_from_nor_kind(nor_n: str, kind: str) -> str:
+    kind_norm = re.sub(r"\s+", " ", kind.upper())
+    if kind_norm == "NVL OBJ":
+        return f"{nor_n}_nvl_obj"
+    if kind_norm == "ID OBJ":
+        return f"{nor_n}_id_obj"
+    if kind_norm == "NO OBJ":
+        return f"{nor_n}_no_obj"
+    raise ValueError(f"unhandled trial token {kind_norm!r}")
+
+
+def _wire_trial(raw: str) -> str:
+    key = str(raw or "").strip()
+    return _TRIAL_WIRE.get(key, key)
+
+
 def parse_kpms_group(
     group_name: str,
     *,
     prefix: str = _KPMS_PREFIX,
     path_hyphens: int = 3,
 ) -> tuple[str, str]:
-    """Return ``(animal_id, raw_session)`` from a native kpMS results group name."""
-    if not group_name.startswith(prefix):
-        raise ValueError(f"unexpected kpMS key prefix: {group_name[:80]!r}")
-    rest = group_name[len(prefix) :]
-    parts = rest.split("-", path_hyphens)
-    if len(parts) != path_hyphens + 1:
-        raise ValueError(f"cannot split kpMS key: {group_name[:120]!r}")
-    animal_id = parts[2]
-    filename = parts[3]
-    m = _SESSION_RE.search(filename)
-    if m is None:
-        raise ValueError(f"no NOR session token in filename: {filename!r}")
-    nor_n = m.group(1).upper()
-    kind = re.sub(r"\s+", " ", m.group(2).upper())
-    if kind == "NVL OBJ":
-        raw = f"{nor_n}_nvl_obj"
-    elif kind == "ID OBJ":
-        raw = f"{nor_n}_id_obj"
-    elif kind == "NO OBJ":
-        raw = f"{nor_n}_no_obj"
-    else:
-        raise ValueError(f"unhandled trial token {kind!r} in {filename!r}")
-    return animal_id, raw
+    """Return ``(animal_id, raw_session)`` from a native kpMS results group name.
+
+    Accepts legacy ``D:-nor vids-…`` keys and bare IMPRESS stems used by the
+    recognition-only kpMS fits (``NOR1 NVL OBJ Arena … <id> HH-MM``).
+    """
+    name = str(group_name)
+    if name.startswith(prefix):
+        rest = name[len(prefix) :]
+        parts = rest.split("-", path_hyphens)
+        if len(parts) != path_hyphens + 1:
+            raise ValueError(f"cannot split kpMS key: {name[:120]!r}")
+        animal_id = parts[2]
+        filename = parts[3]
+        m = _SESSION_RE.search(filename)
+        if m is None:
+            raise ValueError(f"no NOR session token in filename: {filename!r}")
+        nor_n = m.group(1).upper()
+        return animal_id, _raw_session_from_nor_kind(nor_n, m.group(2))
+
+    m_bare = _BARE_KEY_RE.match(name)
+    if m_bare is not None:
+        nor_n = m_bare.group(1).upper()
+        animal_id = m_bare.group(3)
+        return animal_id, _raw_session_from_nor_kind(nor_n, m_bare.group(2))
+
+    raise ValueError(f"unexpected kpMS key format: {name[:80]!r}")
 
 
 def filter_cohort(nor_h5: h5py.File) -> dict[str, object]:
@@ -136,7 +168,7 @@ def iter_joined_sessions(
             animal_id=animal_id,
             raw_session=raw_session,
             session=pl,
-            trial=_h5_attr(sg, "trial", "condition_layer"),
+            trial=_wire_trial(_h5_attr(sg, "trial", "condition_layer")),
             condition=_h5_attr(ag, "condition", "tx"),
             sex=str(ag.attrs.get("sex", "") or ""),
             cohort=str(ag.attrs.get("cohort", "") or ""),
@@ -170,7 +202,7 @@ def iter_nor_sessions(
                 animal_id=str(animal_id),
                 raw_session=str(raw_session),
                 session=pl,
-                trial=_h5_attr(sg, "trial", "condition_layer"),
+                trial=_wire_trial(_h5_attr(sg, "trial", "condition_layer")),
                 condition=_h5_attr(ag, "condition", "tx"),
                 sex=str(ag.attrs.get("sex", "") or ""),
                 cohort=str(ag.attrs.get("cohort", "") or ""),

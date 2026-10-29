@@ -19,7 +19,7 @@ def test_kpms_key_to_mp4() -> None:
         "D:-nor vids-standard format-exp1-3115-"
         "NOR1 ID OBJ Arena 5 07-03-25 3115 06-07.h5"
     )
-    root = Path(r"C:\Users\admin\Documents\work\sack\datas\impress")
+    root = Path(r"D:\sack\datas\impress")
     got = kpms_key_to_mp4(key, root)
     expect = (
         root
@@ -29,6 +29,21 @@ def test_kpms_key_to_mp4() -> None:
         / "NOR1 ID OBJ Arena 5 07-03-25 3115 06-07.mp4"
     )
     assert got == expect
+
+
+def test_kpms_key_to_mp4_bare_recog() -> None:
+    key = "NOR1 NVL OBJ Arena 2 04-02-25 23 3002 14-15"
+    root = Path(r"D:\sack\datas\impress")
+    got = kpms_key_to_mp4(key, root)
+    expect = (
+        root
+        / "standard format"
+        / "exp2"
+        / "3002"
+        / "NOR1 NVL OBJ Arena 2 04-02-25 23 3002 14-15.mp4"
+    )
+    assert got == expect
+    assert got.is_file()
 
 
 def test_dummy_coordinates_tiles_centroid() -> None:

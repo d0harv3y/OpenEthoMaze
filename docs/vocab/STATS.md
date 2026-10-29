@@ -38,9 +38,10 @@ There is **no** “parametric Kruskal” or “parametric Wilcoxon.” Switching
 **Welch ≠ “the ANOVA token.”** Welch marks **unequal-variance** mean tests. Classical one-way ANOVA assumes equal group variances. Our parametric Stage-B twin for the condition lattice uses SciPy Alexander–Govern (`welch_anova` in CSVs); CLI `--stage-b anova` is shorthand for that family, not Fisher `f_oneway`. Pairwise arms: Welch t (`welch_ttest`). Brown–Forsythe is a related unequal-variance ANOVA — not what that runner calls.
 
 **One-way vs multiway (orthogonal to rank vs mean):**
-- **One-way** — one factor (condition within a sex stratum). Default cousin to Kruskal.
-- **Two-way / $k$-way** — two or more factors in one model (condition × sex, …). Same mean-scale idea; different design (main effects + interactions). Stratify-then-one-way ≠ two-way with that factor inside.
+- **One-way** — one factor (condition within a sex stratum). Default cousin to Kruskal. When that factor has $k$ levels, say **k-group** (levels), not k-way.
+- **Two-way / $k$-way** — two or more **factors** in one model (condition × sex, …). Same mean-scale idea; different design (main effects + interactions). Stratify-then-one-way ≠ two-way with that factor inside.
 - There is no single “Kruskal two-way” that mirrors factorial ANOVA; if you need factorial structure on ranks, name the method (ART, etc.) or stay stratified.
+- **k-ary** is CS/math arity (or loose ML class-count talk) — **not** a synonym for k-group or k-way here. Trap: three-**group** Kruskal ≠ three-**way** ANOVA.
 
 Rules of thumb:
 - Same **question shape** (e.g. “do txs differ on this scalar?”) ≠ same **procedure**. Token and statistic letter must match the procedure you ran.
@@ -59,10 +60,13 @@ When many tests share a **family** (e.g. one signed-rank per syllable inside `mo
 | **Uncorrected p** | error rate of **one** test in isolation | `p`, `hit_p05` (`p < 0.05`) | companion / exploratory |
 | **FDR-corrected q** | expected fraction of **the hit list** that is false **within the family** | `q_bh`, `hit_fdr05` (`q_bh < 0.05`) | primary DA claim |
 | **FWER** (Bonferroni) | chance of **any** false hit in the family | not our DA primary | stricter; different target |
+| **Tukey HSD** (“Tukey adjustment”) | FWER for **all pairwise mean** comparisons after classical ANOVA among $k$ groups | `tukey_` (ladder-only) | post-hoc after `anova_`; **not** our DA primary; **not** Stage-B omnibus |
 
 **Worked FDR (the object people mix up):** you run m tests. Some are true nulls. You publish a **hit list**. FDR asks: of the things I called hits, what fraction do I expect to be duds? Target 0.05 means: if you called 20 hits in that family, expect about 1 dud **on average under the procedure** — not “each hit has p = 0.05,” and not “5 of 100 tests are false regardless of how many you called.”
 
 Toy: 100 syllables, all truly unchanged. Uncorrected `p < 0.05` still yields ~5 accidental hits. BH raises the bar so the **list** you keep has expected dud-rate 5%. If BH leaves you 0 hits, FDR is vacuously controlled (empty list has no false discoveries).
+
+**Tukey vs Bonferroni vs FDR:** all are multiplicity rules, different jobs. Bonferroni / Tukey are **FWER** (any false hit). Tukey is specialized for the **closed set of pairwise mean contrasts** after classical one-way ANOVA among $k$ txs. Bonferroni can wrap any predeclared family. BH FDR wraps large discovery lists (our DA). Our Stage-B arm pairs are usually Mann–Whitney or Welch t with **BH within the arm-contrast family** — that is **not** Tukey. Rank post-hocs after Kruskal are Dunn / Conover (and cousins), not Tukey HSD.
 
 **Uncorrected** does **not** mean wrong, unnormalized, or without bias correction (Miller–Madow on MI is a different sense of “correction”).
 
@@ -89,9 +93,10 @@ Rules of thumb:
 
 | Their word | Our use |
 |------------|---------|
-| alpha | within one composition: COUNT and/or UNCERTAINTY |
+| alpha | within one composition: COUNT and/or UNCERTAINTY (Shannon **entropy** $H(p)$) |
 | beta | between compositions: DIFFERENCE (name which formula) |
 | gamma | rare here; don’t use without defining grain |
+| transition grammar | bout stream: $P(\mathrm{next}\mid\mathrm{current})$, $H(\mathrm{next}\mid\mathrm{current})$, TV vs ref — not alpha Shannon on $p$ |
 
 ## DIFFERENCE vs distance vs Δp
 
@@ -182,7 +187,8 @@ Some NOR runs hold one axis fixed and pair on another **twice** — e.g. conditi
 | Question | D / I | Operation family | Formal examples (curtained) |
 |----------|-------|------------------|-----------------------------|
 | How many distinct categories in this composition? | D | COUNT | richness / observed |
-| How uncertain is category identity in this composition *now*? | D | UNCERTAINTY | Shannon (Simpson / Hill: aliases under same family) |
+| How uncertain is category identity in this composition *now*? | D | UNCERTAINTY | **Entropy** / Shannon $H(p)$ (`shannon_bits`; Simpson / Hill: aliases under same family) |
+| After knowing $X$, how uncertain is $Y$? | D | UNCERTAINTY | **Conditional entropy** $H(Y \mid X)$; bout form $H(\mathrm{next}\mid\mathrm{current})$ (`H_next_given_curr`) |
 | What fraction of the session is in a gated window? | D | scalar rate | `frac_near`, occupancy |
 | How far apart are two compositions? | D | DIFFERENCE | Jaccard distance; Bray–Curtis (dissimilarity); UniFrac; Aitchison (distance) |
 | Re-coordinate a composition for log-ratio geometry? | D | TRANSFORM | CLR (then Euclidean → Aitchison) |
@@ -196,7 +202,13 @@ Some NOR runs hold one axis fixed and pair on another **twice** — e.g. conditi
 | Do groups differ in **multivariate composition**? | I | distance-matrix group partition | PERMANOVA on a named DIFFERENCE |
 | **Which categories** differ in relative use between groups? | I | category contrast / **DA** | differential abundance; contribution / SIMPER-ish — see below |
 | How much does knowing Y reduce uncertainty about X? | D→I | INFO | MI (estimate is D-ish; permutation/null test is I) |
+| Given current bout, how is next bout distributed? | D | TRANSITION | Transition law $P(\mathrm{next}\mid\mathrm{current})$ (matrix $P_{ij}$); `pair_MI` / `bigram_richness` at fixed budget |
+| How unpredictable is next bout given current? | D | TRANSITION / UNCERTAINTY | $H(\mathrm{next}\mid\mathrm{current})$ (`H_next_given_curr`) |
+| How far is this animal’s transition law from a reference? | D | TRANSITION / DIFFERENCE | **Total variation (TV)** $\mathrm{TV}(P,Q)$ — not total **variance** (`trans_dist_to_nosd_ref`) |
 | How much does *this* composition move over time? | D | VOLATILITY | temporal compositional variability (name DIFFERENCE formula + summary) |
+| After removing declared covariates, what is left of $Y$? | D | RESIDUAL | $e = y - \hat y$ (`resid_*`; e.g. OLS residual litmus) |
+| Do groups still differ on that leftover? | I | RESIDUAL + k-group | Kruskal on `resid_*` by condition (Residual-A style); declare $Y$, $X$s, family |
+| How long until a **named event**, with some units never firing it? | D | TIME-TO-EVENT | Kaplan–Meier survival (`kaplan_meier_`); I cousin: log-rank (`logrank_`) |
 | Hidden trajectory subclasses over time? | I | MODEL | LCMM (classes are model constructs) |
 
 ### Differential abundance (DA)
@@ -222,21 +234,34 @@ TRANSFORM → ORDINATE    (re-express / map; PCA vs PCoA by input)
 TEST                    (groups on scalars or DIFFERENCE matrices)
 DA                      (which categories drive a DIFFERENCE via Δp)
 INFO                    (shared information between variables)
+TRANSITION              (bout P(next|current) / H(next|current); not window p)
 VOLATILITY              (movement of one unit over time)
+RESIDUAL                (model leftover e = y − ŷ; not conditional entropy)
+TIME-TO-EVENT           (latency + right-censoring; Kaplan–Meier)
 MODEL (LCMM)            (latent trajectory classes)
 ```
 
 PCA ≠ PCoA: features in vs pairwise DIFFERENCE matrix in. Spelling is **principal**.
 
-DIFFERENCE ≠ Δp ≠ arena `dist_*`. Volatility ≠ Shannon: movement over time ≠ state now.
+DIFFERENCE ≠ Δp ≠ arena `dist_*`. Volatility ≠ Shannon: movement over time ≠ state now. **Entropy** $H(p)$ = occupancy uncertainty now; **conditional entropy** $H(\mathrm{next}\mid\mathrm{current})$ = bout grammar — different $H$ objects. **Residual** $e=y-\hat y$ = regression leftover — not $H(Y\mid X)$. **TV** = total **variation** between laws, not sample **variance**. Occupancy / `frac_near` ≠ Kaplan–Meier (time-in-state ≠ time-to-event with censoring).
 
 Equations, SciPy notes, and `charted` vs `ladder-only`: [FORMULAS.md](FORMULAS.md). Ranges and low|zero|high: [INTERPRET.md](INTERPRET.md).
 
+## Time-to-event (starting point; ladder-only)
+
+**Kaplan–Meier** estimates the survival curve $\hat S(t)$ = P(event after $t$) in this sample, using **right-censored** units. Declare the **event** and the **clock** (usually one trial). Never-happened before trial end → censored at last observed time, not scored as an event at $T_{\max}$.
+
+**Log-rank** tests whether curves differ across groups (e.g. `condition` within sex). Median survival (time $\hat S$ hits 0.5) is D magnitude; log-rank p is I, not size.
+
+**RAM** (radial-arm maze) is the intended first maze home: latency to first correct arm / first error / trial complete, with animals that never hit the event still contributing until trial end. NOR/VAST first-contact clocks can use the same objects. Cox / competing-risks models are **not** this starter — name them if you later add them.
+
+**Not** Wilcoxon on raw latencies that recode “never” as missing or as session length. **Not** `frac_near`. **Not** volatility.
+
 ## Domain curtains
 
-**Maze / NOR behavior** — scalars like preference, proximity, `frac_near`; grain must name `session` / `trial` / `condition` (and `interval` when used). Canonical ladder: [PROTOCOL-STRATA.md](PROTOCOL-STRATA.md).
+**Maze / NOR / RAM behavior** — scalars like preference, proximity, `frac_near`; grain must name `session` / `trial` / `condition` (and `interval` when used). Canonical ladder: [PROTOCOL-STRATA.md](PROTOCOL-STRATA.md). **RAM** time-to-event (latency + censoring) → TIME-TO-EVENT / Kaplan–Meier when we chart it — still `ladder-only`.
 
-**Pose → syllable** — compositions are **window aggregates**, not collection events. Bout ≠ window. Phylogenetic tools (UniFrac) generally do not transfer.
+**Pose → syllable** — compositions are **window aggregates**, not collection events. Bout ≠ window. **TRANSITION** lives on the bout stream ($P$ / $H(\mathrm{next}\mid\mathrm{current})$); Shannon on window $p$ is occupancy UNCERTAINTY, not transition. Phylogenetic tools (UniFrac) generally do not transfer.
 
 **Microbiome** — collection-event compositions; taxonomic vs functional **representation**; UniFrac / CLR native here. Collaborator “alpha|beta|volatility” talk maps through the table above — don’t import their pipeline into syllable code silently.
 

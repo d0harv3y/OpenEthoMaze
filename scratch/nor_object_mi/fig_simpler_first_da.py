@@ -55,11 +55,11 @@ from nor_object_mi.fig_simpler_first_syllable_signatures import (  # noqa: E402
 from nor_object_mi.simpler_first_da import da_tests_condition_sex_from_animal_deltas  # noqa: E402
 
 DEFAULT_RUN = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_da"
 )
 DEFAULT_SIG = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_syllable_signatures"
 )
 UNMAPPED_CLUSTER = -2

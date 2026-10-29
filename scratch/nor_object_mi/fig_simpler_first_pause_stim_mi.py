@@ -37,7 +37,7 @@ from nor_object_mi._pub_style import (  # noqa: E402
 from nor_object_mi.info_dr_pause_delta import get_y_metric_spec  # noqa: E402
 from nor_object_mi.pause_stim_mi import DEFAULT_MODEL, default_out_dir  # noqa: E402
 
-ROOT = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+ROOT = Path(r"D:\sack\datas\impress\moseq_251017")
 ART_ROOT = ROOT / "_nor_object_mi"
 
 

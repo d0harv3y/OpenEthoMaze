@@ -44,10 +44,10 @@ from vast_moseq.vast_cluster_kruskal import (  # noqa: E402
     kruskal_by_cluster_session_step_sex_stx,
     kruskal_by_cluster_session_step_sex_tx_pairwise,
 )
-from nor_object_mi.cluster_tx_kruskal import representative_cluster_ids  # noqa: E402
+from nor_object_mi.cluster_condition_kruskal import representative_cluster_ids  # noqa: E402
 
-DEFAULT_DA = Path(r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq\_da_trial_windows")
-DEFAULT_SIG = Path(r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq\syllable_signatures")
+DEFAULT_DA = Path(r"D:\sack\AZ-SD-VAST-moseq\_da_trial_windows")
+DEFAULT_SIG = Path(r"D:\sack\AZ-SD-VAST-moseq\syllable_signatures")
 DELTA_USECOLS = (
     "model",
     "animal_id",

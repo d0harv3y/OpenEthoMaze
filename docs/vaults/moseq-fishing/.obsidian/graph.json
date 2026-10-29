@@ -1,0 +1,107 @@
+{
+  "collapse-filter": false,
+  "search": "",
+  "showTags": true,
+  "showAttachments": true,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "file:Prune Map",
+      "color": {
+        "a": 1,
+        "rgb": 14701138
+      }
+    },
+    {
+      "query": "tag:#treasure",
+      "color": {
+        "a": 1,
+        "rgb": 16770949
+      }
+    },
+    {
+      "query": "tag:#rabbit-hole",
+      "color": {
+        "a": 1,
+        "rgb": 8007382
+      }
+    },
+    {
+      "query": "tag:#ladder",
+      "color": {
+        "a": 1,
+        "rgb": 6436356
+      }
+    },
+    {
+      "query": "tag:#snake",
+      "color": {
+        "a": 1,
+        "rgb": 3447055
+      }
+    },
+    {
+      "query": "tag:#lava",
+      "color": {
+        "a": 1,
+        "rgb": 16615708
+      }
+    },
+    {
+      "query": "tag:#alphabet-bound",
+      "color": {
+        "a": 1,
+        "rgb": 6395038
+      }
+    },
+    {
+      "query": "path:theories OR path:hypotheses OR path:estimands OR path:families",
+      "color": {
+        "a": 1,
+        "rgb": 10066329
+      }
+    },
+    {
+      "query": "path:shared",
+      "color": {
+        "a": 1,
+        "rgb": 10066329
+      }
+    },
+    {
+      "query": "file:NOR IMPRESS Index",
+      "color": {
+        "a": 1,
+        "rgb": 8487809
+      }
+    },
+    {
+      "query": "path:assays/vast-alz",
+      "color": {
+        "a": 1,
+        "rgb": 4286945
+      }
+    },
+    {
+      "query": "file:VAST Alz Index",
+      "color": {
+        "a": 1,
+        "rgb": 4286945
+      }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": false,
+  "textFadeMultiplier": 0.2,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": true,
+  "centerStrength": 0.518713248970312,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 250,
+  "scale": 0.3628873693012074,
+  "close": false
+}

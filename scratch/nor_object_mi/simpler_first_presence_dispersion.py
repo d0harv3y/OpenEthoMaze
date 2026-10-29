@@ -27,7 +27,7 @@ from nor_object_mi.simpler_first_presence import (  # noqa: E402
 )
 
 DEFAULT_DELTAS = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_presence_steps\presence_step_deltas_per_animal.csv"
 )
 

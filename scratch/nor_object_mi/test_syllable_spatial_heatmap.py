@@ -159,6 +159,14 @@ def test_condition_colors_match_violin_hex() -> None:
     assert colors["noSD"] == (119, 158, 27)
 
 
+def test_write_condition_legend_uses_tx_keys(tmp_path) -> None:
+    from nor_object_mi.syllable_spatial_heatmap import write_condition_legend
+
+    path = tmp_path / "fig_syllable_spatial_condition_legend.png"
+    write_condition_legend(path)
+    assert path.is_file() and path.stat().st_size > 0
+
+
 def test_condition_overlay_composite_mixes_two_condition_colors() -> None:
     bg = np.zeros((8, 8, 3), dtype=np.uint8)
     colors = tx_colors_bgr()

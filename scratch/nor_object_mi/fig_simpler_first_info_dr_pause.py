@@ -49,7 +49,7 @@ from nor_object_mi.info_dr_pause_delta import (  # noqa: E402
     y_metric_choices,
 )
 
-ROOT = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+ROOT = Path(r"D:\sack\datas\impress\moseq_251017")
 MI_VMAX = 0.12
 NLP_VMAX = 4.0
 

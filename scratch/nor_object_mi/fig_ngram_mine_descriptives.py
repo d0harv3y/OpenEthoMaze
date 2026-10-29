@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         "--mine-root",
         type=Path,
         default=Path(
-            r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017\_ngram_mine"
+            r"D:\sack\datas\impress\moseq_251017\_ngram_mine"
         ),
     )
     p.add_argument(

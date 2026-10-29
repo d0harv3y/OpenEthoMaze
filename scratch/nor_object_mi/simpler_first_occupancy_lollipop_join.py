@@ -38,11 +38,11 @@ from nor_object_mi.simpler_first_syll_ambulation_overlap import (  # noqa: E402
 from nor_object_mi.syll_ambulation_overlap import occupancy_from_bouts  # noqa: E402
 
 DEFAULT_DA = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_da\da_syllable_tests_long.csv"
 )
 DEFAULT_OUT = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_occupancy_da_join"
 )
 

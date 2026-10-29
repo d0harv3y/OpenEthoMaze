@@ -42,9 +42,9 @@ ASSOC_PAIRS = (
 )
 
 DEFAULT_LONG = Path(r"C:\Users\admin\code\archive\IMPRESS\my_nor_wip\my_NOR_results__ambulation_temporal_long.csv")
-DEFAULT_SESS = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017" r"\thresholded-signal-bouts\impress_ambulation.csv")
-DEFAULT_DR = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017" r"\_nor_object_mi\simpler_first_classic_dr\classic_dr_paired.csv")
-DEFAULT_ART = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017\_nor_object_mi")
+DEFAULT_SESS = Path(r"D:\sack\datas\impress\moseq_251017" r"\thresholded-signal-bouts\impress_ambulation.csv")
+DEFAULT_DR = Path(r"D:\sack\datas\impress\moseq_251017" r"\_nor_object_mi\simpler_first_classic_dr\classic_dr_paired.csv")
+DEFAULT_ART = Path(r"D:\sack\datas\impress\moseq_251017\_nor_object_mi")
 
 
 def movement_bout_session(long_df: pd.DataFrame, *, condition: str = CONDITION) -> pd.DataFrame:

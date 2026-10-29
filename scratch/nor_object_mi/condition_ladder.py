@@ -351,7 +351,12 @@ def ladder_within_sex_condition_kruskal_long(
             else:
                 stat_v, p_v = stats.kruskal(*samples)
                 stat, p = float(stat_v), float(p_v)
-            all_d = np.concatenate([np.asarray(by_tx[t], dtype=np.float64) for t in _CONDITION_ORDER if by_tx[t]])
+            parts = [
+                np.asarray(by_tx[t], dtype=np.float64) for t in _CONDITION_ORDER if by_tx[t]
+            ]
+            all_d = (
+                np.concatenate(parts) if parts else np.asarray([], dtype=np.float64)
+            )
             out.append(
                 {
                     "panel": panel,

@@ -1,0 +1,42 @@
+filters:
+  and:
+    - type == "run"
+properties:
+  assay:
+    displayName: Assay
+  status:
+    displayName: Status
+  verdict:
+    displayName: Outcome
+  claim_kind:
+    displayName: Kind
+views:
+  - type: table
+    name: NOR IMPRESS runs
+    filters:
+      and:
+        - assay == "nor-impress"
+    order:
+      - file.name
+      - status
+      - verdict
+      - claim_kind
+  - type: table
+    name: VAST runs
+    filters:
+      and:
+        - assay == "vast-alz"
+    order:
+      - file.name
+      - status
+      - verdict
+  - type: table
+    name: All runs
+    groupBy:
+      property: assay
+      direction: ASC
+    order:
+      - assay
+      - file.name
+      - status
+      - verdict

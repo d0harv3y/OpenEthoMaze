@@ -38,7 +38,7 @@ from nor_object_mi._pub_style import (  # noqa: E402
     type_scale,
 )
 
-DEFAULT_RUN = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017" r"\_nor_object_mi\simpler_first_ambulation_clocks")
+DEFAULT_RUN = Path(r"D:\sack\datas\impress\moseq_251017" r"\_nor_object_mi\simpler_first_ambulation_clocks")
 CONTRASTS = (
     ("n_move_vs_n_syll", "n clocks"),
     ("dur_move_vs_dur_syll", "duration clocks"),

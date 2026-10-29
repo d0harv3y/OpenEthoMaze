@@ -1,0 +1,17 @@
+[Unit]
+Description=bhvr MediaMTX (WHEP live router)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/bhvr-mediamtx
+ExecStart=/home/admin/bhvr-mediamtx/mediamtx /home/admin/bhvr-mediamtx/mediamtx.yml
+Restart=on-failure
+RestartSec=2
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

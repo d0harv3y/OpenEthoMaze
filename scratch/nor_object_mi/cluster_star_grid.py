@@ -2,7 +2,7 @@
 
 Default: one 4×6 crowd movie per multi-star cluster, using the model with the
 most bouts for that cluster's representative syllable (max ``n_bouts`` within
-model × cluster). Same NOR_TX / nvl_obj sampling as ``condition_argmax_grid``.
+model × cluster). Same NOR_TX / novel_obj sampling as ``condition_argmax_grid``.
 
 Regen (repo root; needs ``--extra kpms``)::
 
@@ -41,7 +41,7 @@ from nor_object_mi.condition_argmax_grid import (  # noqa: E402
 )
 
 DEFAULT_MI = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017\_nor_object_mi"
+    r"D:\sack\datas\impress\moseq_251017\_nor_object_mi"
 )
 DEFAULT_DA = DEFAULT_MI / "simpler_first_da"
 DEFAULT_PP = DEFAULT_MI / "simpler_first_session_paired"
@@ -101,10 +101,14 @@ def pick_jobs(
 
 
 def _info_md(clusters: pd.DataFrame, *, all_models: bool, source: str, min_stars: int) -> str:
-    rows = "\n".join(
-        f"| {int(r.cluster_id)} | {int(r.n_stars)} | {int(r.n_da)} | {int(r.n_pp)} |"
-        for r in clusters.itertuples(index=False)
-    )
+    rows_parts: list[str] = []
+    for r in clusters.itertuples(index=False):
+        cid = int(r.cluster_id)
+        n_stars = "" if not np.isfinite(getattr(r, "n_stars", np.nan)) else str(int(r.n_stars))
+        n_da = "" if not np.isfinite(getattr(r, "n_da", np.nan)) else str(int(r.n_da))
+        n_pp = "" if not np.isfinite(getattr(r, "n_pp", np.nan)) else str(int(r.n_pp))
+        rows_parts.append(f"| {cid} | {n_stars} | {n_da} | {n_pp} |")
+    rows = "\n".join(rows_parts)
     mode = "all models with a mapped syllable" if all_models else "one model per cluster (max n_bouts)"
     return f"""# INFO — Multi-star cluster grid movies
 
@@ -119,7 +123,7 @@ majority `*` on mean-model Kruskal overviews (`source={source}`).
 
 Cells = sampled bouts of that model's representative `raw_syllable_id`
 (max `n_bouts` within model × cluster) on `session=NOR_TX` /
-`trial=nvl_obj`.
+`trial=novel_obj` (analysis wire: `nvl_obj`).
 
 `raw_syllable_id` is **not** portable. Shared claim = HDBSCAN `cluster_id`.
 

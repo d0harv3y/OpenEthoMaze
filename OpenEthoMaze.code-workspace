@@ -10,9 +10,6 @@
 			"path": "../../.cursor"
 		},
 		{
-			"path": "../../Documents/work/sack"
-		},
-		{
 			"path": "../../.agents"
 		},
 		{
@@ -20,6 +17,24 @@
 		},
 		{
 			"path": "../archive/IMPRESS"
+		},
+		{
+			"path": "../../Documents/work/davis lab/alz bb"
+		},
+		{
+			"path": "D:/az-sd-vast_paramscan2026"
+		},
+		{
+			"path": "D:/sack"
+		},
+		{
+			"path": "../DeepLabCut"
+		},
+		{
+			"path": "D:/Open Field - mp4"
+		},
+		{
+			"path": "D:/DeepLabCut"
 		}
 	],
 	"settings": {}

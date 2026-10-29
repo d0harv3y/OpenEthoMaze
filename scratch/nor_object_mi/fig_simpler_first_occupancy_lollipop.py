@@ -45,11 +45,11 @@ SESSION_SHORT = {
 }
 
 DEFAULT_RUN = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_occupancy_da_join"
 )
 DEFAULT_DA = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_da\da_syllable_tests_long.csv"
 )
 CLASS_COLOR = {"move": "#2f5d8a", "still": "#8a4f3d", "ns": "#9a9a9a", "no_occ": "#cccccc"}

@@ -39,7 +39,7 @@ from nor_object_mi.simpler_first_syllable_signatures import (  # noqa: E402
 from maze.kpms.behavior_ethogram.cluster import zscore_features  # noqa: E402
 
 DEFAULT_RUN = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_syllable_signatures"
 )
 HI_COLOR = "#0072B2"

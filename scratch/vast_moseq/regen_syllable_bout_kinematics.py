@@ -65,11 +65,11 @@ from maze.pipeline.db.trial_key import TrialKey  # noqa: E402
 from maze.pipeline.io.file_discovery import TrialManifest, load_manifest_csv  # noqa: E402
 from nor_object_mi.syllable_cleanup import maybe_absorb_short_bouts  # noqa: E402
 
-DEFAULT_PRIMARY = Path(r"C:\Users\admin\Documents\work\sack\gerstner_vast_fit\results.h5")
-DEFAULT_SEED_ROOT = Path(r"C:\Users\admin\Documents\work\sack\test2\anatomical")
-DEFAULT_MANIFEST = Path(r"C:\Users\admin\Documents\work\sack\test2\gerstner_manifest_local_legacy.csv")
-DEFAULT_TRACKING = Path(r"C:\Users\admin\Documents\work\sack\vast_results_legacy.h5")
-DEFAULT_OUT = Path(r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq\syllable_bout_kinematics")
+DEFAULT_PRIMARY = Path(r"D:\sack\gerstner_vast_fit\results.h5")
+DEFAULT_SEED_ROOT = Path(r"D:\sack\test2\anatomical")
+DEFAULT_MANIFEST = Path(r"D:\sack\test2\gerstner_manifest_local_legacy.csv")
+DEFAULT_TRACKING = Path(r"D:\sack\vast_results_legacy.h5")
+DEFAULT_OUT = Path(r"D:\sack\AZ-SD-VAST-moseq\syllable_bout_kinematics")
 
 SEEDS: tuple[str, ...] = ("005", "013", "042", "067", "111")
 GERSTNER_MODEL = "gerstner_vast_fit"

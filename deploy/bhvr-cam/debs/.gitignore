@@ -1,0 +1,2 @@
+# Offline apt cache for firstboot (see offline/README.md). Do not commit binaries.
+*.deb

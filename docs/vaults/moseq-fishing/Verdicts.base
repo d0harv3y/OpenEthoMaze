@@ -1,0 +1,74 @@
+filters:
+  and:
+    - 'type == "verdict"'
+
+formulas:
+  sell: 'if(verdict == "fail", "null", if(verdict == "partial", "partial", if(verdict == "pass", "pass", "")))'
+
+properties:
+  status:
+    displayName: Status
+  claim_kind:
+    displayName: Kind
+  verdict:
+    displayName: Outcome
+  assay:
+    displayName: Assay
+  formula.sell:
+    displayName: Sell
+
+views:
+  - type: table
+    name: Fail
+    filters:
+      and:
+        - 'verdict == "fail"'
+    order:
+      - file.name
+      - status
+      - claim_kind
+      - assay
+
+  - type: table
+    name: Partial / pass
+    filters:
+      or:
+        - 'verdict == "partial"'
+        - 'verdict == "pass"'
+    order:
+      - file.name
+      - verdict
+      - status
+      - claim_kind
+
+  - type: table
+    name: Clock-portable
+    filters:
+      and:
+        - 'claim_kind == "clock-portable"'
+    order:
+      - file.name
+      - verdict
+      - status
+
+  - type: table
+    name: Alphabet-bound
+    filters:
+      and:
+        - 'claim_kind == "alphabet-bound"'
+    order:
+      - file.name
+      - verdict
+      - status
+
+  - type: table
+    name: All verdicts
+    order:
+      - claim_kind
+      - file.name
+      - verdict
+      - status
+      - assay
+    groupBy:
+      property: claim_kind
+      direction: ASC

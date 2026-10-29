@@ -1,0 +1,8 @@
+[Unit]
+Description=bhvr-cam HTU21D 1 Hz sample tick (ring buffer)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/bhvr-cam.env
+ExecStart=/usr/bin/python3 /usr/local/bin/bhvr-cam-htu21d sample

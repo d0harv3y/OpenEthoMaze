@@ -1,9 +1,17 @@
-"""VAST DA figures: volcano ladders by session + pause-cluster Δp (sex-faceted).
+"""VAST DA figures: trial-step and session-step volcano ladders.
 
-Reads ``_da_trial_windows`` artifacts. Cohort 2×2×2 strain × tx × sex (M/F separate).
+Wire names follow ``docs/vocab/PROTOCOL-STRATA.md``:
+  session · trial_window · trial_step · session_step
+(not ``phase_layer`` / ``sessions as phases``).
+
+Stratified: one figure per strain×tx condition (sex = marker; filled = FDR).
+Pooled x ∈ [−0.08, 0.12]; stratified x ∈ [−0.1, 0.2].
 
 Regen:
-  uv run python scratch/vast_moseq/fig_da_trial_windows.py
+  uv run python scratch/vast_moseq/fig_da_trial_windows.py \\
+    --da-dir D:/az-sd-vast_paramscan2026/_da_trial_windows \\
+    --sig-dir D:/az-sd-vast_paramscan2026/_syllable_signatures \\
+    --pause-cluster 40
 """
 
 from __future__ import annotations
@@ -15,12 +23,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.lines import Line2D
 
 _SCRATCH = Path(__file__).resolve().parents[1]
 if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
-
-from matplotlib.lines import Line2D  # noqa: E402
 
 from nor_object_mi._pub_style import (  # noqa: E402
     FIGSIZE_DOUBLE,
@@ -38,25 +45,62 @@ from nor_object_mi.fig_simpler_first_syllable_signatures import (  # noqa: E402
     build_cluster_color_lookup,
     colors_for_cluster_ids,
 )
-
 from vast_moseq.cohort_meta import STRAIN_ORDER, TX_ORDER  # noqa: E402
 from vast_moseq.vast_da_strat import da_tests_cohort_strat_from_deltas  # noqa: E402
 
-DEFAULT_DA = Path(r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq\_da_trial_windows")
-DEFAULT_SIG = Path(r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq\syllable_signatures")
+DEFAULT_DA = Path(r"D:\sack\AZ-SD-VAST-moseq\_da_trial_windows")
+DEFAULT_SIG = Path(r"D:\sack\AZ-SD-VAST-moseq\syllable_signatures")
 
-PHASES = ("S01", "S02", "S03", "S04", "S05")
-STEPS = (
+SESSIONS = ("S01", "S02", "S03", "S04", "S05")
+TRIAL_WINDOWS = ("early_t1-3", "mid_t4-6", "late_t7-9")
+TRIAL_WINDOW_LAB = {
+    "early_t1-3": "early T1–3",
+    "mid_t4-6": "mid T4–6",
+    "late_t7-9": "late T7–9",
+}
+TRIAL_STEPS = (
     ("mid_early", "mid−early"),
     ("late_mid", "late−mid"),
     ("late_early", "late−early"),
 )
+SESSION_STEPS = (
+    ("S02-S01", "S02−S01"),
+    ("S03-S02", "S03−S02"),
+    ("S04-S03", "S04−S03"),
+    ("S05-S04", "S05−S04"),
+    ("S05-S01", "S05−S01"),
+)
+
 Y_CLIP = 4.0
+X_LIM_POOLED = (-0.08, 0.12)
+X_LIM_STRAT = (-0.1, 0.2)
 GREY_SQ = "#9a9a9a"
-VAST_TX_COLOR = {"RBSF-1": "#E69F00", "n/a": "#0072B2"}
+
+# 4 strain×tx arms — Okabe–Ito-ish categorical (colorblind-safer than 2×2 overlays).
+STX_ORDER: tuple[str, ...] = (
+    "wt·n/a",
+    "wt·RBSF-1",
+    "tg·n/a",
+    "tg·RBSF-1",
+)
+STX_STEM = {
+    "wt·n/a": "wt_na",
+    "wt·RBSF-1": "wt_RBSF-1",
+    "tg·n/a": "tg_na",
+    "tg·RBSF-1": "tg_RBSF-1",
+}
+STX_COLOR = {
+    "wt·n/a": "#0072B2",  # blue
+    "wt·RBSF-1": "#E69F00",  # orange
+    "tg·n/a": "#009E73",  # bluish green
+    "tg·RBSF-1": "#CC79A7",  # reddish purple
+}
 STRAIN_COLOR = {"wt": "#009E73", "tg": "#CC79A7"}
-TX_MARKER = {"RBSF-1": "o", "n/a": "s"}
 TX_EDGE = {"RBSF-1": "#333333", "n/a": "#888888"}
+
+
+def stx_label(strain: object, tx: object) -> str:
+    return f"{str(strain)}·{str(tx)}"
 
 
 def _as_bool(s: pd.Series) -> pd.Series:
@@ -65,8 +109,22 @@ def _as_bool(s: pd.Series) -> pd.Series:
     return s.astype(str).str.lower().isin(("true", "1", "yes"))
 
 
+def _alias_wire(df: pd.DataFrame) -> pd.DataFrame:
+    """Accept legacy ``phase_layer`` / ``condition_layer`` or wire ``session`` / ``trial_window``."""
+    out = df.copy()
+    if "session" not in out.columns and "phase_layer" in out.columns:
+        out = out.rename(columns={"phase_layer": "session"})
+    if "trial_window" not in out.columns and "condition_layer" in out.columns:
+        out = out.rename(columns={"condition_layer": "trial_window"})
+    if "trial_step" not in out.columns and "step" in out.columns:
+        # legacy trial-window DA used bare ``step``
+        if "session_step" not in out.columns:
+            out = out.rename(columns={"step": "trial_step"})
+    return out
+
+
 def _volcano_xy(tests: pd.DataFrame) -> pd.DataFrame:
-    t = tests.copy()
+    t = _alias_wire(tests)
     if "hit_fdr05" in t.columns:
         t["hit"] = _as_bool(t["hit_fdr05"])
     else:
@@ -75,6 +133,8 @@ def _volcano_xy(tests: pd.DataFrame) -> pd.DataFrame:
     t["median_delta_p"] = pd.to_numeric(t["median_delta_p"], errors="coerce")
     t = t[np.isfinite(t["p"]) & (t["p"] > 0) & np.isfinite(t["median_delta_p"])]
     t["neglog10_p"] = np.minimum(-np.log10(t["p"].to_numpy(dtype=float)), Y_CLIP)
+    if {"strain", "tx"}.issubset(t.columns):
+        t["stx"] = [stx_label(a, b) for a, b in zip(t["strain"], t["tx"], strict=True)]
     return t
 
 
@@ -88,7 +148,9 @@ def _attach_cluster(tests: pd.DataFrame, sig: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _build_cluster_lookup(sig: pd.DataFrame) -> tuple[dict[int, tuple[float, float, float, float]], list[int], object | None]:
+def _build_cluster_lookup(
+    sig: pd.DataFrame,
+) -> tuple[dict[int, tuple[float, float, float, float]], list[int], object | None]:
     summary = (
         sig[sig["cluster_id"] >= 0]
         .groupby("cluster_id", as_index=False)
@@ -108,7 +170,7 @@ def _scatter_pooled_cluster_squares(
     miss_s: float,
     hit_s: float,
 ) -> None:
-    """Pooled-only: edge/fill color = cluster_id heatmap; grey = noise; fill = FDR hit."""
+    """Pooled: edge/fill = cluster_id; grey = noise; filled = FDR hit."""
     for is_hit, s, z in ((False, miss_s, 2), (True, hit_s, 3)):
         sub = cell[cell["hit"] == is_hit]
         if sub.empty:
@@ -135,7 +197,6 @@ def _scatter_pooled_grey_ghost(
     miss_s: float,
     hit_s: float,
 ) -> None:
-    """Stratified underlay: grey ghost squares; fill = FDR hit within pooled layer."""
     for is_hit, s, alpha, z in ((False, miss_s, 0.20, 1), (True, hit_s, 0.32, 2)):
         sub = cell[cell["hit"] == is_hit]
         if sub.empty:
@@ -154,56 +215,36 @@ def _scatter_pooled_grey_ghost(
         )
 
 
-def _scatter_strat_cohort(
+def _scatter_strat_stx(
     ax,
     cell: pd.DataFrame,
     *,
     pt_s: float,
-    asterisk_pt: float,
 ) -> None:
-    """tx=color (edge); sex=shape; fill=wt; black *=FDR q<0.05."""
-    for tx in TX_ORDER:
-        c = VAST_TX_COLOR[tx]
+    """4 strain×tx colors; sex = marker; filled = FDR hit; open = not."""
+    for stx in STX_ORDER:
+        c = STX_COLOR[stx]
         for sex in SEX_ORDER:
             mk = SEX_MARKER[sex]
-            for strain in STRAIN_ORDER:
-                sub = cell[
-                    (cell["tx"] == tx) & (cell["sex"] == sex) & (cell["strain"] == strain)
-                ]
-                if sub.empty:
+            sub = cell[(cell["stx"] == stx) & (cell["sex"] == sex)]
+            if sub.empty:
+                continue
+            for is_hit, z in ((False, 4), (True, 5)):
+                g = sub[sub["hit"] == is_hit]
+                if g.empty:
                     continue
-                xs = sub["median_delta_p"].to_numpy(dtype=float)
-                ys = sub["neglog10_p"].to_numpy(dtype=float)
-                fc = c if strain == "wt" else "none"
                 ax.scatter(
-                    xs,
-                    ys,
+                    g["median_delta_p"],
+                    g["neglog10_p"],
                     s=pt_s,
                     marker=mk,
-                    facecolors=fc,
+                    facecolors=c if is_hit else "none",
                     edgecolors=c,
                     linewidths=0.55,
-                    alpha=0.88,
-                    zorder=4,
+                    alpha=0.9,
+                    zorder=z,
                     rasterized=True,
                 )
-                hits = sub[sub["hit"]]
-                if hits.empty:
-                    continue
-                hx = hits["median_delta_p"].to_numpy(dtype=float)
-                hy = hits["neglog10_p"].to_numpy(dtype=float)
-                for x, y in zip(hx, hy, strict=True):
-                    ax.text(
-                        x,
-                        y,
-                        "*",
-                        ha="center",
-                        va="center",
-                        fontsize=asterisk_pt,
-                        color="#000000",
-                        zorder=5,
-                        clip_on=True,
-                    )
 
 
 def _draw_pooled_to_strat_ladders(
@@ -272,8 +313,9 @@ def _pooled_legend_handles(*, dest: str) -> list[Line2D]:
     ]
 
 
-def _strat_legend_handles(*, dest: str) -> list[Line2D]:
+def _strat_legend_handles(*, dest: str, stx: str) -> list[Line2D]:
     ms = 8 if dest == "slides" else 6
+    c = STX_COLOR[stx]
     handles: list[Line2D] = [
         Line2D(
             [0],
@@ -287,19 +329,6 @@ def _strat_legend_handles(*, dest: str) -> list[Line2D]:
             label="pooled ghost □",
         ),
     ]
-    for tx in TX_ORDER:
-        handles.append(
-            Line2D(
-                [0],
-                [0],
-                marker="o",
-                color="none",
-                markerfacecolor=VAST_TX_COLOR[tx],
-                markeredgecolor=VAST_TX_COLOR[tx],
-                markersize=ms,
-                label=f"tx={tx}",
-            )
-        )
     for sex in SEX_ORDER:
         handles.append(
             Line2D(
@@ -307,8 +336,8 @@ def _strat_legend_handles(*, dest: str) -> list[Line2D]:
                 [0],
                 marker=SEX_MARKER[sex],
                 color="none",
-                markerfacecolor=INK,
-                markeredgecolor=INK,
+                markerfacecolor=c,
+                markeredgecolor=c,
                 markersize=ms,
                 label=f"sex={sex}",
             )
@@ -318,84 +347,102 @@ def _strat_legend_handles(*, dest: str) -> list[Line2D]:
             Line2D(
                 [0],
                 [0],
-                marker=SEX_MARKER["F"],
+                marker="o",
                 color="none",
-                markerfacecolor=VAST_TX_COLOR["RBSF-1"],
-                markeredgecolor=VAST_TX_COLOR["RBSF-1"],
+                markerfacecolor=c,
+                markeredgecolor=c,
                 markersize=ms,
-                label="fill = wt",
+                label="filled = FDR q<0.05",
             ),
             Line2D(
                 [0],
                 [0],
-                marker=SEX_MARKER["F"],
+                marker="o",
                 color="none",
                 markerfacecolor="none",
-                markeredgecolor=VAST_TX_COLOR["RBSF-1"],
+                markeredgecolor=c,
                 markersize=ms,
-                label="open = tg",
-            ),
-            Line2D(
-                [0],
-                [0],
-                marker="",
-                color="none",
-                label="* = FDR q<0.05",
+                label="open = not FDR",
             ),
         ]
     )
     return handles
 
 
-def load_or_build_strat_tests(da: Path, *, rebuild: bool = False) -> pd.DataFrame:
-    dest = da / "da_syllable_tests_strat_long.csv"
+def _style_volcano_ax(
+    ax,
+    *,
+    xlabel: bool,
+    ylabel: str | None,
+    title: str | None,
+    ts,
+    xlim: tuple[float, float],
+) -> None:
+    ax.axvline(0, color=MUTE, lw=0.7, ls="--", zorder=0)
+    ax.set_xlim(*xlim)
+    ax.set_ylim(-0.05, Y_CLIP + 0.12)
+    if title:
+        ax.set_title(title, fontsize=ts["annotation"], color=INK)
+    if ylabel:
+        ax.set_ylabel(ylabel, fontsize=ts["annotation"])
+    if xlabel:
+        ax.set_xlabel("median Δp", fontsize=ts["annotation"])
+
+
+def load_or_build_strat_tests(
+    da: Path,
+    *,
+    stem: str = "da_syllable_tests_strat_long.csv",
+    delta_stem: str = "da_syllable_deltas_per_animal.csv",
+    rebuild: bool = False,
+) -> pd.DataFrame:
+    dest = da / stem
     if dest.is_file() and not rebuild:
-        return pd.read_csv(dest, keep_default_na=False)
-    delta_path = da / "da_syllable_deltas_per_animal.csv"
+        return _alias_wire(pd.read_csv(dest, keep_default_na=False))
+    delta_path = da / delta_stem
     if not delta_path.exists():
         raise FileNotFoundError(f"Need {delta_path} to build stratified DA tests")
-    print("building tx×sex×strain Wilcoxon from per-animal deltas ...", flush=True)
-    dtab = pd.read_csv(delta_path, keep_default_na=False)
+    print(f"building stratified Wilcoxon from {delta_path.name} ...", flush=True)
+    dtab = _alias_wire(pd.read_csv(delta_path, keep_default_na=False))
     tests = da_tests_cohort_strat_from_deltas(dtab, progress=True)
     tests.to_csv(dest, index=False)
     print(f"wrote {dest}  rows={len(tests)}", flush=True)
-    return tests
+    return _alias_wire(tests)
 
 
-def fig_volcano_ladder_pooled_sessions(
+def fig_volcano_ladder_trial_steps_pooled(
     pooled: pd.DataFrame,
     sig: pd.DataFrame,
     out: Path,
     *,
     dest: str = "slides",
 ) -> None:
+    """Rows = trial_step, cols = session."""
     apply_style(dest=dest)
     ts = type_scale(dest)
     lookup, cluster_ids, listed = _build_cluster_lookup(sig)
     p_xy = _attach_cluster(_volcano_xy(pooled), sig)
-
     miss_s = 14 if dest == "slides" else 9
     hit_s = 24 if dest == "slides" else 14
 
-    nrows, ncols = 3, 5
     fig, axes = plt.subplots(
-        nrows,
-        ncols,
+        3,
+        5,
         figsize=(FIGSIZE_DOUBLE[0] * 1.15, FIGSIZE_DOUBLE[1] * 1.1),
         sharex=True,
         sharey=True,
     )
-    for r, (step, slab) in enumerate(STEPS):
-        for c, phase in enumerate(PHASES):
+    for r, (step, slab) in enumerate(TRIAL_STEPS):
+        for c, session in enumerate(SESSIONS):
             ax = axes[r, c]
-            pc = p_xy[(p_xy["step"] == step) & (p_xy["phase_layer"] == phase)]
+            step_col = "trial_step" if "trial_step" in p_xy.columns else "step"
+            pc = p_xy[(p_xy[step_col] == step) & (p_xy["session"] == session)]
             if pc.empty:
                 ax.set_axis_off()
                 continue
             _scatter_pooled_cluster_squares(
                 ax, pc, lookup=lookup, miss_s=miss_s, hit_s=hit_s
             )
-            ax.axvline(0, color=MUTE, lw=0.7, ls="--", zorder=0)
             n_fdr = int(pc["hit"].sum())
             ax.text(
                 0.98,
@@ -407,16 +454,17 @@ def fig_volcano_ladder_pooled_sessions(
                 fontsize=7,
                 color=INK,
             )
-            if r == 0:
-                ax.set_title(phase, fontsize=ts["annotation"], color=INK)
-            if c == 0:
-                ax.set_ylabel(f"{slab}\n−log10(p)", fontsize=ts["annotation"])
-            if r == nrows - 1:
-                ax.set_xlabel("median Δp", fontsize=ts["annotation"])
-            ax.set_ylim(-0.05, Y_CLIP + 0.12)
+            _style_volcano_ax(
+                ax,
+                xlabel=(r == 2),
+                ylabel=f"{slab}\n−log10(p)" if c == 0 else None,
+                title=session if r == 0 else None,
+                ts=ts,
+                xlim=X_LIM_POOLED,
+            )
 
     fig.suptitle(
-        "DA ladder · pooled · sessions as phases · 6 alphabets overlaid",
+        "DA · trial-steps · pooled · sessions across columns",
         fontsize=ts["suptitle"],
         fontweight="bold",
         color=INK,
@@ -433,76 +481,81 @@ def fig_volcano_ladder_pooled_sessions(
     )
     fig_footnote(
         fig,
-        "Pooled Wilcoxon (all animals). Square edge/fill color = HDBSCAN cluster_id (turbo); "
-        "grey = noise/unclustered. Filled square = BH q<0.05 within model×session×step. Run-phase only.",
+        "Trial-step DA (early/mid/late trial windows within session). "
+        "Pooled Wilcoxon. Square color = HDBSCAN cluster_id; grey = noise. "
+        "Filled = BH q<0.05 within model×session×trial_step. Interval = run only.",
         fontsize=ts["footnote"],
     )
-    save_pdf_png(fig, out / "fig_da_volcano_ladder_overlay_sessions")
+    save_pdf_png(fig, out / "fig_da_volcano_ladder_overlay_trial_steps")
 
 
-def fig_volcano_ladder_stratified_sessions(
+def fig_volcano_ladder_trial_steps_stratified(
     pooled: pd.DataFrame,
     strat: pd.DataFrame,
     sig: pd.DataFrame,
     out: Path,
     *,
+    stx: str,
     dest: str = "slides",
 ) -> None:
+    """One condition (strain×tx); grey pooled underlay; sex = marker."""
+    if stx not in STX_COLOR:
+        raise ValueError(f"unknown stx {stx!r}; expected one of {STX_ORDER}")
     apply_style(dest=dest)
     ts = type_scale(dest)
     p_xy = _attach_cluster(_volcano_xy(pooled), sig)
     s_xy = _attach_cluster(_volcano_xy(strat), sig)
+    s_xy = s_xy[s_xy["stx"] == stx]
+    pt_s = 22 if dest == "slides" else 14
+    c = STX_COLOR[stx]
 
-    pt_s = 20 if dest == "slides" else 12
-    ast_pt = 11 if dest == "slides" else 8
-
-    nrows, ncols = 3, 5
     fig, axes = plt.subplots(
-        nrows,
-        ncols,
+        3,
+        5,
         figsize=(FIGSIZE_DOUBLE[0] * 1.15, FIGSIZE_DOUBLE[1] * 1.15),
         sharex=True,
         sharey=True,
     )
-    for r, (step, slab) in enumerate(STEPS):
-        for c, phase in enumerate(PHASES):
-            ax = axes[r, c]
-            pc = p_xy[(p_xy["step"] == step) & (p_xy["phase_layer"] == phase)]
-            sc = s_xy[(s_xy["step"] == step) & (s_xy["phase_layer"] == phase)]
+    for r, (step, slab) in enumerate(TRIAL_STEPS):
+        for c_i, session in enumerate(SESSIONS):
+            ax = axes[r, c_i]
+            step_col = "trial_step" if "trial_step" in p_xy.columns else "step"
+            pc = p_xy[(p_xy[step_col] == step) & (p_xy["session"] == session)]
+            sc = s_xy[(s_xy[step_col] == step) & (s_xy["session"] == session)]
             if pc.empty and sc.empty:
                 ax.set_axis_off()
                 continue
             _scatter_pooled_grey_ghost(ax, pc, miss_s=pt_s * 0.7, hit_s=pt_s * 0.85)
             _draw_pooled_to_strat_ladders(ax, pc, sc)
-            _scatter_strat_cohort(ax, sc, pt_s=pt_s, asterisk_pt=ast_pt)
-            ax.axvline(0, color=MUTE, lw=0.7, ls="--", zorder=0)
+            _scatter_strat_stx(ax, sc, pt_s=pt_s)
             n_fdr_s = int(sc["hit"].sum()) if len(sc) else 0
             ax.text(
                 0.98,
                 0.02,
-                f"strat n={len(sc)}\nFDR={n_fdr_s}",
+                f"n={len(sc)}\nFDR={n_fdr_s}",
                 transform=ax.transAxes,
                 ha="right",
                 va="bottom",
                 fontsize=6.5,
-                color=INK,
+                color=c,
             )
-            if r == 0:
-                ax.set_title(phase, fontsize=ts["annotation"], color=INK)
-            if c == 0:
-                ax.set_ylabel(f"{slab}\n−log10(p)", fontsize=ts["annotation"])
-            if r == nrows - 1:
-                ax.set_xlabel("median Δp", fontsize=ts["annotation"])
-            ax.set_ylim(-0.05, Y_CLIP + 0.12)
+            _style_volcano_ax(
+                ax,
+                xlabel=(r == 2),
+                ylabel=f"{slab}\n−log10(p)" if c_i == 0 else None,
+                title=session if r == 0 else None,
+                ts=ts,
+                xlim=X_LIM_STRAT,
+            )
 
     fig.suptitle(
-        "DA ladder · stratified overlay · grey pooled underlay",
+        f"DA · trial-steps · {stx} · grey pooled underlay",
         fontsize=ts["suptitle"],
         fontweight="bold",
         color=INK,
     )
     fig.legend(
-        handles=_strat_legend_handles(dest=dest),
+        handles=_strat_legend_handles(dest=dest, stx=stx),
         loc="lower center",
         ncol=4,
         frameon=False,
@@ -511,12 +564,171 @@ def fig_volcano_ladder_stratified_sessions(
     )
     fig_footnote(
         fig,
-        "Grey ghost squares = pooled Wilcoxon underlay. Overlay = tx×sex×strain Wilcoxon "
-        "(color=tx, shape=sex; filled=wt, open=tg). Black * = BH q<0.05 in that stratum. "
-        "Run-phase only.",
+        f"Trial-step DA · condition={stx}. Grey ghost = pooled Wilcoxon. "
+        "Overlay = sex-stratified Wilcoxon in this strain×tx arm. "
+        "Filled = BH q<0.05. Interval = run only.",
         fontsize=ts["footnote"],
     )
-    save_pdf_png(fig, out / "fig_da_volcano_ladder_stratified_sessions")
+    save_pdf_png(fig, out / f"fig_da_volcano_ladder_stratified_trial_steps_{STX_STEM[stx]}")
+
+
+def fig_volcano_ladder_session_steps_pooled(
+    pooled: pd.DataFrame,
+    sig: pd.DataFrame,
+    out: Path,
+    *,
+    dest: str = "slides",
+) -> None:
+    """Rows = session_step, cols = trial_window."""
+    apply_style(dest=dest)
+    ts = type_scale(dest)
+    lookup, cluster_ids, listed = _build_cluster_lookup(sig)
+    p_xy = _attach_cluster(_volcano_xy(pooled), sig)
+    miss_s = 14 if dest == "slides" else 9
+    hit_s = 24 if dest == "slides" else 14
+
+    fig, axes = plt.subplots(
+        len(SESSION_STEPS),
+        len(TRIAL_WINDOWS),
+        figsize=(FIGSIZE_DOUBLE[0] * 0.95, FIGSIZE_DOUBLE[1] * 1.35),
+        sharex=True,
+        sharey=True,
+    )
+    for r, (step, slab) in enumerate(SESSION_STEPS):
+        for c, tw in enumerate(TRIAL_WINDOWS):
+            ax = axes[r, c]
+            pc = p_xy[(p_xy["session_step"] == step) & (p_xy["trial_window"] == tw)]
+            if pc.empty:
+                ax.set_axis_off()
+                continue
+            _scatter_pooled_cluster_squares(
+                ax, pc, lookup=lookup, miss_s=miss_s, hit_s=hit_s
+            )
+            n_fdr = int(pc["hit"].sum())
+            ax.text(
+                0.98,
+                0.02,
+                f"n={len(pc)}\nFDR={n_fdr}",
+                transform=ax.transAxes,
+                ha="right",
+                va="bottom",
+                fontsize=7,
+                color=INK,
+            )
+            _style_volcano_ax(
+                ax,
+                xlabel=(r == len(SESSION_STEPS) - 1),
+                ylabel=f"{slab}\n−log10(p)" if c == 0 else None,
+                title=TRIAL_WINDOW_LAB[tw] if r == 0 else None,
+                ts=ts,
+                xlim=X_LIM_POOLED,
+            )
+
+    fig.suptitle(
+        "DA · session-steps · pooled · trial windows across columns",
+        fontsize=ts["suptitle"],
+        fontweight="bold",
+        color=INK,
+    )
+    if listed is not None and cluster_ids:
+        add_cluster_id_colorbar(fig, axes[0, -1], cluster_ids, listed, dest=dest)
+    fig.legend(
+        handles=_pooled_legend_handles(dest=dest),
+        loc="lower center",
+        ncol=3,
+        frameon=False,
+        fontsize=7,
+        bbox_to_anchor=(0.5, -0.02),
+    )
+    fig_footnote(
+        fig,
+        "Session-step DA (paired sessions, trial window held). "
+        "Pooled Wilcoxon. Filled = BH q<0.05 within model×trial_window×session_step. "
+        "Interval = run only.",
+        fontsize=ts["footnote"],
+    )
+    save_pdf_png(fig, out / "fig_da_volcano_ladder_overlay_session_steps")
+
+
+def fig_volcano_ladder_session_steps_stratified(
+    pooled: pd.DataFrame,
+    strat: pd.DataFrame,
+    sig: pd.DataFrame,
+    out: Path,
+    *,
+    stx: str,
+    dest: str = "slides",
+) -> None:
+    if stx not in STX_COLOR:
+        raise ValueError(f"unknown stx {stx!r}; expected one of {STX_ORDER}")
+    apply_style(dest=dest)
+    ts = type_scale(dest)
+    p_xy = _attach_cluster(_volcano_xy(pooled), sig)
+    s_xy = _attach_cluster(_volcano_xy(strat), sig)
+    s_xy = s_xy[s_xy["stx"] == stx]
+    pt_s = 22 if dest == "slides" else 14
+    c = STX_COLOR[stx]
+
+    fig, axes = plt.subplots(
+        len(SESSION_STEPS),
+        len(TRIAL_WINDOWS),
+        figsize=(FIGSIZE_DOUBLE[0] * 0.95, FIGSIZE_DOUBLE[1] * 1.4),
+        sharex=True,
+        sharey=True,
+    )
+    for r, (step, slab) in enumerate(SESSION_STEPS):
+        for c_i, tw in enumerate(TRIAL_WINDOWS):
+            ax = axes[r, c_i]
+            pc = p_xy[(p_xy["session_step"] == step) & (p_xy["trial_window"] == tw)]
+            sc = s_xy[(s_xy["session_step"] == step) & (s_xy["trial_window"] == tw)]
+            if pc.empty and sc.empty:
+                ax.set_axis_off()
+                continue
+            _scatter_pooled_grey_ghost(ax, pc, miss_s=pt_s * 0.7, hit_s=pt_s * 0.85)
+            _draw_pooled_to_strat_ladders(ax, pc, sc)
+            _scatter_strat_stx(ax, sc, pt_s=pt_s)
+            n_fdr_s = int(sc["hit"].sum()) if len(sc) else 0
+            ax.text(
+                0.98,
+                0.02,
+                f"n={len(sc)}\nFDR={n_fdr_s}",
+                transform=ax.transAxes,
+                ha="right",
+                va="bottom",
+                fontsize=6.5,
+                color=c,
+            )
+            _style_volcano_ax(
+                ax,
+                xlabel=(r == len(SESSION_STEPS) - 1),
+                ylabel=f"{slab}\n−log10(p)" if c_i == 0 else None,
+                title=TRIAL_WINDOW_LAB[tw] if r == 0 else None,
+                ts=ts,
+                xlim=X_LIM_STRAT,
+            )
+
+    fig.suptitle(
+        f"DA · session-steps · {stx} · grey pooled underlay",
+        fontsize=ts["suptitle"],
+        fontweight="bold",
+        color=INK,
+    )
+    fig.legend(
+        handles=_strat_legend_handles(dest=dest, stx=stx),
+        loc="lower center",
+        ncol=4,
+        frameon=False,
+        fontsize=7,
+        bbox_to_anchor=(0.5, -0.03),
+    )
+    fig_footnote(
+        fig,
+        f"Session-step DA · condition={stx}. Grey ghost = pooled. "
+        "Overlay = sex-stratified Wilcoxon in this strain×tx arm. "
+        "Filled = BH q<0.05. Interval = run only.",
+        fontsize=ts["footnote"],
+    )
+    save_pdf_png(fig, out / f"fig_da_volcano_ladder_stratified_session_steps_{STX_STEM[stx]}")
 
 
 def fig_cluster_delta(
@@ -529,128 +741,74 @@ def fig_cluster_delta(
 ) -> None:
     apply_style(dest=dest)
     ts = type_scale(dest)
+    med = _alias_wire(med)
+    sliced = _alias_wire(sliced) if not sliced.empty else sliced
     rng = np.random.default_rng(0)
-    fig, axes = plt.subplots(6, 5, figsize=(FIGSIZE_DOUBLE[0] * 1.1, FIGSIZE_DOUBLE[1] * 2.0), sharey=True)
+    fig, axes = plt.subplots(
+        6, 5, figsize=(FIGSIZE_DOUBLE[0] * 1.1, FIGSIZE_DOUBLE[1] * 2.0), sharey=True
+    )
     sex_rows = (("F", 0, 1, 2), ("M", 3, 4, 5))
-    for sex, r0, r1, r2 in sex_rows:
-        for r, (step, slab) in enumerate(STEPS):
+    step_col = "trial_step" if "trial_step" in med.columns else "step"
+    for sex, r0, _r1, _r2 in sex_rows:
+        for r, (step, slab) in enumerate(TRIAL_STEPS):
             ax_row = r0 + r
-            for c, phase in enumerate(PHASES):
+            for c, session in enumerate(SESSIONS):
                 ax = axes[ax_row, c]
-                sub = med[(med["step"] == step) & (med["phase_layer"] == phase) & (med["sex"] == sex)]
+                sub = med[
+                    (med[step_col] == step)
+                    & (med["session"] == session)
+                    & (med["sex"] == sex)
+                ]
                 if sub.empty:
                     ax.set_axis_off()
                     continue
-                for si, strain in enumerate(("wt", "tg")):
-                    for tx in ("RBSF-1", "n/a"):
+                for si, strain in enumerate(STRAIN_ORDER):
+                    for tx in TX_ORDER:
                         g = sub[(sub["strain"] == strain) & (sub["tx"] == tx)]
                         if g.empty:
                             continue
                         x = np.full(len(g), si + (0.15 if tx == "n/a" else -0.15))
-                        x = x + rng.normal(0, 0.04, size=len(g))
-                        y = pd.to_numeric(g["delta_p"], errors="coerce")
-                        half = 0.5 * pd.to_numeric(g["iqr_across_models"], errors="coerce").fillna(0)
+                        x = x + rng.normal(0, 0.03, size=len(g))
+                        y = pd.to_numeric(g["delta_p"], errors="coerce").to_numpy(dtype=float)
                         ax.errorbar(
-                            x,
-                            y,
-                            yerr=half,
+                            float(np.nanmedian(x)),
+                            float(np.nanmedian(y)),
+                            yerr=float(np.nanstd(y)) if len(y) > 1 else 0.0,
                             fmt="none",
                             ecolor=MUTE,
-                            elinewidth=0.6,
-                            capsize=0,
-                            alpha=0.45,
+                            elinewidth=0.8,
+                            capsize=2,
                             zorder=2,
                         )
                         ax.scatter(
                             x,
                             y,
+                            s=28,
+                            marker="o" if tx == "RBSF-1" else "s",
                             facecolors=STRAIN_COLOR[strain],
                             edgecolors=TX_EDGE[tx],
-                            marker=TX_MARKER[tx],
-                            s=24 if tx == "RBSF-1" else 20,
-                            alpha=0.9,
-                            linewidths=0.8,
+                            linewidths=0.7,
+                            alpha=0.85,
                             zorder=3,
                         )
                 ax.axhline(0, color=MUTE, lw=0.7, ls="--")
+                if ax_row == r0 and c == 0:
+                    ax.set_ylabel(f"{sex}\n{slab}\nΔp", fontsize=7)
+                elif c == 0:
+                    ax.set_ylabel(slab, fontsize=7)
+                if ax_row == r0:
+                    ax.set_title(session, fontsize=ts["annotation"])
                 ax.set_xticks([0, 1])
                 ax.set_xticklabels(["wt", "tg"], fontsize=7)
-                if r == 0:
-                    ax.set_title(phase, fontsize=ts["annotation"])
-                if c == 0:
-                    ax.set_ylabel(f"{sex} · {slab}\nΔp", fontsize=ts["annotation"])
-    handles = [
-        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=STRAIN_COLOR["wt"], markeredgecolor=TX_EDGE["RBSF-1"], markersize=7, label="wt · RBSF-1"),
-        plt.Line2D([0], [0], marker="s", color="w", markerfacecolor=STRAIN_COLOR["wt"], markeredgecolor=TX_EDGE["n/a"], markersize=7, label="wt · n/a"),
-        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=STRAIN_COLOR["tg"], markeredgecolor=TX_EDGE["RBSF-1"], markersize=7, label="tg · RBSF-1"),
-        plt.Line2D([0], [0], marker="s", color="w", markerfacecolor=STRAIN_COLOR["tg"], markeredgecolor=TX_EDGE["n/a"], markersize=7, label="tg · n/a"),
-    ]
-    fig.legend(handles=handles, loc="upper right", ncol=2, frameon=False, fontsize=7)
+
     fig.suptitle(
-        f"Pause syllable Δp by session · cluster {cluster_id} (sex rows separate; fill=strain, marker=tx)",
+        f"Pause syllable Δp · trial-steps · cluster {cluster_id} "
+        f"(sex rows; fill=strain, marker=tx)",
         fontsize=ts["suptitle"],
         fontweight="bold",
         color=INK,
     )
-    fig_footnote(
-        fig,
-        "Points = animal median Δp across 6 alphabets. Mann–Whitney slices in companion heatmaps.",
-        fontsize=ts["footnote"],
-    )
     save_pdf_png(fig, out / f"fig_cluster{cluster_id}_session_delta")
-
-    if sliced.empty:
-        return
-    for contrast, hold_col, hold_vals in (
-        ("strain", "hold_sex", ("F", "M")),
-        ("tx", "hold_sex", ("F", "M")),
-    ):
-        fig_h, axes_h = plt.subplots(len(STEPS), len(hold_vals), figsize=(3.2 * len(hold_vals), 2.4 * len(STEPS)))
-        if len(STEPS) == 1:
-            axes_h = np.asarray([axes_h])
-        if len(hold_vals) == 1:
-            axes_h = axes_h[:, np.newaxis]
-        for i, (step, slab) in enumerate(STEPS):
-            for j, hold_val in enumerate(hold_vals):
-                ax = axes_h[i, j]
-                sub = sliced[
-                    (sliced["contrast_factor"] == contrast)
-                    & (sliced["step"] == step)
-                    & (sliced[hold_col] == hold_val)
-                    & (sliced["hold_strain"] == "")
-                    & (sliced["hold_tx"] == "")
-                ]
-                mat = np.full(len(PHASES), np.nan)
-                for k, phase in enumerate(PHASES):
-                    row = sub[sub["phase_layer"] == phase]
-                    if row.empty:
-                        continue
-                    p = float(row.iloc[0]["p"])
-                    mat[k] = -np.log10(max(p, 1e-12)) if np.isfinite(p) else np.nan
-                ax.imshow(np.clip(mat, 0, 4).reshape(1, -1), aspect="auto", cmap="magma", vmin=0, vmax=4)
-                for k, phase in enumerate(PHASES):
-                    row = sub[sub["phase_layer"] == phase]
-                    if row.empty:
-                        continue
-                    p = float(row.iloc[0]["p"])
-                    hit = bool(row.iloc[0].get("hit_fdr05", False))
-                    txt = f"{p:.3f}" if np.isfinite(p) else ""
-                    if hit:
-                        txt += "*"
-                    ax.text(k, 0, txt, ha="center", va="center", fontsize=6, color="white")
-                ax.set_yticks([])
-                ax.set_xticks(range(len(PHASES)))
-                ax.set_xticklabels(PHASES, fontsize=7)
-                if i == 0:
-                    ax.set_title(f"sex={hold_val}", fontsize=ts["annotation"])
-                if j == 0:
-                    ax.set_ylabel(slab, fontsize=ts["annotation"])
-        fig_h.suptitle(
-            f"Mann–Whitney Δp · {contrast} · cluster {cluster_id} (* BH q<0.05)",
-            fontsize=ts["suptitle"],
-            fontweight="bold",
-        )
-        save_pdf_png(fig_h, out / f"fig_cluster{cluster_id}_{contrast}_within_sex")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -665,20 +823,53 @@ def main(argv: list[str] | None = None) -> int:
     da = args.da_dir
     out = args.out_dir or (da / "figures")
     out.mkdir(parents=True, exist_ok=True)
-    tests = pd.read_csv(da / "da_syllable_tests_long.csv", keep_default_na=False)
-    strat = load_or_build_strat_tests(da)
     sig = pd.read_csv(args.sig_dir / "syllable_prototypes_clustered.csv")
-    fig_volcano_ladder_pooled_sessions(tests, sig, out, dest=args.dest)
-    fig_volcano_ladder_stratified_sessions(tests, strat, sig, out, dest=args.dest)
+
+    # Trial-step tables (legacy filenames still accepted).
+    trial_tests = _alias_wire(
+        pd.read_csv(da / "da_syllable_tests_long.csv", keep_default_na=False)
+    )
+    if "trial_step" not in trial_tests.columns and "step" in trial_tests.columns:
+        trial_tests = trial_tests.rename(columns={"step": "trial_step"})
+    trial_strat = load_or_build_strat_tests(da)
+    if "trial_step" not in trial_strat.columns and "step" in trial_strat.columns:
+        trial_strat = trial_strat.rename(columns={"step": "trial_step"})
+
+    fig_volcano_ladder_trial_steps_pooled(trial_tests, sig, out, dest=args.dest)
+    for stx in STX_ORDER:
+        fig_volcano_ladder_trial_steps_stratified(
+            trial_tests, trial_strat, sig, out, stx=stx, dest=args.dest
+        )
+
+    sess_tests_path = da / "da_session_step_tests_long.csv"
+    if sess_tests_path.is_file():
+        sess_tests = _alias_wire(pd.read_csv(sess_tests_path, keep_default_na=False))
+        sess_strat = load_or_build_strat_tests(
+            da,
+            stem="da_session_step_tests_strat_long.csv",
+            delta_stem="da_session_step_deltas_per_animal.csv",
+        )
+        fig_volcano_ladder_session_steps_pooled(sess_tests, sig, out, dest=args.dest)
+        for stx in STX_ORDER:
+            fig_volcano_ladder_session_steps_stratified(
+                sess_tests, sess_strat, sig, out, stx=stx, dest=args.dest
+            )
+    else:
+        print(f"skip session-step figs (missing {sess_tests_path.name})", flush=True)
 
     med_path = da / f"cluster{args.pause_cluster}_animal_median_delta_p.csv"
     sliced_path = da / f"cluster{args.pause_cluster}_sliced_tests.csv"
     if med_path.is_file():
         med = pd.read_csv(med_path, keep_default_na=False)
-        sliced = pd.read_csv(sliced_path, keep_default_na=False) if sliced_path.is_file() else pd.DataFrame()
+        sliced = (
+            pd.read_csv(sliced_path, keep_default_na=False)
+            if sliced_path.is_file()
+            else pd.DataFrame()
+        )
         if not sliced.empty:
             for col in ("hold_sex", "hold_strain", "hold_tx"):
-                sliced[col] = sliced[col].fillna("")
+                if col in sliced.columns:
+                    sliced[col] = sliced[col].fillna("")
         fig_cluster_delta(med, sliced, out, cluster_id=int(args.pause_cluster), dest=args.dest)
     print(f"wrote figures -> {out}", flush=True)
     return 0

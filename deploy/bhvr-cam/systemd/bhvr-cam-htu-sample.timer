@@ -1,0 +1,11 @@
+[Unit]
+Description=HTU21D 1 Hz sampling for announce/REC window
+
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec=1s
+AccuracySec=200ms
+Unit=bhvr-cam-htu-sample.service
+
+[Install]
+WantedBy=timers.target

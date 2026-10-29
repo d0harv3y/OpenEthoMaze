@@ -1,0 +1,3 @@
+# Log cam gadget ethernet bind (CDC ECM / RNDIS) — any usbN / enx*.
+ACTION=="add", SUBSYSTEM=="net", DRIVER=="cdc_ether|rndis_host", \
+  RUN+="/bin/sh -c 'logger -t bhvr-usb-gadget host_iface=%k driver=%s{ID_NET_DRIVER}'"

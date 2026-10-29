@@ -1,0 +1,2253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>bhvr-kiosk · {{ cfg.nvr_id }}</title>
+  <style>
+    :root {
+      --bg: #1a1d21;
+      --panel: #24282e;
+      --tile: #2c3138;
+      --tile-empty: #1e2227;
+      --ok: #3d8b5a;
+      --warn: #b8860b;
+      --bad: #a33;
+      --text: #e8eaed;
+      --muted: #9aa0a6;
+      --accent: #4a90d9;
+      --menu: #2a2f36;
+      --menu-border: #3a424c;
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0.75rem;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh;
+      -webkit-touch-callout: none;
+    }
+    header {
+      display: flex; flex-wrap: wrap; align-items: center;
+      gap: 0.45rem 0.65rem; margin-bottom: 0.4rem;
+    }
+    h1 { font-size: 1.05rem; margin: 0; font-weight: 600; }
+    .badge {
+      font-size: 0.72rem; padding: 0.15rem 0.45rem;
+      border-radius: 0.25rem; background: #333; color: var(--muted);
+    }
+    .badge.rec { background: var(--bad); color: #fff; }
+    .clocks {
+      font-family: ui-monospace, monospace; font-size: 0.68rem;
+      line-height: 1.25; color: var(--muted); white-space: nowrap;
+    }
+    .clocks strong { color: var(--text); font-weight: 600; }
+    .roster-line { display: inline-flex; align-items: center; gap: 0.35rem; position: relative; }
+    .tip-btn {
+      font-size: 0.72rem; font-weight: 700; width: 1.45rem; height: 1.45rem;
+      padding: 0; border-radius: 999px; border: 0; cursor: pointer;
+      background: #3a4550; color: #cde; line-height: 1;
+    }
+    .tip-btn[aria-expanded="true"] { background: var(--accent); color: #fff; }
+    .tip-pop {
+      display: none; position: absolute; z-index: 40; left: 0; top: calc(100% + 0.35rem);
+      width: min(22rem, 92vw); padding: 0.65rem 0.75rem;
+      background: var(--menu); border: 1px solid var(--menu-border);
+      border-radius: 0.4rem; box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+      color: var(--text); font-size: 0.82rem; line-height: 1.35; font-weight: 400;
+    }
+    .tip-pop.open { display: block; }
+    .tip-pop strong { color: #fff; font-weight: 600; }
+    .ssd-banner {
+      display: none; width: 100%; font-size: 0.8rem; padding: 0.35rem 0.55rem;
+      background: #5a2a2a; color: #ffd0d0; border-radius: 0.3rem;
+    }
+    .ssd-banner.show { display: block; }
+    button {
+      font-size: 0.95rem; padding: 0.45rem 0.75rem;
+      border: 0; border-radius: 0.35rem; cursor: pointer;
+      background: var(--accent); color: #fff;
+    }
+    button.stop { background: var(--bad); }
+    button.secondary { background: #3a4550; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.45rem;
+      width: min(100%, 56rem);
+      margin: 0 auto;
+    }
+    .tile {
+      background: var(--tile); border-radius: 0.4rem;
+      padding: 0.75rem; display: flex; flex-direction: column;
+      justify-content: space-between; border: 2px solid transparent;
+      position: relative; aspect-ratio: 4 / 3; overflow: hidden;
+      cursor: pointer; user-select: none;
+      /* none: Pi Chromium often maps touch → mouse; don't let the browser steal the press */
+      touch-action: none;
+    }
+    .tile.empty { background: var(--tile-empty); color: var(--muted); cursor: default; }
+    .tile.online { border-color: var(--ok); }
+    .tile.stale { border-color: var(--warn); }
+    .tile.recording { border-color: var(--bad); }
+    .tile.live-on {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    .tile h2 { margin: 0; font-size: 0.95rem; position: relative; z-index: 2; }
+    .tile .ip {
+      font-family: ui-monospace, monospace; font-size: 0.68rem; color: var(--muted);
+      position: relative; z-index: 2; line-height: 1.25; white-space: pre-line;
+    }
+    .tile .ip .ip-active { color: #c8d0dc; }
+    .tile .meta { font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; position: relative; z-index: 2; }
+    .tile .status {
+      align-self: flex-start; font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.04em; padding: 0.15rem 0.4rem; border-radius: 0.2rem;
+      background: #444; position: relative; z-index: 2;
+    }
+    .tile.online .status { background: var(--ok); }
+    .tile.stale .status { background: var(--warn); color: #111; }
+    .tile.recording .status { background: var(--bad); }
+    .tile[data-link="wifi"] .status { outline: 1px solid rgba(255, 200, 80, 0.7); }
+    .tile[data-link="usb"] .status { outline: 1px solid rgba(120, 220, 160, 0.5); }
+    .tile .live {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: contain; object-position: center; background: #000;
+      display: none; z-index: 1;
+    }
+    .tile .live-canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: contain; background: #000;
+      display: none; z-index: 1; pointer-events: none;
+    }
+    .tile.live-on .live { display: block; opacity: 0; } /* decode source; paint via canvas */
+    .tile.live-on .live-canvas { display: block; }
+    .tile.live-on .body-copy { opacity: 0; }
+    .tile .focus-tag, .tile .fps-tag, .tile .rec-tag,
+    .tile .meta-tag, .tile .env-tag {
+      display: none; position: absolute; z-index: 2;
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
+      padding: 0.15rem 0.4rem; border-radius: 0.2rem; color: #fff;
+      max-width: 58%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tile .focus-tag { left: 0.5rem; top: 0.5rem; background: var(--accent); }
+    .tile.live-on .focus-tag { display: inline-block; }
+    /* REC sits under LIVE when both are on; alone it stays top-left. */
+    .tile .rec-tag { left: 0.5rem; top: 0.5rem; background: var(--bad); max-width: 72%; }
+    .tile.live-on.recording .rec-tag { top: 2.05rem; }
+    .tile.recording .rec-tag { display: inline-block; }
+    .tile .rec-tag.ok { background: var(--ok); }
+    .tile .rec-tag.slow { background: var(--warn); color: #1a1d21; }
+    .tile .rec-tag.stall { background: var(--bad); }
+    .tile .rec-tag.starting { background: #555; }
+    .tile .meta-tag {
+      right: 0.5rem; top: 0.5rem; font-weight: 600; letter-spacing: 0.02em;
+      background: rgba(0,0,0,0.7); color: #e8eaed;
+    }
+    .tile .meta-tag.needs-meta { color: #ffcc66; }
+    .tile .meta-tag:not(:empty) { display: inline-block; }
+    .tile .env-tag {
+      right: 0.5rem; top: 2.05rem; font-weight: 600; letter-spacing: 0.02em;
+      font-variant-numeric: tabular-nums; background: rgba(0,0,0,0.7); color: #9fe3b0;
+    }
+    .tile .env-tag:not(:empty) { display: inline-block; }
+    .tile .fps-tag {
+      right: 0.5rem; bottom: 0.5rem; letter-spacing: 0.02em;
+      font-variant-numeric: tabular-nums; background: rgba(0,0,0,0.65);
+    }
+    .tile.live-on .fps-tag { display: inline-block; }
+    /* Idle-only touchscreen help (fps-tag owns this corner while LIVE). */
+    .tile .tile-tip {
+      position: absolute; right: 0.45rem; bottom: 0.45rem; z-index: 5;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem;
+    }
+    .tile.live-on .tile-tip,
+    .tile.empty .tile-tip { display: none; }
+    .tile .tile-tip .tip-btn {
+      width: 1.75rem; height: 1.75rem; font-size: 0.85rem;
+      touch-action: manipulation;
+    }
+    .tile .tile-tip .tip-pop {
+      left: auto; right: 0; top: auto; bottom: calc(100% + 0.3rem);
+      width: min(16.5rem, 78vw);
+      max-height: 11rem; overflow: auto;
+    }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.25rem 0 0.55rem; }
+    .chip {
+      font-size: 0.95rem; padding: 0.55rem 0.85rem; min-height: 2.75rem;
+      border-radius: 0.35rem; border: 2px solid var(--menu-border);
+      background: #1a1d21; color: var(--text); cursor: pointer;
+    }
+    .chip.selected { border-color: var(--accent); background: #243044; }
+    .badge.honesty { background: #3a4550; color: #cde; max-width: 22rem; white-space: normal; line-height: 1.25; }
+    .badge.science { background: #2a4a3a; color: #cfe; }
+    .tile .fps-tag.connecting { color: #ffcc66; }
+    .tile .fps-tag.ok { color: #9fe3b0; }
+    .tile .fps-tag.slow { color: #ffb4b4; }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+
+    /* Context menu */
+    #ctx-menu {
+      display: none; position: fixed; z-index: 1000; min-width: 13rem;
+      background: var(--menu); border: 1px solid var(--menu-border);
+      border-radius: 0.4rem; box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+      padding: 0.3rem 0; list-style: none; margin: 0;
+    }
+    #ctx-menu.open { display: block; }
+    #ctx-menu li button {
+      display: block; width: 100%; text-align: left;
+      background: transparent; color: var(--text);
+      border-radius: 0; padding: 0.65rem 0.9rem; font-size: 0.95rem;
+    }
+    #ctx-menu li button:hover, #ctx-menu li button:focus {
+      background: #3a4550; outline: none;
+    }
+    #ctx-menu li button:disabled { opacity: 0.35; }
+    #ctx-menu li.sep {
+      height: 1px; background: var(--menu-border); margin: 0.3rem 0;
+    }
+    #ctx-menu .ctx-title {
+      padding: 0.35rem 0.9rem 0.5rem; font-size: 0.75rem; color: var(--muted);
+    }
+    #ctx-menu .ctx-section {
+      padding: 0.45rem 0.9rem 0.15rem; font-size: 0.7rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    #ctx-menu li button.checked::before {
+      content: "✓ ";
+      color: #9fe3b0;
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; z-index: 1100;
+      background: rgba(0,0,0,0.55); align-items: center; justify-content: center;
+      padding: 1rem;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--panel); border-radius: 0.5rem; width: min(100%, 34rem);
+      max-height: 90vh; overflow: auto; padding: 1rem 1.1rem 1.1rem;
+      border: 1px solid var(--menu-border);
+    }
+    .modal h3 { margin: 0 0 0.65rem; font-size: 1.05rem; }
+    label.field { display: block; margin: 0.45rem 0 0.15rem; font-size: 0.8rem; color: var(--muted); }
+    input, select, textarea {
+      width: 100%; font-size: 1rem; padding: 0.4rem;
+      border-radius: 0.3rem; border: 1px solid #444;
+      background: #1a1d21; color: var(--text);
+    }
+    .row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+    .row > * { flex: 1 1 8rem; }
+    .cam-picks { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.4rem 0 0.6rem; }
+    .cam-picks label {
+      display: flex; gap: 0.3rem; align-items: center; font-size: 0.85rem;
+      background: #1a1d21; padding: 0.3rem 0.5rem; border-radius: 0.3rem;
+    }
+    .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.85rem; }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    code { font-size: 0.8rem; }
+    .err { color: #ffb4b4; font-size: 0.85rem; margin-top: 0.4rem; }
+    .modal.wide { width: min(100%, 42rem); }
+    .ks-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0 0 0.75rem; }
+    .ks-tabs button {
+      font-size: 0.82rem; padding: 0.4rem 0.65rem; background: #1a1d21;
+      color: var(--muted); border: 1px solid var(--menu-border);
+    }
+    .ks-tabs button.active { background: #243044; color: #fff; border-color: var(--accent); }
+    .ks-panel { display: none; }
+    .ks-panel.active { display: block; }
+    .ks-log {
+      font-family: ui-monospace, monospace; font-size: 0.72rem; line-height: 1.35;
+      max-height: 12rem; overflow: auto; background: #12151a; padding: 0.5rem 0.6rem;
+      border-radius: 0.3rem; white-space: pre-wrap; margin-top: 0.5rem;
+    }
+    .ks-check { max-height: 10rem; overflow: auto; margin: 0.35rem 0; }
+    .ks-check label {
+      display: flex; gap: 0.4rem; align-items: center; font-size: 0.85rem;
+      padding: 0.25rem 0; border-bottom: 1px solid #2a2f36;
+    }
+    .warn-line { color: #ffcc66; font-size: 0.85rem; margin: 0.35rem 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>bhvr-kiosk · {{ cfg.nvr_id }}</h1>
+    <span class="roster-line">
+      <span class="badge" id="roster-badge">roster …</span>
+      <button type="button" class="tip-btn" id="roster-tip-btn" aria-expanded="false"
+              aria-controls="roster-tip-pop" title="Roster help">i</button>
+      <div class="tip-pop" id="roster-tip-pop" role="dialog" aria-label="Roster help" hidden>
+        <strong>MQTT camera roster</strong><br/>
+        ONLINE / STALE = announce seen within <code>stale_after_s</code> (default 180s).
+        STALE badge shows <code>seen Xm ago</code> (last MQTT).<br/>
+        Badge <code>USB</code>/<code>WiFi</code> = active announce path (LIVE SSH target).
+        Dual-IP lines = both addresses when dual-homed.<br/>
+        <strong>STALE recovery:</strong> (1) <strong>Invite</strong> — refresh MQTT broker on cams;
+        (2) plug USB — fastest path back; (3) tap LIVE after online — starts WHEP;
+        (4) power-cycle cam if WiFi dead. Online≠LIVE — SSH must reach the roster IP.<br/>
+        <strong>Invite</strong> = UDP broker beacon (~45s burst).<br/>
+        data_root: <code>{{ data_root }}</code>
+      </div>
+      <button type="button" class="secondary" id="btn-invite" title="UDP invite burst">Invite</button>
+    </span>
+    <div class="clocks" id="clocks" title="Wall clocks">
+      <div><strong>UTC</strong> <span id="clock-utc">—</span></div>
+      <div><strong>Local</strong> <span id="clock-local">—</span></div>
+    </div>
+    <span class="badge rec" id="rec-badge" hidden>REC 0:00</span>
+    <span class="badge science" id="science-badge" title="Idle + REC encode ask" {% if not active %}hidden{% endif %}>
+      {{ idle_ask_label }}
+    </span>
+    <span class="badge honesty" id="honesty-badge" hidden>REC* disk can beat LIVE fps</span>
+    <div class="actions" style="margin-left:auto">
+      <button type="button" class="secondary" id="btn-session-settings">Session settings</button>
+      <button type="button" class="secondary" id="btn-kiosk-settings">Kiosk settings</button>
+      <button type="button" id="btn-start-session">Start</button>
+      <button type="button" class="stop" id="btn-stop-session" hidden>Stop</button>
+    </div>
+    <div class="ssd-banner{% if storage and not storage.mounted %} show{% endif %}" id="ssd-banner">
+      SSD / data_root not mounted or not writable — recording disabled.
+      <code>{{ data_root }}</code>
+    </div>
+  </header>
+
+  <div class="grid" id="cam-grid">
+    {% for cam in tiles %}
+    <div class="tile {% if cam %}{% if cam.online %}online{% else %}stale{% endif %}{% else %}empty{% endif %}"
+         {% if cam %}data-cam-id="{{ cam.id }}" data-online="{{ '1' if cam.online else '0' }}" data-link="{{ cam.link or '' }}" tabindex="0" role="button" aria-label="{{ cam.id }}"{% endif %}>
+      {% if cam %}
+      <video class="live" muted playsinline disablepictureinpicture></video>
+      <canvas class="live-canvas" aria-hidden="true"></canvas>
+      <div class="body-copy">
+        <h2>{{ cam.id }}</h2>
+        <div class="ip">{% set _ips = cam.ips or {} %}{% if _ips.usb or _ips.wifi %}{% if _ips.usb %}<span class="{% if cam.link == 'usb' %}ip-active{% endif %}">USB {{ _ips.usb }}</span>{% endif %}{% if _ips.usb and _ips.wifi %}
+{% endif %}{% if _ips.wifi %}<span class="{% if cam.link == 'wifi' %}ip-active{% endif %}">WiFi {{ _ips.wifi }}</span>{% endif %}{% else %}{{ cam.ip }}{% endif %}</div>
+      </div>
+      {% set a = cam.animal or {} %}
+      {% if a.subject_id %}
+      <span class="meta-tag" data-animal title="{{ a.notes or '' }}">{{ a.subject_id }} · {{ a.cage_id or "—" }}</span>
+      {% else %}
+      <span class="meta-tag needs-meta" data-animal title="Set Cam metadata">needs meta</span>
+      {% endif %}
+      <span class="env-tag" data-env>{% if cam.temp_c is number and cam.rh_pct is number %}{{ "%.1f"|format(cam.temp_c) }}°C · {{ "%.0f"|format(cam.rh_pct) }}%{% elif cam.temp_c is number %}{{ "%.1f"|format(cam.temp_c) }}°C{% endif %}</span>
+      <span class="status">{% if cam.online %}ONLINE{% else %}STALE{% endif %}{% if cam.link == 'usb' %} · USB{% elif cam.link == 'wifi' %} · WiFi{% endif %}{% if not cam.online and cam.age_s is number %} · seen {% if cam.age_s >= 3600 %}{{ (cam.age_s // 3600)|int }}h{% elif cam.age_s >= 60 %}{{ (cam.age_s // 60)|int }}m{% else %}{{ cam.age_s|int }}s{% endif %} ago{% endif %}</span>
+      <span class="rec-tag">REC</span>
+      <span class="focus-tag">LIVE</span>
+      <span class="fps-tag" data-fps>—</span>
+      <div class="tile-tip">
+        <div class="tip-pop" data-tile-tip-pop role="dialog" aria-label="Tile help" hidden>
+          <strong>Tile</strong> · tap = LIVE on/off · long-press = menu<br/>
+          <strong>ONLINE / STALE</strong> = MQTT announce (not LIVE).<br/>
+          <strong>STALE recovery:</strong> Invite · plug USB · power-cycle if WiFi dead · tap LIVE once online.<br/>
+          Dual IPs = USB + WiFi; brighter = active SSH path.
+        </div>
+        <button type="button" class="tip-btn" data-tile-tip-btn
+                aria-expanded="false" title="Tile help">i</button>
+      </div>
+      {% else %}
+      <div>
+        <h2>empty</h2>
+        <div class="meta">waiting for MQTT announce</div>
+      </div>
+      <span class="status">—</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <ul id="ctx-menu" role="menu" aria-hidden="true">
+    <li class="ctx-title" id="ctx-title">camera</li>
+    <li><button type="button" data-act="focus" role="menuitem">Start live</button></li>
+    <li><button type="button" data-act="unfocus" role="menuitem">Stop live</button></li>
+    <li class="sep"></li>
+    <li><button type="button" data-act="session-settings" role="menuitem">Session settings…</button></li>
+    <li><button type="button" data-act="cam-meta" role="menuitem">Cam metadata…</button></li>
+    <li class="sep"></li>
+    <li><button type="button" data-act="record" role="menuitem">Start recording…</button></li>
+    <li><button type="button" data-act="stop" role="menuitem">Stop recording</button></li>
+  </ul>
+
+  <div class="modal-backdrop" id="modal-start" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="modal-start-title">
+      <h3 id="modal-start-title">Start recording</h3>
+      <p class="muted" id="start-summary">—</p>
+      <label class="field">cameras</label>
+      <div class="cam-picks" id="cam-picks"></div>
+      <div class="err" id="start-err" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" data-close="modal-start">Cancel</button>
+        <button type="button" id="btn-start-go">Start</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modal-session" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="modal-session-title">
+      <h3 id="modal-session-title">Session settings</h3>
+      <p class="muted">Idle live uses these knobs too*. REC writes the same encode to disk (often steadier fps).</p>
+      <label class="field">Science size</label>
+      <div class="chip-row" id="size-chips" role="group" aria-label="Science size">
+        {% for opt in science_size_options %}
+        <button type="button" class="chip{% if opt.id == default_science_size %} selected{% endif %}"
+                data-size="{{ opt.id }}">{{ opt.label }} · {{ opt.width }}×{{ opt.height }}</button>
+        {% endfor %}
+      </div>
+      <label class="field">Soft fps</label>
+      <div class="chip-row" id="fps-chips" role="group" aria-label="Soft fps">
+        {% for f in science_fps_options %}
+        <button type="button" class="chip{% if f == default_science_fps %} selected{% endif %}"
+                data-fps="{{ f }}">{{ f }}</button>
+        {% endfor %}
+      </div>
+      <input type="hidden" id="profile" value="{{ default_science_size }}" />
+      <input type="hidden" id="soft_fps" value="{{ default_science_fps }}" />
+      <div class="row">
+        <div>
+          <label class="field" for="maxlat">maxlat (s) — LIVE chase</label>
+          <input id="maxlat" type="number" min="0.15" max="3" step="0.05" />
+        </div>
+        <div>
+          <label class="field" for="chunk_minutes">chunk minutes (0 = no limit)</label>
+          <input id="chunk_minutes" type="number" min="0" max="1440" step="1" value="{{ operator.chunk_minutes if operator else 20 }}" />
+          <div class="chip-row" style="margin-top:0.35rem">
+            <button type="button" class="chip" id="chunk-preset-lite" data-chunk="20">Lite default 20</button>
+            <button type="button" class="chip" id="chunk-preset-std" data-chunk="5">Standard default 5</button>
+          </div>
+        </div>
+      </div>
+      <label class="field" for="output_subdir">output subdir under data_root</label>
+      <input id="output_subdir" list="subdir-list" placeholder="(root)" value="{{ operator.output_subdir if operator else '' }}" />
+      <datalist id="subdir-list"></datalist>
+      <p class="muted" id="session-estimate">—</p>
+      <p class="muted"><code id="session-data-root">{{ data_root }}</code></p>
+      <div class="err" id="session-err" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" data-close="modal-session">Close</button>
+        <button type="button" id="btn-session-apply">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modal-kiosk" aria-hidden="true">
+    <div class="modal wide" role="dialog" aria-labelledby="modal-kiosk-title">
+      <h3 id="modal-kiosk-title">Kiosk settings</h3>
+      <p class="muted">Fleet / NVR ops — not science encode (use Session settings).</p>
+      <div class="ks-tabs" role="tablist">
+        <button type="button" class="active" data-ks-tab="push">USB push</button>
+        <button type="button" data-ks-tab="wifi">SSID &amp; password</button>
+        <button type="button" data-ks-tab="backup">Network backup</button>
+        <button type="button" data-ks-tab="dataroot">Data root</button>
+      </div>
+
+      <div class="ks-panel active" id="ks-panel-push" data-ks-panel="push">
+        <p class="muted" id="ks-git-line">git …</p>
+        <p class="warn-line" id="ks-git-dirty" hidden>Working tree dirty — push still allowed.</p>
+        <p class="muted" id="ks-soft-line">soft set …</p>
+        <label class="field">ONLINE · USB targets (SSH litmus)</label>
+        <div class="ks-check" id="ks-push-cams"></div>
+        <div class="err" id="ks-push-err" hidden></div>
+        <div class="modal-actions" style="justify-content:flex-start">
+          <button type="button" id="btn-ks-push">Push soft set</button>
+          <button type="button" class="secondary" id="btn-ks-refresh">Refresh</button>
+        </div>
+        <div class="ks-log" id="ks-push-log" hidden></div>
+      </div>
+
+      <div class="ks-panel" id="ks-panel-wifi" data-ks-panel="wifi">
+        <p class="muted">Same lab profile → USB cams first, then NVR (<code>bhvr-iot</code>). Password is write-only.</p>
+        <label class="field" for="ks-ssid">SSID</label>
+        <input id="ks-ssid" autocomplete="off" />
+        <label class="field" for="ks-psk">password</label>
+        <input id="ks-psk" type="password" autocomplete="new-password" />
+        <label class="field" style="display:flex;gap:0.4rem;align-items:center;margin-top:0.5rem">
+          <input type="checkbox" id="ks-wifi-hidden" style="width:auto" /> hidden network
+        </label>
+        <label class="field" style="display:flex;gap:0.4rem;align-items:center">
+          <input type="checkbox" id="ks-wifi-nvr" checked style="width:auto" /> apply to NVR last
+        </label>
+        <p class="warn-line">If you are on IoT-only Wi‑Fi, NVR apply may drop this session — prefer USB admin.</p>
+        <div class="err" id="ks-wifi-err" hidden></div>
+        <div class="modal-actions" style="justify-content:flex-start">
+          <button type="button" id="btn-ks-wifi">Apply Wi‑Fi</button>
+        </div>
+        <div class="ks-log" id="ks-wifi-log" hidden></div>
+      </div>
+
+      <div class="ks-panel" id="ks-panel-backup" data-ks-panel="backup">
+        <p class="muted">Manual CIFS copy — credentials not stored. Example: <code>\\cs.spokane.wsu.edu\Davis-Lab\…\bhvr-backup</code></p>
+        <label class="field" for="ks-unc">UNC / share</label>
+        <input id="ks-unc" placeholder="//server/share/path" autocomplete="off" />
+        <div class="row">
+          <div>
+            <label class="field" for="ks-cifs-user">username</label>
+            <input id="ks-cifs-user" autocomplete="off" />
+          </div>
+          <div>
+            <label class="field" for="ks-cifs-pass">password</label>
+            <input id="ks-cifs-pass" type="password" autocomplete="new-password" />
+          </div>
+        </div>
+        <label class="field">sessions under data_root</label>
+        <div class="ks-check" id="ks-backup-sessions"></div>
+        <div class="err" id="ks-backup-err" hidden></div>
+        <div class="modal-actions" style="justify-content:flex-start">
+          <button type="button" id="btn-ks-backup">Backup now</button>
+        </div>
+        <div class="ks-log" id="ks-backup-log" hidden></div>
+      </div>
+
+      <div class="ks-panel" id="ks-panel-dataroot" data-ks-panel="dataroot">
+        <p class="muted">Absolute archive root (SSD swap). Session settings still pick subdir under this.</p>
+        <p class="muted" id="ks-storage-line">storage …</p>
+        <label class="field" for="ks-data-root">data_root</label>
+        <input id="ks-data-root" />
+        <label class="field" style="display:flex;gap:0.4rem;align-items:center;margin-top:0.5rem">
+          <input type="checkbox" id="ks-restart-web" checked style="width:auto" /> restart kiosk web after Apply
+        </label>
+        <div class="err" id="ks-dataroot-err" hidden></div>
+        <div class="modal-actions" style="justify-content:flex-start">
+          <button type="button" id="btn-ks-dataroot">Apply</button>
+        </div>
+        <div class="ks-log" id="ks-dataroot-log" hidden></div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="secondary" data-close="modal-kiosk">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modal-cam-meta" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="modal-cam-meta-title">
+      <h3 id="modal-cam-meta-title">Cam metadata</h3>
+      <p class="muted" id="cam-meta-id">—</p>
+      <div class="row">
+        <div>
+          <label class="field" for="c_subject_id">subject_id *</label>
+          <input id="c_subject_id" autocomplete="off" />
+        </div>
+        <div>
+          <label class="field" for="c_sex">sex</label>
+          <select id="c_sex">
+            <option value="M">M</option>
+            <option value="F">F</option>
+            <option value="U" selected>U</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label class="field" for="c_cage_id">cage_id</label>
+          <input id="c_cage_id" />
+        </div>
+        <div>
+          <label class="field" for="c_strain">strain</label>
+          <input id="c_strain" />
+        </div>
+      </div>
+      <label class="field" for="c_notes">notes (tile tooltip)</label>
+      <textarea id="c_notes" rows="2"></textarea>
+      <div class="err" id="cam-meta-err" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" data-close="modal-cam-meta">Close</button>
+        <button type="button" id="btn-cam-meta-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/jmuxer.min.js"></script>
+  <script src="/static/mpegts.min.js"></script>
+  <script src="/static/mediamtx-reader.js"></script>
+  <script>
+    const PREVIEW_TRANSPORT = "{{ preview_transport }}";
+    const PREVIEW_WIDTH = {{ preview_width | default(640) }};
+    const PREVIEW_HEIGHT = {{ preview_height | default(480) }};
+    const SPECIES_DEFAULT = "{{ cfg.species_default }}";
+    const ALL_CAMS = {{ cameras | tojson }};
+    let sessionActive = {{ 'true' if active else 'false' }};
+    let sessionInfo = {{ active | tojson if active else 'null' }};
+    let recTimer = null;
+    // mpegts.js knobs: ?chase=0|1&stash=32&maxlat=0.5&minrem=0.15
+    // Defaults for mpegts: chase on, stash 32, keep MSE ahead ≤ ~0.5s (drop late frames).
+    const _qs = new URLSearchParams(location.search || "");
+    const _chaseRaw = _qs.get("chase");
+    let playerChase;
+    if (_chaseRaw == null || _chaseRaw === "") {
+      playerChase = PREVIEW_TRANSPORT === "mpegts";
+    } else {
+      playerChase = ["1", "true", "yes", "on"].includes(String(_chaseRaw).toLowerCase());
+    }
+    const _stashDefault = playerChase ? "32" : "128";
+    let playerStash = Math.max(
+      16,
+      Math.min(512, parseInt(_qs.get("stash") || _stashDefault, 10) || parseInt(_stashDefault, 10))
+    );
+    let playerMaxLat = Math.max(0.15, Math.min(3, parseFloat(_qs.get("maxlat") || "0.5") || 0.5));
+    let playerMinRem = Math.max(0.05, Math.min(playerMaxLat, parseFloat(_qs.get("minrem") || "0.15") || 0.15));
+    // Last stream fps per cam (for diag POST)
+    const lastStreamFps = {};
+
+    function formatElapsed(ms) {
+      const s = Math.max(0, Math.floor(ms / 1000));
+      const hh = Math.floor(s / 3600);
+      const mm = Math.floor((s % 3600) / 60);
+      const ss = s % 60;
+      if (hh > 0) {
+        return hh + ":" + String(mm).padStart(2, "0") + ":" + String(ss).padStart(2, "0");
+      }
+      return mm + ":" + String(ss).padStart(2, "0");
+    }
+
+    function sessionStartedMs() {
+      if (!sessionInfo || !sessionInfo.started) return null;
+      const t = Date.parse(sessionInfo.started);
+      return Number.isFinite(t) ? t : null;
+    }
+
+    function tickRecElapsed() {
+      const startMs = sessionStartedMs();
+      const text = startMs == null ? "REC" : ("REC " + formatElapsed(Date.now() - startMs));
+      const badge = document.getElementById("rec-badge");
+      if (badge) badge.textContent = text;
+      // Tile .rec-tag = write health from /api/session/capture-stats (not elapsed).
+    }
+
+    function formatWriteRate(bps) {
+      if (bps == null || !Number.isFinite(bps)) return "—";
+      if (bps >= 1e6) return (bps / 1e6).toFixed(1) + " MB/s";
+      if (bps >= 1e3) return Math.round(bps / 1e3) + " KB/s";
+      return Math.round(bps) + " B/s";
+    }
+
+    function formatBytesShort(n) {
+      if (n == null || !Number.isFinite(n)) return "—";
+      if (n >= 1e6) return (n / 1e6).toFixed(1) + " MB";
+      if (n >= 1e3) return Math.round(n / 1e3) + " KB";
+      return n + " B";
+    }
+
+    function tickClocks() {
+      const now = new Date();
+      const utc = document.getElementById("clock-utc");
+      const loc = document.getElementById("clock-local");
+      if (utc) utc.textContent = now.toISOString().replace(".000", "").replace("Z", "Z");
+      if (loc) {
+        loc.textContent = now.toLocaleString(undefined, {
+          year: "numeric", month: "2-digit", day: "2-digit",
+          hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+        });
+      }
+    }
+    tickClocks();
+    setInterval(tickClocks, 1000);
+
+    const MAXLAT_KEY = "bhvr_kiosk_maxlat";
+    (function loadMaxlat() {
+      const saved = localStorage.getItem(MAXLAT_KEY);
+      if (saved != null && saved !== "") {
+        const v = parseFloat(saved);
+        if (Number.isFinite(v)) playerMaxLat = Math.max(0.15, Math.min(3, v));
+      }
+    })();
+
+    async function tickCaptureStats() {
+      if (!sessionActive) return;
+      let data;
+      try {
+        const r = await fetch("/api/session/capture-stats", { cache: "no-store" });
+        if (!r.ok) return;
+        data = await r.json();
+      } catch (e) {
+        return;
+      }
+      const cams = (data && data.cameras) || {};
+      document.querySelectorAll(".tile.recording[data-cam-id]").forEach((tile) => {
+        const id = tile.getAttribute("data-cam-id");
+        const s = cams[id];
+        const tag = tile.querySelector(".rec-tag");
+        if (!tag) return;
+        tag.classList.remove("ok", "stall", "slow", "starting");
+        if (!s) {
+          tag.classList.add("starting");
+          tag.textContent = "REC …";
+          tag.title = "waiting for capture stats";
+          return;
+        }
+        const st = s.status || "ok";
+        tag.classList.add(st);
+        let txt = "REC";
+        if (st === "stall") txt = "REC stall";
+        else if (st === "starting") txt = "REC …";
+        else if (s.est_fps != null) txt = "REC ~" + s.est_fps + " · " + formatWriteRate(s.write_Bps);
+        else txt = "REC " + formatWriteRate(s.write_Bps);
+        tag.textContent = txt;
+        tag.title =
+          formatBytesShort(s.bytes) + " on SSD" +
+          (s.last_write_age_s != null ? (" · last write " + s.last_write_age_s + "s ago") : "") +
+          " · not LIVE decode fps";
+      });
+    }
+
+    function syncRecUi() {
+      const recBadge = document.getElementById("rec-badge");
+      const stopBtn = document.getElementById("btn-stop-session");
+      const scienceBadge = document.getElementById("science-badge");
+      const ids = new Set(recordingCamIds());
+      if (recBadge) recBadge.hidden = !sessionActive;
+      if (stopBtn) stopBtn.hidden = !sessionActive;
+      if (scienceBadge) {
+        scienceBadge.hidden = !sessionActive;
+        if (sessionActive && sessionInfo && sessionInfo.meta) {
+          const m = sessionInfo.meta;
+          scienceBadge.textContent = "science " + (m.science_ask || ((m.profile || "?") + " @" + (m.soft_fps || "?")));
+        }
+      }
+      const honesty = document.getElementById("honesty-badge");
+      if (honesty) honesty.hidden = !sessionActive;
+      const startBtn = document.getElementById("btn-start-session");
+      if (startBtn) startBtn.hidden = !!sessionActive;
+      document.querySelectorAll(".tile[data-cam-id]").forEach((t) => {
+        const id = t.getAttribute("data-cam-id");
+        t.classList.toggle("recording", ids.has(id));
+        const st = t.querySelector(".status");
+        if (st && ids.has(id)) st.textContent = "REC";
+        else if (st) {
+          const ageAttr = t.dataset.ageS;
+          const ageS = ageAttr != null && ageAttr !== "" ? Number(ageAttr) : null;
+          st.textContent = onlineStatusText(t.dataset.online === "1", t.dataset.link || "", ageS);
+        }
+      });
+      if (sessionActive && sessionStartedMs() != null) {
+        tickRecElapsed();
+        tickCaptureStats();
+        if (!recTimer) {
+          recTimer = setInterval(() => {
+            tickRecElapsed();
+            tickCaptureStats();
+          }, 1000);
+        }
+      } else {
+        if (recTimer) { clearInterval(recTimer); recTimer = null; }
+        document.querySelectorAll(".rec-tag").forEach((el) => {
+          el.textContent = "REC";
+          el.classList.remove("ok", "stall", "slow", "starting");
+          el.title = "";
+        });
+        if (recBadge) recBadge.textContent = "REC 0:00";
+      }
+    }
+
+    function bufferedAheadS(video) {
+      try {
+        if (!video || !video.buffered || video.buffered.length === 0) return null;
+        const t = video.currentTime || 0;
+        for (let i = 0; i < video.buffered.length; i++) {
+          const a = video.buffered.start(i);
+          const b = video.buffered.end(i);
+          if (t >= a && t <= b) return Math.max(0, b - t);
+        }
+        const end = video.buffered.end(video.buffered.length - 1);
+        return Math.max(0, end - t);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    /** Drop late frames: jump playhead so MSE ahead ≤ maxlat (OK to skip). */
+    function chaseLiveBuffer(video) {
+      if (!playerChase || !video) return;
+      const ahead = bufferedAheadS(video);
+      if (ahead == null || ahead <= playerMaxLat) return;
+      try {
+        if (!video.buffered || video.buffered.length === 0) return;
+        const end = video.buffered.end(video.buffered.length - 1);
+        const target = Math.max(0, end - playerMinRem);
+        if (target > (video.currentTime || 0) + 0.04) {
+          video.currentTime = target;
+        }
+      } catch (e) {}
+    }
+
+    function postLivePlayerDiag(camId, video, streamFps) {
+      if (PREVIEW_TRANSPORT !== "mpegts") return;
+      const body = {
+        cam_id: camId,
+        chase: playerChase,
+        stash: playerStash,
+        paint_n: 1,
+        buffered_s: bufferedAheadS(video),
+        stream_fps: streamFps,
+        ts_ms: Date.now(),
+      };
+      fetch("/api/diag/live-player", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        keepalive: true,
+      }).catch(() => {});
+    }
+
+    (function bindScienceChips() {
+      const sizeRow = document.getElementById("size-chips");
+      const fpsRow = document.getElementById("fps-chips");
+      const profileEl = document.getElementById("profile");
+      const fpsEl = document.getElementById("soft_fps");
+      if (sizeRow) {
+        sizeRow.addEventListener("click", (ev) => {
+          const b = ev.target.closest("button[data-size]");
+          if (!b) return;
+          sizeRow.querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
+          b.classList.add("selected");
+          if (profileEl) profileEl.value = b.dataset.size;
+        });
+      }
+      if (fpsRow) {
+        fpsRow.addEventListener("click", (ev) => {
+          const b = ev.target.closest("button[data-fps]");
+          if (!b) return;
+          fpsRow.querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
+          b.classList.add("selected");
+          if (fpsEl) fpsEl.value = b.dataset.fps;
+        });
+      }
+      document.getElementById("chunk-preset-lite")?.addEventListener("click", () => {
+        const el = document.getElementById("chunk_minutes");
+        if (el) el.value = "20";
+      });
+      document.getElementById("chunk-preset-std")?.addEventListener("click", () => {
+        const el = document.getElementById("chunk_minutes");
+        if (el) el.value = "5";
+      });
+    })();
+    // Per-cam live sessions (issue 12 — no single-focus mutex).
+    // camId → { abort, mpegtsPlayer, rtcPc, whepReader, jmuxer, fpsTimer }
+    const liveSessions = new Map();
+    // Idle LIVE self-heal: restart only on near-frozen decode (not "slow" under floor).
+    // Multi-cam often paints 3–8 fps — that must not thrash whep/start.
+    const LIVE_DEAD_FPS = 0.5;        // only treat as dead if essentially frozen
+    const LIVE_STALL_S = 30;          // must stay dead this long (seconds)
+    const LIVE_WATCH_GRACE_MS = 60000; // settle after start/re-track (milliseconds; 60000 = 60s)
+    const LIVE_RETRY_BASE_MS = 15000;
+    const LIVE_RETRY_MAX_MS = 120000;
+    const liveRetryTimer = new Map(); // camId → timeout id
+    const liveBackoffMs = new Map(); // camId → next wait
+    let ctxCamId = null;
+    let pressTimer = null;
+    let pressOrigin = null;
+    let suppressTileClick = false;
+    const LONG_PRESS_MS = 550;
+    const LONG_PRESS_SLOP_PX = 14;
+
+    function clearLiveRetry(camId) {
+      const t = liveRetryTimer.get(camId);
+      if (t) clearTimeout(t);
+      liveRetryTimer.delete(camId);
+    }
+
+    function resetLiveBackoff(camId) {
+      liveBackoffMs.delete(camId);
+    }
+
+    function scheduleLiveRetry(camId, reason) {
+      if (!camId) return;
+      clearLiveRetry(camId);
+      const prev = liveBackoffMs.get(camId) || LIVE_RETRY_BASE_MS;
+      const wait = Math.min(Math.max(LIVE_RETRY_BASE_MS, prev), LIVE_RETRY_MAX_MS);
+      liveBackoffMs.set(camId, Math.min(wait * 2, LIVE_RETRY_MAX_MS));
+      console.warn("live retry", camId, reason, "in", wait, "ms");
+      liveRetryTimer.set(camId, setTimeout(() => {
+        liveRetryTimer.delete(camId);
+        if (liveSessions.has(camId)) return;
+        const tile = document.querySelector('.tile[data-cam-id="' + CSS.escape(camId) + '"]');
+        if (!tile || tile.dataset.online !== "1") return;
+        setFocus(camId);
+      }, wait));
+    }
+
+    function clearPressTimer() {
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+      pressOrigin = null;
+    }
+
+    function resolutionLabel(video) {
+      const w = video && video.videoWidth;
+      const h = video && video.videoHeight;
+      // WebRTC can briefly report 2×2 (or other toy sizes) while renegotiating.
+      if (w >= 16 && h >= 16) return w + "×" + h;
+      return PREVIEW_WIDTH + "×" + PREVIEW_HEIGHT;
+    }
+
+    function withResolution(fpsText, video) {
+      if (!fpsText) return resolutionLabel(video);
+      return fpsText + " · " + resolutionLabel(video);
+    }
+
+    function setFocusBadge(_id, _fpsText) {
+      /* lean header — no focus badge */
+    }
+
+    function setFpsTag(tile, text, cls) {
+      const tag = tile.querySelector(".fps-tag");
+      if (!tag) return;
+      tag.textContent = text;
+      tag.classList.remove("connecting", "ok", "slow");
+      if (cls) tag.classList.add(cls);
+    }
+
+    function recordingCamIds() {
+      return (sessionInfo && sessionInfo.meta && sessionInfo.meta.camera_ids) || [];
+    }
+
+    function sessionOf(camId) {
+      return liveSessions.get(camId) || null;
+    }
+
+    function destroySession(camId) {
+      const s = liveSessions.get(camId);
+      if (!s) return;
+      if (s.fpsTimer) { clearInterval(s.fpsTimer); s.fpsTimer = null; }
+      if (s.abort) { try { s.abort.abort(); } catch (e) {} }
+      if (s.mpegtsPlayer) { try { s.mpegtsPlayer.destroy(); } catch (e) {} }
+      if (s.rtcPc) { try { s.rtcPc.close(); } catch (e) {} }
+      if (s.whepReader) { try { s.whepReader.close(); } catch (e) {} }
+      if (s.jmuxer) { try { s.jmuxer.destroy(); } catch (e) {} }
+      liveSessions.delete(camId);
+    }
+
+    function paintLiveCanvas(tile, video) {
+      const canvas = tile.querySelector("canvas.live-canvas");
+      if (!canvas || !video || video.videoWidth < 2) return;
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      // contain-fit into tile (canvas CSS stretches; draw full frame letterboxed later if needed)
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    }
+
+    function startFpsCounter(camId, tile, video) {
+      const s = sessionOf(camId);
+      if (!s) return;
+      // Bump generation so an older rvfc/interval (e.g. second onTrack) cannot
+      // fire stall with an already-expired closed-over grace timer.
+      s.fpsGen = (s.fpsGen || 0) + 1;
+      const gen = s.fpsGen;
+      const now0 = performance.now();
+      // Extend grace on re-track — never shrink it mid-session.
+      s.watchGraceUntil = Math.max(s.watchGraceUntil || 0, now0 + LIVE_WATCH_GRACE_MS);
+      let streamFrames = 0;
+      let windowStart = now0;
+      let lastPresented = null;
+      let deadSince = null;
+      let everAlive = false;
+      const report = () => {
+        const cur = sessionOf(camId);
+        if (!cur || cur.fpsGen !== gen || !tile.classList.contains("live-on")) return;
+        const now = performance.now();
+        const dt = now - windowStart;
+        if (dt < 900) return;
+        const streamFps = (streamFrames * 1000) / dt;
+        streamFrames = 0;
+        windowStart = now;
+        // Badge = stream (decode/deliver) fps; canvas paints every presented frame.
+        lastStreamFps[camId] = streamFps;
+        chaseLiveBuffer(video);
+        const buf = bufferedAheadS(video);
+        const bufTxt = buf == null ? "" : (" · buf " + buf.toFixed(2) + "s");
+        // LIVE = browser decode/deliver; REC tile tag is SSD write (separate poll).
+        const livePrefix = sessionActive ? "LIVE " : "";
+        const txt = withResolution(livePrefix + streamFps.toFixed(1) + " fps", video) + bufTxt;
+        const okFloor = sessionActive ? 8 : 6; // badge only — not a restart trigger
+        setFpsTag(tile, txt, streamFps >= okFloor ? "ok" : "slow");
+        setFocusBadge(camId, txt);
+        postLivePlayerDiag(camId, video, streamFps);
+        // Watchdog: near-zero only. "Slow" under okFloor is normal under 4-cam load.
+        if (streamFps >= LIVE_DEAD_FPS) {
+          everAlive = true;
+          deadSince = null;
+          if (cur.stallNoted) cur.stallNoted = false;
+          resetLiveBackoff(camId);
+          return;
+        }
+        const graceUntil = cur.watchGraceUntil || 0;
+        if (!everAlive && now < graceUntil) return;
+        if (deadSince == null) {
+          deadSince = now;
+          return;
+        }
+        if ((now - deadSince) / 1000 < LIVE_STALL_S) return;
+        // Badge only — do NOT clearFocus/stop publisher. Under 4-cam decode
+        // budget, starved tiles sit near 0 fps; tearing them down caused the
+        // live→idle→backoff thrash (preview_idle lost cams while MQTT stayed up).
+        if (!cur.stallNoted) {
+          cur.stallNoted = true;
+          console.warn("live stall (no auto-restart)", camId, "fps", streamFps.toFixed(1), "gen", gen);
+        }
+        setFpsTag(tile, "stall (tap to retry)", "slow");
+      };
+      if (typeof video.requestVideoFrameCallback === "function") {
+        const loop = (_now, meta) => {
+          const cur = sessionOf(camId);
+          if (!cur || cur.fpsGen !== gen || !tile.classList.contains("live-on")) return;
+          let delta = 1;
+          if (meta && typeof meta.presentedFrames === "number") {
+            if (lastPresented == null) lastPresented = meta.presentedFrames;
+            else {
+              delta = Math.max(0, meta.presentedFrames - lastPresented);
+              lastPresented = meta.presentedFrames;
+            }
+          }
+          if (delta > 0) streamFrames += delta;
+          paintLiveCanvas(tile, video);
+          report();
+          video.requestVideoFrameCallback(loop);
+        };
+        video.requestVideoFrameCallback(loop);
+      }
+      if (s.fpsTimer) clearInterval(s.fpsTimer);
+      s.fpsTimer = setInterval(() => {
+        report();
+      }, 500);
+    }
+
+    async function runPreviewMpegts(camId, tile, video, signal) {
+      if (typeof mpegts === "undefined") throw new Error("mpegts.js not loaded");
+      const s = sessionOf(camId);
+      const url = "/api/preview/" + encodeURIComponent(camId) + "?t=" + Date.now();
+      const player = mpegts.createPlayer(
+        { type: "mpegts", isLive: true, hasAudio: false, url: url },
+        {
+          enableWorker: false,
+          // Stash ahead of MSE is what lets buf climb — off while chasing.
+          enableStashBuffer: !playerChase,
+          stashInitialSize: playerStash,
+          lazyLoad: false,
+          autoCleanupSourceBuffer: true,
+          liveBufferLatencyChasing: playerChase,
+          // Library defaults are ~1.5s / 0.5s — too loose; clamp to maxlat/minrem.
+          liveBufferLatencyMaxLatency: playerMaxLat,
+          liveBufferLatencyMinRemain: playerMinRem,
+        },
+      );
+      if (s) s.mpegtsPlayer = player;
+      player.attachMediaElement(video);
+      player.on(mpegts.Events.ERROR, (type) => {
+        setFpsTag(tile, "err", "slow");
+        setFocusBadge(camId, "mpegts " + type);
+      });
+      player.load();
+      try { await video.play(); } catch (e) {}
+      startFpsCounter(camId, tile, video);
+      await new Promise((resolve, reject) => {
+        player.on(mpegts.Events.ERROR, (type, detail) => {
+          if (!signal.aborted) reject(new Error(String(type) + " " + String(detail)));
+        });
+        signal.addEventListener("abort", () => resolve(), { once: true });
+      });
+    }
+
+    async function runPreviewAnnexB(camId, tile, video, signal) {
+      if (typeof JMuxer === "undefined") throw new Error("JMuxer not loaded");
+      const s = sessionOf(camId);
+      const jmuxer = new JMuxer({ node: video, mode: "video", flushingTime: 0, fps: 30, debug: false });
+      if (s) s.jmuxer = jmuxer;
+      const res = await fetch("/api/preview/" + encodeURIComponent(camId) + "?t=" + Date.now(), {
+        signal, cache: "no-store",
+      });
+      if (!res.ok || !res.body) throw new Error("preview HTTP " + res.status);
+      startFpsCounter(camId, tile, video);
+      const reader = res.body.getReader();
+      while (!signal.aborted) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value && value.length) jmuxer.feed({ video: value });
+      }
+    }
+
+    async function runPreviewWebRTC(camId, tile, video, signal) {
+      const s = sessionOf(camId);
+      const rtcPc = new RTCPeerConnection({ iceServers: [] });
+      if (s) s.rtcPc = rtcPc;
+      rtcPc.addTransceiver("video", { direction: "recvonly" });
+      rtcPc.ontrack = (ev) => {
+        if (ev.streams && ev.streams[0]) video.srcObject = ev.streams[0];
+      };
+      const offer = await rtcPc.createOffer();
+      await rtcPc.setLocalDescription(offer);
+      const res = await fetch("/api/preview/" + encodeURIComponent(camId) + "/webrtc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sdp: offer.sdp, type: offer.type }),
+        signal,
+      });
+      if (!res.ok) throw new Error("webrtc HTTP " + res.status);
+      await rtcPc.setRemoteDescription(await res.json());
+      await video.play();
+      startFpsCounter(camId, tile, video);
+      await new Promise((resolve) => {
+        signal.addEventListener("abort", resolve, { once: true });
+      });
+    }
+
+    async function runPreviewWhep(camId, tile, video, signal) {
+      if (typeof MediaMTXWebRTCReader === "undefined") {
+        throw new Error("MediaMTXWebRTCReader not loaded");
+      }
+      const s = sessionOf(camId);
+      const res = await fetch("/api/preview/" + encodeURIComponent(camId) + "/whep/start", {
+        method: "POST",
+        signal,
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error("whep/start HTTP " + res.status + " " + body);
+      }
+      const info = await res.json();
+      let whepUrl = info.whep_url;
+      if (!whepUrl) throw new Error("whep/start missing whep_url");
+      // API often returns http://127.0.0.1:8889/... — fine on-NVR browser;
+      // when the UI is opened from another host, rewrite to that host.
+      try {
+        const u = new URL(whepUrl, window.location.href);
+        if (u.hostname === "127.0.0.1" || u.hostname === "localhost") {
+          if (window.location.hostname && window.location.hostname !== "127.0.0.1") {
+            u.hostname = window.location.hostname;
+            whepUrl = u.toString();
+          }
+        }
+      } catch (e) {}
+      await new Promise((resolve, reject) => {
+        let settled = false;
+        const fail = (err) => {
+          if (settled || signal.aborted) return;
+          settled = true;
+          reject(err instanceof Error ? err : new Error(String(err)));
+        };
+        const whepReader = new MediaMTXWebRTCReader({
+          url: whepUrl,
+          onError: (err) => fail(err),
+          onTrack: (evt) => {
+            if (evt.streams && evt.streams[0]) video.srcObject = evt.streams[0];
+            video.play().catch(() => {});
+            startFpsCounter(camId, tile, video);
+            if (!settled) {
+              settled = true;
+              resolve();
+            }
+          },
+        });
+        if (s) s.whepReader = whepReader;
+        signal.addEventListener("abort", () => {
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+        }, { once: true });
+        setTimeout(() => fail(new Error("whep track timeout")), 20000);
+      });
+      await new Promise((resolve) => {
+        signal.addEventListener("abort", resolve, { once: true });
+      });
+    }
+
+    function effectiveTransport(camId) {
+      // Only cams owned by the science session use the capture tee (mpegts).
+      // Other online cams keep idle WHEP — forcing mpegts globally caused 400s.
+      const inRec = !!camId && recordingCamIds().includes(camId);
+      if (inRec && (PREVIEW_TRANSPORT === "webrtc" || PREVIEW_TRANSPORT === "whep")) {
+        return "mpegts";
+      }
+      // udp ingest remuxes to MPEG-TS on the NVR — same browser player as ssh mpegts.
+      if (PREVIEW_TRANSPORT === "udp") return "mpegts";
+      return PREVIEW_TRANSPORT;
+    }
+
+    async function runPreview(camId, tile, video, signal) {
+      setFpsTag(tile, withResolution("…", video), "connecting");
+      setFocusBadge(camId, withResolution("connecting", video));
+      const mode = effectiveTransport(camId);
+      if (mode === "whep") await runPreviewWhep(camId, tile, video, signal);
+      else if (mode === "webrtc") await runPreviewWebRTC(camId, tile, video, signal);
+      else if (mode === "mpegts") await runPreviewMpegts(camId, tile, video, signal);
+      else await runPreviewAnnexB(camId, tile, video, signal);
+    }
+
+    function clearTileVideo(tile) {
+      tile.classList.remove("live-on");
+      const v = tile.querySelector("video.live");
+      if (v) {
+        try { v.pause(); } catch (e) {}
+        v.removeAttribute("src");
+        v.srcObject = null;
+        v.load();
+      }
+      setFpsTag(tile, "—");
+    }
+
+    /** Stop one live tile (or all if camId omitted). Does not steal other tiles. */
+    function clearFocus(camId) {
+      if (camId) {
+        clearLiveRetry(camId);
+        destroySession(camId);
+        const tile = document.querySelector('.tile[data-cam-id="' + CSS.escape(camId) + '"]');
+        if (tile) clearTileVideo(tile);
+        fetch("/api/preview/stop?cam_id=" + encodeURIComponent(camId), { method: "POST" }).catch(() => {});
+        setFocusBadge(null);
+        return;
+      }
+      const ids = [...liveSessions.keys()];
+      ids.forEach((id) => {
+        clearLiveRetry(id);
+        destroySession(id);
+      });
+      document.querySelectorAll(".tile.live-on").forEach(clearTileVideo);
+      fetch("/api/preview/stop", { method: "POST" }).catch(() => {});
+      setFocusBadge(null);
+    }
+
+    /** Toggle live on this tile without stopping other live tiles. */
+    function setFocus(camId) {
+      if (!camId) return;
+      if (liveSessions.has(camId)) {
+        clearLiveRetry(camId);
+        resetLiveBackoff(camId);
+        clearFocus(camId);
+        return;
+      }
+      const tile = document.querySelector('.tile[data-cam-id="' + CSS.escape(camId) + '"]');
+      if (!tile || tile.classList.contains("empty")) return;
+      if (tile.dataset.online !== "1") return;
+      clearLiveRetry(camId);
+      tile.classList.add("live-on");
+      const video = tile.querySelector("video.live");
+      if (!video) return;
+      const abort = new AbortController();
+      liveSessions.set(camId, { abort, mpegtsPlayer: null, rtcPc: null, whepReader: null, jmuxer: null, fpsTimer: null });
+      setFocusBadge(camId);
+      setFpsTag(tile, withResolution("…", video), "connecting");
+      runPreview(camId, tile, video, abort.signal).catch((err) => {
+        if (abort.signal.aborted) return;
+        console.warn("preview failed", err);
+        // Clear zombie UI session only. Do NOT /api/preview/stop or auto-retry:
+        // that tore down healthy NVR publishers and caused the black/gray loop.
+        destroySession(camId);
+        clearTileVideo(tile);
+        const msg = String(err && err.message || err || "");
+        const noPath = /no SSH path|online≠LIVE/.test(msg);
+        const camBusy = /Pipeline handler in use|failed to acquire camera|WHEP publish died/i.test(msg);
+        const httpFail = /\b503\b|\b404\b|whep\/start HTTP/.test(msg);
+        const link = tile.dataset.link || "";
+        let failHint = "fail (tap LIVE)";
+        if (noPath) {
+          failHint = link === "wifi" ? "no LIVE (WiFi path)" : "no LIVE (plug USB?)";
+        } else if (camBusy) {
+          failHint = "camera busy (tap retry)";
+        } else if (httpFail && link === "wifi") {
+          failHint = "WiFi LIVE died (tap retry)";
+        } else if (httpFail) {
+          failHint = "LIVE died (tap retry)";
+        }
+        setFpsTag(tile, failHint, "slow");
+        const st = tile.querySelector(".status");
+        if (st && (noPath || httpFail || camBusy) && !tile.classList.contains("recording")) {
+          const mode = link === "wifi" ? "WiFi" : (link === "usb" ? "USB" : "");
+          const why = camBusy ? "camera busy" : "no LIVE";
+          st.textContent = mode
+            ? ("ONLINE · " + mode + " · " + why)
+            : ("ONLINE · " + why);
+        }
+      });
+    }
+
+    function autoStartOnlineLives() {
+      // Attach browser WHEP only — publishers should already be up (or whep/start
+      // is idempotent per cam). Stagger to avoid 4× offer storms.
+      const ids = [...document.querySelectorAll('.tile[data-cam-id][data-online="1"]')]
+        .map((t) => t.getAttribute("data-cam-id"))
+        .filter(Boolean);
+      ids.forEach((id, i) => {
+        setTimeout(() => {
+          if (!liveSessions.has(id)) setFocus(id);
+        }, 1000 + i * 3000);
+      });
+    }
+
+    /* ---- context menu ---- */
+    const ctxMenu = document.getElementById("ctx-menu");
+
+    function hideCtx() {
+      ctxMenu.classList.remove("open");
+      ctxMenu.setAttribute("aria-hidden", "true");
+      ctxCamId = null;
+    }
+
+    function openCtx(camId, clientX, clientY) {
+      ctxCamId = camId;
+      document.getElementById("ctx-title").textContent = camId;
+      const online = document.querySelector('.tile[data-cam-id="' + CSS.escape(camId) + '"]')?.dataset.online === "1";
+      const inRec = recordingCamIds().includes(camId);
+      const btns = Object.fromEntries(
+        [...ctxMenu.querySelectorAll("button[data-act]")].map((b) => [b.dataset.act, b])
+      );
+      const setDisabled = (act, disabled) => {
+        if (btns[act]) btns[act].disabled = !!disabled;
+      };
+      setDisabled("focus", !online);
+      if (btns.focus) {
+        btns.focus.textContent = liveSessions.has(camId) ? "Start live ✓" : "Start live";
+      }
+      setDisabled("unfocus", !liveSessions.has(camId));
+      setDisabled("record", sessionActive || !online);
+      setDisabled("stop", !sessionActive);
+      setDisabled("session-settings", false);
+      setDisabled("cam-meta", false); // editable idle or REC (subject frozen server-side while REC)
+      if (btns.stop) {
+        btns.stop.textContent = inRec ? "Stop recording" : "Stop recording (session)";
+      }
+
+      const pad = 8;
+      ctxMenu.classList.add("open");
+      ctxMenu.setAttribute("aria-hidden", "false");
+      // Measure after open; first open can be 0×0 if display:none was still applying.
+      const rect = ctxMenu.getBoundingClientRect();
+      let x = clientX;
+      let y = clientY;
+      if (x + rect.width > window.innerWidth - pad) x = window.innerWidth - rect.width - pad;
+      if (y + rect.height > window.innerHeight - pad) y = window.innerHeight - rect.height - pad;
+      ctxMenu.style.left = Math.max(pad, x) + "px";
+      ctxMenu.style.top = Math.max(pad, y) + "px";
+    }
+
+    function bindTileGestures(tile) {
+      const camId = tile.getAttribute("data-cam-id");
+      if (!camId) return;
+
+      // Pointer Events cover real touch + Pi panels that only synthesize mouse.
+      tile.addEventListener("pointerdown", (ev) => {
+        if (ev.isPrimary === false) return;
+        // Ignore non-primary mouse buttons (right-click uses contextmenu).
+        if (ev.pointerType === "mouse" && ev.button !== 0) return;
+        clearPressTimer();
+        pressOrigin = { x: ev.clientX, y: ev.clientY, id: ev.pointerId };
+        try { tile.setPointerCapture(ev.pointerId); } catch (e) {}
+        pressTimer = setTimeout(() => {
+          pressTimer = null;
+          const origin = pressOrigin;
+          pressOrigin = null;
+          suppressTileClick = true;
+          openCtx(camId, (origin && origin.x) || ev.clientX, (origin && origin.y) || ev.clientY);
+        }, LONG_PRESS_MS);
+      });
+
+      tile.addEventListener("pointermove", (ev) => {
+        if (!pressTimer || !pressOrigin || ev.pointerId !== pressOrigin.id) return;
+        if (Math.hypot(ev.clientX - pressOrigin.x, ev.clientY - pressOrigin.y) > LONG_PRESS_SLOP_PX) {
+          clearPressTimer();
+        }
+      });
+
+      const endPress = (ev) => {
+        if (pressOrigin && ev.pointerId !== pressOrigin.id) return;
+        // If timer still pending, this was a short tap → let click handle focus.
+        // If timer already fired, suppressTileClick blocks the synthetic click.
+        clearPressTimer();
+      };
+      tile.addEventListener("pointerup", endPress);
+      tile.addEventListener("pointercancel", endPress);
+      tile.addEventListener("lostpointercapture", () => clearPressTimer());
+
+      tile.addEventListener("click", (ev) => {
+        if (suppressTileClick) {
+          suppressTileClick = false;
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
+        if (ctxMenu.classList.contains("open")) {
+          hideCtx();
+          return;
+        }
+        setFocus(camId);
+      });
+
+      tile.addEventListener("contextmenu", (ev) => {
+        ev.preventDefault();
+        clearPressTimer();
+        suppressTileClick = true;
+        openCtx(camId, ev.clientX, ev.clientY);
+      });
+
+      tile.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          setFocus(camId);
+        } else if (ev.key === "ContextMenu" || (ev.shiftKey && ev.key === "F10")) {
+          ev.preventDefault();
+          const r = tile.getBoundingClientRect();
+          openCtx(camId, r.left + r.width / 2, r.top + r.height / 2);
+        }
+      });
+    }
+
+    document.querySelectorAll(".tile[data-cam-id]").forEach(bindTileGestures);
+
+    document.addEventListener("pointerdown", (ev) => {
+      if (!ctxMenu.classList.contains("open")) return;
+      if (ctxMenu.contains(ev.target)) return;
+      hideCtx();
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") {
+        hideCtx();
+        closeModal("modal-start");
+        closeModal("modal-session");
+        closeModal("modal-cam-meta");
+      }
+    });
+
+    ctxMenu.addEventListener("click", async (ev) => {
+      const btn = ev.target.closest("button[data-act]");
+      if (!btn || btn.disabled) return;
+      const act = btn.dataset.act;
+      const camId = ctxCamId;
+      hideCtx();
+      if (act === "session-settings") {
+        openSessionSettings();
+        return;
+      }
+      if (!camId) return;
+      if (act === "focus") setFocus(camId);
+      else if (act === "unfocus") clearFocus(camId);
+      else if (act === "record") openStartModal(camId);
+      else if (act === "stop") await stopSession();
+      else if (act === "cam-meta") openCamMetaModal(camId);
+    });
+
+    /* ---- modals ---- */
+    function openModal(id) {
+      const el = document.getElementById(id);
+      el.classList.add("open");
+      el.setAttribute("aria-hidden", "false");
+    }
+    function closeModal(id) {
+      const el = document.getElementById(id);
+      el.classList.remove("open");
+      el.setAttribute("aria-hidden", "true");
+    }
+    document.querySelectorAll("[data-close]").forEach((b) => {
+      b.addEventListener("click", () => closeModal(b.getAttribute("data-close")));
+    });
+    document.querySelectorAll(".modal-backdrop").forEach((bd) => {
+      bd.addEventListener("click", (ev) => {
+        if (ev.target === bd) closeModal(bd.id);
+      });
+    });
+
+    function openStartModal(primaryCamId) {
+      const picks = document.getElementById("cam-picks");
+      picks.innerHTML = "";
+      const cams = ALL_CAMS.length ? ALL_CAMS : [{ id: primaryCamId, online: true }];
+      cams.forEach((c) => {
+        const lab = document.createElement("label");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = c.id;
+        cb.checked = !primaryCamId || c.id === primaryCamId;
+        if (c.online === false) cb.disabled = true;
+        const a = c.animal || {};
+        const tag = a.subject_id ? (" · " + a.subject_id) : " · needs meta";
+        lab.appendChild(cb);
+        lab.appendChild(document.createTextNode(" " + c.id + tag));
+        picks.appendChild(lab);
+      });
+      const sum = document.getElementById("start-summary");
+      if (sum) {
+        sum.textContent =
+          "Ask from Session settings · each checked cam needs subject_id · folder ses-<utc>/";
+      }
+      document.getElementById("start-err").hidden = true;
+      openModal("modal-start");
+    }
+
+    document.getElementById("btn-start-go").addEventListener("click", async () => {
+      const err = document.getElementById("start-err");
+      err.hidden = true;
+      const camera_ids = [...document.querySelectorAll("#cam-picks input:checked")].map((c) => c.value);
+      if (!camera_ids.length) {
+        err.textContent = "select at least one camera";
+        err.hidden = false;
+        return;
+      }
+      clearFocus();
+      try {
+        const r = await fetch("/api/session/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ camera_ids }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+        sessionActive = true;
+        sessionInfo = data;
+        closeModal("modal-start");
+        syncRecUi();
+        location.reload();
+      } catch (e) {
+        err.textContent = String(e.message || e);
+        err.hidden = false;
+      }
+    });
+
+    async function stopSession() {
+      if (!sessionActive) return;
+      if (!confirm("Stop recording session?")) return;
+      clearFocus();
+      try {
+        const r = await fetch("/api/session/stop", { method: "POST" });
+        if (!r.ok) {
+          const data = await r.json().catch(() => ({}));
+          throw new Error(data.detail || ("HTTP " + r.status));
+        }
+        sessionActive = false;
+        sessionInfo = null;
+        syncRecUi();
+        location.reload();
+      } catch (e) {
+        alert("Stop failed: " + e.message);
+      }
+    }
+
+    let camMetaTarget = null;
+
+    async function openSessionSettings() {
+      const err = document.getElementById("session-err");
+      if (err) err.hidden = true;
+      try {
+        const r = await fetch("/api/operator/settings");
+        const data = await r.json();
+        const st = data.settings || {};
+        const profileEl = document.getElementById("profile");
+        const fpsEl = document.getElementById("soft_fps");
+        if (profileEl) profileEl.value = st.profile || "standard";
+        if (fpsEl) fpsEl.value = String(st.soft_fps || 20);
+        document.querySelectorAll("#size-chips .chip").forEach((c) => {
+          c.classList.toggle("selected", c.dataset.size === profileEl.value);
+        });
+        document.querySelectorAll("#fps-chips .chip").forEach((c) => {
+          c.classList.toggle("selected", c.dataset.fps === fpsEl.value);
+        });
+        const chunk = document.getElementById("chunk_minutes");
+        if (chunk) chunk.value = String(st.chunk_minutes ?? 20);
+        const sub = document.getElementById("output_subdir");
+        if (sub) sub.value = st.output_subdir || "";
+        const maxlat = document.getElementById("maxlat");
+        if (maxlat) maxlat.value = String(playerMaxLat);
+        const dl = document.getElementById("subdir-list");
+        if (dl) {
+          dl.innerHTML = "";
+          (data.subdirs || []).forEach((name) => {
+            const o = document.createElement("option");
+            o.value = name;
+            dl.appendChild(o);
+          });
+        }
+        const est = document.getElementById("session-estimate");
+        if (est && data.estimate) {
+          est.textContent =
+            (data.science_ask || "") +
+            " · ~" + data.estimate.gb_per_hour + " GB/h for " +
+            data.estimate.n_cams + " cams" +
+            (data.storage && data.storage.free_gb != null
+              ? (" · free " + data.storage.free_gb + " GB")
+              : "");
+        }
+        const banner = document.getElementById("ssd-banner");
+        if (banner) banner.classList.toggle("show", !(data.storage && data.storage.mounted));
+        const apply = document.getElementById("btn-session-apply");
+        if (apply) apply.disabled = !!data.recording;
+        openModal("modal-session");
+      } catch (e) {
+        alert("Failed to load session settings: " + e.message);
+      }
+    }
+
+    document.getElementById("btn-session-apply").addEventListener("click", async () => {
+      const err = document.getElementById("session-err");
+      err.hidden = true;
+      const maxlatEl = document.getElementById("maxlat");
+      if (maxlatEl) {
+        const v = parseFloat(maxlatEl.value);
+        if (Number.isFinite(v)) {
+          playerMaxLat = Math.max(0.15, Math.min(3, v));
+          localStorage.setItem(MAXLAT_KEY, String(playerMaxLat));
+        }
+      }
+      const body = {
+        profile: document.getElementById("profile").value,
+        soft_fps: parseInt(document.getElementById("soft_fps").value, 10) || 20,
+        output_subdir: document.getElementById("output_subdir").value.trim(),
+        chunk_minutes: parseInt(document.getElementById("chunk_minutes").value, 10),
+      };
+      if (!Number.isFinite(body.chunk_minutes) || body.chunk_minutes < 0) {
+        err.textContent = "chunk_minutes must be ≥ 0 (0 = no limit)";
+        err.hidden = false;
+        return;
+      }
+      try {
+        const r = await fetch("/api/operator/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+        const sci = document.getElementById("science-badge");
+        if (sci && data.science_ask) {
+          sci.hidden = false;
+          sci.textContent = data.science_ask;
+        }
+        closeModal("modal-session");
+        // Server already stop_all_idle_previews; give publishers a beat, then
+        // staggered whep/start at the new Session size×fps.
+        clearFocus();
+        setTimeout(autoStartOnlineLives, 1500);
+      } catch (e) {
+        err.textContent = String(e.message || e);
+        err.hidden = false;
+      }
+    });
+
+    async function openCamMetaModal(camId) {
+      camMetaTarget = camId;
+      document.getElementById("cam-meta-id").textContent = camId;
+      document.getElementById("cam-meta-err").hidden = true;
+      try {
+        const r = await fetch("/api/cams/" + encodeURIComponent(camId) + "/meta");
+        const data = await r.json();
+        const m = data.meta || {};
+        document.getElementById("c_subject_id").value = m.subject_id || "";
+        document.getElementById("c_subject_id").disabled = !!data.subject_frozen;
+        document.getElementById("c_sex").value = m.sex || "U";
+        document.getElementById("c_cage_id").value = m.cage_id || "";
+        document.getElementById("c_strain").value = m.strain || "";
+        document.getElementById("c_notes").value = m.notes || "";
+        openModal("modal-cam-meta");
+      } catch (e) {
+        alert("Failed to load cam meta: " + e.message);
+      }
+    }
+
+    function paintAnimalOnTile(camId, m) {
+      const tile = document.querySelector('.tile[data-cam-id="' + CSS.escape(camId) + '"]');
+      if (!tile) return;
+      const el = tile.querySelector("[data-animal]");
+      if (!el) return;
+      if (m && m.subject_id) {
+        el.classList.remove("needs-meta");
+        el.textContent = m.subject_id + " · " + (m.cage_id || "—");
+        el.title = [m.sex || "U", m.strain || "—", m.notes || ""].filter(Boolean).join(" · ");
+      } else {
+        el.classList.add("needs-meta");
+        el.textContent = "needs meta";
+        el.title = "Set Cam metadata";
+      }
+    }
+
+    document.getElementById("btn-cam-meta-save").addEventListener("click", async () => {
+      const err = document.getElementById("cam-meta-err");
+      err.hidden = true;
+      if (!camMetaTarget) return;
+      const body = {
+        subject_id: document.getElementById("c_subject_id").value.trim(),
+        sex: document.getElementById("c_sex").value,
+        cage_id: document.getElementById("c_cage_id").value.trim(),
+        strain: document.getElementById("c_strain").value.trim(),
+        notes: document.getElementById("c_notes").value.trim(),
+      };
+      if (!body.subject_id && !document.getElementById("c_subject_id").disabled) {
+        err.textContent = "subject_id required";
+        err.hidden = false;
+        return;
+      }
+      try {
+        const r = await fetch("/api/cams/" + encodeURIComponent(camMetaTarget) + "/meta", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+        paintAnimalOnTile(camMetaTarget, data.meta || body);
+        closeModal("modal-cam-meta");
+      } catch (e) {
+        err.textContent = String(e.message || e);
+        err.hidden = false;
+      }
+    });
+
+    document.getElementById("btn-stop-session").addEventListener("click", () => stopSession());
+    document.getElementById("btn-start-session").addEventListener("click", () => openStartModal(null));
+    document.getElementById("btn-session-settings").addEventListener("click", () => openSessionSettings());
+
+    // --- Kiosk settings (fleet ops) -----------------------------------------
+    function ksShowPanel(name) {
+      document.querySelectorAll("[data-ks-tab]").forEach((b) => {
+        b.classList.toggle("active", b.getAttribute("data-ks-tab") === name);
+      });
+      document.querySelectorAll("[data-ks-panel]").forEach((p) => {
+        p.classList.toggle("active", p.getAttribute("data-ks-panel") === name);
+      });
+    }
+    document.querySelectorAll("[data-ks-tab]").forEach((b) => {
+      b.addEventListener("click", () => ksShowPanel(b.getAttribute("data-ks-tab")));
+    });
+
+    function fmtBytes(n) {
+      const x = Number(n) || 0;
+      if (x < 1024) return x + " B";
+      if (x < 1024 * 1024) return (x / 1024).toFixed(1) + " KiB";
+      if (x < 1024 * 1024 * 1024) return (x / (1024 * 1024)).toFixed(1) + " MiB";
+      return (x / (1024 * 1024 * 1024)).toFixed(2) + " GiB";
+    }
+
+    async function loadKioskStatus() {
+      const r = await fetch("/api/kiosk/status", { cache: "no-store" });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+      const g = data.git || {};
+      const gitEl = document.getElementById("ks-git-line");
+      gitEl.innerHTML =
+        "source <code>" + (g.root || "") + "</code> · " +
+        (g.describe || g.sha || "—") +
+        (g.ok ? "" : " · <span class='err'>" + (g.error || "git?") + "</span>");
+      const dirty = document.getElementById("ks-git-dirty");
+      dirty.hidden = !g.dirty;
+      document.getElementById("ks-soft-line").textContent =
+        "soft set " + (data.soft_present || 0) + "/" + (data.soft_total || 0) +
+        " files under deploy/bhvr-cam";
+      const box = document.getElementById("ks-push-cams");
+      box.innerHTML = "";
+      const elig = data.eligible || [];
+      if (!elig.length) {
+        box.innerHTML = "<p class='muted'>No ONLINE·USB cams with SSH litmus right now.</p>";
+      } else {
+        elig.forEach((c) => {
+          const lab = document.createElement("label");
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.value = c.id;
+          cb.checked = !!c.eligible;
+          cb.disabled = !c.eligible;
+          cb.dataset.ip = c.ip || "";
+          lab.appendChild(cb);
+          lab.appendChild(document.createTextNode(
+            c.id + " · " + (c.ip || "") + (c.eligible ? "" : " (SSH fail)")
+          ));
+          box.appendChild(lab);
+        });
+      }
+      const st = data.storage || {};
+      document.getElementById("ks-storage-line").textContent =
+        (st.mounted ? "mounted/writable" : "NOT mounted") +
+        " · free " + (st.free_gb != null ? st.free_gb + " GiB" : "—");
+      document.getElementById("ks-data-root").value = data.data_root || "";
+      return data;
+    }
+
+    async function loadBackupSessions() {
+      const r = await fetch("/api/kiosk/sessions", { cache: "no-store" });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+      const box = document.getElementById("ks-backup-sessions");
+      box.innerHTML = "";
+      const rows = data.sessions || [];
+      if (!rows.length) {
+        box.innerHTML = "<p class='muted'>No ses-* folders under data_root.</p>";
+        return;
+      }
+      rows.forEach((s) => {
+        const lab = document.createElement("label");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = s.name;
+        lab.appendChild(cb);
+        lab.appendChild(document.createTextNode(s.name + " · " + fmtBytes(s.bytes)));
+        box.appendChild(lab);
+      });
+    }
+
+    async function openKioskSettings() {
+      document.getElementById("ks-push-err").hidden = true;
+      document.getElementById("ks-push-log").hidden = true;
+      document.getElementById("ks-wifi-err").hidden = true;
+      document.getElementById("ks-wifi-log").hidden = true;
+      document.getElementById("ks-backup-err").hidden = true;
+      document.getElementById("ks-backup-log").hidden = true;
+      document.getElementById("ks-dataroot-err").hidden = true;
+      document.getElementById("ks-dataroot-log").hidden = true;
+      document.getElementById("ks-psk").value = "";
+      document.getElementById("ks-cifs-pass").value = "";
+      ksShowPanel("push");
+      try {
+        await loadKioskStatus();
+        await loadBackupSessions();
+        openModal("modal-kiosk");
+      } catch (e) {
+        alert("Kiosk settings: " + (e.message || e));
+      }
+    }
+
+    document.getElementById("btn-kiosk-settings").addEventListener("click", () => openKioskSettings());
+    document.getElementById("btn-ks-refresh").addEventListener("click", async () => {
+      try {
+        await loadKioskStatus();
+        await loadBackupSessions();
+      } catch (e) {
+        document.getElementById("ks-push-err").textContent = String(e.message || e);
+        document.getElementById("ks-push-err").hidden = false;
+      }
+    });
+    document.getElementById("btn-ks-push").addEventListener("click", async () => {
+      const err = document.getElementById("ks-push-err");
+      const log = document.getElementById("ks-push-log");
+      err.hidden = true;
+      const ids = [...document.querySelectorAll("#ks-push-cams input:checked")].map((c) => c.value);
+      if (!ids.length) {
+        err.textContent = "Select at least one eligible cam";
+        err.hidden = false;
+        return;
+      }
+      const btn = document.getElementById("btn-ks-push");
+      btn.disabled = true;
+      btn.textContent = "Pushing…";
+      try {
+        const r = await fetch("/api/kiosk/usb-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cam_ids: ids }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+        const lines = [];
+        (data.results || []).forEach((row) => {
+          lines.push((row.ok ? "OK" : "FAIL") + " " + row.id + " " + (row.ip || ""));
+          (row.log || []).forEach((l) => lines.push("  " + l));
+        });
+        log.textContent = lines.join("\n") || "(no results)";
+        log.hidden = false;
+        if (!data.ok) {
+          err.textContent = "Push finished with failures (" + data.pushed + "/" + data.total + ")";
+          err.hidden = false;
+        }
+      } catch (e) {
+        err.textContent = String(e.message || e);
+        err.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Push soft set";
+      }
+    });
+    document.getElementById("btn-ks-wifi").addEventListener("click", async () => {
+      const err = document.getElementById("ks-wifi-err");
+      const log = document.getElementById("ks-wifi-log");
+      err.hidden = true;
+      const ssid = document.getElementById("ks-ssid").value.trim();
+      const password = document.getElementById("ks-psk").value;
+      if (!ssid || password.length < 8) {
+        err.textContent = "SSID + password (≥8) required";
+        err.hidden = false;
+        return;
+      }
+      if (!confirm("Apply Wi‑Fi to USB cams first, then NVR if checked?\nSSID: " + ssid)) return;
+      const btn = document.getElementById("btn-ks-wifi");
+      btn.disabled = true;
+      try {
+        const r = await fetch("/api/kiosk/wifi", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ssid,
+            password,
+            hidden: document.getElementById("ks-wifi-hidden").checked,
+            apply_nvr: document.getElementById("ks-wifi-nvr").checked,
+          }),
+        });
+        const data = await r.json().catch(() => ({}));
+        document.getElementById("ks-psk").value = "";
+        if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+        log.textContent = (data.log || []).join("\n");
+        log.hidden = false;
+        if (!data.ok) {
+          err.textContent = "Wi‑Fi apply had failures — see log";
+          err.hidden = false;
+        }
+      } catch (e) {
+        err.textContent = String(e.message || e);
+        err.hidden = false;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    document.getElementById("btn-ks-backup").addEventListener("click", async () => {
+      const err = document.getElementById("ks-backup-err");
+      const log = document.getElementById("ks-backup-log");
+      err.hidden = true;
+      const unc = document.getElementById("ks-unc").value.trim();
+      const username = document.getElementById("ks-cifs-user").value.trim();
+      const password = document.getElementById("ks-cifs-pass").value;
+      const sessions = [...document.querySelectorAll("#ks-backup-sessions input:checked")].map((c) => c.value);
+      if (!unc || !username || !password || !sessions.length) {
+        err.textContent = "UNC, user, password, and ≥1 session required";
+        err.hidden = false;
+        return;
+      }
+      const btn = document.getElementById("btn-ks-backup");
+      btn.disabled = true;
+      btn.textContent = "Copying…";
+      try {
+        const r = await fetch("/api/kiosk/backup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ unc, username, password, sessions }),
+        });
+        const data = await r.json().catch(() => ({}));
+        document.getElementById("ks-cifs-pass").value = "";
+        if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+        log.textContent = (data.log || []).join("\n");
+        log.hidden = false;
+        if (!data.ok) {
+          err.textContent = "Backup failed — see log";
+          err.hidden = false;
+        }
+      } catch (e) {
+        err.textContent = String(e.message || e);
+        err.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Backup now";
+      }
+    });
+    document.getElementById("btn-ks-dataroot").addEventListener("click", async () => {
+      const err = document.getElementById("ks-dataroot-err");
+      const log = document.getElementById("ks-dataroot-log");
+      err.hidden = true;
+      const data_root = document.getElementById("ks-data-root").value.trim();
+      if (!data_root) {
+        err.textContent = "data_root required";
+        err.hidden = false;
+        return;
+      }
+      if (!confirm("Set data_root to:\n" + data_root + "\nand restart kiosk web if checked?")) return;
+      const btn = document.getElementById("btn-ks-dataroot");
+      btn.disabled = true;
+      try {
+        const r = await fetch("/api/kiosk/data-root", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            data_root,
+            restart: document.getElementById("ks-restart-web").checked,
+          }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+        const lines = [
+          "old: " + (data.old || "—"),
+          "new: " + (data.new || "—"),
+        ];
+        if (data.restart && data.restart.attempted) {
+          lines.push("restart: " + (data.restart.ok ? "OK" : "manual") + " — " + (data.restart.detail || ""));
+        }
+        log.textContent = lines.join("\n");
+        log.hidden = false;
+        setTimeout(() => location.reload(), 1500);
+      } catch (e) {
+        err.textContent = String(e.message || e);
+        err.hidden = false;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById("btn-invite").addEventListener("click", async () => {
+      await fetch("/api/beacon", { method: "POST" });
+      const badge = document.getElementById("roster-badge");
+      if (badge) badge.textContent = "inviting…";
+      setTimeout(() => location.reload(), 2000);
+    });
+
+    function paintEnvOnTile(camId, tempC, rhPct) {
+      const tile = document.querySelector('.tile[data-cam-id="' + CSS.escape(camId) + '"]');
+      if (!tile) return;
+      const el = tile.querySelector("[data-env]");
+      if (!el) return;
+      if (tempC == null || !Number.isFinite(Number(tempC))) {
+        el.textContent = "";
+        return;
+      }
+      let s = Number(tempC).toFixed(1) + "°C";
+      if (rhPct != null && Number.isFinite(Number(rhPct))) {
+        s += " · " + Math.round(Number(rhPct)) + "%";
+      }
+      el.textContent = s;
+    }
+
+    // Debounce MQTT online edges so a single missed announce / poll blip
+    // cannot clearFocus and fight the LIVE grace/watchdog (live↔idle thrash).
+    const onlineLatch = new Map(); // camId → { confirmed, misses, primed }
+
+    /** Roster IP → USB (192.168.7.x) / WiFi (10.x); matches server announce_link_mode. */
+    function linkModeFromIp(ip) {
+      const s = String(ip || "");
+      if (s.startsWith("192.168.7.")) return "usb";
+      if (s.startsWith("10.")) return "wifi";
+      return "";
+    }
+    function formatAgeShort(ageS) {
+      if (ageS == null || !Number.isFinite(Number(ageS))) return "";
+      const s = Math.max(0, Math.round(Number(ageS)));
+      if (s < 60) return s + "s";
+      const m = Math.floor(s / 60);
+      if (m < 60) return m + "m";
+      const h = Math.floor(m / 60);
+      return h + "h";
+    }
+    function onlineStatusText(online, linkOrIp, ageS) {
+      let link = String(linkOrIp || "");
+      if (link !== "usb" && link !== "wifi") link = linkModeFromIp(link);
+      const mode = link === "usb" ? "USB" : (link === "wifi" ? "WiFi" : "");
+      const base = online ? "ONLINE" : "STALE";
+      let t = mode ? (base + " · " + mode) : base;
+      // Visible last-seen on STALE (title still has full detail when online).
+      if (!online) {
+        const a = formatAgeShort(ageS);
+        if (a) t += " · seen " + a + " ago";
+      }
+      return t;
+    }
+
+    /** Dual-homed: show both; brighter line = active LIVE/SSH path (cam.link). */
+    function formatIpsHtml(ip, ips, link) {
+      const u = ips && ips.usb ? String(ips.usb) : "";
+      const w = ips && ips.wifi ? String(ips.wifi) : "";
+      if (!u && !w) {
+        return ip ? escapeHtml(String(ip)) : "";
+      }
+      const parts = [];
+      if (u) {
+        parts.push(
+          '<span class="' + (link === "usb" ? "ip-active" : "") + '">USB ' + escapeHtml(u) + "</span>"
+        );
+      }
+      if (w) {
+        parts.push(
+          '<span class="' + (link === "wifi" ? "ip-active" : "") + '">WiFi ' + escapeHtml(w) + "</span>"
+        );
+      }
+      return parts.join("\n");
+    }
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function paintOnlineOnTile(camId, online, ageS, ip, link, ips) {
+      const tile = document.querySelector('.tile[data-cam-id="' + CSS.escape(camId) + '"]');
+      if (!tile) return;
+      const nowOnline = !!online;
+      const mode = (link === "usb" || link === "wifi") ? link : linkModeFromIp(ip);
+      const prevMode = tile.dataset.link || "";
+      tile.dataset.online = nowOnline ? "1" : "0";
+      if (ageS != null && Number.isFinite(Number(ageS))) tile.dataset.ageS = String(ageS);
+      else delete tile.dataset.ageS;
+      if (mode) tile.dataset.link = mode;
+      else delete tile.dataset.link;
+      if (ip) tile.dataset.camIp = String(ip);
+      else delete tile.dataset.camIp;
+      // Only usb↔wifi link flips (not every IP churn) — IP-change reattach was
+      // clearFocus/setFocus thrashing and left every tile black.
+      const linkFlip =
+        nowOnline &&
+        tile.classList.contains("live-on") &&
+        prevMode &&
+        mode &&
+        prevMode !== mode &&
+        (prevMode === "usb" || prevMode === "wifi") &&
+        (mode === "usb" || mode === "wifi");
+      if (linkFlip) {
+        const now = Date.now();
+        const last = Number(tile.dataset.linkFlipAt || 0);
+        if (now - last > 5000) {
+          tile.dataset.linkFlipAt = String(now);
+          clearFocus(camId);
+          clearLiveRetry(camId);
+          resetLiveBackoff(camId);
+          setTimeout(() => setFocus(camId), 600);
+        }
+      }
+      tile.classList.toggle("online", nowOnline);
+      tile.classList.toggle("stale", !nowOnline);
+      const st = tile.querySelector(".status");
+      const recording = tile.classList.contains("recording");
+      if (st && !recording) st.textContent = onlineStatusText(nowOnline, mode || ip, ageS);
+      const ipEl = tile.querySelector(".ip");
+      if (ipEl) {
+        const html = formatIpsHtml(ip, ips, mode);
+        if (html) ipEl.innerHTML = html;
+      }
+      const modeHint = mode === "usb" ? " · USB" : (mode === "wifi" ? " · WiFi" : "");
+      const ipsHint = ips && (ips.usb || ips.wifi)
+        ? (" · " + [ips.usb ? ("USB " + ips.usb) : "", ips.wifi ? ("WiFi " + ips.wifi) : ""].filter(Boolean).join(" / "))
+        : (ip ? (" · " + ip) : "");
+      tile.title = nowOnline
+        ? (camId + " online" + modeHint + ipsHint + (ageS != null ? (" · seen " + ageS + "s ago") : ""))
+        : (camId + " stale" + modeHint + ipsHint + (ageS != null ? (" · last seen " + ageS + "s ago") : ""));
+
+      let latch = onlineLatch.get(camId);
+      if (!latch) {
+        onlineLatch.set(camId, { confirmed: nowOnline, misses: nowOnline ? 0 : 1, primed: true });
+        return; // first paint: visuals only (autoStartOnlineLives owns initial LIVE)
+      }
+      if (nowOnline) {
+        latch.misses = 0;
+        if (!latch.confirmed) {
+          latch.confirmed = true;
+          // Do not auto setFocus here — races with autoStartOnlineLives and
+          // caused whep/start storms when combined with empty-grid reload.
+        }
+      } else {
+        latch.misses += 1;
+        // 4 consecutive polls before treating as offline for LIVE (~20s if 5s poll).
+        if (latch.misses >= 4 && latch.confirmed) {
+          latch.confirmed = false;
+          clearFocus(camId);
+          clearLiveRetry(camId);
+        }
+      }
+      onlineLatch.set(camId, latch);
+    }
+
+    async function refreshRoster() {
+      try {
+        const r = await fetch("/api/health");
+        const h = await r.json();
+        const badge = document.getElementById("roster-badge");
+        if (badge) {
+          badge.textContent = "roster " + h.roster_size + (h.active ? " · active" : "");
+          // Keep static title; refresh only refreshes count text.
+        }
+        if (h.session) {
+          sessionActive = true;
+          sessionInfo = h.session;
+        } else if (h.active === false) {
+          sessionActive = false;
+          sessionInfo = null;
+        }
+        syncRecUi();
+      } catch (e) {}
+      try {
+        const r2 = await fetch("/api/cams");
+        const data = await r2.json();
+        (data.cameras || []).forEach((c) => {
+          if (!c || !c.id) return;
+          paintOnlineOnTile(c.id, c.online, c.age_s, c.ip, c.link, c.ips);
+          paintEnvOnTile(c.id, c.temp_c, c.rh_pct);
+          if (c.animal) paintAnimalOnTile(c.id, c.animal);
+        });
+      } catch (e) {}
+    }
+    (function bindRosterTip() {
+      const btn = document.getElementById("roster-tip-btn");
+      const pop = document.getElementById("roster-tip-pop");
+      if (!btn || !pop) return;
+      const close = () => {
+        pop.classList.remove("open");
+        pop.hidden = true;
+        btn.setAttribute("aria-expanded", "false");
+      };
+      const open = () => {
+        pop.hidden = false;
+        pop.classList.add("open");
+        btn.setAttribute("aria-expanded", "true");
+      };
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        if (pop.classList.contains("open")) close();
+        else open();
+      });
+      document.addEventListener("click", (ev) => {
+        if (!pop.classList.contains("open")) return;
+        if (pop.contains(ev.target) || btn.contains(ev.target)) return;
+        close();
+      });
+    })();
+
+    (function bindTileTips() {
+      function closeAllTileTips(except) {
+        document.querySelectorAll(".tile .tile-tip").forEach((wrap) => {
+          if (except && wrap === except) return;
+          const b = wrap.querySelector("[data-tile-tip-btn]");
+          const p = wrap.querySelector("[data-tile-tip-pop]");
+          if (!b || !p) return;
+          p.classList.remove("open");
+          p.hidden = true;
+          b.setAttribute("aria-expanded", "false");
+        });
+      }
+      document.querySelectorAll(".tile .tile-tip").forEach((wrap) => {
+        const btn = wrap.querySelector("[data-tile-tip-btn]");
+        const pop = wrap.querySelector("[data-tile-tip-pop]");
+        if (!btn || !pop) return;
+        const stop = (ev) => {
+          ev.stopPropagation();
+          ev.preventDefault();
+        };
+        // Don't let tile LIVE toggle / long-press steal the tap.
+        ["pointerdown", "pointerup", "touchstart", "touchend", "mousedown", "mouseup", "click"].forEach((type) => {
+          btn.addEventListener(type, stop);
+          pop.addEventListener(type, (ev) => ev.stopPropagation());
+        });
+        btn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          ev.preventDefault();
+          const open = pop.classList.contains("open");
+          closeAllTileTips(open ? null : wrap);
+          if (open) {
+            pop.classList.remove("open");
+            pop.hidden = true;
+            btn.setAttribute("aria-expanded", "false");
+          } else {
+            pop.hidden = false;
+            pop.classList.add("open");
+            btn.setAttribute("aria-expanded", "true");
+          }
+        });
+      });
+      document.addEventListener("click", (ev) => {
+        if (ev.target.closest && ev.target.closest(".tile-tip")) return;
+        closeAllTileTips(null);
+      });
+    })();
+
+    syncRecUi();
+    refreshRoster();
+    setInterval(refreshRoster, 5000);
+    // Idle thumbs: auto-live all online cams (Session settings encode ask).
+    setTimeout(autoStartOnlineLives, 400);
+    // Empty-grid auto-reload disabled: it thrashed the kiosk whenever LIVE
+    // failed to stick (reload → autoStart → fail → empty → reload).
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+[Unit]
+Description=bhvr-cam H.264 session record (rpicam-vid)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/bhvr-cam.env
+EnvironmentFile=-/run/bhvr/record.env
+ExecStartPre=/bin/mkdir -p /data/bhvr/current
+ExecStart=/usr/local/bin/bhvr-cam-record
+# rpicam-vid finalizes the mp4 on SIGINT
+KillSignal=SIGINT
+TimeoutStopSec=45
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

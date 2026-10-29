@@ -44,9 +44,9 @@ ASSOC_Y = (
     ("time_immobile_s", "classic_vs_immobile"),
 )
 
-DEFAULT_EXPL = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017" r"\thresholded-signal-bouts\impress_exploration.csv")
-DEFAULT_AMB = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017" r"\thresholded-signal-bouts\impress_ambulation.csv")
-DEFAULT_OBJECT_PROX = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017" r"\_nor_object_mi\simpler_first_object_prox_0p10\object_prox_metrics_per_animal.csv")
+DEFAULT_EXPL = Path(r"D:\sack\datas\impress\moseq_251017" r"\thresholded-signal-bouts\impress_exploration.csv")
+DEFAULT_AMB = Path(r"D:\sack\datas\impress\moseq_251017" r"\thresholded-signal-bouts\impress_ambulation.csv")
+DEFAULT_OBJECT_PROX = Path(r"D:\sack\datas\impress\moseq_251017" r"\_nor_object_mi\simpler_first_object_prox_0p10\object_prox_metrics_per_animal.csv")
 
 
 def _norm_cols(df: pd.DataFrame) -> pd.DataFrame:

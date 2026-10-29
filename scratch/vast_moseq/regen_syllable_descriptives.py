@@ -26,14 +26,14 @@ if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
 
 DEFAULT_KIN = Path(
-    r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq"
+    r"D:\sack\AZ-SD-VAST-moseq"
     r"\syllable_bout_kinematics\syllable_bout_kinematics.csv"
 )
 DEFAULT_SIG = Path(
-    r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq"
+    r"D:\sack\AZ-SD-VAST-moseq"
     r"\syllable_signatures\syllable_prototypes_clustered.csv"
 )
-DEFAULT_OUT = Path(r"C:\Users\admin\Documents\work\sack\AZ-SD-VAST-moseq\_syllable_descriptives")
+DEFAULT_OUT = Path(r"D:\sack\AZ-SD-VAST-moseq\_syllable_descriptives")
 
 MODEL_ORDER = (
     "seed_005",

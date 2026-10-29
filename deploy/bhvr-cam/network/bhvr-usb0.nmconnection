@@ -1,0 +1,19 @@
+# NetworkManager keyfile — installed to /etc/NetworkManager/system-connections/
+# USB gadget CDC ECM: DHCP client, preferred over wlan (lower metric).
+[connection]
+id=bhvr-usb0
+uuid=a1b2c3d4-e5f6-4789-a012-3456789abcde
+type=ethernet
+interface-name=usb0
+autoconnect=true
+autoconnect-priority=100
+
+[ethernet]
+
+[ipv4]
+method=auto
+route-metric=100
+may-fail=true
+
+[ipv6]
+method=disabled

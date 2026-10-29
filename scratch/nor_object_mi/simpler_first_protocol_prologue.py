@@ -47,27 +47,27 @@ CLOCK_PAIRS = (
 )
 
 DEFAULT_CLASSIC = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_classic_dr\classic_dr_paired.csv"
 )
 DEFAULT_PRESENCE = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_presence_steps\presence_step_deltas_per_animal.csv"
 )
 DEFAULT_DISPERSION = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_presence_steps\presence_step_across_model_dispersion.csv"
 )
 DEFAULT_DISPERSION_SUMMARY = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_presence_steps\presence_step_across_model_dispersion_summary.csv"
 )
 DEFAULT_CLOCKS = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_ambulation_clocks\clock_metrics_per_animal.csv"
 )
 DEFAULT_OUT = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_protocol_prologue"
 )
 

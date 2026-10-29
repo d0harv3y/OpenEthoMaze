@@ -134,7 +134,7 @@ def _cell_table(rows: list[dict[str, object]], *, phase_label: str) -> list[dict
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     root = Path(
-        r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+        r"D:\sack\datas\impress\moseq_251017"
         r"\_nor_object_mi\paramscan_s1-1e8_s2-1e5_ss-50"
     )
     ap.add_argument("--tx-csv", type=Path, default=root / "presence" / "mi_delta_presence_per_animal.csv")

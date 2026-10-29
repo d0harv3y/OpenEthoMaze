@@ -32,7 +32,7 @@ from nor_object_mi.simpler_first_protocol_prologue import SESSIONS  # noqa: E402
 from nor_object_mi.simpler_first_q1 import SEX_ORDER  # noqa: E402
 
 DEFAULT_RUN = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_locomotor_presence"
 )
 SESSION_SHORT = {

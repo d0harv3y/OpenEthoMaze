@@ -1,0 +1,80 @@
+filters:
+  or:
+    - type == "hypothesis"
+    - type == "verdict"
+    - type == "estimand"
+    - type == "family"
+    - type == "theory"
+formulas:
+  status_icon: if(status == "treasure", "gold", if(status == "lava", "lava", if(status == "ladder", "ladder", if(status == "rabbit-hole", "rh", status))))
+properties:
+  type:
+    displayName: Type
+  assay:
+    displayName: Assay
+  status:
+    displayName: Status
+  claim_kind:
+    displayName: Kind
+  verdict:
+    displayName: Verdict
+views:
+  - type: table
+    name: Treasure
+    filters:
+      and:
+        - status == "treasure"
+    order:
+      - formula.status_icon
+      - file.name
+      - type
+      - assay
+      - claim_kind
+      - verdict
+  - type: table
+    name: Lava
+    filters:
+      and:
+        - status == "lava"
+    order:
+      - file.name
+      - type
+      - assay
+      - claim_kind
+      - verdict
+  - type: table
+    name: Rabbit-hole
+    filters:
+      and:
+        - status == "rabbit-hole"
+    order:
+      - file.name
+      - type
+      - assay
+      - claim_kind
+  - type: table
+    name: NOR IMPRESS
+    filters:
+      and:
+        - assay == "nor-impress"
+    groupBy:
+      property: type
+      direction: ASC
+    order:
+      - type
+      - file.name
+      - status
+      - claim_kind
+      - verdict
+  - type: table
+    name: All claims
+    groupBy:
+      property: status
+      direction: ASC
+    order:
+      - type
+      - file.name
+      - status
+      - assay
+      - claim_kind
+      - verdict

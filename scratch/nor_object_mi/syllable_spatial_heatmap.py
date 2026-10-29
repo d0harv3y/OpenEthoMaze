@@ -915,11 +915,11 @@ def write_condition_legend(path: Path) -> None:
     ax.set_ylim(0, 1)
     ax.axis("off")
     for i, tx in enumerate(CONDITION_ORDER):
-        b, g, r = colors[condition]
+        b, g, r = colors[tx]
         ax.add_patch(
             plt.Rectangle((i + 0.08, 0.25), 0.35, 0.5, color=(r / 255, g / 255, b / 255))
         )
-        ax.text(i + 0.5, 0.5, condition, ha="left", va="center", fontsize=8)
+        ax.text(i + 0.5, 0.5, tx, ha="left", va="center", fontsize=8)
     ax.set_title("tx (violin colors)", fontsize=9, loc="left")
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1126,8 +1126,6 @@ def run_condition_overlay_grain(
 ) -> dict[str, object]:
     if not HAS_CV2:
         raise RuntimeError("opencv-python required for spatial heatmaps")
-    if keep_clusters is None:
-        raise ValueError("tx overlay mode requires keep_clusters (e.g. cluster 13)")
 
     models = models or discover_paramscan_models(ensemble_root)
     proto = pd.read_csv(prototypes_csv)
@@ -1145,7 +1143,10 @@ def run_condition_overlay_grain(
 
     _ = bg_frame_stride
     canonical_hw = resolve_canonical_hw(sessions, video_root)
-    keep_note = f" keep_clusters={sorted(keep_clusters)} color_by=tx"
+    if keep_clusters is not None:
+        keep_note = f" keep_clusters={sorted(keep_clusters)} color_by=tx"
+    else:
+        keep_note = " keep_clusters=all color_by=tx"
     print(
         f"grain {grain.slug()}: n_sessions={len(sessions)} models={len(models)} "
         f"canvas={canonical_hw[1]}x{canonical_hw[0]} "
@@ -1186,7 +1187,7 @@ def run_condition_overlay_grain(
     draw_loci_markers(composite, markers)
     n_rotated = int(sum(1 for s in sessions if s.rotate_180))
     draw_rotation_notation(composite, n_rotated=n_rotated, n_sessions=len(sessions))
-    if len(keep_clusters) == 1:
+    if keep_clusters is not None and len(keep_clusters) == 1:
         only = next(iter(keep_clusters))
         _put_outlined_text(composite, f"cluster {only}", (8, 44), scale=0.5)
     out_dir.mkdir(parents=True, exist_ok=True)

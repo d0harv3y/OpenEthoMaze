@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=bhvr-kiosk
+Comment=Session console (no GNOME keyring prompt)
+Exec=/usr/bin/chromium --password-store=basic --disable-features=PasswordManagerOnboarding http://127.0.0.1:8080/
+Icon=chromium
+Terminal=false
+Categories=Network;WebBrowser;
+StartupNotify=true
+X-GNOME-Autostart-enabled=true

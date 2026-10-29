@@ -46,11 +46,11 @@ from nor_object_mi.fig_simpler_first_syllable_signatures import (  # noqa: E402
 )
 
 DEFAULT_FRAME = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_da"
 )
 DEFAULT_BOUT = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_da_bout_count"
 )
 

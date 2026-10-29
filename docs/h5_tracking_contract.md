@@ -175,7 +175,10 @@ Rationale: Live pose matches what the operator saw (jump filter, ROI crop, hybri
 
 **Fixed 8** for v2, parity with `len(STANDARD_NODE_NAMES)`. Names: `maze.core.anatomy.BLOB_NODE_NAMES` (`blob_p0`…`blob_p7`). Change only alongside a schema bump and anatomy constants—not a scattered GUI default.
 
+## Resolved for open-field frailty (2026-10-29)
+
+SuperAnimal uses the same `tracking/anatomical` datasets (`frame_index`, `xy`, `score`, `node_names`) with `pose_source=superanimal_topviewmouse` and the model’s own bodypart list (TopViewMouse: 27). `STANDARD_NODE_NAMES` is the maze SLEAP skeleton and is not the storage order for this pose. Frailty scalars live in a separate session-grain feature table in a cohort file that is not the maze trial H5. Direction: [roadmap.md](roadmap.md) § Open-field frailty.
+
 ## Open decisions (remaining)
 
-1. **DLC:** same `tracking/anatomical` layout with `pose_source=dlc_import` and DLC node name list?
-2. **Cross-DB pointer:** when results H5 ≠ acquisition H5, store `tracking_source_h5` attr on trial group vs rely on manifest `input_h5_path` only?
+1. **Cross-DB pointer:** when results H5 ≠ acquisition H5, store `tracking_source_h5` attr on trial group vs rely on manifest `input_h5_path` only?

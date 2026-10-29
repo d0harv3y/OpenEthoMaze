@@ -277,7 +277,7 @@ def run_q1(bout_csv: Path, out_dir: Path) -> dict[str, object]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    root = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
+    root = Path(r"D:\sack\datas\impress\moseq_251017")
     ap.add_argument(
         "--bout-csv",
         type=Path,

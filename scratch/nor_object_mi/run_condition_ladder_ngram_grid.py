@@ -214,12 +214,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--ensemble-root",
         type=Path,
-        default=Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"),
+        default=Path(r"D:\sack\datas\impress\moseq_251017"),
     )
     ap.add_argument(
         "--nor-h5",
         type=Path,
-        default=Path(r"C:\Users\admin\Documents\work\sack\datas\impress\my_NOR_results.h5"),
+        default=Path(r"D:\sack\datas\impress\my_NOR_results.h5"),
     )
     ap.add_argument("--repo", type=Path, default=Path(r"C:\Users\admin\code\OpenEthoMaze"))
     ap.add_argument("--bin-edges-json", type=Path, default=None)

@@ -64,7 +64,12 @@ class KpmsAlignmentCache:
         recording_key = kpms_recording_key(manifest)
         cache_key = (recording_key, _preprocess_cache_token(pre_cfg))
         if cache_key not in self._entries:
-            raw = kpms_aligned_coordinates_and_indices(manifest, pre_cfg)
+            # Honor pre_cfg.conf_threshold (fit/apply must match; default kwarg is 0.2).
+            raw = kpms_aligned_coordinates_and_indices(
+                manifest,
+                pre_cfg,
+                conf_threshold=float(pre_cfg.conf_threshold),
+            )
             if raw is None:
                 self._entries[cache_key] = None
             else:

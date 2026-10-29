@@ -5,7 +5,7 @@ Canonical nouns for maze / pose·syllable / microbiome analyses. For **which too
 ## Voice
 
 **Discuss / plan**: descriptive label first; formal name in parentheses.
-**Implement**: formal tokens in filenames and APIs (`shannon_`, `braycurtis_`, `wilcoxon_`, `kruskal_`, `spearman_`, `permanova_`, `anova_`, `ttest_`, `clr_`, `pca_`, `pcoa_`, …).
+**Implement**: formal tokens in filenames and APIs (`shannon_`, `H_next_given_curr`, `trans_dist_to_nosd_ref`, `resid_`, `braycurtis_`, `wilcoxon_`, `kruskal_`, `spearman_`, `permanova_`, `anova_`, `ttest_`, `clr_`, `pca_`, `pcoa_`, `volatility_`, `kaplan_meier_`, `logrank_`, …).
 
 ## Language
 
@@ -32,6 +32,22 @@ _Avoid_: using this as syllable jargon
 **Bout**:
 A contiguous run of one syllable label. Not a composition unit and not a grain.
 _Avoid_: run (conflicts with maze `trial_state`), window, sample
+
+**Entropy (Shannon; marginal)** (operation UNCERTAINTY; token `shannon_` / `shannon_bits`):
+Average uncertainty (bits) about **which category** under **one** composition $p$ at one grain — formal $H(p)$. In our vocab **entropy = uncertainty** for a declared categorical law. Distinct from sample **variance**; from **conditional entropy** $H(Y \mid X)$; from **MI** (shared information).
+_Avoid_: “entropy changed” without naming occupancy $p$ vs transition $P$; calling every $H$ Shannon-on-$p$
+
+**Conditional entropy** ($H(Y \mid X)$; UNCERTAINTY):
+Uncertainty left in $Y$ after knowing $X$. Canonical bout form: $H(\mathrm{next} \mid \mathrm{current})$ (`H_next_given_curr`) from row-stochastic $P(\mathrm{next} \mid \mathrm{current})$. Related: $I(X;Y) = H(Y) - H(Y \mid X)$.
+_Avoid_: equating with marginal Shannon on window $p$; equating with $I(\mathrm{next};\mathrm{stim}\mid\mathrm{current})$; calling Miller–Madow “conditional entropy”
+
+**Total variation (TV) distance** (DIFFERENCE between two laws on the same support; token `trans_dist_to_nosd_ref`):
+How far apart are two **transition matrices** $P$ and $Q$? $\mathrm{TV}=\tfrac{1}{2}\sum_{i,j}|P_{ij}-Q_{ij}|$. Name is **total variation**, not **total variance** ($\sigma^2$). Charted vs a pooled reference law.
+_Avoid_: “TV” for ANOVA variance components; reading animal TV without transition-count checks (sparse → uniform $P$ → inflated TV)
+
+**Transition** (bout-to-bout; operation TRANSITION):
+How the **next** bout label depends on the **current** one. Core objects: $P(\mathrm{next} \mid \mathrm{current})$; $H(\mathrm{next} \mid \mathrm{current})$; optional TV of $P$ to a reference; pair MI / bigram richness at a fixed transition budget. Built on the **bout stream**, not on a window composition. See [FORMULAS.md](FORMULAS.md) § TRANSITION.
+_Avoid_: calling Shannon-on-$p$ a transition summary; equating $H(\mathrm{next}\mid\mathrm{current})$ with occupancy MI or $I(\mathrm{next};\mathrm{stim}\mid\mathrm{current})$; reading TV without a transition-count check (sparse → nearer-uniform $P$ → larger TV)
 
 **Microbiome composition**:
 Composition over taxa (or ASVs/OTUs), typically one collection event per composition.
@@ -73,6 +89,17 @@ _Avoid_: calling median `Δp` “the Bray–Curtis”; calling a BC Wilcoxon “
 Per-category $p_k(\mathrm{right}) - p_k(\mathrm{left})$. The DA magnitude object. Not itself a distance/dissimilarity.
 _Avoid_: calling $\Delta p$ “the Bray–Curtis”
 
+**Volatility** (temporal compositional variability; token `volatility_`; operation VOLATILITY):
+How much **one** unit’s composition **moves over time** (or across repeated windows), usually from a time series of DIFFERENCE scalars. Always name representation + DIFFERENCE formula + summary (mean consecutive change / variability of change / cumulative turnover). `ladder-only` in `moseq_251017` simpler-first (not charted there). Syllable use is **analogy-only** unless a native pipeline declares grain + distance + summary.
+_Avoid_: calling volatility a diversity metric; equating it with Shannon (state now ≠ movement); bare “volatility” without *what* representation moved; treating one paired BC as “volatility”
+
+**Related trajectory notions** (not synonyms of volatility):
+**Resistance** — how little composition moved **during** a perturbation. **Recovery / resilience** — how quickly it returned toward baseline. Separate claims from raw volatility.
+
+**Residual** (model leftover; token `resid_*`; operation RESIDUAL):
+What remains of an observed scalar $y$ after subtracting a fitted prediction $\hat y$ from declared covariates: $e = y - \hat y$. In NOR residual litmus: OLS within sex of syllable scalars (Shannon, $H(\mathrm{next}\mid\mathrm{current})$, pair MI) on Layer A locomotor / proximity covariates (`mean_speed_mps`, `frac_still`, `frac_near_nvl`), then Kruskal on `resid_*` by `condition`. Declare $Y$, $X$s, stratum, and fit. Residual is D of the leftover; testing residuals by groups is I.
+_Avoid_: equating with **conditional entropy** $H(Y \mid X)$ (information leftover, not regression leftover); calling FDR / Miller–Madow a residual; bare “residual” without naming outcome and covariates
+
 **Rank test**:
 Inferential comparison that uses only the **order** of values (signed-rank, two-group rank-sum, k-group rank, Spearman). Spacing discarded. Named procedures (**Wilcoxon signed-rank**, **Mann–Whitney**, **Kruskal–Wallis**, **Spearman**) are **rank by definition** — there is no “parametric Kruskal” or “parametric Wilcoxon.”
 _Avoid_: nonparametric (overloaded); calling Shannon or Bray–Curtis “rank tests”; “parametric Kruskal–Wallis”
@@ -95,6 +122,17 @@ _Avoid_: treating t vs Wilcoxon as different *questions*; renaming ANOVA as “p
 - **Two-way / $k$-way (multiway):** two or more factors in one model (e.g. condition × sex, or condition × session). Same mean-scale family; different **design strip** (interactions, main effects). Not “parametric Kruskal.” Stratifying by sex then running one-way ≠ putting sex in a two-way model.
 - Rank side has no single Kruskal analogue for full factorial designs; people use aligned-rank / ART / separate strata — name what you did.
 _Avoid_: calling every mean-scale k-group test “ANOVA” without one-way vs multiway and classical vs Welch
+
+**k-group vs k-way vs k-ary** (do not synonymize):
+
+| Term | Counts | Our use |
+|------|--------|---------|
+| **k-group** | levels of **one** factor (how many arms) | Kruskal / one-way ANOVA among $k$ txs (`kruskal_`, `anova_`) |
+| **k-way** | how many **factors** in one model | two-way = condition × sex; three-way = three factors |
+| **k-ary** | arity of a relation/operator (CS/math; sometimes ML class count) | **not** our stats jargon — do not say “k-ary Kruskal” or “k-ary ANOVA” |
+
+Trap: “three-group Kruskal” = k-group with $k=3$. “Three-way ANOVA” = three **factors**. Different claims.
+_Avoid_: k-ary as a stand-in for k-group or k-way
 
 **First difference** (paired change; token `delta_*`):
 Within one animal (or one pairing axis), $\Delta_M = M_{\mathrm{right}} - M_{\mathrm{left}}$. Answers: “did this step move $M$?” Test: signed-rank on $\Delta$ vs 0 (`wilcoxon_`), often txs pooled.
@@ -128,6 +166,10 @@ _Avoid_: comparing q across families as one ranking of biology; calling FDR “B
 Chance of **at least one** false hit in the family. Stricter than FDR when m is large. We do not use it as the DA primary.
 _Avoid_: saying “FDR is Bonferroni”
 
+**Tukey’s HSD** (Honest Significant Difference; “Tukey adjustment”):
+Post-hoc **pairwise mean** comparisons after classical one-way ANOVA among $k$ groups. Controls FWER for **all pairs** in that $k$-group family (not FDR; not Bonferroni on an arbitrary list). Token if needed: `tukey_`. Classical equal-variance mean procedure — not the default after Kruskal or Welch/Alexander–Govern.
+_Avoid_: calling BH “Tukey”; using Tukey after Kruskal (rank post-hocs are Dunn / Conover and cousins); treating Tukey as our DA primary or as Stage-B omnibus
+
 **Effect size** (magnitude; D companion to an I test):
 How **large** the move is on the declared scale — not how surprising. In our DA tables: `median_delta_p`, `frac_gt0`, `bc_contrib_frac`. Elsewhere: paired Δ, DR, occupancy, BC. p and q are **not** effect sizes (tiny p can sit on a tiny Δ if n is large).
 _Avoid_: reading −log₁₀(p) or q as “how big”; calling T / H / F an effect size without conversion
@@ -135,6 +177,18 @@ _Avoid_: reading −log₁₀(p) or q as “how big”; calling T / H / F an eff
 **Volcano plot** (DA display):
 Scatter of **magnitude** (x, usually `median_delta_p`) vs **evidence** (y, usually −log₁₀ of uncorrected p). Fill/color often marks FDR hits. Overlaying models is a display choice, not a joint BH family.
 _Avoid_: reading height as size; pooling overlay points as one FDR family; treating color as a shared syllable id across alphabets
+
+**Time-to-event** (latency with incomplete follow-up):
+How long until a **named event** (first baited-arm entry, first error, trial complete, first near-bout, …). Units that never fire the event before observation ends are **right-censored**, not “event at session end” and not dropped. Grain must name the clock (trial / session) and the event.
+_Avoid_: treating never-happened as missing, as 0, or as max trial duration without declaring censoring
+
+**Kaplan–Meier estimator** (token `kaplan_meier_`; operation TIME-TO-EVENT):
+Nonparametric **survival** curve: share of units that have **not yet had the event** by time $t$, using right-censored rows. Step function; D of this sample. `ladder-only` until a runner exists. Natural maze home: **RAM** (radial-arm maze) latencies; also NOR/VAST first-contact clocks when censoring is real.
+_Avoid_: calling occupancy / `frac_near` a KM; equating KM with volatility; reporting mean latency that ignores censoring
+
+**Log-rank** (token `logrank_`):
+Inferential cousin: do two (or k) KM curves differ? I. Not an effect size; median time-to-event (when $\hat S$ crosses 0.5) is the D magnitude companion.
+_Avoid_: calling log-rank a Kruskal on raw latencies (that discards censoring)
 
 ## Protocol strata (pointer)
 

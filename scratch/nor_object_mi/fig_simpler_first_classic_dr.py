@@ -41,25 +41,25 @@ from nor_object_mi._pub_style import (  # noqa: E402
     type_scale,
 )
 
-DEFAULT_RUN = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017" r"\_nor_object_mi\simpler_first_classic_dr")
+DEFAULT_RUN = Path(r"D:\sack\datas\impress\moseq_251017" r"\_nor_object_mi\simpler_first_classic_dr")
 CONTRASTS = (
     ("classic_vs_object_prox", "object-prox DR"),
     ("classic_vs_speed", "mean speed"),
     ("classic_vs_immobile", "time immobile"),
 )
 FOOT_VIOLIN = (
-    "Grain: animal × phase × nvl_obj. Each point is one animal's classic "
-    "investigation DR (nose/forelimb T_nvl vs T_fam). Color=tx, shape=sex. "
-    "Wilcoxon p is DR vs 0, txs pooled (preference, not a treatment claim). "
-    "Kruskal p is within sex (treatment claim). Not a syllable composition; "
-    "not object-prox occupancy; not MI; not DA."
+    "DR = (T_nvl - T_fam) / (T_nvl + T_fam). Classic T = nose/forelimb "
+    "investigation time (IMPRESS exploration export), not prox occupancy. "
+    "Grain: animal x phase x nvl_obj. Color=tx, shape=sex. "
+    "Wilcoxon p is DR vs 0, txs pooled (preference). Kruskal p is within sex "
+    "(treatment). Not syllable composition; not object-prox; not MI; not DA."
 )
 FOOT_SCATTER = (
-    "Grain: animal × phase × nvl_obj. X = classic investigation DR; Y = "
-    "object-prox occupancy DR (median across 21 kpMS models). Same formula, "
-    "different T. Color=tx, shape=sex. Spearman ρ and p are from "
-    "classic_dr_association.csv (not recomputed). Dashed line is y = x. "
-    "Not a treatment claim; not speed thresholding; not MI; not DA."
+    "Object-prox: exclusive 0.10 m disks around fam|nvl (drop overlap); "
+    "T = kpMS bout-frame time with bout-mean dist < 0.10 m; DR median across "
+    "21 models. Same DR formula as classic, different T. Grain: animal x phase "
+    "x nvl_obj. Color=tx, shape=sex. Spearman from association table; y=x dashed. "
+    "Not speed thresholding; not MI; not DA."
 )
 FOOT_ASSOC = (
     "Grain: animal × phase × nvl_obj. Color is Spearman ρ of classic "
@@ -72,10 +72,12 @@ FOOT_ASSOC = (
 
 
 FOOT_VIOLIN_S = (
-    "Wilcoxon vs 0 is preference (txs pooled). Kruskal by tx is within sex (treatment)."
+    "DR = (T_nvl - T_fam) / (T_nvl + T_fam); classic T = nose/forelimb investigation time. "
+    "Grain: animal x phase x nvl_obj. Wilcoxon vs 0 = preference (txs pooled); Kruskal by tx within sex."
 )
 FOOT_SCATTER_S = (
-    "Same DR formula, different T: investigation vs object-prox occupancy. Spearman from the association table."
+    "Object-prox: exclusive 0.10 m fam|nvl disks; T = kpMS bout occupancy (bout-mean dist); "
+    "DR median x21 models. Same DR formula as classic, different T. Spearman from association table."
 )
 FOOT_ASSOC_S = (
     "Spearman ρ of classic DR vs object-prox / speed / immobile. Association, not a treatment test."
@@ -251,7 +253,7 @@ def fig_scatter(paired: pd.DataFrame, assoc: pd.DataFrame, out: Path, *, dest: s
         jitter = rng.normal(0.0, 0.008, size=x.size)
         for t in CONDITION_ORDER:
             for s in SEX_ORDER:
-                m = (tx == t) & (sex == s)
+                m = (condition == t) & (sex == s)
                 if not np.any(m):
                     continue
                 ax.scatter(

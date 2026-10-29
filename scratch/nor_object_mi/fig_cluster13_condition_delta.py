@@ -49,7 +49,7 @@ from nor_object_mi.cluster13_condition_delta import (  # noqa: E402
 )
 
 DEFAULT_DA = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_da"
 )
 DELTA_USECOLS = (

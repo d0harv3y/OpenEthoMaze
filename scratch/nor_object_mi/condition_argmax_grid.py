@@ -1,6 +1,6 @@
 """Grid movies for the TX pooled DA argmax syllable (cluster_id 13).
 
-One 4x6 crowd movie per paramscan model, sampled from NOR_TX / nvl_obj
+One 4x6 crowd movie per paramscan model, sampled from NOR_TX / novel_obj
 sessions. raw_syllable_id is model-local; labels include cluster_id.
 
 Regen (OpenEthoMaze repo root; needs --extra kpms)::
@@ -27,19 +27,20 @@ _SCRATCH = Path(__file__).resolve().parents[1]
 if str(_SCRATCH) not in sys.path:
     sys.path.insert(0, str(_SCRATCH))
 
-from nor_object_mi.join_keys import filter_cohort, iter_joined_sessions  # noqa: E402
+from nor_object_mi.join_keys import filter_cohort, iter_joined_sessions, parse_kpms_group  # noqa: E402
 
 DEFAULT_DA = Path(
-    r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017"
+    r"D:\sack\datas\impress\moseq_251017"
     r"\_nor_object_mi\simpler_first_da"
 )
-DEFAULT_ENSEMBLE = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\moseq_251017")
-DEFAULT_NOR = Path(r"C:\Users\admin\Documents\work\sack\datas\impress\my_NOR_results.h5")
-DEFAULT_VIDEO_ROOT = Path(r"C:\Users\admin\Documents\work\sack\datas\impress")
+DEFAULT_ENSEMBLE = Path(r"D:\sack\datas\impress\moseq_251017")
+DEFAULT_NOR = Path(r"D:\sack\datas\impress\my_NOR_results.h5")
+DEFAULT_VIDEO_ROOT = Path(r"D:\sack\datas\impress")
 KPMS_PREFIX = "D:-nor vids-"
 WINNER_CSV = "tx_pooled_argmax_syllable.csv"
 NOVELTY_STEP = "id_obj->nvl_obj"
 PHASE = "NOR_TX"
+# Analysis wire trial (join_keys normalizes NOR H5 ``novel_obj`` → ``nvl_obj``).
 CONDITION = "nvl_obj"
 N_BODY = 8
 WINDOW_SIZE = 384
@@ -49,15 +50,25 @@ COLS = 6
 
 def kpms_key_to_mp4(kpms_key: str, video_root: Path) -> Path:
     """Map native kpMS group name to the NOR mp4 under impress/."""
-    if not kpms_key.startswith(KPMS_PREFIX):
-        raise ValueError(f"unexpected kpMS key prefix: {kpms_key[:80]!r}")
-    rest = kpms_key[len(KPMS_PREFIX) :]
-    parts = rest.split("-", 3)
-    if len(parts) != 4:
-        raise ValueError(f"cannot split kpMS key: {kpms_key[:120]!r}")
-    rel, exp, animal, fname = parts
-    stem = fname[:-3] if fname.lower().endswith(".h5") else Path(fname).stem
-    return Path(video_root) / rel / exp / animal / f"{stem}.mp4"
+    root = Path(video_root)
+    if kpms_key.startswith(KPMS_PREFIX):
+        rest = kpms_key[len(KPMS_PREFIX) :]
+        parts = rest.split("-", 3)
+        if len(parts) != 4:
+            raise ValueError(f"cannot split kpMS key: {kpms_key[:120]!r}")
+        rel, exp, animal, fname = parts
+        stem = fname[:-3] if fname.lower().endswith(".h5") else Path(fname).stem
+        return root / rel / exp / animal / f"{stem}.mp4"
+
+    # Bare recognition-fit stems: search standard format/<cohort>/<animal>/<stem>.mp4
+    animal_id, _raw = parse_kpms_group(kpms_key)
+    stem = kpms_key
+    matches = sorted(root.glob(f"standard format/*/{animal_id}/{stem}.mp4"))
+    if not matches:
+        raise FileNotFoundError(
+            f"no mp4 for bare kpMS key under {root / 'standard format'}: {stem!r}"
+        )
+    return matches[0]
 
 
 def dummy_coordinates(centroid: np.ndarray) -> np.ndarray:
@@ -77,7 +88,7 @@ Crowd movies (keypoint-MoSeq grid) of the **NOR_TX** pooled DA winner
 ## Grain
 
 One MP4 per **model**. Cells = sampled bouts of that model's `raw_syllable_id`
-on `session=NOR_TX` and `trial=nvl_obj`.
+on `session=NOR_TX` and `trial=novel_obj` (analysis wire: `nvl_obj`).
 
 `raw_syllable_id` is **not** portable across models. The shared claim is
 HDBSCAN `cluster_id=13` (pause/still-like kinematics).
@@ -135,6 +146,8 @@ def _render_one(
     out_path: Path,
     fps: float,
 ) -> int:
+    if not results or not video_paths:
+        return 0
     syllables = {k: v["syllable"] for k, v in results.items()}
     centroids = {k: v["centroid"] for k, v in results.items()}
     headings = {k: v["heading"] for k, v in results.items()}
