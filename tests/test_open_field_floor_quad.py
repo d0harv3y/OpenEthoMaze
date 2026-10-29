@@ -19,8 +19,10 @@ from maze.pipeline.open_field.floor_quad import (
     _relock_lines,
     cohort_qc_flags,
     fit_floor_quad,
+    POSE_MASK_SCALE,
     mask_outside_quad,
     mean_diagonal_px,
+    scale_quad_about_center,
     quad_review_flags,
     rectified_side_ratio,
     snap_quad_to_dark_edge,
@@ -235,13 +237,18 @@ def test_vertices_for_video_skips_a_flagged_quad(tmp_path: Path) -> None:
         vertices_for_video(table, "Test 68")
 
 
-def test_mask_zeros_the_corner_triangles_and_keeps_the_floor() -> None:
-    image = np.full((48, 64, 3), 200, np.uint8)
-    quad = _diamond((31.5, 23.5), 16.0)
-    masked = mask_outside_quad(image, quad)
-    assert masked.shape == image.shape
-    assert masked[0, 0, 0] == 0
-    assert masked[23, 31, 0] == 200
+def test_pose_mask_keeps_the_wall_band_and_zeros_beyond_the_blue_roi() -> None:
+    image = np.full((120, 160), 200, np.uint8)
+    quad = _diamond((79.5, 59.5), 30.0)
+    pose = scale_quad_about_center(quad, POSE_MASK_SCALE)
+    assert POSE_MASK_SCALE == 1.8
+    assert np.allclose(pose.mean(axis=0), quad.mean(axis=0))
+    masked = mask_outside_quad(image, pose)
+    # 40 px right of center: outside the green floor (radius 30), inside the 1.8x zone (radius 54).
+    assert masked[60, 120] == 200
+    # 80 px right of center: outside the blue zone.
+    assert masked[60, 159] == 0
+    assert masked[60, 80] == 200
     assert not np.shares_memory(masked, image)
 
 

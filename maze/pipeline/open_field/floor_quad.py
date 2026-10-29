@@ -643,8 +643,24 @@ def quad_review_flags(
     return tuple(flags)
 
 
+# Pose video keeps the walls. The mask is the floor quadrilateral grown by 80%
+# about its own center (the blue outline). The frame crops whatever leaves the image.
+POSE_MASK_SCALE = 1.8
+
+
+def scale_quad_about_center(vertices_xy: np.ndarray, scale: float = POSE_MASK_SCALE) -> np.ndarray:
+    """Return ``vertices_xy`` scaled about their centroid. ``scale`` 1.8 is 80% bigger."""
+    if scale <= 0:
+        raise ValueError(f"scale must be positive, got {scale}")
+    vertices = np.asarray(vertices_xy, dtype=np.float64)
+    if vertices.shape != (4, 2):
+        raise ValueError(f"vertices_xy must have shape (4, 2), got {vertices.shape}")
+    center = vertices.mean(axis=0)
+    return center + scale * (vertices - center)
+
+
 def mask_outside_quad(frame: np.ndarray, vertices_xy: np.ndarray) -> np.ndarray:
-    """Zero pixels outside the floor quadrilateral. Width and height stay the same."""
+    """Zero pixels outside the polygon. Width and height stay the same."""
     if frame.ndim not in (2, 3):
         raise ValueError(f"frame must be gray or color, got shape {frame.shape}")
     vertices = np.asarray(vertices_xy, dtype=np.float64)

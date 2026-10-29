@@ -1,8 +1,10 @@
-"""Write one open-field video with the four corner triangles zeroed.
+"""Write one open-field video with pixels outside the pose zone set to 0.
 
-The quadrilateral comes from ``floor_quads.csv`` (``maze-of-floor-quad``). Frame
-size is unchanged, so pose stays in the original camera frame. Pixels outside
-the floor polygon are 0.
+The floor quadrilateral comes from ``floor_quads.csv`` (``maze-of-floor-quad``).
+The pose zone is that quadrilateral at 1.8 times the size, same center: 80%
+bigger, which is the blue outline. The frame crops whatever leaves the image.
+Frame size is unchanged, so pose stays in the original camera frame. The floor
+quadrilateral itself stays the corner-to-corner ruler and is not the mask edge.
 
 Example::
 
@@ -22,7 +24,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from maze.pipeline.open_field.floor_quad import mask_outside_quad
+from maze.pipeline.open_field.floor_quad import POSE_MASK_SCALE, mask_outside_quad, scale_quad_about_center
 
 
 def vertices_for_video(csv_path: Path, video_stem: str, *, allow_review: bool = False) -> np.ndarray:
@@ -45,7 +47,8 @@ def vertices_for_video(csv_path: Path, video_stem: str, *, allow_review: bool = 
 
 
 def write_masked_video(video_path: Path, out_path: Path, vertices_xy: np.ndarray) -> int:
-    """Stream ``video_path`` to ``out_path`` with pixels outside the quadrilateral set to 0."""
+    """Stream ``video_path`` to ``out_path`` with pixels outside the 1.8x pose zone set to 0."""
+    vertices_xy = scale_quad_about_center(vertices_xy, POSE_MASK_SCALE)
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
         raise FileNotFoundError(f"could not open {video_path}")

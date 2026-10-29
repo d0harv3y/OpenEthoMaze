@@ -51,7 +51,7 @@ Per [docs/rescue_plan.md](../docs/rescue_plan.md) § Scripts classification.
 | **Maintained (shim)** | `fix_ele_h5_session_animal_ids.py` | One-off H5 ID repair |
 | **Maintained (shim)** | `sleap_nn_batch_inference.py` | Batch SLEAP-NN (`--extra sleap`) |
 | **Maintained (shim)** | `of_floor_quad.py` | Per-video open-field floor quadrilateral + review images |
-| **Maintained (shim)** | `of_mask_video.py` | Zero the four corner triangles outside one floor quadrilateral |
+| **Maintained (shim)** | `of_mask_video.py` | Zero pixels outside the 1.8x pose zone around one floor quadrilateral |
 | **Demo** | `demos/langfuse_demo.py` → `maze-langfuse-demo` | Langfuse trace demo; not for production pipelines |
 | **Frozen** | `archive/**` | Legacy one-offs; do not extend or install |
 
