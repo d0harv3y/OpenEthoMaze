@@ -1,14 +1,15 @@
 """Write one open-field video with pixels outside the pose zone set to 0.
 
 The floor quadrilateral comes from ``floor_quads.csv`` (``maze-of-floor-quad``).
-The pose zone is that quadrilateral at 1.8 times the size, same center: 80%
-bigger, which is the blue outline. The frame crops whatever leaves the image.
-Frame size is unchanged, so pose stays in the original camera frame. The floor
-quadrilateral itself stays the corner-to-corner ruler and is not the mask edge.
+The pose zone is that quadrilateral scaled about its own center. The default
+scale is 1.8 (80% bigger). ``--scale`` selects another size for a tighter copy.
+The frame crops whatever leaves the image. Frame size is unchanged, so pose
+stays in the original camera frame. The floor quadrilateral itself stays the
+corner-to-corner ruler and is not the mask edge.
 
 Example::
 
-    uv run maze-of-mask-video --quad-csv floor_quads.csv --video "Test 1.mp4" --out masked.mp4
+    uv run maze-of-mask-video --quad-csv floor_quads.csv --video "Test 1.mp4" --out masked.mp4 --scale 1.3
 
 Paths are arguments. Nothing in this module defaults to a lab drive.
 """
@@ -46,9 +47,17 @@ def vertices_for_video(csv_path: Path, video_stem: str, *, allow_review: bool = 
     raise KeyError(f"{video_stem} is not in {csv_path}")
 
 
-def write_masked_video(video_path: Path, out_path: Path, vertices_xy: np.ndarray) -> int:
-    """Stream ``video_path`` to ``out_path`` with pixels outside the 1.8x pose zone set to 0."""
-    vertices_xy = scale_quad_about_center(vertices_xy, POSE_MASK_SCALE)
+def write_masked_video(
+    video_path: Path,
+    out_path: Path,
+    vertices_xy: np.ndarray,
+    scale: float = POSE_MASK_SCALE,
+) -> int:
+    """Stream ``video_path`` to ``out_path``, zeroing pixels outside the scaled pose zone.
+
+    ``scale`` 1.8 is 80% bigger than the floor quadrilateral, same center.
+    """
+    vertices_xy = scale_quad_about_center(vertices_xy, scale)
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
         raise FileNotFoundError(f"could not open {video_path}")
@@ -97,9 +106,17 @@ def main() -> int:
     parser.add_argument("--video", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--allow-review", action="store_true", help="Mask a video whose quadrilateral was flagged")
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=POSE_MASK_SCALE,
+        help=f"Pose-zone size relative to the floor quadrilateral. Default {POSE_MASK_SCALE}.",
+    )
     args = parser.parse_args()
+    if not (args.scale > 0):
+        parser.error("--scale must be positive")
     vertices = vertices_for_video(args.quad_csv, args.video.stem, allow_review=args.allow_review)
-    written = write_masked_video(args.video, args.out, vertices)
+    written = write_masked_video(args.video, args.out, vertices, scale=args.scale)
     print(f"frames={written} out={args.out}", file=sys.stderr)
     return 0
 

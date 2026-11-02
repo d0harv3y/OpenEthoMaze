@@ -220,11 +220,19 @@ def _cam_ffmpeg_resolve_shell() -> str:
 
 
 def _cam_ffmpeg_annexb_to_mpegts_pipe_args() -> str:
-    """``-c copy`` remux annex-B stdin → MPEG-TS stdout (shared idle + science)."""
+    """``-c copy`` remux annex-B stdin → MPEG-TS stdout (shared idle + science).
+
+    Do **not** use ``-fflags nobuffer`` alone here: it forces probesize/
+    analyzeduration to 0, and recent ffmpeg then fails immediately with
+    ``Output file does not contain any stream`` when the first SSH bytes
+    arrive before rpicam's first IDR+SPS (0-byte science ``.ts``). Modest
+    probe windows still keep live latency low with ``low_delay`` + flush.
+    """
     return (
         '"$FFMPEG" -hide_banner -loglevel warning -nostats '
         "-use_wallclock_as_timestamps 1 "
-        "-fflags +genpts+nobuffer+flush_packets -flags low_delay -avioflags direct "
+        "-fflags +genpts+flush_packets -flags low_delay -avioflags direct "
+        "-probesize 2M -analyzeduration 2M "
         "-f h264 -i pipe:0 -c copy -muxdelay 0 -muxpreload 0 "
         "-flush_packets 1 -f mpegts pipe:1"
     )
@@ -266,9 +274,10 @@ def cam_science_ssh_mpegts_remote(
     pts_remote: str,
     workdir: str,
 ) -> str:
-    """Science capture: HW H.264 + ``--save-pts`` → cam MPEG-TS on SSH stdout.
+    """Legacy: HW H.264 + ``--save-pts`` → cam-side ffmpeg MPEG-TS on SSH stdout.
 
-    NVR writes ``*_video.ts`` and tees the same bytes to live (no NVR remux).
+    Prefer ``cam_science_annexb_remote`` + NVR remux — cam ffmpeg was exiting on
+    mid-stream H264 junk (SIGPIPE → 0-byte ``.ts``).
     """
     mode = rpicam_mode_flag(sensor_mode)
     buf = max(1, int(buffer_count))
@@ -290,6 +299,79 @@ def cam_science_ssh_mpegts_remote(
         f"--save-pts {pts_remote} -o - "
         f"| stdbuf -o0 {_cam_ffmpeg_annexb_to_mpegts_pipe_args()}"
     )
+
+
+def cam_science_annexb_remote(
+    *,
+    width: int,
+    height: int,
+    soft_fps: int,
+    bitrate_bps: int,
+    intra: int,
+    sensor_mode: str,
+    buffer_count: int,
+    pts_remote: str,
+    workdir: str,
+) -> str:
+    """Science: HW H.264 annex-B + ``--save-pts`` on SSH stdout (no cam ffmpeg).
+
+    Same shape as idle ``nvr_annexb`` LIVE; NVR remuxes to MPEG-TS for SSD + tee.
+    """
+    mode = rpicam_mode_flag(sensor_mode)
+    buf = max(1, int(buffer_count))
+    fps = max(1, int(soft_fps))
+    br = max(100_000, int(bitrate_bps))
+    return (
+        f"mkdir -p {workdir}; "
+        f"{cam_free_encode_remote()}; "
+        f"rm -f {pts_remote}; "
+        f"exec stdbuf -o0 rpicam-vid -n -t 0{mode} "
+        f"--width {width} --height {height} "
+        f"--framerate {fps} --codec h264 --inline --intra {intra} --flush "
+        f"--bitrate {br} --denoise cdn_off "
+        f"--buffer-count {buf} "
+        f"--save-pts {pts_remote} -o -"
+    )
+
+
+def nvr_ffmpeg_science_annexb_to_mpegts_pipe() -> list[str]:
+    """NVR: annex-B stdin → MPEG-TS stdout for science CaptureSink (+ live tee).
+
+    Patient probe (same class as MediaMTX remux) so first IDR+SPS after camera
+    reclaim is not dropped; ``discardcorrupt`` skips mid-GOP junk without exiting.
+    """
+    return [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "warning",
+        "-nostats",
+        "-use_wallclock_as_timestamps",
+        "1",
+        "-fflags",
+        "+genpts+flush_packets+discardcorrupt",
+        "-flags",
+        "low_delay",
+        "-probesize",
+        "5000000",
+        "-analyzeduration",
+        "5000000",
+        "-f",
+        "h264",
+        "-i",
+        "pipe:0",
+        "-c",
+        "copy",
+        "-muxdelay",
+        "0",
+        "-muxpreload",
+        "0",
+        "-flush_packets",
+        "1",
+        "-f",
+        "mpegts",
+        "pipe:1",
+    ]
 
 
 def cam_live_udp_remote(settings: PreviewSettings, nvr_ip: str, port: int) -> str:

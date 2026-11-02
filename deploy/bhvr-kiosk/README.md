@@ -10,7 +10,9 @@ session folder → live H.264 stream from cams onto the NVR SSD. Not Frigate, no
 | `bhvr-nvr*` (Pi 4) | This console + Mosquitto + Invite beacon; **writes** session MPEG-TS |
 | `bhvr-cam*` (Pi Zero W) | `rpicam-vid \| ffmpeg` MPEG-TS over SSH; keeps tiny `timestamps.pts` |
 
-Science archive = `data_root[/subdir]/ses-<utc>/` with `{subject}__{cam}__pNNN.ts` (see `SETTINGS_GRILL.md`). H5 pack is next slice.
+Science archive = `data_root[/subdir]/{tag}-<utc>/` with `{subject}__{tag}__{cam}__pNNN.ts` (default tag `ses`)
+rolled by Session **chunk minutes**, packed into `{subject}__{cam}.h5`
+(`video/mpegts_NNN` + `pts_NNN`; see `SETTINGS_GRILL.md`).
 
 **Why not write video on the cam?** Local multi-GB then `rsync` at Stop was a litmus path; wireless batch pull timed out / filled the Zero. Acquisition now pipes stdout to the NVR so the cam disk stays near-empty.
 

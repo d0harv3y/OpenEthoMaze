@@ -2,8 +2,9 @@
 
 Do not contradict without a new grill round.
 
-- **Session / layout / H5:** confirmed 2026-10-22  
+- **Session / layout / H5:** confirmed 2026-10-22; H5 pack + chunk roll built 2026-10-30; optional H5 + recording tag 2026-10-30
 - **Kiosk settings menu:** confirmed 2026-10-23 (Rounds 1–4)
+- **Related — LIVE / REC lifecycle (phases, promote, anti-thrash):** [LIVE_REC_PROTOCOL_GRILL.md](LIVE_REC_PROTOCOL_GRILL.md) (separate grill; do not merge)
 
 ## Layout & chrome
 
@@ -20,7 +21,9 @@ Do not contradict without a new grill round.
 - Output: show `data_root` + pick **subdir under it**; warn if SSD unmounted (banner + block Start/Apply).
 - Estimates: bitrate table pre-start + live `write_Bps` during REC.
 - Chunk minutes: one field + presets Lite default / Standard default; defaults **20 / 5**; **`0` = no limit**.
-- Fresh operator defaults: **Lite @ 30** (chunk 20).
+- **H5 pack** checkbox (default **on**); off → keep loose `.ts`/`.pts` only (no shell, no pack on roll/stop).
+- **recording tag** (default **`ses`**): one token for folder prefix and filename mid-token; empty input → `ses`; sanitized like slug, max 64.
+- Fresh operator defaults: **Lite @ 30** (chunk 20, h5_pack on, tag `ses`).
 
 ## Per-cam metadata
 
@@ -31,9 +34,9 @@ Do not contradict without a new grill round.
 
 ## Files & H5
 
-- Layout: `ses-<utc>/`; `{subject_id}__{cam_id}__p{NNN}.ts`.
-- One H5 per cam with `video/mpegts_000`…; **no session JSON**; rich H5 attrs.
-- H5 **created at REC start** (shell + attrs); roll loose TS by time limit; **background pack** after each roll; remainder at Stop.
+- Layout: `{tag}-<utc>/` + `{subject}__{tag}__{cam}__p{NNN}.ts` (same tag; default `ses`).
+- One H5 per cam `{subject}__{tag}__{cam}.h5` with `video/mpegts_000`… when **h5_pack** on; **no session JSON**; rich H5 attrs.
+- When packing: H5 **created at REC start** (shell + attrs); roll loose TS by time limit; **background pack** after each roll; remainder at Stop.
 - After verify: **delete** loose `.ts` / `.pts` for that part.
 - H5 v0: raw MPEG-TS + pts + fps summary + attrs (session/part/pack UTC; pts relative). No Stop remux to MP4.
 
@@ -77,7 +80,7 @@ Doc: [`../bhvr-cam/CAM_SOFTWARE_DEPLOY.md`](../bhvr-cam/CAM_SOFTWARE_DEPLOY.md).
 ### Network backup
 
 - **Manual “Backup now” only** (no post-Stop hook in v1).
-- Modal: UNC + user + password (**re-enter every time** — not stored) → list `ses-*` under data_root → multi-select → mount → copy → unmount + progress.
+- Modal: UNC + user + password (**re-enter every time** — not stored) → list `{tag}-<utc>` under data_root → multi-select → mount → copy → unmount + progress.
 - Example share shape: `\\cs.spokane.wsu.edu\Davis-Lab\…\bhvr-backup`.
 
 ### Data root

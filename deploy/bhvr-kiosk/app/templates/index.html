@@ -134,14 +134,15 @@
     }
     .tile .focus-tag { left: 0.5rem; top: 0.5rem; background: var(--accent); }
     .tile.live-on .focus-tag { display: inline-block; }
-    /* REC sits under LIVE when both are on; alone it stays top-left. */
-    .tile .rec-tag { left: 0.5rem; top: 0.5rem; background: var(--bad); max-width: 72%; }
+    /* REC write health on tile; header #rec-badge is elapsed-only once armed. */
+    .tile .rec-tag { left: 0.5rem; top: 0.5rem; background: var(--bad); max-width: 78%; }
     .tile.live-on.recording .rec-tag { top: 2.05rem; }
     .tile.recording .rec-tag { display: inline-block; }
     .tile .rec-tag.ok { background: var(--ok); }
     .tile .rec-tag.slow { background: var(--warn); color: #1a1d21; }
     .tile .rec-tag.stall { background: var(--bad); }
     .tile .rec-tag.starting { background: #555; }
+    .tile.recording .status { outline: 2px solid var(--bad); }
     .tile .meta-tag {
       right: 0.5rem; top: 0.5rem; font-weight: 600; letter-spacing: 0.02em;
       background: rgba(0,0,0,0.7); color: #e8eaed;
@@ -157,14 +158,30 @@
       right: 0.5rem; bottom: 0.5rem; letter-spacing: 0.02em;
       font-variant-numeric: tabular-nums; background: rgba(0,0,0,0.65);
     }
-    .tile.live-on .fps-tag { display: inline-block; }
+    /* Round B phase strip: show fps-tag while LIVE or fail/promote/stop chrome. */
+    .tile.live-on .fps-tag,
+    .tile[data-phase="connecting"] .fps-tag,
+    .tile[data-phase="settle"] .fps-tag,
+    .tile[data-phase="stall"] .fps-tag,
+    .tile[data-phase="fail"] .fps-tag,
+    .tile[data-phase="promoting"] .fps-tag,
+    .tile[data-phase="stopping"] .fps-tag { display: inline-block; }
+    .tile[data-phase="fail"] .fps-tag { color: #ffb4b4; }
+    .tile[data-phase="promoting"] .fps-tag,
+    .tile[data-phase="stopping"] .fps-tag { color: #ffcc66; }
     /* Idle-only touchscreen help (fps-tag owns this corner while LIVE). */
     .tile .tile-tip {
       position: absolute; right: 0.45rem; bottom: 0.45rem; z-index: 5;
       display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem;
     }
     .tile.live-on .tile-tip,
-    .tile.empty .tile-tip { display: none; }
+    .tile.empty .tile-tip,
+    .tile[data-phase="fail"] .tile-tip,
+    .tile[data-phase="promoting"] .tile-tip,
+    .tile[data-phase="stopping"] .tile-tip,
+    .tile[data-phase="connecting"] .tile-tip,
+    .tile[data-phase="settle"] .tile-tip,
+    .tile[data-phase="stall"] .tile-tip { display: none; }
     .tile .tile-tip .tip-btn {
       width: 1.75rem; height: 1.75rem; font-size: 0.85rem;
       touch-action: manipulation;
@@ -183,9 +200,15 @@
     .chip.selected { border-color: var(--accent); background: #243044; }
     .badge.honesty { background: #3a4550; color: #cde; max-width: 22rem; white-space: normal; line-height: 1.25; }
     .badge.science { background: #2a4a3a; color: #cfe; }
-    .tile .fps-tag.connecting { color: #ffcc66; }
+    .badge.pack { background: #5a4a20; color: #ffe9a8; }
+    .badge.pack.fail { background: var(--bad); color: #fff; }
+    .badge.pack.ok { background: var(--ok); color: #111; }
+    .tile .fps-tag.connecting,
+    .tile .fps-tag.settle { color: #ffcc66; }
     .tile .fps-tag.ok { color: #9fe3b0; }
-    .tile .fps-tag.slow { color: #ffb4b4; }
+    .tile .fps-tag.slow,
+    .tile .fps-tag.stall,
+    .tile .fps-tag.fail { color: #ffb4b4; }
     .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
 
     /* Context menu */
@@ -298,6 +321,7 @@
       <div><strong>Local</strong> <span id="clock-local">—</span></div>
     </div>
     <span class="badge rec" id="rec-badge" hidden>REC 0:00</span>
+    <span class="badge pack" id="pack-badge" hidden title="Background H5 pack after Stop">PACK</span>
     <span class="badge science" id="science-badge" title="Idle + REC encode ask" {% if not active %}hidden{% endif %}>
       {{ idle_ask_label }}
     </span>
@@ -376,9 +400,10 @@
       <p class="muted" id="start-summary">—</p>
       <label class="field">cameras</label>
       <div class="cam-picks" id="cam-picks"></div>
+      <p class="muted" id="start-progress" hidden>Starting science capture… camera reclaim can take 10–20s. Don’t tap Start again.</p>
       <div class="err" id="start-err" hidden></div>
       <div class="modal-actions">
-        <button type="button" class="secondary" data-close="modal-start">Cancel</button>
+        <button type="button" class="secondary" data-close="modal-start" id="btn-start-cancel">Cancel</button>
         <button type="button" id="btn-start-go">Start</button>
       </div>
     </div>
@@ -421,6 +446,22 @@
       <label class="field" for="output_subdir">output subdir under data_root</label>
       <input id="output_subdir" list="subdir-list" placeholder="(root)" value="{{ operator.output_subdir if operator else '' }}" />
       <datalist id="subdir-list"></datalist>
+      <div class="row" style="margin-top:0.5rem;align-items:flex-end">
+        <div>
+          <label class="field" for="recording_tag">recording tag</label>
+          <input id="recording_tag" type="text" maxlength="64" placeholder="ses"
+                 value="{{ operator.recording_tag if operator and operator.recording_tag else 'ses' }}"
+                 title="Folder {tag}-&lt;utc&gt;/ and files {subj}__{tag}__{cam}__pNNN" />
+          <p class="muted" style="margin:0.25rem 0 0">{tag}-&lt;utc&gt;/ · {subj}__{tag}__{cam}__pNNN · default ses</p>
+        </div>
+        <div>
+          <label class="field" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer">
+            <input id="h5_pack" type="checkbox" {% if not operator or operator.h5_pack %}checked{% endif %} />
+            pack TS into H5 (default on)
+          </label>
+          <p class="muted" style="margin:0.25rem 0 0">off = keep loose .ts/.pts only</p>
+        </div>
+      </div>
       <p class="muted" id="session-estimate">—</p>
       <p class="muted"><code id="session-data-root">{{ data_root }}</code></p>
       <div class="err" id="session-err" hidden></div>
@@ -570,6 +611,49 @@
     let sessionActive = {{ 'true' if active else 'false' }};
     let sessionInfo = {{ active | tojson if active else 'null' }};
     let recTimer = null;
+    let packPending = false;
+    let packPollTimer = null;
+    let packBannerClearTimer = null;
+    // Operator event journal: one page-session = one browser load (ring-buffer on NVR).
+    const PAGE_SESSION_ID = (() => {
+      try {
+        const k = "bhvr_kiosk_page_session";
+        let id = sessionStorage.getItem(k);
+        if (!id) {
+          id = (crypto.randomUUID && crypto.randomUUID()) ||
+            ("p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+          sessionStorage.setItem(k, id);
+        }
+        return id;
+      } catch (e) {
+        return "p" + Date.now().toString(36);
+      }
+    })();
+    let journalDisabled = false;
+    function journalEvent(kind, detail) {
+      if (journalDisabled) return;
+      fetch("/api/journal/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: PAGE_SESSION_ID,
+          kind: kind,
+          detail: detail || {},
+        }),
+        keepalive: true,
+      }).then((r) => r.json().catch(() => ({}))).then((j) => {
+        if (j && j.rotate_suggested) {
+          journalDisabled = true;
+          try { sessionStorage.removeItem("bhvr_kiosk_page_session"); } catch (e) {}
+          location.reload();
+        }
+      }).catch(() => {});
+    }
+    journalEvent("page.load", {
+      href: location.href,
+      transport: PREVIEW_TRANSPORT,
+      ua: (navigator.userAgent || "").slice(0, 120),
+    });
     // mpegts.js knobs: ?chase=0|1&stash=32&maxlat=0.5&minrem=0.15
     // Defaults for mpegts: chase on, stash 32, keep MSE ahead ≤ ~0.5s (drop late frames).
     const _qs = new URLSearchParams(location.search || "");
@@ -608,11 +692,13 @@
     }
 
     function tickRecElapsed() {
-      const startMs = sessionStartedMs();
-      const text = startMs == null ? "REC" : ("REC " + formatElapsed(Date.now() - startMs));
       const badge = document.getElementById("rec-badge");
-      if (badge) badge.textContent = text;
-      // Tile .rec-tag = write health from /api/session/capture-stats (not elapsed).
+      if (!badge) return;
+      if (!badge.dataset.armedMs) {
+        badge.textContent = "REC arming…";
+        return;
+      }
+      badge.textContent = "REC " + formatElapsed(Date.now() - Number(badge.dataset.armedMs));
     }
 
     function formatWriteRate(bps) {
@@ -664,6 +750,9 @@
         return;
       }
       const cams = (data && data.cameras) || {};
+      const badge = document.getElementById("rec-badge");
+      let anyBytes = false;
+      let anyStall = false;
       document.querySelectorAll(".tile.recording[data-cam-id]").forEach((tile) => {
         const id = tile.getAttribute("data-cam-id");
         const s = cams[id];
@@ -676,19 +765,36 @@
           tag.title = "waiting for capture stats";
           return;
         }
+        const b = Number(s.bytes) || 0;
+        if (b > 0) anyBytes = true;
         const st = s.status || "ok";
-        tag.classList.add(st);
+        if (st === "stall" || s.pipe_dead) anyStall = true;
+        tag.classList.add(st === "stall" || s.pipe_dead ? "stall" : st);
         let txt = "REC";
-        if (st === "stall") txt = "REC stall";
-        else if (st === "starting") txt = "REC …";
-        else if (s.est_fps != null) txt = "REC ~" + s.est_fps + " · " + formatWriteRate(s.write_Bps);
-        else txt = "REC " + formatWriteRate(s.write_Bps);
+        if (s.pipe_dead) txt = "REC dead";
+        else if (st === "stall") txt = "REC stall";
+        else if (st === "starting" || b <= 0) txt = "REC …";
+        else if (s.est_fps != null) {
+          txt = "REC ~" + s.est_fps + " · " + formatBytesShort(b);
+        } else {
+          txt = "REC " + formatBytesShort(b);
+          if (s.write_Bps != null) txt += " · " + formatWriteRate(s.write_Bps);
+        }
         tag.textContent = txt;
         tag.title =
-          formatBytesShort(s.bytes) + " on SSD" +
+          formatBytesShort(b) + " on SSD" +
           (s.last_write_age_s != null ? (" · last write " + s.last_write_age_s + "s ago") : "") +
+          (s.pipe_dead ? " · encode pipe dead" : "") +
           " · not LIVE decode fps";
       });
+      if (badge) {
+        if (anyBytes && !badge.dataset.armedMs) badge.dataset.armedMs = String(Date.now());
+        if (!anyBytes) delete badge.dataset.armedMs;
+        badge.title = anyStall
+          ? "SSD write stalled or pipe dead — see per-cam REC tag"
+          : "Elapsed since first SSD bytes (per-cam KB on tile)";
+        tickRecElapsed();
+      }
     }
 
     function syncRecUi() {
@@ -708,16 +814,30 @@
       const honesty = document.getElementById("honesty-badge");
       if (honesty) honesty.hidden = !sessionActive;
       const startBtn = document.getElementById("btn-start-session");
-      if (startBtn) startBtn.hidden = !!sessionActive;
+      if (startBtn) {
+        startBtn.hidden = !!sessionActive;
+        startBtn.disabled = !!packPending;
+        startBtn.title = packPending
+          ? "Wait for PACK banner to clear (archive still writing)"
+          : "";
+      }
       document.querySelectorAll(".tile[data-cam-id]").forEach((t) => {
         const id = t.getAttribute("data-cam-id");
         t.classList.toggle("recording", ids.has(id));
+        // Keep ONLINE·USB/WiFi in the corner status; recording = red outline only.
         const st = t.querySelector(".status");
-        if (st && ids.has(id)) st.textContent = "REC";
-        else if (st) {
+        if (st) {
           const ageAttr = t.dataset.ageS;
           const ageS = ageAttr != null && ageAttr !== "" ? Number(ageAttr) : null;
           st.textContent = onlineStatusText(t.dataset.online === "1", t.dataset.link || "", ageS);
+        }
+        if (id && ids.has(id) && sessionActive) {
+          // Do not clobber LIVE strip (connecting/settle/live/stall/fail) — that
+          // left the fps tag stuck on "LIVE sync…" while phase flipped to recording.
+          const ph = tilePhase.get(id) || t.dataset.phase || "";
+          if (!ph || ph === "promoting" || ph === "recording" || ph === "stopping") {
+            if (ph !== "promoting" && ph !== "stopping") setLivePhase(id, "recording");
+          }
         }
       });
       if (sessionActive && sessionStartedMs() != null) {
@@ -731,13 +851,75 @@
         }
       } else {
         if (recTimer) { clearInterval(recTimer); recTimer = null; }
+        if (recBadge) {
+          delete recBadge.dataset.armedMs;
+          recBadge.textContent = "REC arming…";
+          recBadge.title = "";
+        }
         document.querySelectorAll(".rec-tag").forEach((el) => {
           el.textContent = "REC";
           el.classList.remove("ok", "stall", "slow", "starting");
           el.title = "";
         });
-        if (recBadge) recBadge.textContent = "REC 0:00";
       }
+    }
+
+    function paintPackBadge(snap) {
+      const el = document.getElementById("pack-badge");
+      if (!el) return;
+      const pending = !!(snap && snap.pending);
+      packPending = pending;
+      const state = (snap && snap.state) || "idle";
+      const label = (snap && snap.label) || "";
+      el.classList.remove("fail", "ok");
+      if (pending) {
+        el.hidden = false;
+        el.textContent = label || "PACK…";
+        el.title = "Background H5 pack after Stop — Start gated until done";
+      } else if (state === "fail" && label) {
+        el.hidden = false;
+        el.classList.add("fail");
+        el.textContent = label;
+        el.title = "Pack failed — loose .ts retained; see stop_log / data_root";
+      } else if (state === "ok" && label) {
+        el.hidden = false;
+        el.classList.add("ok");
+        el.textContent = label;
+        el.title = "Final H5 pack finished";
+        if (packBannerClearTimer) clearTimeout(packBannerClearTimer);
+        packBannerClearTimer = setTimeout(() => {
+          el.hidden = true;
+          fetch("/api/session/pack-status?clear_finished=1").catch(() => {});
+        }, 8000);
+      } else {
+        el.hidden = true;
+      }
+      const startBtn = document.getElementById("btn-start-session");
+      if (startBtn && !sessionActive) {
+        startBtn.disabled = !!packPending;
+        startBtn.title = packPending
+          ? "Wait for PACK banner to clear (archive still writing)"
+          : "";
+      }
+    }
+
+    async function tickPackStatus() {
+      try {
+        const r = await fetch("/api/session/pack-status", { cache: "no-store" });
+        if (!r.ok) return;
+        const snap = await r.json();
+        paintPackBadge(snap);
+        if (!snap.pending && packPollTimer) {
+          clearInterval(packPollTimer);
+          packPollTimer = null;
+        }
+      } catch (e) {}
+    }
+
+    function startPackPolling() {
+      tickPackStatus();
+      if (packPollTimer) return;
+      packPollTimer = setInterval(tickPackStatus, 1000);
     }
 
     function bufferedAheadS(video) {
@@ -825,15 +1007,25 @@
     // Per-cam live sessions (issue 12 — no single-focus mutex).
     // camId → { abort, mpegtsPlayer, rtcPc, whepReader, jmuxer, fpsTimer }
     const liveSessions = new Map();
-    // Idle LIVE self-heal: restart only on near-frozen decode (not "slow" under floor).
-    // Multi-cam often paints 3–8 fps — that must not thrash whep/start.
-    const LIVE_DEAD_FPS = 0.5;        // only treat as dead if essentially frozen
-    const LIVE_STALL_S = 30;          // must stay dead this long (seconds)
-    const LIVE_WATCH_GRACE_MS = 60000; // settle after start/re-track (milliseconds; 60000 = 60s)
+    // Round B phase strip — defaults locked in LIVE_REC_PROTOCOL_GRILL.md (2026-10-30).
+    // Idle LIVE: near-frozen only for stall badge; multi-cam 3–8 fps must not thrash whep/start.
+    const LIVE_DEAD_FPS = 0.5;
+    const LIVE_STALL_S = 30;
+    const LIVE_WATCH_GRACE_MS = 60000;
     const LIVE_RETRY_BASE_MS = 15000;
     const LIVE_RETRY_MAX_MS = 120000;
+    const LIVE_AUTOSTART_DELAY0_MS = 1000;
+    const LIVE_AUTOSTART_STRIDE_MS = 3000;
+    const LIVE_PHASES = new Set([
+      "offline", "connecting", "settle", "live", "stall", "fail",
+      "promoting", "recording", "stopping",
+    ]);
     const liveRetryTimer = new Map(); // camId → timeout id
     const liveBackoffMs = new Map(); // camId → next wait
+    const tilePhase = new Map(); // camId → phase string
+    const autoStartTimers = []; // timeouts from autoStartOnlineLives (cancel on REC)
+    const recTeeRetry = new Map(); // camId → retries used for mid-stream mpegts join
+    const liveBootRetry = new Map(); // camId → silent autostart retries before fail(tap)
     let ctxCamId = null;
     let pressTimer = null;
     let pressOrigin = null;
@@ -845,6 +1037,11 @@
       const t = liveRetryTimer.get(camId);
       if (t) clearTimeout(t);
       liveRetryTimer.delete(camId);
+    }
+
+    function resetLiveBootRetry(camId) {
+      if (camId) liveBootRetry.delete(camId);
+      else liveBootRetry.clear();
     }
 
     function resetLiveBackoff(camId) {
@@ -896,8 +1093,64 @@
       const tag = tile.querySelector(".fps-tag");
       if (!tag) return;
       tag.textContent = text;
-      tag.classList.remove("connecting", "ok", "slow");
+      tag.classList.remove("connecting", "settle", "ok", "slow", "stall", "fail");
       if (cls) tag.classList.add(cls);
+    }
+
+    /** Round B: per-cam lifecycle phase on tile (fps-tag + data-phase). */
+    function setLivePhase(camId, phase, opts) {
+      if (!camId || !LIVE_PHASES.has(phase)) return;
+      const o = opts || {};
+      tilePhase.set(camId, phase);
+      const tile = document.querySelector('.tile[data-cam-id="' + CSS.escape(camId) + '"]');
+      if (!tile) return;
+      tile.dataset.phase = phase;
+      const video = tile.querySelector("video.live");
+      if (phase === "offline") {
+        delete tile.dataset.phase;
+        tilePhase.set(camId, "offline");
+        if (!tile.classList.contains("live-on") && !tile.classList.contains("recording")) {
+          setFpsTag(tile, "—");
+        }
+        return;
+      }
+      if (phase === "connecting") {
+        setFpsTag(tile, o.text || withResolution("connecting", video), "connecting");
+        return;
+      }
+      if (phase === "settle") {
+        setFpsTag(tile, o.text || withResolution("settle", video), "settle");
+        return;
+      }
+      if (phase === "stall") {
+        setFpsTag(tile, o.text || "stall (tap to retry)", "stall");
+        return;
+      }
+      if (phase === "fail") {
+        setFpsTag(tile, o.text || "fail (tap LIVE)", o.cls || "fail");
+        return;
+      }
+      if (phase === "promoting") {
+        setFpsTag(tile, o.text || "promoting…", "settle");
+        return;
+      }
+      if (phase === "stopping") {
+        setFpsTag(tile, o.text || "stopping…", "settle");
+        return;
+      }
+      if (phase === "recording") {
+        // rec-tag owns write health; only clear fps when LIVE is not attached.
+        if (!tile.classList.contains("live-on")) setFpsTag(tile, "—");
+        // If LIVE is on, leave fps-tag alone (live/settle/stall own it).
+        return;
+      }
+      // live: caller supplies fps text via setFpsTag / watchdog
+    }
+
+    function clearLivePhase(camId) {
+      tilePhase.delete(camId);
+      const tile = document.querySelector('.tile[data-cam-id="' + CSS.escape(camId) + '"]');
+      if (tile) delete tile.dataset.phase;
     }
 
     function recordingCamIds() {
@@ -965,8 +1218,7 @@
         // LIVE = browser decode/deliver; REC tile tag is SSD write (separate poll).
         const livePrefix = sessionActive ? "LIVE " : "";
         const txt = withResolution(livePrefix + streamFps.toFixed(1) + " fps", video) + bufTxt;
-        const okFloor = sessionActive ? 8 : 6; // badge only — not a restart trigger
-        setFpsTag(tile, txt, streamFps >= okFloor ? "ok" : "slow");
+        const okFloor = sessionActive ? 8 : 6; // badge color only — not a restart trigger
         setFocusBadge(camId, txt);
         postLivePlayerDiag(camId, video, streamFps);
         // Watchdog: near-zero only. "Slow" under okFloor is normal under 4-cam load.
@@ -975,23 +1227,32 @@
           deadSince = null;
           if (cur.stallNoted) cur.stallNoted = false;
           resetLiveBackoff(camId);
+          resetLiveBootRetry(camId);
+          recTeeRetry.delete(camId);
+          setLivePhase(camId, "live");
+          setFpsTag(tile, txt, streamFps >= okFloor ? "ok" : "slow");
           return;
         }
         const graceUntil = cur.watchGraceUntil || 0;
-        if (!everAlive && now < graceUntil) return;
-        if (deadSince == null) {
-          deadSince = now;
+        if (!everAlive && now < graceUntil) {
+          setLivePhase(camId, "settle", { text: withResolution("settle", video) });
           return;
         }
-        if ((now - deadSince) / 1000 < LIVE_STALL_S) return;
-        // Badge only — do NOT clearFocus/stop publisher. Under 4-cam decode
-        // budget, starved tiles sit near 0 fps; tearing them down caused the
-        // live→idle→backoff thrash (preview_idle lost cams while MQTT stayed up).
+        if (deadSince == null) {
+          deadSince = now;
+          setLivePhase(camId, "settle", { text: withResolution("settle", video) });
+          return;
+        }
+        if ((now - deadSince) / 1000 < LIVE_STALL_S) {
+          setLivePhase(camId, "settle", { text: withResolution("settle", video) });
+          return;
+        }
+        // Badge only — do NOT clearFocus/stop publisher (Round B: stall = tap).
         if (!cur.stallNoted) {
           cur.stallNoted = true;
           console.warn("live stall (no auto-restart)", camId, "fps", streamFps.toFixed(1), "gen", gen);
         }
-        setFpsTag(tile, "stall (tap to retry)", "slow");
+        setLivePhase(camId, "stall");
       };
       if (typeof video.requestVideoFrameCallback === "function") {
         const loop = (_now, meta) => {
@@ -1021,34 +1282,50 @@
     async function runPreviewMpegts(camId, tile, video, signal) {
       if (typeof mpegts === "undefined") throw new Error("mpegts.js not loaded");
       const s = sessionOf(camId);
+      const inRec = recordingCamIds().includes(camId);
+      // REC tee joins mid-GOP — stash on + milder chase so MSE can wait for IDR.
+      const chase = inRec ? false : playerChase;
+      const stashOn = inRec ? true : !playerChase;
+      const stashSize = inRec ? Math.max(playerStash, 128) : playerStash;
       const url = "/api/preview/" + encodeURIComponent(camId) + "?t=" + Date.now();
       const player = mpegts.createPlayer(
         { type: "mpegts", isLive: true, hasAudio: false, url: url },
         {
           enableWorker: false,
-          // Stash ahead of MSE is what lets buf climb — off while chasing.
-          enableStashBuffer: !playerChase,
-          stashInitialSize: playerStash,
+          enableStashBuffer: stashOn,
+          stashInitialSize: stashSize,
           lazyLoad: false,
           autoCleanupSourceBuffer: true,
-          liveBufferLatencyChasing: playerChase,
-          // Library defaults are ~1.5s / 0.5s — too loose; clamp to maxlat/minrem.
+          liveBufferLatencyChasing: chase,
           liveBufferLatencyMaxLatency: playerMaxLat,
           liveBufferLatencyMinRemain: playerMinRem,
         },
       );
       if (s) s.mpegtsPlayer = player;
       player.attachMediaElement(video);
-      player.on(mpegts.Events.ERROR, (type) => {
-        setFpsTag(tile, "err", "slow");
+      player.on(mpegts.Events.ERROR, (type, detail) => {
+        // Mid-stream join often throws once before the next keyframe — log only;
+        // reject handler owns retry. Do not spam "LIVE sync…" over the fps tag.
+        console.warn("mpegts error", camId, type, detail, "inRec", inRec);
         setFocusBadge(camId, "mpegts " + type);
       });
       player.load();
       try { await video.play(); } catch (e) {}
+      setLivePhase(camId, "settle");
       startFpsCounter(camId, tile, video);
       await new Promise((resolve, reject) => {
         player.on(mpegts.Events.ERROR, (type, detail) => {
-          if (!signal.aborted) reject(new Error(String(type) + " " + String(detail)));
+          if (signal.aborted) return;
+          // During REC: one soft retry instead of hard-failing the tile.
+          if (inRec) {
+            const n = recTeeRetry.get(camId) || 0;
+            if (n < 2) {
+              recTeeRetry.set(camId, n + 1);
+              reject(new Error("rec-tee-retry " + String(type) + " " + String(detail)));
+              return;
+            }
+          }
+          reject(new Error(String(type) + " " + String(detail)));
         });
         signal.addEventListener("abort", () => resolve(), { once: true });
       });
@@ -1102,6 +1379,7 @@
         throw new Error("MediaMTXWebRTCReader not loaded");
       }
       const s = sessionOf(camId);
+      setLivePhase(camId, "connecting");
       const res = await fetch("/api/preview/" + encodeURIComponent(camId) + "/whep/start", {
         method: "POST",
         signal,
@@ -1114,6 +1392,8 @@
       const info = await res.json();
       let whepUrl = info.whep_url;
       if (!whepUrl) throw new Error("whep/start missing whep_url");
+      // Publisher up — wait for browser track / first frames (Round B settle).
+      setLivePhase(camId, "settle");
       // API often returns http://127.0.0.1:8889/... — fine on-NVR browser;
       // when the UI is opened from another host, rewrite to that host.
       try {
@@ -1138,6 +1418,7 @@
           onTrack: (evt) => {
             if (evt.streams && evt.streams[0]) video.srcObject = evt.streams[0];
             video.play().catch(() => {});
+            setLivePhase(camId, "settle");
             startFpsCounter(camId, tile, video);
             if (!settled) {
               settled = true;
@@ -1172,13 +1453,20 @@
     }
 
     async function runPreview(camId, tile, video, signal) {
-      setFpsTag(tile, withResolution("…", video), "connecting");
+      setLivePhase(camId, "connecting");
       setFocusBadge(camId, withResolution("connecting", video));
       const mode = effectiveTransport(camId);
       if (mode === "whep") await runPreviewWhep(camId, tile, video, signal);
-      else if (mode === "webrtc") await runPreviewWebRTC(camId, tile, video, signal);
-      else if (mode === "mpegts") await runPreviewMpegts(camId, tile, video, signal);
-      else await runPreviewAnnexB(camId, tile, video, signal);
+      else if (mode === "webrtc") {
+        setLivePhase(camId, "settle");
+        await runPreviewWebRTC(camId, tile, video, signal);
+      } else if (mode === "mpegts") {
+        setLivePhase(camId, "settle");
+        await runPreviewMpegts(camId, tile, video, signal);
+      } else {
+        setLivePhase(camId, "settle");
+        await runPreviewAnnexB(camId, tile, video, signal);
+      }
     }
 
     function clearTileVideo(tile) {
@@ -1190,7 +1478,10 @@
         v.srcObject = null;
         v.load();
       }
-      setFpsTag(tile, "—");
+      const phase = tile.dataset.phase;
+      if (phase !== "fail" && phase !== "promoting" && phase !== "stopping") {
+        setFpsTag(tile, "—");
+      }
     }
 
     /** Stop one live tile (or all if camId omitted). Does not steal other tiles. */
@@ -1199,7 +1490,12 @@
         clearLiveRetry(camId);
         destroySession(camId);
         const tile = document.querySelector('.tile[data-cam-id="' + CSS.escape(camId) + '"]');
+        const keepPhase = tile && (tile.dataset.phase === "fail"
+          || tile.dataset.phase === "promoting"
+          || tile.dataset.phase === "stopping"
+          || tile.dataset.phase === "recording");
         if (tile) clearTileVideo(tile);
+        if (!keepPhase) clearLivePhase(camId);
         fetch("/api/preview/stop?cam_id=" + encodeURIComponent(camId), { method: "POST" }).catch(() => {});
         setFocusBadge(null);
         return;
@@ -1208,24 +1504,40 @@
       ids.forEach((id) => {
         clearLiveRetry(id);
         destroySession(id);
+        const tile = document.querySelector('.tile[data-cam-id="' + CSS.escape(id) + '"]');
+        const keep = tile && (tile.dataset.phase === "promoting"
+          || tile.dataset.phase === "stopping"
+          || tile.dataset.phase === "recording");
+        if (!keep) clearLivePhase(id);
       });
       document.querySelectorAll(".tile.live-on").forEach(clearTileVideo);
       fetch("/api/preview/stop", { method: "POST" }).catch(() => {});
       setFocusBadge(null);
     }
 
-    /** Toggle live on this tile without stopping other live tiles. */
-    function setFocus(camId) {
+    /** Toggle live on this tile without stopping other live tiles.
+     *  opts.force — restart even if already live (REC tee attach; no toggle-off). */
+    function setFocus(camId, opts) {
       if (!camId) return;
+      const force = !!(opts && opts.force);
       if (liveSessions.has(camId)) {
         clearLiveRetry(camId);
         resetLiveBackoff(camId);
+        if (!force) {
+          clearFocus(camId);
+          return;
+        }
         clearFocus(camId);
-        return;
       }
       const tile = document.querySelector('.tile[data-cam-id="' + CSS.escape(camId) + '"]');
-      if (!tile || tile.classList.contains("empty")) return;
-      if (tile.dataset.online !== "1") return;
+      if (!tile || tile.classList.contains("empty")) {
+        setLivePhase(camId, "fail", { text: "LIVE off (no tile)" });
+        return;
+      }
+      if (tile.dataset.online !== "1") {
+        setLivePhase(camId, "fail", { text: "LIVE off (offline)" });
+        return;
+      }
       clearLiveRetry(camId);
       tile.classList.add("live-on");
       const video = tile.querySelector("video.live");
@@ -1233,19 +1545,42 @@
       const abort = new AbortController();
       liveSessions.set(camId, { abort, mpegtsPlayer: null, rtcPc: null, whepReader: null, jmuxer: null, fpsTimer: null });
       setFocusBadge(camId);
-      setFpsTag(tile, withResolution("…", video), "connecting");
+      setLivePhase(camId, "connecting");
       runPreview(camId, tile, video, abort.signal).catch((err) => {
         if (abort.signal.aborted) return;
         console.warn("preview failed", err);
-        // Clear zombie UI session only. Do NOT /api/preview/stop or auto-retry:
-        // that tore down healthy NVR publishers and caused the black/gray loop.
         destroySession(camId);
         clearTileVideo(tile);
         const msg = String(err && err.message || err || "");
+        // REC tee often fails once joining mid-GOP — retry without hard fail.
+        if (/rec-tee-retry/.test(msg) && recordingCamIds().includes(camId)) {
+          setLivePhase(camId, "settle", { text: withResolution("LIVE sync…", video) });
+          setTimeout(() => {
+            if (recordingCamIds().includes(camId) && !liveSessions.has(camId)) {
+              setFocus(camId, { force: true });
+            }
+          }, 1200);
+          return;
+        }
         const noPath = /no SSH path|online≠LIVE/.test(msg);
         const camBusy = /Pipeline handler in use|failed to acquire camera|WHEP publish died/i.test(msg);
-        const httpFail = /\b503\b|\b404\b|whep\/start HTTP/.test(msg);
+        const httpFail = /\b503\b|\b404\b|\b409\b|whep\/start HTTP/.test(msg);
+        const mpegtsFail = /MediaError|NetworkError|MpegtsError|mse/i.test(msg);
+        const trackTimeout = /whep track timeout/i.test(msg);
         const link = tile.dataset.link || "";
+        // Cold autostart often times out once while publisher is still settling —
+        // one silent retry before "fail (tap LIVE)".
+        const retries = liveBootRetry.get(camId) || 0;
+        if (!recordingCamIds().includes(camId) && retries < 1 && (trackTimeout || httpFail || camBusy)) {
+          liveBootRetry.set(camId, retries + 1);
+          setLivePhase(camId, "settle", { text: "LIVE retry…" });
+          setTimeout(() => {
+            if (!liveSessions.has(camId) && !recordingCamIds().includes(camId)) {
+              setFocus(camId, { force: true });
+            }
+          }, 1500);
+          return;
+        }
         let failHint = "fail (tap LIVE)";
         if (noPath) {
           failHint = link === "wifi" ? "no LIVE (WiFi path)" : "no LIVE (plug USB?)";
@@ -1255,8 +1590,15 @@
           failHint = "WiFi LIVE died (tap retry)";
         } else if (httpFail) {
           failHint = "LIVE died (tap retry)";
+        } else if (mpegtsFail && recordingCamIds().includes(camId)) {
+          failHint = "LIVE sync fail (tap)";
         }
-        setFpsTag(tile, failHint, "slow");
+        journalEvent("ui.live_fail", {
+          cam_id: camId,
+          hint: failHint,
+          msg: msg.slice(0, 200),
+        });
+        setLivePhase(camId, "fail", { text: failHint });
         const st = tile.querySelector(".status");
         if (st && (noPath || httpFail || camBusy) && !tile.classList.contains("recording")) {
           const mode = link === "wifi" ? "WiFi" : (link === "usb" ? "USB" : "");
@@ -1268,17 +1610,64 @@
       });
     }
 
+    function cancelAutoStartTimers() {
+      while (autoStartTimers.length) {
+        clearTimeout(autoStartTimers.pop());
+      }
+    }
+
     function autoStartOnlineLives() {
       // Attach browser WHEP only — publishers should already be up (or whep/start
-      // is idempotent per cam). Stagger to avoid 4× offer storms.
+      // is idempotent per cam). Stagger to avoid 4× offer storms (grill B3/B6).
+      cancelAutoStartTimers();
       const ids = [...document.querySelectorAll('.tile[data-cam-id][data-online="1"]')]
         .map((t) => t.getAttribute("data-cam-id"))
         .filter(Boolean);
       ids.forEach((id, i) => {
-        setTimeout(() => {
+        const t = setTimeout(() => {
           if (!liveSessions.has(id)) setFocus(id);
-        }, 1000 + i * 3000);
+        }, LIVE_AUTOSTART_DELAY0_MS + i * LIVE_AUTOSTART_STRIDE_MS);
+        autoStartTimers.push(t);
       });
+    }
+
+    async function waitCaptureBytes(camId, minBytes, budgetMs) {
+      const deadline = Date.now() + (budgetMs || 2500);
+      const need = Math.max(1, minBytes || 1);
+      while (Date.now() < deadline) {
+        try {
+          const r = await fetch("/api/session/capture-stats", { cache: "no-store" });
+          if (r.ok) {
+            const data = await r.json();
+            const s = (data.cameras || {})[camId];
+            // Any capturing row with bytes (or capturing flag) is enough to attach.
+            if (s && (Number(s.bytes) >= need || s.capturing)) return true;
+          }
+        } catch (e) {}
+        await new Promise((res) => setTimeout(res, 200));
+      }
+      return false;
+    }
+
+    function armRecLiveWatchdog(camId) {
+      // If tee never paints, leave settle and offer tap — don't spin on LIVE sync…
+      setTimeout(() => {
+        if (!recordingCamIds().includes(camId)) return;
+        const s = sessionOf(camId);
+        const tile = document.querySelector('.tile[data-cam-id="' + CSS.escape(camId) + '"]');
+        if (!tile) return;
+        const ph = tilePhase.get(camId) || tile.dataset.phase || "";
+        const fps = lastStreamFps[camId];
+        if (ph === "live" && fps != null && fps >= LIVE_DEAD_FPS) return;
+        if (ph === "fail") return;
+        console.warn("REC LIVE attach timeout", camId, "phase", ph, "fps", fps);
+        if (s) {
+          destroySession(camId);
+          clearTileVideo(tile);
+        }
+        recTeeRetry.delete(camId);
+        setLivePhase(camId, "fail", { text: "LIVE off (tap)" });
+      }, 10000);
     }
 
     /* ---- context menu ---- */
@@ -1443,26 +1832,63 @@
       el.classList.remove("open");
       el.setAttribute("aria-hidden", "true");
     }
+    let startInFlight = false;
+
     document.querySelectorAll("[data-close]").forEach((b) => {
-      b.addEventListener("click", () => closeModal(b.getAttribute("data-close")));
+      b.addEventListener("click", () => {
+        const id = b.getAttribute("data-close");
+        if (id === "modal-start" && startInFlight) return;
+        closeModal(id);
+      });
     });
     document.querySelectorAll(".modal-backdrop").forEach((bd) => {
       bd.addEventListener("click", (ev) => {
-        if (ev.target === bd) closeModal(bd.id);
+        if (ev.target !== bd) return;
+        if (bd.id === "modal-start" && (startInFlight || bd.dataset.busy === "1")) return;
+        closeModal(bd.id);
       });
     });
 
+    function setStartModalBusy(busy, progressText) {
+      startInFlight = !!busy;
+      const go = document.getElementById("btn-start-go");
+      const cancel = document.getElementById("btn-start-cancel");
+      const prog = document.getElementById("start-progress");
+      const picks = document.getElementById("cam-picks");
+      if (go) {
+        go.disabled = !!busy;
+        go.textContent = busy ? "Starting…" : "Start";
+      }
+      if (cancel) cancel.disabled = !!busy;
+      if (picks) {
+        picks.querySelectorAll("input").forEach((cb) => { cb.disabled = !!busy || cb.dataset.wasOffline === "1"; });
+      }
+      if (prog) {
+        prog.hidden = !busy;
+        if (progressText) prog.textContent = progressText;
+      }
+      // Block backdrop dismiss while science is bringing up.
+      const modal = document.getElementById("modal-start");
+      if (modal) modal.dataset.busy = busy ? "1" : "";
+    }
+
     function openStartModal(primaryCamId) {
+      if (startInFlight || sessionActive) return;
       const picks = document.getElementById("cam-picks");
       picks.innerHTML = "";
-      const cams = ALL_CAMS.length ? ALL_CAMS : [{ id: primaryCamId, online: true }];
+      const cams = ALL_CAMS.length ? ALL_CAMS : (primaryCamId ? [{ id: primaryCamId, online: true }] : []);
+      // Header Start used to check ALL cams (`!primaryCamId`). Only pre-check the
+      // tile that opened the modal; otherwise require explicit picks.
       cams.forEach((c) => {
         const lab = document.createElement("label");
         const cb = document.createElement("input");
         cb.type = "checkbox";
         cb.value = c.id;
-        cb.checked = !primaryCamId || c.id === primaryCamId;
-        if (c.online === false) cb.disabled = true;
+        cb.checked = !!(primaryCamId && c.id === primaryCamId);
+        if (c.online === false) {
+          cb.disabled = true;
+          cb.dataset.wasOffline = "1";
+        }
         const a = c.animal || {};
         const tag = a.subject_id ? (" · " + a.subject_id) : " · needs meta";
         lab.appendChild(cb);
@@ -1471,14 +1897,17 @@
       });
       const sum = document.getElementById("start-summary");
       if (sum) {
-        sum.textContent =
-          "Ask from Session settings · each checked cam needs subject_id · folder ses-<utc>/";
+        sum.textContent = primaryCamId
+          ? ("Recording " + primaryCamId + " (uncheck/add cams as needed) · subject_id required · folder {tag}-<utc>/")
+          : "Check only the cams to record · each needs subject_id · folder {tag}-<utc>/";
       }
       document.getElementById("start-err").hidden = true;
+      setStartModalBusy(false);
       openModal("modal-start");
     }
 
     document.getElementById("btn-start-go").addEventListener("click", async () => {
+      if (startInFlight || sessionActive) return;
       const err = document.getElementById("start-err");
       err.hidden = true;
       const camera_ids = [...document.querySelectorAll("#cam-picks input:checked")].map((c) => c.value);
@@ -1487,41 +1916,122 @@
         err.hidden = false;
         return;
       }
-      clearFocus();
+      if (packPending) {
+        err.textContent = "archive pack still running — wait for PACK banner";
+        err.hidden = false;
+        return;
+      }
+      setStartModalBusy(
+        true,
+        "Starting science on " + camera_ids.join(", ") + "… reclaim + first bytes can take 10–20s. Don’t tap again."
+      );
+      journalEvent("ui.start_begin", { camera_ids });
+      // Round A: cancel staged idle auto-starts; only tear LIVE on science cams.
+      // Await preview/stop BEFORE session/start so a late free/pkill cannot race
+      // the new science SSH (was causing 0-byte .ts + settle hang).
+      cancelAutoStartTimers();
+      for (const id of camera_ids) {
+        setLivePhase(id, "promoting");
+        clearLiveRetry(id);
+        destroySession(id);
+        const tile = document.querySelector('.tile[data-cam-id="' + CSS.escape(id) + '"]');
+        if (tile) clearTileVideo(tile);
+        recTeeRetry.delete(id);
+      }
       try {
+        await Promise.all(
+          camera_ids.map((id) =>
+            fetch("/api/preview/stop?cam_id=" + encodeURIComponent(id), { method: "POST" })
+              .catch(() => null)
+          )
+        );
         const r = await fetch("/api/session/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ camera_ids }),
         });
         const data = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+        if (!r.ok) {
+          const detail = data.detail;
+          const msg = typeof detail === "string" ? detail : (detail && detail.msg) || ("HTTP " + r.status);
+          journalEvent("ui.start_fail", { camera_ids, status: r.status, detail: msg });
+          throw new Error(msg);
+        }
+        journalEvent("ui.start_ok", {
+          camera_ids,
+          folder: data.folder,
+          cam_log: (data.cam_log || []).slice(-12),
+        });
         sessionActive = true;
         sessionInfo = data;
+        setStartModalBusy(false);
         closeModal("modal-start");
         syncRecUi();
-        location.reload();
+        // Flip REC cams only to mpegts tee — leave other tiles' idle LIVE alone.
+        camera_ids.forEach((id, i) => {
+          setTimeout(async () => {
+            if (!sessionActive || !recordingCamIds().includes(id)) return;
+            setLivePhase(id, "settle", { text: "LIVE sync…" });
+            const got = await waitCaptureBytes(id, 1, 8000);
+            if (!sessionActive || !recordingCamIds().includes(id)) return;
+            if (!got) {
+              setLivePhase(id, "fail", { text: "REC no disk bytes (tap LIVE)" });
+              return;
+            }
+            setFocus(id, { force: true });
+            armRecLiveWatchdog(id);
+          }, 500 + i * 400);
+        });
       } catch (e) {
+        sessionActive = false;
+        sessionInfo = null;
+        syncRecUi();
+        camera_ids.forEach((id) => clearLivePhase(id));
+        setStartModalBusy(false);
         err.textContent = String(e.message || e);
         err.hidden = false;
+        // Restore LIVE only on the cams we tore down for the failed promote —
+        // not every online tile (that felt like “Start turned everything LIVE”).
+        setTimeout(() => {
+          camera_ids.forEach((id, i) => {
+            setTimeout(() => {
+              if (!sessionActive && !liveSessions.has(id)) setFocus(id);
+            }, i * 400);
+          });
+        }, 600);
       }
     });
 
     async function stopSession() {
       if (!sessionActive) return;
       if (!confirm("Stop recording session?")) return;
-      clearFocus();
+      const stopped = recordingCamIds().slice();
+      stopped.forEach((id) => {
+        setLivePhase(id, "stopping");
+        clearFocus(id);
+      });
       try {
         const r = await fetch("/api/session/stop", { method: "POST" });
-        if (!r.ok) {
-          const data = await r.json().catch(() => ({}));
-          throw new Error(data.detail || ("HTTP " + r.status));
-        }
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+        journalEvent("ui.stop_ok", {
+          camera_ids: stopped,
+          folder: data.folder,
+          pack_pending: !!(data.pack_pending || (data.pack && data.pack.pending)),
+          stop_log: (data.stop_log || []).slice(-12),
+        });
         sessionActive = false;
         sessionInfo = null;
         syncRecUi();
-        location.reload();
+        if (data.pack_pending || (data.pack && data.pack.pending)) {
+          paintPackBadge(data.pack || { pending: true, state: "packing", label: "PACK…" });
+          startPackPolling();
+        }
+        stopped.forEach((id) => clearLivePhase(id));
+        // Early LIVE restore (S2+) — staggered reconnect.
+        setTimeout(autoStartOnlineLives, 600);
       } catch (e) {
+        journalEvent("ui.stop_fail", { error: String(e.message || e) });
         alert("Stop failed: " + e.message);
       }
     }
@@ -1549,6 +2059,10 @@
         if (chunk) chunk.value = String(st.chunk_minutes ?? 20);
         const sub = document.getElementById("output_subdir");
         if (sub) sub.value = st.output_subdir || "";
+        const tag = document.getElementById("recording_tag");
+        if (tag) tag.value = st.recording_tag || "ses";
+        const h5 = document.getElementById("h5_pack");
+        if (h5) h5.checked = st.h5_pack !== false;
         const maxlat = document.getElementById("maxlat");
         if (maxlat) maxlat.value = String(playerMaxLat);
         const dl = document.getElementById("subdir-list");
@@ -1596,6 +2110,8 @@
         soft_fps: parseInt(document.getElementById("soft_fps").value, 10) || 20,
         output_subdir: document.getElementById("output_subdir").value.trim(),
         chunk_minutes: parseInt(document.getElementById("chunk_minutes").value, 10),
+        recording_tag: (document.getElementById("recording_tag")?.value || "ses").trim() || "ses",
+        h5_pack: !!(document.getElementById("h5_pack")?.checked),
       };
       if (!Number.isFinite(body.chunk_minutes) || body.chunk_minutes < 0) {
         err.textContent = "chunk_minutes must be ≥ 0 (0 = no limit)";
@@ -1771,7 +2287,7 @@
       box.innerHTML = "";
       const rows = data.sessions || [];
       if (!rows.length) {
-        box.innerHTML = "<p class='muted'>No ses-* folders under data_root.</p>";
+        box.innerHTML = "<p class='muted'>No {tag}-&lt;utc&gt; session folders under data_root.</p>";
         return;
       }
       rows.forEach((s) => {
@@ -2134,6 +2650,7 @@
           latch.confirmed = false;
           clearFocus(camId);
           clearLiveRetry(camId);
+          setLivePhase(camId, "offline");
         }
       }
       onlineLatch.set(camId, latch);
@@ -2244,6 +2761,7 @@
     syncRecUi();
     refreshRoster();
     setInterval(refreshRoster, 5000);
+    tickPackStatus();
     // Idle thumbs: auto-live all online cams (Session settings encode ask).
     setTimeout(autoStartOnlineLives, 400);
     // Empty-grid auto-reload disabled: it thrashed the kiosk whenever LIVE

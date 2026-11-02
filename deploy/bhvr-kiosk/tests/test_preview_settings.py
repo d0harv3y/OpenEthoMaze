@@ -3,12 +3,14 @@ from app.preview import (
     cam_live_ssh_mpegts_remote,
     cam_live_udp_remote,
     cam_ordinal,
+    cam_science_annexb_remote,
     cam_science_ssh_mpegts_remote,
     cam_sensor_mode,
     cam_udp_port,
     mediamtx_whep_url,
     normalize_sensor_mode,
     nvr_ffmpeg_annexb_to_mediamtx_udp,
+    nvr_ffmpeg_science_annexb_to_mpegts_pipe,
     nvr_ingress_ip,
     preview_settings,
     rpicam_mode_flag,
@@ -118,6 +120,8 @@ def test_cam_live_ssh_mpegts_uses_cam_ffmpeg() -> None:
     assert "-f mpegts pipe:1" in remote
     assert "--save-pts" not in remote
     assert "pkill -x ffmpeg" in remote
+    assert "-probesize 2M" in remote
+    assert "nobuffer" not in remote
 
 
 def test_cam_science_ssh_mpegts_keeps_save_pts() -> None:
@@ -139,3 +143,28 @@ def test_cam_science_ssh_mpegts_keeps_save_pts() -> None:
     assert "HOME/bin/ffmpeg" in remote
     assert "-f mpegts pipe:1" in remote
     assert "-c copy" in remote
+    assert "-probesize 2M" in remote
+    assert "-analyzeduration 2M" in remote
+    assert "nobuffer" not in remote
+
+
+def test_cam_science_annexb_no_cam_ffmpeg() -> None:
+    remote = cam_science_annexb_remote(
+        width=640,
+        height=480,
+        soft_fps=30,
+        bitrate_bps=1_200_000,
+        intra=30,
+        sensor_mode="640:480",
+        buffer_count=6,
+        pts_remote="/home/admin/bhvr-current/timestamps.pts",
+        workdir="/home/admin/bhvr-current",
+    )
+    assert "rpicam-vid" in remote
+    assert "--save-pts" in remote
+    assert "ffmpeg" not in remote
+    assert "-o -" in remote
+    argv = nvr_ffmpeg_science_annexb_to_mpegts_pipe()
+    assert "5000000" in argv
+    assert "discardcorrupt" in "".join(argv)
+    assert "pipe:1" in argv

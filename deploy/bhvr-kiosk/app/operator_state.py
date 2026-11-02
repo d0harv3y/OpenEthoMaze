@@ -22,10 +22,29 @@ _STATE_NAME = ".kiosk_operator.json"
 
 CHUNK_DEFAULT_LITE_MIN = 20
 CHUNK_DEFAULT_STANDARD_MIN = 5
+# Folder prefix + filename mid-token share one shape: {tag}-<utc>/ and
+# {subj}__{tag}__{cam}__pNNN (never omit — empty input falls back to default).
+DEFAULT_RECORDING_TAG = "ses"
+_SESSION_DIR_RE = re.compile(r"^[A-Za-z0-9._-]+-\d{8}T\d{6}Z$")
 
 
 def _state_path(data_root: Path) -> Path:
     return data_root / _STATE_NAME
+
+
+def normalize_recording_tag(raw: Any) -> str:
+    """Folder prefix + filename mid-token. Empty/invalid → DEFAULT_RECORDING_TAG."""
+    s = str(raw or "").strip()
+    if not s:
+        return DEFAULT_RECORDING_TAG
+    # Same charset as slug; collapse runs; no path separators.
+    s = re.sub(r"[^A-Za-z0-9._-]+", "-", s).strip("-._")
+    return (s[:64] or DEFAULT_RECORDING_TAG)
+
+
+def is_session_dirname(name: str) -> bool:
+    """True for ``{tag}-{YYYYMMDDTHHMMSSZ}`` session folders."""
+    return bool(_SESSION_DIR_RE.match(str(name or "").strip()))
 
 
 def default_operator_state() -> dict[str, Any]:
@@ -35,6 +54,10 @@ def default_operator_state() -> dict[str, Any]:
         "output_subdir": "",
         # 0 = no limit; else minutes per TS part before roll (Lite default).
         "chunk_minutes": CHUNK_DEFAULT_LITE_MIN,
+        # Pack rolled/final TS into per-cam H5 (grill); optional.
+        "h5_pack": True,
+        # Shared token: folder {tag}-<utc>/ + files {subject}__{tag}__{cam}__pNNN
+        "recording_tag": DEFAULT_RECORDING_TAG,
         "cameras": {},  # cam_id -> {subject_id, cage_id, sex, strain, notes}
     }
 
@@ -77,6 +100,9 @@ def load_operator_state(data_root: Path) -> dict[str, Any]:
     except (TypeError, ValueError):
         chunk = out["chunk_minutes"]
     out["chunk_minutes"] = max(0, min(24 * 60, chunk))
+    if "h5_pack" in raw:
+        out["h5_pack"] = bool(raw.get("h5_pack"))
+    out["recording_tag"] = normalize_recording_tag(raw.get("recording_tag"))
     cams_in = raw.get("cameras") if isinstance(raw.get("cameras"), dict) else {}
     cams: dict[str, dict[str, str]] = {}
     for cam_id, meta in cams_in.items():
@@ -99,6 +125,15 @@ def save_operator_state(data_root: Path, state: dict[str, Any]) -> dict[str, Any
     except (TypeError, ValueError) as exc:
         raise ValueError("chunk_minutes must be an integer (0 = no limit)") from exc
     normalized["chunk_minutes"] = max(0, min(24 * 60, chunk))
+    if "h5_pack" in state:
+        normalized["h5_pack"] = bool(state.get("h5_pack"))
+    # Always normalize — empty Apply field falls back to DEFAULT_RECORDING_TAG.
+    if "recording_tag" in state:
+        normalized["recording_tag"] = normalize_recording_tag(state.get("recording_tag"))
+    else:
+        normalized["recording_tag"] = normalize_recording_tag(
+            normalized.get("recording_tag")
+        )
     cams_in = state.get("cameras") if isinstance(state.get("cameras"), dict) else normalized["cameras"]
     cams: dict[str, dict[str, str]] = {}
     for cam_id, meta in cams_in.items():
@@ -193,9 +228,16 @@ def estimate_gb_per_hour(profile: str, soft_fps: int, n_cams: int) -> dict[str, 
     }
 
 
-def session_folder(data_root: Path, output_subdir: str, start_utc_name: str) -> Path:
-    """ses-<utc> under data_root[/subdir] — grill Q14=B."""
+def session_folder(
+    data_root: Path,
+    output_subdir: str,
+    start_utc_name: str,
+    *,
+    recording_tag: str | None = None,
+) -> Path:
+    """``{tag}-<utc>`` under data_root[/subdir] — same tag as filenames."""
+    tag = normalize_recording_tag(recording_tag)
     sub = (output_subdir or "").strip().replace("\\", "/")
     sub = re.sub(r"^/+", "", sub)
     base = data_root / sub if sub else data_root
-    return base / f"ses-{start_utc_name}"
+    return base / f"{tag}-{start_utc_name}"

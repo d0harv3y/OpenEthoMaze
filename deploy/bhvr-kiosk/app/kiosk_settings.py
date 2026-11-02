@@ -410,35 +410,30 @@ def _shell_quote(s: str) -> str:
 
 
 def list_session_folders(root: Path) -> list[dict[str, Any]]:
+    """List ``{tag}-{YYYYMMDDTHHMMSSZ}`` dirs (any tag, not only ``ses-``)."""
+    from app.operator_state import is_session_dirname
+
     if not root.is_dir():
         return []
     rows: list[dict[str, Any]] = []
-    for p in sorted(root.glob("ses-*"), reverse=True):
-        if not p.is_dir():
-            continue
+
+    def _add(p: Path, display: str) -> None:
+        if not p.is_dir() or not is_session_dirname(p.name):
+            return
         try:
             size = sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
         except OSError:
             size = 0
-        rows.append({"name": p.name, "path": str(p), "bytes": size})
+        rows.append({"name": display, "path": str(p), "bytes": size})
+
+    for p in sorted(root.iterdir(), reverse=True):
+        _add(p, p.name)
     # Also under one-level subdirs (output_subdir)
     for sub in sorted(root.iterdir()):
-        if not sub.is_dir() or sub.name.startswith("ses-") or sub.name.startswith("."):
+        if not sub.is_dir() or sub.name.startswith(".") or is_session_dirname(sub.name):
             continue
-        for p in sorted(sub.glob("ses-*"), reverse=True):
-            if not p.is_dir():
-                continue
-            try:
-                size = sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
-            except OSError:
-                size = 0
-            rows.append(
-                {
-                    "name": f"{sub.name}/{p.name}",
-                    "path": str(p),
-                    "bytes": size,
-                }
-            )
+        for p in sorted(sub.iterdir(), reverse=True):
+            _add(p, f"{sub.name}/{p.name}")
     return rows
 
 

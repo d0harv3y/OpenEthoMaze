@@ -13,10 +13,13 @@ import threading
 import time
 from collections import deque
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from app import event_journal, pack_jobs
 
 import yaml
 from fastapi import FastAPI, Form, HTTPException, Query, Request
@@ -45,10 +48,12 @@ from app.encode_ask import (
 from app.operator_state import (
     CHUNK_DEFAULT_LITE_MIN,
     CHUNK_DEFAULT_STANDARD_MIN,
+    DEFAULT_RECORDING_TAG,
     chunk_preset_minutes,
     estimate_gb_per_hour,
     list_output_subdirs,
     load_operator_state,
+    normalize_recording_tag,
     patch_cam_meta,
     save_operator_state,
     session_folder,
@@ -62,18 +67,20 @@ from app.preview import (
     cam_live_annexb_remote,
     cam_live_ssh_mpegts_remote,
     cam_live_udp_remote,
-    cam_science_ssh_mpegts_remote,
+    cam_science_annexb_remote,
     cam_stop_udp_remote,
     cam_udp_port,
     feed_queue_to_iterator,
     idle_rpicam_remote,
     mediamtx_whep_url,
     nvr_ffmpeg_annexb_to_mediamtx_udp,
+    nvr_ffmpeg_science_annexb_to_mpegts_pipe,
     nvr_ffmpeg_udp_to_mpegts_pipe,
     nvr_ingress_ip,
     preview_settings,
 )
-from app import kiosk_settings, webrtc_preview
+from app import h5_archive, kiosk_settings, webrtc_preview
+from app.capture_sink import CaptureSink
 
 APP_DIR = Path(__file__).resolve().parent
 ROOT = APP_DIR.parent
@@ -100,6 +107,43 @@ _record_preview_sinks: dict[str, "queue.Queue[bytes | None]"] = {}
 # Browser live-player diag (mpegts.js knobs / buffered-ahead). Ring for litmus.
 _live_player_lock = threading.Lock()
 _live_player_samples: deque[dict[str, Any]] = deque(maxlen=800)
+# Chunk roll (grill): timer thread rotates CaptureSink; packs closed parts to H5.
+_chunk_roller_stop = threading.Event()
+_chunk_roller_thread: threading.Thread | None = None
+_pack_log_lock = threading.Lock()
+_pack_log: list[str] = []
+# Round A science bring-up (LIVE_REC_PROTOCOL_GRILL).
+SCIENCE_START_PARALLEL = 2
+SCIENCE_READY_MIN_BYTES = 188 * 50  # ~50 TS packets
+# Budget after idle→science reclaim; early H264 warnings are normal until first IDR.
+SCIENCE_READY_BUDGET_S = 8.0
+# Cams claimed for science promote/capture. Blocks late /api/preview/stop from
+# pkill'ing the new rpicam|ffmpeg before .active_session.json exists (0-byte .ts).
+_science_guard_lock = threading.Lock()
+_science_guard: set[str] = set()
+
+
+def _science_guard_claim(cam_ids: list[str] | set[str]) -> None:
+    with _science_guard_lock:
+        _science_guard.update(str(c) for c in cam_ids)
+
+
+def _science_guard_release(cam_ids: list[str] | set[str] | None = None) -> None:
+    with _science_guard_lock:
+        if cam_ids is None:
+            _science_guard.clear()
+            return
+        for c in cam_ids:
+            _science_guard.discard(str(c))
+
+
+def _science_guarded(cam_id: str) -> bool:
+    cid = str(cam_id)
+    with _science_guard_lock:
+        if cid in _science_guard:
+            return True
+    with _capture_lock:
+        return cid in _captures
 
 
 class LivePlayerSample(BaseModel):
@@ -200,11 +244,16 @@ def slug(s: str) -> str:
 
 
 def session_dir(meta: SubjectMeta, start: datetime) -> Path:
-    """Flat ``ses-<utc>/`` under data_root[/output_subdir] (grill Q14=B)."""
+    """Flat ``{tag}-<utc>/`` under data_root[/output_subdir] (same tag as files)."""
     _ = meta
     st = load_operator_state(data_root())
-    ses = start.strftime("%Y%m%dT%H%M%SZ")
-    return session_folder(data_root(), str(st.get("output_subdir") or ""), ses)
+    utc = start.strftime("%Y%m%dT%H%M%SZ")
+    return session_folder(
+        data_root(),
+        str(st.get("output_subdir") or ""),
+        utc,
+        recording_tag=str(st.get("recording_tag") or ""),
+    )
 
 
 def live_preview_settings(
@@ -231,8 +280,49 @@ def live_preview_settings(
     )
 
 
-def part_stem(subject_id: str, cam_id: str, part: int = 0) -> str:
-    return f"{slug(subject_id)}__{slug(cam_id)}__p{int(part):03d}"
+def part_stem(
+    subject_id: str,
+    cam_id: str,
+    part: int = 0,
+    *,
+    recording_tag: str = "ses",
+) -> str:
+    """``{subject}__{tag}__{cam}__pNNN`` — tag always present (folder uses same tag)."""
+    subj = slug(subject_id)
+    cam = slug(cam_id)
+    tag = normalize_recording_tag(recording_tag)
+    return f"{subj}__{tag}__{cam}__p{int(part):03d}"
+
+
+def parse_part_stem(stem: str, cam_id: str) -> dict[str, Any] | None:
+    """Parse ``{subject}__{tag}__{cam}__pNNN`` (or legacy ``{subject}__{cam}__pNNN``)."""
+    cam = slug(cam_id)
+    name = Path(stem).stem if stem.endswith(".ts") else str(stem)
+    marker = f"__{cam}__p"
+    idx = name.rfind(marker)
+    if idx < 0:
+        return None
+    head = name[:idx]
+    part_s = name[idx + len(marker) :]
+    try:
+        part = int(part_s)
+    except ValueError:
+        return None
+    bits = head.split("__")
+    if len(bits) >= 2:
+        subject_id, recording_tag = bits[0], bits[1]
+    elif len(bits) == 1 and bits[0]:
+        subject_id, recording_tag = bits[0], DEFAULT_RECORDING_TAG
+    else:
+        return None
+    if not subject_id or subject_id == "unknown":
+        return None
+    return {
+        "subject_id": subject_id,
+        "recording_tag": normalize_recording_tag(recording_tag),
+        "part": part,
+        "stem": name,
+    }
 
 
 def _coerce_float(raw: Any) -> float | None:
@@ -521,8 +611,11 @@ def _free_cam_encode_hosts(
     Alternate (mismatch) hosts use a short ConnectTimeout so a dead USB IP after
     unplug cannot stall whep/start for 15–30s and black the browser.
     """
-    if cam_id in _active_session_camera_ids():
+    if _science_guarded(cam_id) or cam_id in _active_session_camera_ids():
         return
+    with _capture_lock:
+        if cam_id in _captures:
+            return
     if hosts is None:
         hosts = _roster_hosts_for_cam(cfg, cam_id)
     if not link:
@@ -578,11 +671,7 @@ def _stop_idle_preview(cam_id: str, cfg: dict[str, Any] | None = None) -> None:
         feeder.join(timeout=2)
     # Best-effort remote cleanup on the SSH host we were using (not every IP —
     # scanning a dead USB path blocked LIVE for all tiles).
-    if (
-        host
-        and cfg
-        and cam_id not in _active_session_camera_ids()
-    ):
+    if host and cfg and not _science_guarded(cam_id) and cam_id not in _active_session_camera_ids():
         try:
             _free_cam_encode_hosts(cfg, cam_id, [host])
         except Exception:
@@ -599,7 +688,7 @@ def stop_all_idle_previews(cfg: dict[str, Any] | None = None) -> None:
 def _capture_writer(
     cam_id: str,
     proc: subprocess.Popen[bytes],
-    out_f: Any,
+    sink: CaptureSink,
     stop_event: threading.Event,
     stats: dict[str, Any] | None = None,
 ) -> None:
@@ -610,29 +699,28 @@ def _capture_writer(
             chunk = proc.stdout.read(65536)
             if not chunk:
                 break
-            out_f.write(chunk)
+            sink.write(chunk)
             if stats is not None:
                 note_capture_bytes(stats, len(chunk))
             with _preview_lock:
-                sink = _record_preview_sinks.get(cam_id)
-            if sink is not None:
+                preview_q = _record_preview_sinks.get(cam_id)
+            if preview_q is not None:
                 # Bounded queue; drop oldest on pressure. Do NOT clear the whole
                 # queue — that would tear annex-B mid-NAL until the next IDR.
                 try:
-                    sink.put_nowait(chunk)
+                    preview_q.put_nowait(chunk)
                 except queue.Full:
                     try:
-                        sink.get_nowait()
+                        preview_q.get_nowait()
                     except queue.Empty:
                         pass
                     try:
-                        sink.put_nowait(chunk)
+                        preview_q.put_nowait(chunk)
                     except queue.Full:
                         pass
     finally:
         try:
-            out_f.flush()
-            out_f.close()
+            sink.close()
         except Exception:
             pass
         try:
@@ -642,27 +730,41 @@ def _capture_writer(
             pass
 
 
+def _kill_proc(proc: Any, *, timeout: float = 10) -> None:
+    if proc is None:
+        return
+    try:
+        if proc.poll() is not None:
+            return
+        proc.terminate()
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            proc.kill()
+            proc.wait(timeout=5)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def _stop_capture_entry(info: dict[str, Any]) -> None:
     stop_event = info.get("stop")
     if isinstance(stop_event, threading.Event):
         stop_event.set()
-    proc = info.get("proc")
-    if proc is not None:
-        try:
-            proc.terminate()
-            proc.wait(timeout=20)
-        except subprocess.TimeoutExpired:
-            try:
-                proc.kill()
-                proc.wait(timeout=5)
-            except Exception:
-                pass
-        except Exception:
-            pass
+    # Remux first (closes stdin → cam SSH gets EOF), then SSH/rpicam.
+    _kill_proc(info.get("proc"), timeout=15)
+    _kill_proc(info.get("cam_proc"), timeout=10)
     writer = info.get("writer")
     if isinstance(writer, threading.Thread) and writer.is_alive():
         writer.join(timeout=5)
-    for fh in (info.get("stderr"),):
+    sink = info.get("sink")
+    if isinstance(sink, CaptureSink):
+        try:
+            sink.close()
+        except Exception:
+            pass
+    for fh in (info.get("stderr"), info.get("ff_stderr")):
         try:
             if fh:
                 fh.close()
@@ -670,27 +772,491 @@ def _stop_capture_entry(info: dict[str, Any]) -> None:
             pass
 
 
-def start_cameras(meta: SubjectMeta, folder: Path, cfg: dict[str, Any]) -> list[str]:
-    """Promote to science: cam ``rpicam | ffmpeg`` MPEG-TS over SSH.
+def _note_pack(msg: str) -> None:
+    print(msg, flush=True)
+    with _pack_log_lock:
+        _pack_log.append(msg)
 
-    Cam keeps ``timestamps.pts`` (pulled at stop). NVR writes
-    ``{subject}__{cam}__p000.ts``. Stdout teed for focus live (no NVR remux).
-    """
-    # Promote-on-start: kill idle preview before science encode.
-    stop_all_idle_previews(cfg)
-    by_id = {c["id"]: c for c in online_cameras(cfg)}
-    op = load_operator_state(data_root())
-    cam_metas = op.get("cameras") or {}
-    log: list[str] = ["promote: stopped idle previews (if any); science wire=mpegts"]
-    ask = science_encode_ask(meta.profile, meta.soft_fps, cfg)
+
+def _pull_cam_pts(cfg: dict[str, Any], host: str, dest: Path) -> tuple[bool, str]:
+    user = cfg.get("ssh_user", "admin")
+    identity = cfg.get("ssh_identity_file") or ""
+    rsync = ["rsync", "-avz", "--timeout=120"]
+    if identity:
+        rsync.extend(
+            [
+                "-e",
+                f"ssh -i {identity} -o BatchMode=yes -o IdentitiesOnly=yes",
+            ]
+        )
+    try:
+        rr = subprocess.run(
+            [*rsync, f"{user}@{host}:bhvr-current/timestamps.pts", str(dest)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return False, str(exc)
+    if rr.returncode == 0 and dest.is_file():
+        return True, f"{dest.stat().st_size} B"
+    err = (rr.stderr or rr.stdout or "").strip() or f"exit {rr.returncode}"
+    return False, err
+
+
+def _pack_part_async(
+    *,
+    h5_path: Path,
+    part: int,
+    ts_path: Path,
+    pts_path: Path | None,
+    fps_summary: dict[str, Any] | None,
+    attrs: dict[str, Any],
+    folder: Path | None = None,
+    cam_id: str | None = None,
+    subject_id: str | None = None,
+    pack_session_sidecars: bool = False,
+) -> None:
+    def _run() -> None:
+        try:
+            result = h5_archive.pack_part(
+                h5_path,
+                part=part,
+                ts_path=ts_path,
+                pts_path=pts_path,
+                fps_summary=fps_summary,
+                attrs=attrs,
+                delete_loose=True,
+                folder=folder,
+                cam_id=cam_id,
+                subject_id=subject_id,
+                pack_session_sidecars=pack_session_sidecars,
+            )
+            if result.get("ok"):
+                _note_pack(
+                    f"H5 pack OK {h5_path.name} part={part} bytes={result.get('bytes')}"
+                )
+            else:
+                _note_pack(f"H5 pack FAIL {h5_path.name} part={part}: {result.get('error')}")
+        except Exception as exc:  # noqa: BLE001
+            _note_pack(f"H5 pack FAIL {h5_path.name} part={part}: {exc!r}")
+
+    threading.Thread(
+        target=_run, name=f"bhvr-h5-pack-{part}", daemon=True
+    ).start()
+
+
+def _roll_capture_part(
+    cfg: dict[str, Any],
+    cam_id: str,
+    info: dict[str, Any],
+    *,
+    reason: str,
+) -> None:
+    """Rotate loose TS to next part; background-pack the closed part into H5."""
+    sink = info.get("sink")
+    if not isinstance(sink, CaptureSink):
+        return
+    folder = Path(str(info.get("folder") or ""))
+    if not folder.is_dir():
+        return
+    subject_id = str(info.get("subject_id") or "unknown")
+    h5_raw = str(info.get("h5_path") or "").strip()
+    h5_path = Path(h5_raw) if h5_raw else None
+    part = int(info.get("part") or 0)
+    next_part = part + 1
+    recording_tag = normalize_recording_tag(info.get("recording_tag"))
+    next_stem = part_stem(
+        subject_id, cam_id, next_part, recording_tag=recording_tag
+    )
+    next_ts = folder / f"{next_stem}.ts"
+    host = str(info.get("host") or "")
+    do_h5 = bool(info.get("h5_pack", True)) and h5_path is not None
+
+    with _capture_lock:
+        cur = _captures.get(cam_id)
+        if cur is not info:
+            return
+        closed_ts = sink.rotate(next_ts)
+        info["part"] = next_part
+        info["stem"] = next_stem
+        info["video"] = str(next_ts)
+        info["h264"] = str(next_ts)
+        info["part_started_at"] = time.time()
+
+    _note_pack(
+        f"chunk roll {cam_id} part={part}->{next_part} reason={reason} "
+        f"closed={closed_ts.name}"
+    )
+
+    # Snapshot pts for the closed part (slice since last roll).
+    pts_full = folder / f".{slug(cam_id)}_pts_full.pts"
+    pts_part = closed_ts.with_suffix(".pts")
+    start_idx = int(info.get("pts_index") or 0)
+    if host:
+        ok, detail = _pull_cam_pts(cfg, host, pts_full)
+        if ok:
+            n, next_idx = h5_archive.slice_pts_file(
+                pts_full, pts_part, start_index=start_idx
+            )
+            info["pts_index"] = next_idx
+            _note_pack(f"pts slice {cam_id} part={part} n={n} next_idx={next_idx}")
+        else:
+            _note_pack(f"pts pull fail {cam_id} on roll: {detail}")
+            pts_part = None  # type: ignore[assignment]
+    else:
+        pts_part = None  # type: ignore[assignment]
+
+    if not do_h5:
+        _note_pack(f"H5 pack off — kept loose {closed_ts.name}")
+        return
+
+    fps_summary = None
+    if pts_part is not None and pts_part.is_file():
+        fps_summary = _fps_from_pts(pts_part)
+
+    _pack_part_async(
+        h5_path=h5_path,
+        part=part,
+        ts_path=closed_ts,
+        pts_path=pts_part,
+        fps_summary=fps_summary,
+        attrs={
+            "cam_id": cam_id,
+            "subject_id": subject_id,
+            "recording_tag": recording_tag,
+            "roll_reason": reason,
+            "soft_fps": info.get("soft_fps"),
+        },
+        folder=folder,
+        cam_id=cam_id,
+        subject_id=subject_id,
+        pack_session_sidecars=False,
+    )
+
+
+def _maybe_roll_captures(cfg: dict[str, Any]) -> None:
+    with _capture_lock:
+        items = [(cid, info) for cid, info in _captures.items()]
+    now = time.time()
+    for cam_id, info in items:
+        minutes = int(info.get("chunk_minutes") or 0)
+        if minutes <= 0:
+            continue
+        started = float(info.get("part_started_at") or 0.0)
+        if started <= 0 or (now - started) < minutes * 60:
+            continue
+        try:
+            _roll_capture_part(cfg, cam_id, info, reason="timer")
+        except Exception as exc:  # noqa: BLE001
+            _note_pack(f"chunk roll error {cam_id}: {exc!r}")
+
+
+def _chunk_roller_loop(cfg: dict[str, Any]) -> None:
+    while not _chunk_roller_stop.wait(2.0):
+        if not active_path().is_file():
+            continue
+        _maybe_roll_captures(cfg)
+
+
+def _start_chunk_roller(cfg: dict[str, Any]) -> None:
+    global _chunk_roller_thread
+    _chunk_roller_stop.clear()
+    if _chunk_roller_thread and _chunk_roller_thread.is_alive():
+        return
+    _chunk_roller_thread = threading.Thread(
+        target=_chunk_roller_loop,
+        args=(cfg,),
+        name="bhvr-chunk-roll",
+        daemon=True,
+    )
+    _chunk_roller_thread.start()
+
+
+def _stop_chunk_roller() -> None:
+    _chunk_roller_stop.set()
+    t = _chunk_roller_thread
+    if t and t.is_alive():
+        t.join(timeout=6)
+
+
+def _wait_science_ready(
+    proc: subprocess.Popen[bytes],
+    ts_path: Path,
+    *,
+    min_bytes: int = SCIENCE_READY_MIN_BYTES,
+    budget_s: float = SCIENCE_READY_BUDGET_S,
+) -> tuple[bool, str]:
+    """Data-driven ready: proc alive and TS grew ≥ min_bytes within budget."""
+    deadline = time.monotonic() + max(0.5, float(budget_s))
+    start_size = ts_path.stat().st_size if ts_path.is_file() else 0
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            return False, f"exited rc={proc.returncode}"
+        size = ts_path.stat().st_size if ts_path.is_file() else 0
+        if size - start_size >= min_bytes or size >= min_bytes:
+            return True, f"bytes={size}"
+        time.sleep(0.15)
+    if proc.poll() is not None:
+        return False, f"exited rc={proc.returncode}"
+    size = ts_path.stat().st_size if ts_path.is_file() else 0
+    if size > 0:
+        return True, f"bytes={size} (partial)"
+    return False, f"no bytes after {budget_s:.1f}s"
+
+
+def _science_fail_hint(*paths: Path) -> str:
+    """One-line operator hint from capture/remux logs (never dump raw spam)."""
+    text = ""
+    for err_path in paths:
+        try:
+            text += "\n" + err_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+    low = text.lower()
+    if "output file does not contain any stream" in low or "could not find codec parameters" in low:
+        return "remux exited before first H264 SPS — retry Start"
+    if "bitstream malformed" in low or "no startcode" in low:
+        return "H264 stream glitch after camera reclaim — retry Start"
+    if "pipeline handler in use" in low or "failed to acquire camera" in low:
+        return "camera busy — wait for LIVE to stop, retry"
+    if "failed to write output bytes" in low or "signal 13" in low:
+        # SIGPIPE: writer still going, reader (ffmpeg/SSH) already gone.
+        return "encode pipe closed early (SIGPIPE) — remux died; retry Start"
+    if "ffmpeg missing" in low:
+        return "cam ffmpeg missing (~/bin/ffmpeg)"
+    for line in reversed(text.splitlines()):
+        s = line.strip()
+        if s and not s.startswith("["):
+            return s[:120]
+    return ""
+
+
+def _start_one_science_cam(
+    *,
+    cfg: dict[str, Any],
+    cam_id: str,
+    host: str,
+    folder: Path,
+    meta: SubjectMeta,
+    cmeta: dict[str, Any],
+    ask: Any,
+    chunk_minutes: int,
+    h5_pack: bool,
+    recording_tag: str,
+    session_utc: str,
+) -> list[str]:
+    """Bring up one science SSH capture. Safe to run in a worker pool."""
+    log: list[str] = []
+    subject_id = str(cmeta.get("subject_id") or "").strip() or meta.subject_id
+    stem = part_stem(subject_id, cam_id, 0, recording_tag=recording_tag)
     width, height = ask.width, ask.height
     soft_fps = ask.soft_fps
     bitrate_bps = ask.bitrate_bps
     intra = ask.intra
     buf = ask.buffer_count
-    folder.mkdir(parents=True, exist_ok=True)
 
+    with _capture_lock:
+        prev = _captures.pop(cam_id, None)
+    if prev:
+        _stop_capture_entry(prev)
+
+    ts_path = folder / f"{stem}.ts"
+    err_path = folder / f"{stem}_capture.log"
+    h5_path: Path | None = None
+    if h5_pack:
+        h5_path = h5_archive.cam_h5_path(
+            folder, subject_id, cam_id, recording_tag=recording_tag
+        )
+        try:
+            h5_archive.create_cam_h5(
+                h5_path,
+                attrs={
+                    "cam_id": cam_id,
+                    "subject_id": subject_id,
+                    "recording_tag": recording_tag,
+                    "session_started_utc": session_utc,
+                    "science_size": meta.profile,
+                    "soft_fps": soft_fps,
+                    "chunk_minutes": chunk_minutes,
+                    "cage_id": str(cmeta.get("cage_id") or ""),
+                    "sex": str(cmeta.get("sex") or "U"),
+                    "strain": str(cmeta.get("strain") or ""),
+                    "nvr_id": str(cfg.get("nvr_id") or ""),
+                },
+            )
+            log.append(f"OK H5 shell {h5_path.name}")
+        except Exception as exc:  # noqa: BLE001
+            log.append(f"FAIL H5 shell {cam_id}: {exc}")
+            return log
+    else:
+        log.append(f"H5 pack off — loose TS only ({stem}.ts)")
+
+    pts_remote = f"{CAM_WORKDIR}/timestamps.pts"
+    # Annex-B over SSH + NVR remux (same family as idle WHEP nvr_annexb).
+    remote = cam_science_annexb_remote(
+        width=width,
+        height=height,
+        soft_fps=soft_fps,
+        bitrate_bps=bitrate_bps,
+        intra=intra,
+        sensor_mode=ask.sensor_mode,
+        buffer_count=buf,
+        pts_remote=pts_remote,
+        workdir=CAM_WORKDIR,
+    )
+    remux_path = folder / f"{stem}_remux.log"
+
+    stop_event: threading.Event | None = None
+    stats: dict[str, Any] | None = None
+    writer: threading.Thread | None = None
+    proc: subprocess.Popen[bytes] | None = None
+    cam_proc: subprocess.Popen[bytes] | None = None
+    sink: CaptureSink | None = None
+    err_f: Any = None
+    ff_err: Any = None
+    ready = False
+    ready_detail = "not started"
+    # One retry: first attempt often loses the race while libcamera reclaims.
+    for attempt in range(2):
+        if attempt:
+            time.sleep(1.5)
+            log.append(f"RETRY science start {cam_id} (attempt {attempt + 1})")
+            try:
+                if ts_path.is_file():
+                    ts_path.write_bytes(b"")
+            except OSError:
+                pass
+        try:
+            sink = CaptureSink(ts_path)
+            err_f = err_path.open("ab" if attempt else "wb")
+            ff_err = remux_path.open("ab" if attempt else "wb")
+            cam_proc = subprocess.Popen(
+                [
+                    *_ssh_argv(cfg, host),
+                    "-o",
+                    "ServerAliveInterval=10",
+                    "-o",
+                    "ServerAliveCountMax=3",
+                    remote,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=err_f,
+                stdin=subprocess.DEVNULL,
+                bufsize=0,
+            )
+            assert cam_proc.stdout is not None
+            proc = subprocess.Popen(
+                nvr_ffmpeg_science_annexb_to_mpegts_pipe(),
+                stdin=cam_proc.stdout,
+                stdout=subprocess.PIPE,
+                stderr=ff_err,
+                bufsize=0,
+            )
+            cam_proc.stdout.close()
+        except OSError as exc:
+            log.append(f"FAIL start {cam_id}@{host}: {exc}")
+            return log
+
+        stop_event = threading.Event()
+        stats = new_capture_byte_stats()
+        writer = threading.Thread(
+            target=_capture_writer,
+            args=(cam_id, proc, sink, stop_event, stats),
+            name=f"bhvr-cap-{cam_id}",
+            daemon=True,
+        )
+        writer.start()
+
+        ready, ready_detail = _wait_science_ready(proc, ts_path)
+        if ready:
+            break
+        _stop_capture_entry(
+            {
+                "stop": stop_event,
+                "proc": proc,
+                "cam_proc": cam_proc,
+                "writer": writer,
+                "sink": sink,
+                "stderr": err_f,
+                "ff_stderr": ff_err,
+            }
+        )
+        err_hint = _science_fail_hint(err_path, remux_path)
+        log.append(
+            f"FAIL start {cam_id}@{host} attempt={attempt + 1}: {ready_detail}"
+            + (f" ({err_hint})" if err_hint else "")
+        )
+        proc = cam_proc = sink = err_f = ff_err = writer = stop_event = stats = None
+
+    if not ready or proc is None or sink is None or stop_event is None or stats is None:
+        return log
+
+    with _capture_lock:
+        _captures[cam_id] = {
+            "proc": proc,
+            "cam_proc": cam_proc,
+            "stderr": err_f,
+            "ff_stderr": ff_err,
+            "host": host,
+            "video": str(ts_path),
+            "h264": str(ts_path),
+            "stem": stem,
+            "subject_id": subject_id,
+            "recording_tag": recording_tag,
+            "part": 0,
+            "part_started_at": time.time(),
+            "chunk_minutes": chunk_minutes,
+            "h5_pack": h5_pack,
+            "folder": str(folder),
+            "h5_path": str(h5_path) if h5_path else "",
+            "sink": sink,
+            "pts_index": 0,
+            "stop": stop_event,
+            "writer": writer,
+            "stats": stats,
+            "soft_fps": soft_fps,
+            "bitrate_bps": bitrate_bps,
+            "session_started_utc": session_utc,
+        }
+    size = ts_path.stat().st_size if ts_path.is_file() else 0
+    log.append(
+        f"OK stream {cam_id}@{host} -> {ts_path.name} "
+        f"pid={proc.pid} early_bytes={size} ({ready_detail}) {meta.profile} "
+        f"{width}x{height} soft_fps={soft_fps} bitrate_kbps={bitrate_bps // 1000} "
+        f"chunk_min={chunk_minutes} h5_pack={int(h5_pack)}"
+    )
+    return log
+
+
+def start_cameras(meta: SubjectMeta, folder: Path, cfg: dict[str, Any]) -> list[str]:
+    """Promote to science: cam ``rpicam | ffmpeg`` MPEG-TS over SSH.
+
+    Round A: stop idle only for selected cams; bring up with parallel≤2 and
+    data-driven ready (not fixed sleep).
+    """
+    by_id = {c["id"]: c for c in online_cameras(cfg)}
+    op = load_operator_state(data_root())
+    cam_metas = op.get("cameras") or {}
+    chunk_minutes = int(op.get("chunk_minutes") or 0)
+    h5_pack = bool(op.get("h5_pack", True))
+    recording_tag = normalize_recording_tag(op.get("recording_tag"))
+    log: list[str] = [
+        f"promote: idle stop for {len(meta.camera_ids)} cam(s); "
+        f"science parallel≤{SCIENCE_START_PARALLEL}"
+    ]
+    ask = science_encode_ask(meta.profile, meta.soft_fps, cfg)
+    folder.mkdir(parents=True, exist_ok=True)
+    session_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Claim before idle stop so a racing /api/preview/stop cannot pkill science.
+    _science_guard_claim(list(meta.camera_ids))
+
+    work: list[tuple[str, str, dict[str, Any]]] = []
     for cam_id in meta.camera_ids:
+        # Only kill idle LIVE on cams entering science (leave other tiles alone).
+        _stop_idle_preview(cam_id, cfg)
         cam = by_id.get(cam_id)
         if not cam or not cam.get("online"):
             log.append(f"SKIP {cam_id} (not online in MQTT roster)")
@@ -700,99 +1266,41 @@ def start_cameras(meta: SubjectMeta, folder: Path, cfg: dict[str, Any]) -> list[
             log.append(f"SKIP {cam_id} (no ip)")
             continue
         cmeta = cam_metas.get(cam_id) or {}
-        subject_id = str(cmeta.get("subject_id") or "").strip() or meta.subject_id
-        stem = part_stem(subject_id, cam_id, 0)
+        work.append((cam_id, host, cmeta if isinstance(cmeta, dict) else {}))
 
-        with _capture_lock:
-            prev = _captures.pop(cam_id, None)
-        if prev:
-            _stop_capture_entry(prev)
+    if not work:
+        _science_guard_release(list(meta.camera_ids))
+        return log
 
-        ts_path = folder / f"{stem}.ts"
-        err_path = folder / f"{stem}_capture.log"
-        pts_remote = f"{CAM_WORKDIR}/timestamps.pts"
-        # soft_fps is an encoder request only — achieved rate is pts/fps.json.
-        remote = cam_science_ssh_mpegts_remote(
-            width=width,
-            height=height,
-            soft_fps=soft_fps,
-            bitrate_bps=bitrate_bps,
-            intra=intra,
-            sensor_mode=ask.sensor_mode,
-            buffer_count=buf,
-            pts_remote=pts_remote,
-            workdir=CAM_WORKDIR,
-        )
-        try:
-            out_f = ts_path.open("wb")
-            err_f = err_path.open("wb")
-            proc = _popen_ssh_bash_s(
-                cfg,
-                host,
-                remote,
-                err_f=err_f,
-                extra_ssh=[
-                    "-o",
-                    "ServerAliveInterval=10",
-                    "-o",
-                    "ServerAliveCountMax=3",
-                ],
-            )
-        except OSError as exc:
-            log.append(f"FAIL start {cam_id}@{host}: {exc}")
-            continue
-
-        stop_event = threading.Event()
-        stats = new_capture_byte_stats()
-        writer = threading.Thread(
-            target=_capture_writer,
-            args=(cam_id, proc, out_f, stop_event, stats),
-            name=f"bhvr-cap-{cam_id}",
-            daemon=True,
-        )
-        writer.start()
-
-        time.sleep(2)
-        if proc.poll() is not None:
-            stop_event.set()
-            writer.join(timeout=3)
-            err_tail = ""
+    with ThreadPoolExecutor(max_workers=SCIENCE_START_PARALLEL) as pool:
+        futs = {
+            pool.submit(
+                _start_one_science_cam,
+                cfg=cfg,
+                cam_id=cam_id,
+                host=host,
+                folder=folder,
+                meta=meta,
+                cmeta=cmeta,
+                ask=ask,
+                chunk_minutes=chunk_minutes,
+                h5_pack=h5_pack,
+                recording_tag=recording_tag,
+                session_utc=session_utc,
+            ): cam_id
+            for cam_id, host, cmeta in work
+        }
+        for fut in as_completed(futs):
+            cam_id = futs[fut]
             try:
-                err_tail = err_path.read_text(encoding="utf-8", errors="replace")[-500:]
-            except OSError:
-                pass
-            log.append(
-                f"FAIL start {cam_id}@{host}: exited rc={proc.returncode} {err_tail}"
-            )
-            try:
-                err_f.close()
-            except Exception:
-                pass
-            continue
+                log.extend(fut.result())
+            except Exception as exc:  # noqa: BLE001
+                log.append(f"FAIL start {cam_id}: {exc!r}")
 
-        with _capture_lock:
-            _captures[cam_id] = {
-                "proc": proc,
-                "stderr": err_f,
-                "host": host,
-                "video": str(ts_path),
-                "h264": str(ts_path),  # legacy key — path is *.ts
-                "stem": stem,
-                "subject_id": subject_id,
-                "part": 0,
-                "stop": stop_event,
-                "writer": writer,
-                "stats": stats,
-                "soft_fps": soft_fps,
-                "bitrate_bps": bitrate_bps,
-            }
-        size = ts_path.stat().st_size if ts_path.is_file() else 0
-        log.append(
-            f"OK stream {cam_id}@{host} -> {ts_path.name} "
-            f"pid={proc.pid} early_bytes={size} {meta.profile} "
-            f"{width}x{height} soft_fps={soft_fps} bitrate_kbps={bitrate_bps // 1000}"
-        )
-
+    with _capture_lock:
+        ok_ids = {cid for cid in meta.camera_ids if cid in _captures}
+    _science_guard_release(set(meta.camera_ids) - ok_ids)
+    # Successful cams stay guarded until Stop (blocks stray free/pkill).
     _save_capture_pids(folder)
     return log
 
@@ -882,14 +1390,18 @@ def stop_cameras(
     folder: Path | None = None,
     profile: str = "480p",
 ) -> list[str]:
-    """Stop NVR SSH capture pipes; pull tiny pts; write fps.json (keep ``*_video.ts``)."""
-    stop_all_idle_previews(cfg)
-    user = cfg.get("ssh_user", "admin")
+    """Stop NVR SSH capture pipes; pull pts; queue final H5 pack (Round A S2+).
+
+    Does not stop idle WHEP on non-session cams. Final pack is background —
+    see ``pack_jobs`` / ``/api/session/pack-status``.
+    """
+    _stop_chunk_roller()
     by_id = {c["id"]: c for c in online_cameras(cfg)}
     with _roster_lock:
         for cam_id, row in _roster.items():
             by_id.setdefault(cam_id, {**row, "id": cam_id, "online": True})
     log: list[str] = []
+    pending_packs: list[dict[str, Any]] = []
     _ = PROFILE_GEOM.get(profile, (1280, 720))
     if folder is not None:
         folder.mkdir(parents=True, exist_ok=True)
@@ -898,19 +1410,55 @@ def stop_cameras(
         cam = by_id.get(cam_id)
         host = str((cam or {}).get("ip") or "")
         with _preview_lock:
-            sink = _record_preview_sinks.pop(cam_id, None)
-        if sink is not None:
+            preview_q = _record_preview_sinks.pop(cam_id, None)
+        if preview_q is not None:
             try:
-                sink.put_nowait(None)
+                preview_q.put_nowait(None)
             except queue.Full:
                 pass
         with _capture_lock:
             info = _captures.pop(cam_id, None)
         video = Path("")
         stem = ""
+        subject_id = "unknown"
+        recording_tag = DEFAULT_RECORDING_TAG
+        part = 0
+        h5_path: Path | None = None
+        h5_pack = True
+        pts_index = 0
+        # Prefer session / operator meta so a lost in-memory capture never packs
+        # as unknown__… (was: default subject_id="unknown" on orphan TS).
+        if active_path().is_file():
+            try:
+                active = json.loads(active_path().read_text(encoding="utf-8"))
+                ameta = (active.get("meta") or {}).get("cameras") or {}
+                crow = ameta.get(cam_id) or {}
+                if crow.get("subject_id"):
+                    subject_id = str(crow["subject_id"]).strip() or subject_id
+                if active.get("meta", {}).get("recording_tag"):
+                    recording_tag = normalize_recording_tag(
+                        active["meta"].get("recording_tag")
+                    )
+                if "h5_pack" in (active.get("meta") or {}):
+                    h5_pack = bool(active["meta"].get("h5_pack"))
+            except (OSError, json.JSONDecodeError, TypeError):
+                pass
+        if subject_id == "unknown":
+            op_row = (load_operator_state(data_root()).get("cameras") or {}).get(
+                cam_id
+            ) or {}
+            if op_row.get("subject_id"):
+                subject_id = str(op_row["subject_id"]).strip() or subject_id
         if info and info.get("proc"):
             host = str(info.get("host") or host)
             stem = str(info.get("stem") or "")
+            subject_id = str(info.get("subject_id") or subject_id)
+            recording_tag = normalize_recording_tag(info.get("recording_tag"))
+            part = int(info.get("part") or 0)
+            pts_index = int(info.get("pts_index") or 0)
+            h5_pack = bool(info.get("h5_pack", True))
+            if info.get("h5_path"):
+                h5_path = Path(str(info["h5_path"]))
             video = Path(str(info.get("video") or info.get("h264") or ""))
             _stop_capture_entry(info)
             nbytes = video.stat().st_size if video.is_file() else 0
@@ -933,6 +1481,13 @@ def stop_cameras(
                 if matches:
                     video = matches[-1]
                     stem = video.stem
+                    parsed = parse_part_stem(stem, cam_id)
+                    if parsed:
+                        subject_id = str(parsed["subject_id"])
+                        recording_tag = normalize_recording_tag(
+                            parsed.get("recording_tag")
+                        )
+                        part = int(parsed.get("part") or 0)
 
         if folder is None or not host:
             continue
@@ -951,53 +1506,119 @@ def stop_cameras(
             if dest_ts.suffix == ".ts"
             else folder / f"{cam_id}_timestamps.pts"
         )
-        identity = cfg.get("ssh_identity_file") or ""
-        rsync = ["rsync", "-avz", "--timeout=120"]
-        if identity:
-            rsync.extend(
-                [
-                    "-e",
-                    f"ssh -i {identity} -o BatchMode=yes -o IdentitiesOnly=yes",
-                ]
+        pts_full = folder / f".{slug(cam_id)}_pts_full.pts"
+        ok, detail = _pull_cam_pts(cfg, host, pts_full)
+        if ok:
+            n, _next_idx = h5_archive.slice_pts_file(
+                pts_full, dest_pts, start_index=pts_index
             )
-        try:
-            rr = subprocess.run(
-                [*rsync, f"{user}@{host}:bhvr-current/timestamps.pts", str(dest_pts)],
-                capture_output=True,
-                text=True,
-                timeout=120,
-                check=False,
-            )
-        except (subprocess.TimeoutExpired, OSError) as exc:
-            log.append(f"FAIL pull pts {cam_id}: {exc}")
-            rr = None
-        if rr is not None:
-            if rr.returncode == 0 and dest_pts.is_file():
-                log.append(f"OK pull pts {cam_id} ({dest_pts.stat().st_size} B)")
-            else:
-                err = (rr.stderr or rr.stdout or "").strip() or f"exit {rr.returncode}"
-                log.append(f"FAIL pull pts {cam_id}: {err}")
-
-        if dest_ts.is_file() and dest_ts.stat().st_size > 0:
-            log.append(f"OK keep {dest_ts.name} ({dest_ts.stat().st_size} B)")
+            log.append(f"OK pull pts {cam_id} ({detail}) sliced_n={n}")
         else:
-            log.append(f"FAIL archive {cam_id}: missing/empty {dest_ts.name}")
+            log.append(f"FAIL pull pts {cam_id}: {detail}")
 
+        fps_summary: dict[str, Any] | None = None
         if dest_pts.is_file():
             try:
-                stats = _fps_from_pts(dest_pts)
-                log.append(f"FPS {cam_id}: {json.dumps(stats)}")
+                fps_summary = _fps_from_pts(dest_pts)
+                log.append(f"FPS {cam_id}: {json.dumps(fps_summary)}")
                 fps_path = (
                     dest_ts.with_name(dest_ts.stem + "_fps.json")
                     if dest_ts.suffix == ".ts"
                     else folder / f"{cam_id}_fps.json"
                 )
-                fps_path.write_text(json.dumps(stats, indent=2) + "\n", encoding="utf-8")
+                fps_path.write_text(
+                    json.dumps(fps_summary, indent=2) + "\n", encoding="utf-8"
+                )
             except Exception as exc:  # noqa: BLE001 — never block session stop
                 log.append(f"FAIL fps parse {cam_id}: {exc}")
 
+        if h5_pack and h5_path is None and folder is not None:
+            # Reuse existing shell for this cam (never invent unknown__ if a
+            # real subject shell already exists from Start).
+            existing = sorted(folder.glob(f"*__{slug(cam_id)}.h5"))
+            preferred = [
+                p
+                for p in existing
+                if not p.name.startswith("unknown__") and p.stat().st_size >= 0
+            ]
+            if preferred:
+                h5_path = preferred[-1]
+                # Keep filename subject if stop meta was still unknown.
+                parsed_h5 = preferred[-1].stem.split("__")
+                if subject_id == "unknown" and parsed_h5:
+                    subject_id = parsed_h5[0]
+            else:
+                h5_path = h5_archive.cam_h5_path(
+                    folder, subject_id, cam_id, recording_tag=recording_tag
+                )
+
+        if (
+            h5_pack
+            and dest_ts.is_file()
+            and dest_ts.stat().st_size > 0
+            and h5_path is not None
+            and folder is not None
+        ):
+            pending_packs.append(
+                {
+                    "cam_id": cam_id,
+                    "folder": str(folder),
+                    "h5_path": h5_path,
+                    "part": part,
+                    "ts_path": dest_ts,
+                    "pts_path": dest_pts if dest_pts.is_file() else None,
+                    "fps_summary": fps_summary,
+                    "attrs": {
+                        "cam_id": cam_id,
+                        "subject_id": subject_id,
+                        "recording_tag": recording_tag,
+                        "roll_reason": "stop",
+                    },
+                    "subject_id": subject_id,
+                    "nbytes": dest_ts.stat().st_size,
+                }
+            )
+        elif dest_ts.is_file() and dest_ts.stat().st_size > 0:
+            why = "H5 pack off" if not h5_pack else "no H5"
+            log.append(
+                f"OK keep {dest_ts.name} ({dest_ts.stat().st_size} B) ({why})"
+            )
+        else:
+            log.append(f"FAIL archive {cam_id}: missing/empty {dest_ts.name}")
+
+    # Write stop_log before enqueue so pack_session_sidecars can fold it.
+    if folder is not None:
+        try:
+            (folder / "stop_log.json").write_text(
+                json.dumps(log, indent=2) + "\n", encoding="utf-8"
+            )
+        except OSError as exc:
+            log.append(f"FAIL write stop_log: {exc}")
+
+    for spec in pending_packs:
+        job_id = pack_jobs.enqueue(
+            cam_id=str(spec["cam_id"]),
+            folder=str(spec["folder"]),
+            h5_path=Path(spec["h5_path"]),
+            part=int(spec["part"]),
+            ts_path=Path(spec["ts_path"]),
+            pts_path=Path(spec["pts_path"]) if spec.get("pts_path") else None,
+            fps_summary=spec.get("fps_summary"),
+            attrs=dict(spec["attrs"]),
+            pack_fn=h5_archive.pack_part,
+            subject_id=str(spec.get("subject_id") or ""),
+            pack_session_sidecars=True,
+        )
+        log.append(
+            f"QUEUED H5 pack {Path(spec['h5_path']).name} part={spec['part']} "
+            f"job={job_id} ({spec['nbytes']} B)"
+        )
+
     if folder is not None and _capture_pid_path(folder).is_file():
         _capture_pid_path(folder).unlink(missing_ok=True)
+    with _pack_log_lock:
+        log.extend(list(_pack_log))
+        _pack_log.clear()
     return log
 
 
@@ -1500,7 +2121,8 @@ def api_preview(cam_id: str) -> StreamingResponse:
                 "capturing it (web restarted?). Stop the session or restart capture — "
                 "refusing live so we do not kill the cam encode.",
             )
-        stop_all_idle_previews(cfg)
+        # Round A: do NOT stop_all_idle_previews — other cams keep WHEP.
+        # This cam's idle was already stopped at science promote.
         gen = _iter_record_preview(cam_id, cfg)
         media_type = "video/mp2t"
     else:
@@ -1795,6 +2417,13 @@ def beacon_form() -> RedirectResponse:
 def _begin_session(meta: SubjectMeta, cfg: dict[str, Any]) -> dict[str, Any]:
     if active_path().is_file():
         raise HTTPException(409, "session already active; stop first")
+    if pack_jobs.pending():
+        snap = pack_jobs.snapshot()
+        raise HTTPException(
+            409,
+            "archive pack still running — wait for PACK banner to clear "
+            f"({snap.get('label') or 'packing'})",
+        )
     health = storage_health(data_root())
     if not health.get("mounted"):
         raise HTTPException(
@@ -1832,7 +2461,46 @@ def _begin_session(meta: SubjectMeta, cfg: dict[str, Any]) -> dict[str, Any]:
     folder = session_dir(meta, start)
     folder.mkdir(parents=True, exist_ok=True)
     # No session meta.json (grill Q16=B′); runtime state stays in .active_session.json.
+    with _pack_log_lock:
+        _pack_log.clear()
     cam_log = start_cameras(meta, folder, cfg)
+    with _capture_lock:
+        n_ok = sum(1 for cid in meta.camera_ids if cid in _captures)
+    if n_ok == 0:
+        _science_guard_release(list(meta.camera_ids))
+        fails = [ln for ln in cam_log if ln.startswith(("FAIL", "SKIP"))]
+        # Keep modal readable — full capture.log stays on SSD under the session folder.
+        detail = " · ".join(fails[:3]) if fails else "no cameras capturing"
+        if len(detail) > 240:
+            detail = detail[:237] + "…"
+        event_journal.append_event(
+            data_root(),
+            session_id="server",
+            kind="session.start_fail",
+            detail={"folder": str(folder), "cam_log": cam_log[-12:], "detail": detail},
+        )
+        raise HTTPException(
+            503,
+            f"REC start failed — no video on SSD. {detail}",
+        )
+    event_journal.append_event(
+        data_root(),
+        session_id="server",
+        kind="session.start_ok",
+        detail={
+            "folder": str(folder),
+            "camera_ids": list(meta.camera_ids),
+            "n_ok": n_ok,
+            "cam_log": [ln for ln in cam_log if ln.startswith(("OK", "RETRY", "FAIL"))][
+                -20:
+            ],
+        },
+    )
+    chunk_minutes = int(op.get("chunk_minutes") or 0)
+    h5_pack = bool(op.get("h5_pack", True))
+    recording_tag = normalize_recording_tag(op.get("recording_tag"))
+    if chunk_minutes > 0:
+        _start_chunk_roller(cfg)
     active_path().parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "folder": str(folder),
@@ -1840,14 +2508,17 @@ def _begin_session(meta: SubjectMeta, cfg: dict[str, Any]) -> dict[str, Any]:
         "meta": {
             **meta.model_dump(),
             "science_ask": ask.label,
-            "chunk_minutes": int(op.get("chunk_minutes") or 0),
+            "chunk_minutes": chunk_minutes,
+            "h5_pack": h5_pack,
+            "recording_tag": recording_tag,
             "output_subdir": op.get("output_subdir") or "",
             "cameras": {
                 cid: dict(cams_meta.get(cid) or {}) for cid in meta.camera_ids
             },
         },
         "cam_log": cam_log,
-        "h5_pack": "stub",  # chunk roll + background H5 pack — next slice
+        "h5_pack": h5_pack,
+        "h5_schema": "v0",
     }
     active_path().write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return payload
@@ -1869,13 +2540,35 @@ def _end_session() -> dict[str, Any]:
         print(f"_end_session stop_cameras error: {exc!r}", flush=True)
     if folder is not None:
         try:
+            # Refresh after enqueue lines appended; sidecars already folded from
+            # the pre-enqueue write inside stop_cameras.
             (folder / "stop_log.json").write_text(
                 json.dumps(stop_log, indent=2) + "\n", encoding="utf-8"
             )
         except OSError as exc:
             stop_log.append(f"FAIL write stop_log: {exc}")
     active_path().unlink(missing_ok=True)
-    return {"status": "stopped", "stop_log": stop_log, "folder": folder_s}
+    _science_guard_release(list(camera_ids) if camera_ids else None)
+    pack_snap = pack_jobs.snapshot()
+    event_journal.append_event(
+        data_root(),
+        session_id="server",
+        kind="session.stop",
+        detail={
+            "folder": folder_s,
+            "camera_ids": list(camera_ids),
+            "stop_log": stop_log[-20:],
+            "pack_pending": bool(pack_snap.get("pending")),
+        },
+    )
+    return {
+        "status": "stopped",
+        "stop_log": stop_log,
+        "folder": folder_s,
+        "camera_ids": list(camera_ids),
+        "pack_pending": bool(pack_snap.get("pending")),
+        "pack": pack_snap,
+    }
 
 
 class SessionStartBody(BaseModel):
@@ -1889,6 +2582,8 @@ class OperatorSettingsBody(BaseModel):
     soft_fps: int | None = None
     output_subdir: str | None = None
     chunk_minutes: int | None = None
+    h5_pack: bool | None = None
+    recording_tag: str | None = None
 
 
 class CamMetaBody(BaseModel):
@@ -2008,11 +2703,50 @@ def api_session_capture_stats() -> dict[str, Any]:
             bitrate_bps=info.get("bitrate_bps"),
         )
         snap["capturing"] = True
+        remux = info.get("proc")
+        cam_p = info.get("cam_proc")
+        remux_dead = remux is not None and remux.poll() is not None
+        cam_dead = cam_p is not None and cam_p.poll() is not None
+        if remux_dead or cam_dead:
+            snap["status"] = "stall"
+            snap["stalled"] = True
+            snap["pipe_dead"] = True
+            snap["remux_rc"] = remux.returncode if remux_dead else None
+            snap["cam_rc"] = cam_p.returncode if cam_dead else None
         cameras[cam_id] = snap
     return {
         "active": active_path().is_file(),
         "cameras": cameras,
     }
+
+
+class JournalEventBody(BaseModel):
+    session_id: str = Field(min_length=4, max_length=80)
+    kind: str = Field(min_length=1, max_length=80)
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
+@app.post("/api/journal/event")
+def api_journal_event(body: JournalEventBody) -> JSONResponse:
+    """Client breadcrumb into the operator event journal (page-session JSONL)."""
+    out = event_journal.append_event(
+        data_root(),
+        session_id=body.session_id,
+        kind=body.kind,
+        detail=body.detail,
+        source="ui",
+    )
+    return JSONResponse(out)
+
+
+@app.get("/api/journal/recent")
+def api_journal_recent(
+    session_id: str | None = Query(default=None),
+    limit: int = Query(default=80, ge=1, le=500),
+) -> dict[str, Any]:
+    return event_journal.recent_events(
+        data_root(), session_id=session_id, limit=limit
+    )
 
 
 @app.post("/api/session/start")
@@ -2040,6 +2774,16 @@ def api_session_start(body: SessionStartBody) -> JSONResponse:
 @app.post("/api/session/stop")
 def api_session_stop() -> JSONResponse:
     return JSONResponse(_end_session())
+
+
+@app.get("/api/session/pack-status")
+def api_session_pack_status(
+    clear_finished: bool = Query(False),
+) -> dict[str, Any]:
+    """Round A S2+: background final-pack progress for the recording banner."""
+    if clear_finished and not pack_jobs.pending():
+        pack_jobs.clear_finished()
+    return pack_jobs.snapshot()
 
 
 @app.post("/session/start")

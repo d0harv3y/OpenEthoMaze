@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 import pytest
 
-from maze.cli.of_mask_video import vertices_for_video
+from maze.cli.of_mask_video import vertices_for_video, write_masked_video
 
 from maze.pipeline.open_field.floor_quad import (
     FloorQuad,
@@ -250,6 +250,32 @@ def test_pose_mask_keeps_the_wall_band_and_zeros_beyond_the_blue_roi() -> None:
     assert masked[60, 159] == 0
     assert masked[60, 80] == 200
     assert not np.shares_memory(masked, image)
+
+
+def _gray_pixel(path: Path, x: int, y: int) -> int:
+    capture = cv2.VideoCapture(str(path))
+    ok, frame = capture.read()
+    capture.release()
+    assert ok and frame is not None
+    return int(frame[y, x, 0])
+
+
+def test_mask_scale_tightens_the_zone_and_the_default_stays_wide(tmp_path: Path) -> None:
+    frame = cv2.cvtColor(np.full((120, 160), 200, np.uint8), cv2.COLOR_GRAY2BGR)
+    source = tmp_path / "in.mp4"
+    writer = cv2.VideoWriter(str(source), cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (160, 120))
+    assert writer.isOpened()
+    for _ in range(3):
+        writer.write(frame)
+    writer.release()
+    quad = _diamond((79.5, 59.5), 30.0)
+    tight = tmp_path / "tight.mp4"
+    wide = tmp_path / "wide.mp4"
+    write_masked_video(source, tight, quad, scale=1.0)
+    write_masked_video(source, wide, quad)
+    # 40 px right of center: outside the floor (radius 30), inside the 1.8x zone (radius 54).
+    assert _gray_pixel(tight, 120, 60) < 10
+    assert _gray_pixel(wide, 120, 60) > 150
 
 
 def test_blank_frame_returns_none() -> None:
