@@ -1,6 +1,6 @@
 # INFO — Open-field rearing classifier (Sturman / SuperAnimal recipe)
 
-**Living design doc** (not an implemented runner yet). Companion to
+**Living design doc.** Companion to
 [INFO_of_frailty_metrics.md](INFO_of_frailty_metrics.md). Records **our** port of
 the Sturman OFT (open-field test) rearing MLP (multi-layer perceptron) that the
 SuperAnimal paper reused, mapped onto **SA-TVM** (SuperAnimal–TopViewMouse)
@@ -8,14 +8,14 @@ keypoints from this lab’s pose H5s.
 
 | Field | Value |
 |-------|-------|
-| **Status** | Scaffold — 22-D skeleton + window litmus in-repo; MLP train / LOOCV follow-on |
-| **Code** | [`of_rear_classifier/`](../../of_rear_classifier/) (repo child; **not** under `maze/`). Thin allowlist: `maze.pipeline.open_field.dlc_h5` (+ floor-quad vertices for P1/P2). |
+| **Status** | Goal A ✓; Goals B–D open (see [Goals A–D](#goals-ad)) |
+| **Code** | [`of_rear_classifier/`](../../of_rear_classifier/) (repo child; **not** under `maze/`). Thin allowlist: `maze.pipeline.open_field.dlc_h5` (+ floor-quad vertices for P1/P2). Sturman path uses local CSV loader (no maze). |
 | **Replaces (for Parks #7)** | Geometric `rear_proxy_*` gates in `maze.pipeline.open_field.features` (kept only as interim overlay dial-in) |
 | **Upstream recipe** | [ETHZ-INS/DLCAnalyzer](https://github.com/ETHZ-INS/DLCAnalyzer) `create_skeleton_v1` + `create_train_set_OFT` + keras MLP (`old_outdated_R/OLD_DLCAnalyzer_OFT_MachineLearning_final.R`) |
 | **Paper echo** | Ye et al. SuperAnimal (Nat Commun): 22-D skeleton × 31-frame window → MLP (± CEBRA); figure kit [AdaptiveMotorControlLab/modelzoo-figures](https://github.com/AdaptiveMotorControlLab/modelzoo-figures) `figures/Figure4.ipynb` |
 | **Labels (train seed)** | `DLCAnalyzer/data/OFT/Labels/AllLabDataOFT_final.csv` — Supported / Unsupported / Grooming (+ None gaps); annotators Jin / Furkan / Oliver |
 | **Pose (this lab)** | SA-TVM H5 (`of_superanimal_infer`); bodyparts verified on `Test 27_…topviewmouse….h5` |
-| **Last note** | 2026-11-05 — pilot root `of_rear_classifier/`; former `scratch/` → `moseq-mountain/` |
+| **Last note** | 2026-11-06 — formalized Goals A–D; Goal A artifacts in `of_rear_classifier/runs/sturman_loocv/` |
 
 **Abbreviations**
 
@@ -35,8 +35,39 @@ recipe?
 count); optional time bin for feature tables (`bin_width_s`).
 
 **What this is not:** not EthoVision Behavior Recognition; not unsupervised
-syllable sequencing (kpMS); not the geometric `rear_proxy_count` gate; not a
-weights file shipped inside DeepLabCut.
+syllable sequencing (kpMS) as the classifier itself (kpMS may later *assist*
+labeling — Goal B/C); not the geometric `rear_proxy_count` gate; not a weights
+file shipped inside DeepLabCut.
+
+---
+
+## Goals A–D
+
+Ladder from recipe check → FI-usable rearing. Do not skip claim type.
+
+| Goal | Name | Domain | New labels? | Done when | Claim type |
+|------|------|--------|-------------|-----------|------------|
+| **A** | Sturman LOOCV | Sturman OFT DLC + their intervals | **No** | Holdout frame/bout agreement vs Jin/Furkan/Oliver is sensible; artifacts + INFO table | **Verification** (code≡recipe) |
+| **B** | Davis transfer sanity | Lab SA-TVM H5 + floor quads | **Yes — small** (~2–5 videos, bout intervals) | Sturman- or Goal-A-weights applied to Davis; overlay + labeled time look non-crazy vs human | **Validation** (domain check) |
+| **C** | FI-usable Parks #7 | Lab frailty cohort | **Yes — more** (~10–20 sessions if B weak; ≥2 raters on a subset) | `rear_ml_*` columns locked; LOOCV/fine-tune on Davis; proxy dropped from FI path | **Validation** + FI metric |
+| **D** | Sturman-grade protocol (optional) | Lab or mixed | Dense bout labels ~20 videos × multi-rater | Paper-like multi-annotator agreement protocol on our assay | Gold-standard labeling study |
+
+```mermaid
+flowchart LR
+  A["A Sturman LOOCV\nverify recipe"] --> B["B Davis transfer\n2to5 labeled vids"]
+  B -->|ok enough| C["C FI rear_ml_*\nmore labels / fine-tune"]
+  B -->|fails| C
+  C --> D["D optional\nmulti-rater dense"]
+```
+
+| Goal | Needs from human | Needs from code |
+|------|------------------|-----------------|
+| A | — | ✓ `run_sturman_loocv.py` + `runs/sturman_loocv/` |
+| B | Full (or pilot) SA H5 path; GPU host for weekend kpMS; then label syllable bouts in the OpenCV tool (Supported / Unsupported / Grooming / None) | SA→npz export + syllable labeler ✓; kpMS fit/apply on GPU host; apply Sturman MLP vs those labels |
+| C | Label budget + FI definition (Supported-only vs +Unsupported); second rater subset | Train/fine-tune on Davis; feature-table columns; retire proxy for FI |
+| D | Multi-rater protocol + time | Same stack; agreement stats |
+
+**kpMS note:** syllable start/stop is the **preferred Goal B labeling UX** (not frame scrubbing). Classifier input stays skeleton→window→MLP unless we change the recipe. Runbook: [`of_rear_classifier/docs/WEEKEND_KPMS.md`](../../of_rear_classifier/docs/WEEKEND_KPMS.md). Tools: `export_sa_for_kpms.py`, `label_syllable_bouts.py`.
 
 ---
 
@@ -253,26 +284,59 @@ Supported+Unsupported sum when locking FI (document here when chosen).
 
 ---
 
-## Still missing before Parks #7 lock
+## Goal A — Sturman LOOCV (verified run)
 
-| Item | Role |
-|------|------|
-| MLP train + Sturman LOOCV | In `of_rear_classifier/` (torch optional extra) |
-| Reproduce Sturman LOOCV numbers | Verification that the port matches the recipe |
-| Davis frailty bout labels | Local train / fine-tune / transfer check |
-| Choice: Supported-only vs all rears for FI | Claim definition |
-| Drop geometric `rear_proxy_*` from FI path | Avoid two competing #7s |
+**Question:** does our Python recipe recover sensible holdout agreement with each
+Sturman annotator on their OFT DLC CSVs?
+
+| | |
+|--|--|
+| **Runner** | `uv run --extra sleap python of_rear_classifier/scripts/run_sturman_loocv.py` |
+| **Artifacts** | [`of_rear_classifier/runs/sturman_loocv/`](../../of_rear_classifier/runs/sturman_loocv/) `fold_metrics.csv`, `summary.json` |
+| **Generated** | 2026-11-06 |
+| **Folds** | 60 = 20 videos × {Jin, Furkan, Oliver} |
+| **Train knobs** | epochs=10, batch=256, W=15, cut±100 frames, lik≥0.95; **None** capped at 2× behavior frames (≤80k train rows/fold) — speed/balance vs raw Sturman R (batch 32, full None) |
+
+### Holdout frame accuracy (mean)
+
+| Annotator | mean frame acc |
+|-----------|---------------:|
+| Furkan | 0.854 |
+| Jin | 0.853 |
+| Oliver | 0.851 |
+| **All folds** | **0.853** |
+
+### Bout-level Spearman ρ (pred vs that annotator, after avgbool±10)
+
+| Annotator | Supported time | Unsupported time | Supported count | Unsupported count |
+|-----------|---------------:|-----------------:|----------------:|------------------:|
+| Furkan | 0.901 | 0.789 | 0.886 | 0.812 |
+| Jin | 0.821 | 0.757 | 0.867 | 0.785 |
+| Oliver | 0.847 | 0.764 | 0.891 | 0.826 |
+| pooled folds | 0.873 | 0.774 | — | — |
+
+**Claim type:** verification (code≡recipe on Sturman domain), **not** Davis
+validation and **not** Parks FI lock.
 
 ---
 
-## Verification (planned)
+## Still missing before Parks #7 lock
 
-- **Litmus:** on DLCAnalyzer held-out OFT video, Supported/Unsupported time
-  correlates with the matching annotator within ballpark of published Sturman /
-  SuperAnimal figures (not vibes on overlay alone).
-- **Metamorphic:** shuffling labels → chance accuracy; identity window on
-  constant pose → stable class; dropping P1/P2 should not crash dims.
-- **Validation:** human agreement on Davis OF sample; separate from code≡recipe
-  verification.
+| Item | Goal | Role |
+|------|------|------|
+| Davis bout labels (small) | B | Transfer sanity |
+| Davis bout labels (cohort) + FI definition | C | FI-usable `rear_ml_*` |
+| Drop geometric `rear_proxy_*` from FI path | C | Avoid two competing #7s |
+| Multi-rater dense protocol | D | Optional gold standard |
+
+---
+
+## Verification
+
+- **Litmus (Goal A):** Sturman LOOCV above — Supported/Unsupported time Spearman
+  ≈ 0.75–0.90 vs matching annotator.
+- **Metamorphic (unit):** `of_rear_classifier/tests` — feature dim, z-score P
+  flags, centered window 682-D, toy angles.
+- **Validation:** human agreement on Davis OF sample — still open.
 
 Overlay eye-check remains **validation** support only.

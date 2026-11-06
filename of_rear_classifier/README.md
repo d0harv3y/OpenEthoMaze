@@ -50,6 +50,42 @@ uv run python of_rear_classifier/scripts/smoke_h5.py `
   --max-frames 300
 ```
 
-## Status
+## Goal A — Sturman LOOCV
 
-Scaffold + 22-D skeleton / window litmus. MLP train and Sturman LOOCV = follow-on.
+```powershell
+uv run --extra sleap python of_rear_classifier/scripts/run_sturman_loocv.py `
+  --oft-root "C:\Users\admin\code\DLCAnalyzer\data\OFT" `
+  --out-dir of_rear_classifier/runs/sturman_loocv
+```
+
+Writes `fold_metrics.csv` + `summary.json` (20 videos × Jin/Furkan/Oliver).
+Needs torch (`--extra sleap` or lab). See INFO for numbers.
+
+## Status / goals
+
+Ladder (full text in INFO): **A** Sturman LOOCV ✓ → **B** Davis transfer (2–5
+labeled vids) → **C** FI `rear_ml_*` → **D** optional multi-rater dense.
+
+Goal A complete. Goal B: **per-video CPU kpMS** (no shared alphabet) + matplotlib
+labeler — see [docs/WEEKEND_KPMS.md](docs/WEEKEND_KPMS.md). Full SA H5 cohort on
+`H:\` (mirrors `D:\`); pilot Test 10 locally first.
+
+```powershell
+# Per-video CPU fit (pilot: Test 10, short iters)
+uv run --extra kpms python of_rear_classifier/scripts/fit_sa_cohort_kpms_cpu.py `
+  --h5-dir "D:\Open Field - superanimal" `
+  --out-root "D:\Open Field - kpms_sa_per_video" `
+  --only "Test 10" --ar-iters 10 --full-iters 10 --save-every 10
+
+# Labeler (matplotlib; OEM opencv is often GUI:NONE)
+uv run python of_rear_classifier/scripts/label_syllable_bouts.py `
+  --video "D:\Open Field - mp4\Test 10.mp4" `
+  --bouts "D:\Open Field - kpms_sa_per_video\Test 10\model\syllable_bouts.csv"
+
+# Full cohort on other PC (after commit/pull) — 128 GB: start --workers 8–12
+uv run --extra kpms python of_rear_classifier/scripts/fit_sa_cohort_kpms_cpu.py `
+  --h5-dir "H:\Open Field - superanimal" `
+  --out-root "H:\Open Field - kpms_sa_per_video" `
+  --workers 12
+```
+

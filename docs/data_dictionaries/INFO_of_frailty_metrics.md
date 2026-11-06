@@ -12,7 +12,7 @@ table and the **Model** chart in the same change as the code defaults in
 | **Code** | `maze.pipeline.open_field.features` · `running_metrics` · CLI `maze-of-feature-table` · `maze-of-overlay-metrics` |
 | **Units** | px / px·s⁻¹ / deg·px⁻¹ until `px_per_cm` is joined |
 | **Lit map** | [rodent_frailty_index_features.md](../research/rodent_frailty_index_features.md) ([Parks 2012](https://doi.org/10.1093/gerona/glr193); [Whitehead 2014](https://doi.org/10.1093/gerona/glt136)) |
-| **Rearing (next)** | [INFO_of_rear_classifier.md](INFO_of_rear_classifier.md) — MLP in [`of_rear_classifier/`](../../of_rear_classifier/) (not `maze.pipeline.open_field`); replaces proxy for Parks #7 |
+| **Rearing (next)** | [INFO_of_rear_classifier.md](INFO_of_rear_classifier.md) Goals A–D — A ✓; B Davis transfer next; MLP in [`of_rear_classifier/`](../../of_rear_classifier/) |
 | **Last dial-in note** | 2026-11-05 — rear gate: nose–center–tail_base angle ≥160° (replaced nose-speed); geometric proxy abandoned for FI — see rear-classifier INFO |
 
 ---
