@@ -42,7 +42,7 @@ Syllable spatial heatmaps at recognition (`nvl_obj`). Per-animal side-mass I liv
 | `grain_*__all_tx.json` | n / rot180 / loci / `dwell_s_by_tx` |
 | `INFO_syllable_spatial_heatmaps.md` | Data dictionary |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/fig_syllable_spatial_heatmap.py` (`--overlay-tx`)
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/fig_syllable_spatial_heatmap.py` (`--overlay-tx`)
 
 ### Exemplar knobs (2026-10-09)
 

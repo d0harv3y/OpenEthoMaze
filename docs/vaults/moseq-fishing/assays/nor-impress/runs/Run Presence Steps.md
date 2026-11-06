@@ -46,7 +46,7 @@ Within-session object-appearance engagement steps (`frac_near` Δ and cousins); 
 | `figures/fig_presence_condition_kruskal.svg` | Condition panels | #clock-portable |
 | vault `attachments/fig_v_protocol_step_presence_kruskal.svg` | Verdict embed | #clock-portable |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/` — presence-steps suite + `fig_simpler_first_presence.py`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/` — presence-steps suite + `fig_simpler_first_presence.py`
 
 ## Related
 

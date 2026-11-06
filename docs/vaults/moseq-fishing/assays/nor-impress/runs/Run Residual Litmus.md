@@ -39,7 +39,7 @@ OLS-residualize Shannon / H(next\|current) / pair MI on speed + `frac_still` + `
 | `INFO_residual_litmus.md` | Data dictionary |
 | `run_summary.json` | `pass_family_a: false` |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_residual_litmus.py`  
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_residual_litmus.py`  
 **Lib / litmus:** `residual_litmus.py`, `test_residual_litmus.py`
 
 ## Do not confuse with

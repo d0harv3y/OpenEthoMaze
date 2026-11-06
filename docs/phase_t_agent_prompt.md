@@ -271,12 +271,12 @@ Scope: T5 only. Prerequisites: T4c, E0.
 Empirical comparison on small manifest subset (≤30 trials): fit/apply streams A, B, C with --max-trials 30.
 
 Deliverables:
-- scratch/ dated README with bout duration stats, overlay QC notes, recommendation defer/pursue C
+- moseq-mountain/ dated README with bout duration stats, overlay QC notes, recommendation defer/pursue C
 - Optional: maze/cli/kpms_stream_ablation.py helper (no production default)
 
 Out of scope: merging syllable taxonomies across streams.
 
-Do not commit scratch/; summarize conclusions in PR or docs/tracking_kpms_master_plan.md § T5 findings.
+Do not commit moseq-mountain/; summarize conclusions in PR or docs/tracking_kpms_master_plan.md § T5 findings.
 ```
 
 ---

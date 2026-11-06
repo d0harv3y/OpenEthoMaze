@@ -46,7 +46,7 @@ Same as [[F ProxComp-A Score Contract]] (r=0.10 m exclusive, N=10, `cluster_id` 
 ## Run
 
 ```powershell
-uv run python scratch/nor_object_mi/simpler_first_prox_comp.py --per-scalar-families
+uv run python moseq-mountain/nor_object_mi/simpler_first_prox_comp.py --per-scalar-families
 ```
 
 Arts: `simpler_first_prox_comp_per_scalar_fams/` · [[Run ProxComp Per-Scalar]]

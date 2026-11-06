@@ -71,7 +71,7 @@ Occupancy-Δ honesty panel (includes M novel-Δ near miss).
 
 ![[fig_v_occupancy_delta_null.svg]]
 
-Regen / campaign copies: `sack/.../vault_verdict_figures/` · `scratch/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
+Regen / campaign copies: `sack/.../vault_verdict_figures/` · `moseq-mountain/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
 
 ## Related
 

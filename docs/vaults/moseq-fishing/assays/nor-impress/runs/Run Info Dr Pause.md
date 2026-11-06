@@ -34,7 +34,7 @@ INFO bits between object-prox DR and pause-syllable Δp (cluster-mapped). Not a 
 | `info_dr_pause_tests_long.csv` | I — no `hit_fdr05` / `hit_p05` on DR×Δp_pause MI |
 | `INFO_info_dr_pause.md` | Data dictionary |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/` — info-dr-pause suite
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/` — info-dr-pause suite
 
 **Demote:** fork folders `simpler_first_info_dr_pause__*` — [[Prune Map]]
 

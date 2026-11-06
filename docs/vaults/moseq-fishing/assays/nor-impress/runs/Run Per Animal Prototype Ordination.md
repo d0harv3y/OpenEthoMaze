@@ -46,7 +46,7 @@ Z-score 9 kinematic columns → HDBSCAN → PCA (feature-space ordinate, not PCo
 | `figures/prototype_pca3d_across_mcs4_ms2.html` | Interactive 3D | #alphabet-bound |
 | `figures/FIGURES.md` | Full inventory | — |
 
-**Runners:** `OpenEthoMaze/scratch/nor_object_mi/per_animal_prototype_ordination.py` · `…_plotly3d.py`
+**Runners:** `OpenEthoMaze/moseq-mountain/nor_object_mi/per_animal_prototype_ordination.py` · `…_plotly3d.py`
 
 ## Related
 

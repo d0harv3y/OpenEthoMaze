@@ -79,11 +79,19 @@ Run `uv run pytest tests/ -q` **before and after** each Phase D4 `main_window` e
 - [scripts/README.md](scripts/README.md) — console commands and maintained / promoted / archive classification.
 - Prefer `uv run maze-<name>` over `uv run python scripts/<name>.py` (shims delegate to `maze.cli`).
 
+## Pilot / archival roots (not `maze/`)
+
+| Path | Role |
+|------|------|
+| [`of_rear_classifier/`](of_rear_classifier/) | OF rearing MLP pilot (Sturman/SA); thin imports of `maze.pipeline.open_field.dlc_h5` / floor-quad only. Seed for future extractable OF frailty — do **not** put rearing MLP into `maze/`. Dict: [INFO_of_rear_classifier.md](docs/data_dictionaries/INFO_of_rear_classifier.md). |
+| [`moseq-mountain/`](moseq-mountain/) | Former `scratch/` — archival MoSeq/NOR/kpMS pilots; mine later, do not grow silent campaigns. |
+
 ## What not to edit
 
 | Path | Reason |
 |------|--------|
 | `scripts/archive/**` | Frozen legacy; ruff/black excluded — no new features |
+| `moseq-mountain/**` | Archival pilots; prefer vault / promote deliberately |
 | `maze/pipeline/paths_local.py` | Gitignored per-machine; use example + env/CLI |
 | Phase E ethogram GUI | [docs/ethogram_scope.md](docs/ethogram_scope.md) — parallel track |
 | Tracking v2 + H5 pose/blob | [docs/h5_tracking_contract.md](docs/h5_tracking_contract.md) — agent slices T0–T5 in [docs/phase_t_agent_prompt.md](docs/phase_t_agent_prompt.md) |

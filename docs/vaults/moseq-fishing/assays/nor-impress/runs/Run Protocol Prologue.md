@@ -33,7 +33,7 @@ Mean/interval cousins (t / Welch ANOVA / Pearson) for protocol preference + cond
 | `protocol_dr_per_animal.csv` | D — protocol preference / speed cousins |
 | `INFO_protocol_prologue.md` | Data dictionary |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/` — protocol-prologue suite
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/` — protocol-prologue suite
 
 ## Related
 

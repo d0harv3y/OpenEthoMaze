@@ -33,7 +33,7 @@ Prototype kinematics + HDBSCAN `cluster_id` remap across models. Pause focus for
 | prototype / cluster tables | D — HDBSCAN remap |
 | INFO next to folder | Data dictionary |
 
-**Runner:** `OpenEthoMaze/scratch/vast_moseq/regen_paramscan2026_signatures.py` (also `regen_syllable_signatures.py`)
+**Runner:** `OpenEthoMaze/moseq-mountain/vast_moseq/regen_paramscan2026_signatures.py` (also `regen_syllable_signatures.py`)
 
 ## Related
 

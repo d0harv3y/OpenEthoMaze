@@ -47,7 +47,7 @@ Read vault negatives; do not re-derive:
 ## Next build steps
 
 1. Pick alphabet in the runner (portable cluster / ethogram token preferred; raw `raw_syllable_id` only with explicit methods caveat).  
-2. Implement under `scratch/nor_object_mi/` (pattern: bout tables + `simpler_first_*` honesty CSVs). Lock **one** matrix distance before testing.  
+2. Implement under `moseq-mountain/nor_object_mi/` (pattern: bout tables + `simpler_first_*` honesty CSVs). Lock **one** matrix distance before testing.  
 3. Emit `*_per_animal.csv`, `*_tests_long.csv`, `INFO_*.md`, then `Q5 Transition Structure Honesty Pass.md`.  
 4. Update Index / Q5 / Prune with pass or fail.  
 5. On fail: stop — no Family B without user OK. On pass: then optional physio follow-up on **that** scalar only.

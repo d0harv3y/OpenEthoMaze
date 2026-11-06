@@ -48,7 +48,7 @@ Syllable bout ∩ movement bout — shared boundaries / enrichment. Concordance 
 | `../simpler_first_ambulation_clocks/figures/fig_clock_duration.png` | Clock duration | #clock-portable |
 | `../simpler_first_ambulation_clocks/figures/fig_clock_n_bouts.png` | Bout-count clock | #clock-portable |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/` — ambulation-overlap suite
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/` — ambulation-overlap suite
 
 ## Related
 

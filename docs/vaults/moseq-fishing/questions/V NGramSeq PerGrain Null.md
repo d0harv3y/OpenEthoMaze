@@ -32,7 +32,7 @@ Honesty panel — NGramSeq-PerGrain. Source: [[Run Sequence PerGrain BH]].
 
 ![[fig_v_ngramseq_pergrain_null.svg]]
 
-Regen / campaign copies: `sack/.../vault_verdict_figures/` · `scratch/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
+Regen / campaign copies: `sack/.../vault_verdict_figures/` · `moseq-mountain/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
 
 ## Related
 

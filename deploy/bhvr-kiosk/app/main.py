@@ -23,7 +23,13 @@ from app import event_journal, pack_jobs
 
 import yaml
 from fastapi import FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -79,7 +85,7 @@ from app.preview import (
     nvr_ingress_ip,
     preview_settings,
 )
-from app import h5_archive, kiosk_settings, webrtc_preview
+from app import h5_archive, h5_viewer, kiosk_settings, local_uvc_runtime, webrtc_preview
 from app.capture_sink import CaptureSink
 
 APP_DIR = Path(__file__).resolve().parent
@@ -391,6 +397,8 @@ def ssh_connect_timeout_for_host(host: str, *, mismatch: bool = False) -> int:
 
 
 def online_cameras(cfg: dict[str, Any]) -> list[dict[str, Any]]:
+    if local_uvc_runtime.is_local_uvc(cfg):
+        return local_uvc_runtime.roster_cameras(cfg, load_operator_state(data_root()))
     stale = float(cfg.get("mqtt", {}).get("stale_after_s", 180))
     owned = set(cfg.get("owned_camera_ids") or [])
     now = time.time()
@@ -591,11 +599,22 @@ def _capture_pid_path(folder: Path) -> Path:
 
 def _save_capture_pids(folder: Path) -> None:
     with _capture_lock:
-        payload = {
-            cam_id: {"pid": int(info["proc"].pid), "host": info.get("host")}
-            for cam_id, info in _captures.items()
-            if info.get("proc") is not None
-        }
+        payload: dict[str, Any] = {}
+        for cam_id, info in _captures.items():
+            proc = info.get("proc")
+            if proc is None:
+                continue
+            if str(info.get("backend") or "") == "local_uvc":
+                payload[cam_id] = {
+                    "backend": "local_uvc",
+                    "host": "local",
+                    "source_id": info.get("source_id"),
+                }
+                continue
+            pid = getattr(proc, "pid", None)
+            if pid is None:
+                continue
+            payload[cam_id] = {"pid": int(pid), "host": info.get("host")}
     _capture_pid_path(folder).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
@@ -641,6 +660,13 @@ def _free_cam_encode_hosts(
 
 
 def _stop_idle_preview(cam_id: str, cfg: dict[str, Any] | None = None) -> None:
+    cfg_use = cfg if cfg is not None else load_config()
+    # local_uvc idle LIVE (dshow encode) — stop even if Pi _idle_previews empty.
+    if local_uvc_runtime.is_local_uvc(cfg_use):
+        try:
+            local_uvc_runtime.stop_idle_preview(cfg_use, cam_id)
+        except Exception:
+            pass
     with _preview_lock:
         info = _idle_previews.pop(cam_id, None)
     if not info:
@@ -679,10 +705,31 @@ def _stop_idle_preview(cam_id: str, cfg: dict[str, Any] | None = None) -> None:
 
 
 def stop_all_idle_previews(cfg: dict[str, Any] | None = None) -> None:
+    cfg_use = cfg if cfg is not None else load_config()
+    if local_uvc_runtime.is_local_uvc(cfg_use):
+        try:
+            local_uvc_runtime.stop_all_idle_previews(cfg_use)
+        except Exception:
+            pass
     with _preview_lock:
         ids = list(_idle_previews.keys())
     for cam_id in ids:
-        _stop_idle_preview(cam_id, cfg)
+        _stop_idle_preview(cam_id, cfg_use)
+
+
+def _tee_preview_chunk(preview_q: "queue.Queue[bytes | None]", chunk: bytes) -> None:
+    """Bounded LIVE tee: drop oldest on pressure (do not clear whole queue)."""
+    try:
+        preview_q.put_nowait(chunk)
+    except queue.Full:
+        try:
+            preview_q.get_nowait()
+        except queue.Empty:
+            pass
+        try:
+            preview_q.put_nowait(chunk)
+        except queue.Full:
+            pass
 
 
 def _capture_writer(
@@ -705,19 +752,7 @@ def _capture_writer(
             with _preview_lock:
                 preview_q = _record_preview_sinks.get(cam_id)
             if preview_q is not None:
-                # Bounded queue; drop oldest on pressure. Do NOT clear the whole
-                # queue — that would tear annex-B mid-NAL until the next IDR.
-                try:
-                    preview_q.put_nowait(chunk)
-                except queue.Full:
-                    try:
-                        preview_q.get_nowait()
-                    except queue.Empty:
-                        pass
-                    try:
-                        preview_q.put_nowait(chunk)
-                    except queue.Full:
-                        pass
+                _tee_preview_chunk(preview_q, chunk)
     finally:
         try:
             sink.close()
@@ -748,7 +783,37 @@ def _kill_proc(proc: Any, *, timeout: float = 10) -> None:
         pass
 
 
+def _uvc_size_poller(
+    cam_id: str,
+    ts_path: Path,
+    stats: dict[str, Any],
+    stop: threading.Event,
+) -> None:
+    """Feed capture-stats from growing .ts size (LocalUvc has no CaptureSink writer)."""
+    last = 0
+    while not stop.wait(0.5):
+        try:
+            n = int(ts_path.stat().st_size) if ts_path.is_file() else 0
+        except OSError:
+            continue
+        if n > last:
+            note_capture_bytes(stats, n - last)
+            last = n
+        _ = cam_id
+
+
 def _stop_capture_entry(info: dict[str, Any]) -> None:
+    if str(info.get("backend") or "") == "local_uvc":
+        stop_sz = info.get("stop_size")
+        if isinstance(stop_sz, threading.Event):
+            stop_sz.set()
+        t = info.get("size_thread")
+        if isinstance(t, threading.Thread) and t.is_alive():
+            t.join(timeout=2.0)
+        cam_id = str(info.get("cam_id") or "")
+        if cam_id:
+            local_uvc_runtime.stop_record_cam(load_config(), cam_id)
+        return
     stop_event = info.get("stop")
     if isinstance(stop_event, threading.Event):
         stop_event.set()
@@ -1230,28 +1295,268 @@ def _start_one_science_cam(
     return log
 
 
-def start_cameras(meta: SubjectMeta, folder: Path, cfg: dict[str, Any]) -> list[str]:
-    """Promote to science: cam ``rpicam | ffmpeg`` MPEG-TS over SSH.
+def _start_one_uvc_science_cam(
+    *,
+    cfg: dict[str, Any],
+    cam_id: str,
+    source_id: str,
+    folder: Path,
+    meta: SubjectMeta,
+    cmeta: dict[str, Any],
+    h5_pack: bool,
+    recording_tag: str,
+    session_utc: str,
+    uvc_geom: dict[str, Any],
+) -> list[str]:
+    """LocalUvc dshow → MPEG-TS file (+ optional H5 shell)."""
+    log: list[str] = []
+    subject_id = str(cmeta.get("subject_id") or "").strip() or meta.subject_id
+    stem = part_stem(subject_id, cam_id, 0, recording_tag=recording_tag)
+    with _capture_lock:
+        prev = _captures.pop(cam_id, None)
+    if prev:
+        _stop_capture_entry(prev)
 
-    Round A: stop idle only for selected cams; bring up with parallel≤2 and
-    data-driven ready (not fixed sleep).
-    """
+    ts_path = folder / f"{stem}.ts"
+    pts_path = folder / f"{stem}.pts"
+    h5_path: Path | None = None
+    if h5_pack:
+        h5_path = h5_archive.cam_h5_path(
+            folder, subject_id, cam_id, recording_tag=recording_tag
+        )
+        try:
+            h5_archive.create_cam_h5(
+                h5_path,
+                attrs={
+                    "cam_id": cam_id,
+                    "subject_id": subject_id,
+                    "recording_tag": recording_tag,
+                    "session_started_utc": session_utc,
+                    "science_size": meta.profile,
+                    "capture_backend": "local_uvc",
+                    "source_id": source_id,
+                    "uvc_width": uvc_geom.get("width"),
+                    "uvc_height": uvc_geom.get("height"),
+                    "uvc_fps": uvc_geom.get("fps"),
+                    "cage_id": str(cmeta.get("cage_id") or ""),
+                    "sex": str(cmeta.get("sex") or "U"),
+                    "strain": str(cmeta.get("strain") or ""),
+                    "nvr_id": str(cfg.get("nvr_id") or ""),
+                },
+            )
+            log.append(f"OK H5 shell {h5_path.name}")
+        except Exception as exc:  # noqa: BLE001
+            log.append(f"FAIL H5 shell {cam_id}: {exc}")
+            return log
+
+    try:
+        if ts_path.is_file():
+            ts_path.unlink()
+        if pts_path.is_file():
+            pts_path.unlink()
+    except OSError:
+        pass
+
+    ready = False
+    last_err = ""
+    for attempt in range(2):
+        if attempt:
+            time.sleep(1.2)
+            log.append(f"RETRY start uvc {cam_id} (attempt {attempt + 1})")
+            local_uvc_runtime.stop_record_cam(cfg, cam_id)
+            try:
+                if ts_path.is_file():
+                    ts_path.write_bytes(b"")
+            except OSError:
+                pass
+        def _on_uvc_ts(data: bytes, *, _cid: str = cam_id) -> None:
+            with _preview_lock:
+                preview_q = _record_preview_sinks.get(_cid)
+            if preview_q is not None:
+                _tee_preview_chunk(preview_q, data)
+
+        try:
+            local_uvc_runtime.start_record_cam(
+                cfg=cfg,
+                cam_id=cam_id,
+                source_id=source_id,
+                ts_path=ts_path,
+                pts_path=pts_path,
+                on_ts_bytes=_on_uvc_ts,
+            )
+        except Exception as exc:  # noqa: BLE001
+            last_err = str(exc)
+            log.append(f"FAIL start uvc {cam_id}: {exc}")
+            local_uvc_runtime.stop_record_cam(cfg, cam_id)
+            continue
+
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < 10.0:
+            if ts_path.is_file() and ts_path.stat().st_size >= SCIENCE_READY_MIN_BYTES:
+                ready = True
+                break
+            time.sleep(0.2)
+        if ready:
+            break
+        local_uvc_runtime.stop_record_cam(cfg, cam_id)
+        size = ts_path.stat().st_size if ts_path.is_file() else 0
+        last_err = f"no bytes yet ({size} B)"
+        log.append(f"FAIL start uvc {cam_id}: {last_err}")
+
+    if not ready:
+        if h5_path is not None and h5_path.is_file():
+            try:
+                # Empty shell only — don't leave a fake archive.
+                if h5_path.stat().st_size < 50_000:
+                    h5_path.unlink(missing_ok=True)
+                    log.append(f"removed empty H5 shell {h5_path.name}")
+            except OSError:
+                pass
+        if last_err and not any("FAIL start uvc" in ln for ln in log):
+            log.append(f"FAIL start uvc {cam_id}: {last_err}")
+        return log
+
+    stats = new_capture_byte_stats()
+    # Seed bytes so capture-stats / REC badge aren't "stall" until first poll.
+    try:
+        stats["bytes"] = int(ts_path.stat().st_size) if ts_path.is_file() else 0
+        if stats["bytes"]:
+            note_capture_bytes(stats, 0)
+    except OSError:
+        pass
+    stop_sz = threading.Event()
+    sz_thread = threading.Thread(
+        target=_uvc_size_poller,
+        args=(cam_id, ts_path, stats, stop_sz),
+        name=f"uvc-sz-{cam_id}",
+        daemon=True,
+    )
+    sz_thread.start()
+    with _capture_lock:
+        _captures[cam_id] = {
+            "backend": "local_uvc",
+            "cam_id": cam_id,
+            "proc": None,  # no remux Popen — never call .poll()
+            "cam_proc": None,
+            "active": True,  # stop_cameras: local capture present
+            "host": "local",
+            "source_id": source_id,
+            "video": str(ts_path),
+            "h264": str(ts_path),
+            "stem": stem,
+            "subject_id": subject_id,
+            "recording_tag": recording_tag,
+            "part": 0,
+            "part_started_at": time.time(),
+            "chunk_minutes": 0,
+            "h5_pack": h5_pack,
+            "folder": str(folder),
+            "h5_path": str(h5_path) if h5_path else "",
+            "pts_index": 0,
+            "session_started_utc": session_utc,
+            "stats": stats,
+            "soft_fps": int(uvc_geom.get("fps") or 30),
+            "bitrate_bps": 1_500_000,
+            "stop_size": stop_sz,
+            "size_thread": sz_thread,
+        }
+    size = ts_path.stat().st_size if ts_path.is_file() else 0
+    log.append(
+        f"OK stream {cam_id}@local_uvc -> {ts_path.name} early_bytes={size} "
+        f"{uvc_geom.get('width')}x{uvc_geom.get('height')}@{uvc_geom.get('fps')} "
+        f"h5_pack={int(h5_pack)}"
+    )
+    return log
+
+
+def start_cameras(meta: SubjectMeta, folder: Path, cfg: dict[str, Any]) -> list[str]:
+    """Promote to science: Pi SSH MPEG-TS, or local_uvc dshow encode."""
     by_id = {c["id"]: c for c in online_cameras(cfg)}
     op = load_operator_state(data_root())
     cam_metas = op.get("cameras") or {}
     chunk_minutes = int(op.get("chunk_minutes") or 0)
     h5_pack = bool(op.get("h5_pack", True))
     recording_tag = normalize_recording_tag(op.get("recording_tag"))
-    log: list[str] = [
+    folder.mkdir(parents=True, exist_ok=True)
+    session_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    _science_guard_claim(list(meta.camera_ids))
+
+    if local_uvc_runtime.is_local_uvc(cfg):
+        uvc = local_uvc_runtime.uvc_settings(cfg)
+        # Chunk roll assumes SSH CaptureSink; defer for local_uvc v1.
+        chunk_minutes = 0
+        max_n = int(uvc["max_concurrent"])
+        log: list[str] = [
+            f"promote local_uvc: ≤{max_n} concurrent; chunk_minutes forced 0"
+        ]
+        if len(meta.camera_ids) > max_n:
+            log.append(
+                f"FAIL local_uvc: asked {len(meta.camera_ids)} cams, max {max_n}"
+            )
+            _science_guard_release(list(meta.camera_ids))
+            return log
+        bindings = local_uvc_runtime.normalize_bindings(
+            op.get("uvc_bindings"), max_n=max_n
+        )
+        work_uvc: list[tuple[str, str, dict[str, Any]]] = []
+        for cam_id in meta.camera_ids:
+            _stop_idle_preview(cam_id, cfg)
+            cam = by_id.get(cam_id)
+            source_id = str((cam or {}).get("source_id") or bindings.get(cam_id) or "")
+            if not cam or not cam.get("online") or not source_id:
+                log.append(f"SKIP {cam_id} (not bound/online local_uvc)")
+                continue
+            cmeta = cam_metas.get(cam_id) or {}
+            work_uvc.append(
+                (cam_id, source_id, cmeta if isinstance(cmeta, dict) else {})
+            )
+        if not work_uvc:
+            _science_guard_release(list(meta.camera_ids))
+            return log
+        # Idle stills must not hold dshow while we open science graphs.
+        local_uvc_runtime.set_snapshot_blocked(True)
+        log.append("snapshot blocked + drained for science promote")
+        # Stagger opens (dshow graph settle); serial is safer than ThreadPool.
+        for i, (cam_id, source_id, cmeta) in enumerate(work_uvc):
+            if i:
+                time.sleep(0.85)
+            try:
+                log.extend(
+                    _start_one_uvc_science_cam(
+                        cfg=cfg,
+                        cam_id=cam_id,
+                        source_id=source_id,
+                        folder=folder,
+                        meta=meta,
+                        cmeta=cmeta,
+                        h5_pack=h5_pack,
+                        recording_tag=recording_tag,
+                        session_utc=session_utc,
+                        uvc_geom=uvc,
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.append(f"FAIL start {cam_id}: {exc!r}")
+        with _capture_lock:
+            ok_ids = {cid for cid in meta.camera_ids if cid in _captures}
+        _science_guard_release(set(meta.camera_ids) - ok_ids)
+        _save_capture_pids(folder)
+        try:
+            (folder / "promote_log.json").write_text(
+                json.dumps(log, indent=2) + "\n", encoding="utf-8"
+            )
+        except OSError:
+            pass
+        # Keep snaps blocked while any local_uvc capture is live.
+        if not ok_ids:
+            local_uvc_runtime.set_snapshot_blocked(False)
+        return log
+
+    log = [
         f"promote: idle stop for {len(meta.camera_ids)} cam(s); "
         f"science parallel≤{SCIENCE_START_PARALLEL}"
     ]
     ask = science_encode_ask(meta.profile, meta.soft_fps, cfg)
-    folder.mkdir(parents=True, exist_ok=True)
-    session_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    # Claim before idle stop so a racing /api/preview/stop cannot pkill science.
-    _science_guard_claim(list(meta.camera_ids))
 
     work: list[tuple[str, str, dict[str, Any]]] = []
     for cam_id in meta.camera_ids:
@@ -1449,7 +1754,19 @@ def stop_cameras(
             ) or {}
             if op_row.get("subject_id"):
                 subject_id = str(op_row["subject_id"]).strip() or subject_id
-        if info and info.get("proc"):
+        backend = str((info or {}).get("backend") or "")
+        is_uvc = backend == "local_uvc" or (
+            local_uvc_runtime.is_local_uvc(cfg) and host in ("", "local")
+        )
+        has_local = bool(
+            info
+            and (
+                info.get("active")
+                or info.get("proc") is not None
+                or backend == "local_uvc"
+            )
+        )
+        if info and has_local:
             host = str(info.get("host") or host)
             stem = str(info.get("stem") or "")
             subject_id = str(info.get("subject_id") or subject_id)
@@ -1460,11 +1777,12 @@ def stop_cameras(
             if info.get("h5_path"):
                 h5_path = Path(str(info["h5_path"]))
             video = Path(str(info.get("video") or info.get("h264") or ""))
+            is_uvc = backend == "local_uvc" or is_uvc
             _stop_capture_entry(info)
             nbytes = video.stat().st_size if video.is_file() else 0
             log.append(f"OK stop stream {cam_id} nvr_bytes={nbytes}")
         else:
-            if host:
+            if host and not is_uvc and host != "local":
                 _ssh_run(
                     cfg,
                     host,
@@ -1489,7 +1807,9 @@ def stop_cameras(
                         )
                         part = int(parsed.get("part") or 0)
 
-        if folder is None or not host:
+        if folder is None:
+            continue
+        if not host and not is_uvc:
             continue
 
         if not video.is_file() and stem:
@@ -1506,15 +1826,21 @@ def stop_cameras(
             if dest_ts.suffix == ".ts"
             else folder / f"{cam_id}_timestamps.pts"
         )
-        pts_full = folder / f".{slug(cam_id)}_pts_full.pts"
-        ok, detail = _pull_cam_pts(cfg, host, pts_full)
-        if ok:
-            n, _next_idx = h5_archive.slice_pts_file(
-                pts_full, dest_pts, start_index=pts_index
-            )
-            log.append(f"OK pull pts {cam_id} ({detail}) sliced_n={n}")
+        if is_uvc:
+            if dest_pts.is_file():
+                log.append(f"OK local pts {cam_id} ({dest_pts.stat().st_size} B)")
+            else:
+                log.append(f"WARN local pts missing {cam_id}")
         else:
-            log.append(f"FAIL pull pts {cam_id}: {detail}")
+            pts_full = folder / f".{slug(cam_id)}_pts_full.pts"
+            ok, detail = _pull_cam_pts(cfg, host, pts_full)
+            if ok:
+                n, _next_idx = h5_archive.slice_pts_file(
+                    pts_full, dest_pts, start_index=pts_index
+                )
+                log.append(f"OK pull pts {cam_id} ({detail}) sliced_n={n}")
+            else:
+                log.append(f"FAIL pull pts {cam_id}: {detail}")
 
         fps_summary: dict[str, Any] | None = None
         if dest_pts.is_file():
@@ -1619,6 +1945,13 @@ def stop_cameras(
     with _pack_log_lock:
         log.extend(list(_pack_log))
         _pack_log.clear()
+    # Re-enable crude stills once no local_uvc captures remain.
+    with _capture_lock:
+        any_uvc = any(
+            str(info.get("backend") or "") == "local_uvc" for info in _captures.values()
+        )
+    if not any_uvc and local_uvc_runtime.is_local_uvc(cfg):
+        local_uvc_runtime.set_snapshot_blocked(False)
     return log
 
 
@@ -1876,6 +2209,58 @@ def _iter_record_preview(cam_id: str, cfg: dict[str, Any]) -> Iterator[bytes]:
                 _record_preview_sinks.pop(cam_id, None)
 
 
+def _resolve_local_uvc_preview_source(
+    cfg: dict[str, Any], cam_id: str
+) -> str:
+    """Return source_id or raise HTTPException *before* StreamingResponse starts."""
+    by_id = {c["id"]: c for c in online_cameras(cfg)}
+    cam = by_id.get(cam_id) or {}
+    source_id = str(cam.get("source_id") or "")
+    if not source_id:
+        op = load_operator_state(data_root())
+        uvc = local_uvc_runtime.uvc_settings(cfg)
+        bindings = local_uvc_runtime.normalize_bindings(
+            op.get("uvc_bindings"), max_n=uvc["max_concurrent"]
+        )
+        source_id = str(bindings.get(cam_id) or "")
+    if not source_id:
+        raise HTTPException(404, f"{cam_id} not bound")
+    if cam and not cam.get("online"):
+        raise HTTPException(404, f"{cam_id} offline (source missing)")
+    return source_id
+
+
+def _iter_idle_preview_local_uvc(
+    cfg: dict[str, Any], cam_id: str, source_id: str
+) -> Iterator[bytes]:
+    """Idle LIVE for local_uvc: dshow→libx264 MPEG-TS into a bounded queue.
+
+    Caller must preflight ``source_id`` — never raise HTTPException here after
+    the StreamingResponse has already started (Starlette → ASGI RuntimeError).
+    """
+    tee_max = preview_settings(cfg).tee_queue_max
+    try:
+        q = local_uvc_runtime.ensure_idle_preview(
+            cfg, cam_id, source_id, queue_max=tee_max
+        )
+    except FileNotFoundError as exc:
+        print(f"idle-uvc {cam_id}: ffmpeg missing: {exc}", flush=True)
+        return
+    except (KeyError, RuntimeError, ValueError) as exc:
+        print(f"idle-uvc {cam_id}: open failed: {exc}", flush=True)
+        return
+    stop = threading.Event()
+    print(
+        f"idle-uvc {cam_id}: mpegts publisher queue_max={tee_max} src={source_id}",
+        flush=True,
+    )
+    try:
+        yield from feed_queue_to_iterator(q, stop)
+    finally:
+        stop.set()
+        # Publisher stays up for reconnect; /api/preview/stop tears it down.
+
+
 def _mqtt_loop() -> None:
     try:
         import paho.mqtt.client as mqtt
@@ -1996,6 +2381,13 @@ def _mqtt_loop() -> None:
 @app.on_event("startup")
 def _startup() -> None:
     global _mqtt_thread
+    cfg = load_config()
+    if local_uvc_runtime.is_local_uvc(cfg):
+        print(
+            "capture_backend=local_uvc — MQTT roster skipped; bind cams in operator settings",
+            flush=True,
+        )
+        return
     if _mqtt_thread and _mqtt_thread.is_alive():
         return
     _mqtt_thread = threading.Thread(target=_mqtt_loop, name="bhvr-mqtt", daemon=True)
@@ -2045,6 +2437,7 @@ def index(request: Request) -> HTMLResponse:
             "preview_width": prev.width,
             "preview_height": prev.height,
             "idle_ask_label": ask.label,
+            "capture_backend": local_uvc_runtime.capture_backend(cfg),
         },
     )
 
@@ -2055,9 +2448,83 @@ def api_cams() -> dict[str, Any]:
     cams = online_cameras(cfg)
     return {
         "cameras": cams,
+        "capture_backend": local_uvc_runtime.capture_backend(cfg),
         "science_size_options": science_size_options(),
         "science_fps_options": list(SCIENCE_FPS_OPTIONS),
     }
+
+
+@app.get("/api/uvc/sources")
+def api_uvc_sources() -> dict[str, Any]:
+    cfg = load_config()
+    if not local_uvc_runtime.is_local_uvc(cfg):
+        raise HTTPException(400, "capture_backend is not local_uvc")
+    srcs = local_uvc_runtime.list_sources(cfg)
+    op = load_operator_state(data_root())
+    uvc = local_uvc_runtime.uvc_settings(cfg)
+    return {
+        "sources": [
+            {
+                "source_id": s.source_id,
+                "label": s.label,
+                "kind": s.kind,
+                "meta": dict(s.meta),
+            }
+            for s in srcs
+        ],
+        "bindings": local_uvc_runtime.normalize_bindings(
+            op.get("uvc_bindings"), max_n=uvc["max_concurrent"]
+        ),
+        "max_concurrent": uvc["max_concurrent"],
+        "geom": {
+            "width": uvc["width"],
+            "height": uvc["height"],
+            "fps": uvc["fps"],
+        },
+    }
+
+
+class UvcBindingsBody(BaseModel):
+    """Must be defined before the route (future annotations + FastAPI body infer)."""
+
+    bindings: dict[str, str] = Field(default_factory=dict)
+
+
+@app.put("/api/uvc/bindings")
+def api_uvc_bindings_put(body: UvcBindingsBody) -> JSONResponse:
+    cfg = load_config()
+    if not local_uvc_runtime.is_local_uvc(cfg):
+        raise HTTPException(400, "capture_backend is not local_uvc")
+    if active_path().is_file():
+        raise HTTPException(409, "stop recording before changing UVC bindings")
+    uvc = local_uvc_runtime.uvc_settings(cfg)
+    binds = local_uvc_runtime.normalize_bindings(
+        body.bindings, max_n=uvc["max_concurrent"]
+    )
+    root = data_root()
+    cur = load_operator_state(root)
+    cur["uvc_bindings"] = binds
+    # Ensure cam meta rows exist for bound ids.
+    cams = dict(cur.get("cameras") or {})
+    for cid in binds:
+        cams.setdefault(
+            cid,
+            {
+                "subject_id": "",
+                "cage_id": "",
+                "sex": "U",
+                "strain": "",
+                "notes": "",
+            },
+        )
+    cur["cameras"] = cams
+    saved = save_operator_state(root, cur)
+    return JSONResponse(
+        {
+            "bindings": saved.get("uvc_bindings") or {},
+            "max_concurrent": uvc["max_concurrent"],
+        }
+    )
 
 
 @app.get("/api/cams/{cam_id}/sensor-mode")
@@ -2096,6 +2563,31 @@ class WebRtcOfferBody(BaseModel):
     type: str = Field(default="offer")
 
 
+@app.get("/api/preview/{cam_id}/snapshot")
+def api_preview_snapshot(cam_id: str) -> Response:
+    """Optional JPEG still for local_uvc (diagnostics). Prefer mpegts LIVE tiles."""
+    cfg = load_config()
+    if not local_uvc_runtime.is_local_uvc(cfg):
+        raise HTTPException(400, "snapshot only for capture_backend=local_uvc")
+    cam_id = cam_id.strip()
+    with _capture_lock:
+        if cam_id in _captures:
+            raise HTTPException(409, f"{cam_id} is recording — no still grab")
+    by_id = {c["id"]: c for c in online_cameras(cfg)}
+    cam = by_id.get(cam_id) or {}
+    source_id = str(cam.get("source_id") or "")
+    if not source_id:
+        op = load_operator_state(data_root())
+        source_id = str((op.get("uvc_bindings") or {}).get(cam_id) or "")
+    if not source_id:
+        raise HTTPException(404, f"{cam_id} not bound")
+    jpeg = local_uvc_runtime.snapshot_jpeg(cfg, cam_id, source_id)
+    if not jpeg:
+        # Busy (another cam grabbing) or dshow fail — UI treats as soft miss.
+        raise HTTPException(503, f"snapshot busy/failed for {cam_id}")
+    return Response(content=jpeg, media_type="image/jpeg")
+
+
 @app.get("/api/preview/{cam_id}")
 def api_preview(cam_id: str) -> StreamingResponse:
     """Focus live: MPEG-TS over HTTP (mpegts.js) or annex-B (legacy jmuxer)."""
@@ -2109,6 +2601,45 @@ def api_preview(cam_id: str) -> StreamingResponse:
         capturing = cam_id in _captures
     session_cams = _active_session_camera_ids()
     in_session = cam_id in session_cams
+
+    # local_uvc LIVE v1: idle dshow→mpegts publisher, or science byte-tee while REC.
+    if local_uvc_runtime.is_local_uvc(cfg):
+        if in_session or capturing:
+            if in_session and not capturing:
+                raise HTTPException(
+                    409,
+                    f"{cam_id} is in an active session but this kiosk process is not "
+                    "capturing it (web restarted?). Stop the session or restart capture — "
+                    "refusing live so we do not kill the cam encode.",
+                )
+            gen = _iter_record_preview(cam_id, cfg)
+        else:
+            # Preflight before StreamingResponse — mid-stream HTTPException
+            # becomes "response already started" ASGI noise.
+            source_id = _resolve_local_uvc_preview_source(cfg, cam_id)
+            try:
+                # Surface Pixart 1-up / open errors as real 503 (not empty 200).
+                local_uvc_runtime.ensure_idle_preview(
+                    cfg,
+                    cam_id,
+                    source_id,
+                    queue_max=preview_settings(cfg).tee_queue_max,
+                )
+            except FileNotFoundError as exc:
+                raise HTTPException(503, f"ffmpeg missing: {exc}") from exc
+            except (KeyError, RuntimeError, ValueError) as exc:
+                raise HTTPException(503, f"idle LIVE open failed: {exc}") from exc
+            gen = _iter_idle_preview_local_uvc(cfg, cam_id, source_id)
+        return StreamingResponse(
+            gen,
+            media_type="video/mp2t",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "X-Accel-Buffering": "no",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     # Science session owns the cam encode (MPEG-TS on SSH). Idle would pkill it —
     # only tee the science capture. Browser always uses MPEG-TS here (even if idle
@@ -2398,6 +2929,14 @@ def _beacon_burst(seconds: float = 45.0, interval: float = 2.0) -> None:
 @app.post("/api/beacon")
 def api_beacon() -> JSONResponse:
     """Kiosk 'Invite cameras' — burst UDP beacons for ~45s."""
+    if local_uvc_runtime.is_local_uvc(load_config()):
+        return JSONResponse(
+            {
+                "status": "skipped",
+                "seconds": 0,
+                "hint": "local_uvc — no MQTT invite; bind cams in Session settings",
+            }
+        )
     threading.Thread(target=_beacon_burst, name="bhvr-beacon-burst", daemon=True).start()
     return JSONResponse(
         {
@@ -2497,6 +3036,8 @@ def _begin_session(meta: SubjectMeta, cfg: dict[str, Any]) -> dict[str, Any]:
         },
     )
     chunk_minutes = int(op.get("chunk_minutes") or 0)
+    if local_uvc_runtime.is_local_uvc(cfg):
+        chunk_minutes = 0
     h5_pack = bool(op.get("h5_pack", True))
     recording_tag = normalize_recording_tag(op.get("recording_tag"))
     if chunk_minutes > 0:
@@ -2584,6 +3125,7 @@ class OperatorSettingsBody(BaseModel):
     chunk_minutes: int | None = None
     h5_pack: bool | None = None
     recording_tag: str | None = None
+    uvc_bindings: dict[str, str] | None = None
 
 
 class CamMetaBody(BaseModel):
@@ -2705,14 +3247,25 @@ def api_session_capture_stats() -> dict[str, Any]:
         snap["capturing"] = True
         remux = info.get("proc")
         cam_p = info.get("cam_proc")
-        remux_dead = remux is not None and remux.poll() is not None
-        cam_dead = cam_p is not None and cam_p.poll() is not None
+        # LocalUvc uses proc=None + active=True (never a bool sentinel).
+        remux_dead = (
+            remux is not None
+            and hasattr(remux, "poll")
+            and remux.poll() is not None
+        )
+        cam_dead = (
+            cam_p is not None
+            and hasattr(cam_p, "poll")
+            and cam_p.poll() is not None
+        )
         if remux_dead or cam_dead:
             snap["status"] = "stall"
             snap["stalled"] = True
             snap["pipe_dead"] = True
             snap["remux_rc"] = remux.returncode if remux_dead else None
             snap["cam_rc"] = cam_p.returncode if cam_dead else None
+        if str(info.get("backend") or "") == "local_uvc":
+            snap["backend"] = "local_uvc"
         cameras[cam_id] = snap
     return {
         "active": active_path().is_file(),
@@ -2786,6 +3339,259 @@ def api_session_pack_status(
     return pack_jobs.snapshot()
 
 
+# --- H5 viewer (H5_VIEWER_GRILL.md) -------------------------------------------
+
+
+class H5PackNowBody(BaseModel):
+    session: str = Field(min_length=1)
+    force: bool = False
+
+
+def _h5_active_block(folder: Path) -> None:
+    if h5_viewer.is_active_session_dir(folder, active_path()):
+        raise HTTPException(
+            409,
+            "session is active (REC or packing) — Stop / wait, then open H5",
+        )
+
+
+def _h5_resolve_open(session: str, file: str) -> Path:
+    try:
+        folder = h5_viewer.resolve_session_dir(data_root(), session)
+        _h5_active_block(folder)
+        return h5_viewer.resolve_h5_file(data_root(), session, file)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/h5", response_class=HTMLResponse)
+def h5_viewer_page(request: Request) -> HTMLResponse:
+    cfg = load_config()
+    return TEMPLATES.TemplateResponse(
+        request,
+        "h5.html",
+        {
+            "cfg": cfg,
+            "data_root": str(data_root()),
+        },
+    )
+
+
+@app.get("/api/h5/sessions")
+def api_h5_sessions() -> dict[str, Any]:
+    root = data_root()
+    active = h5_viewer.active_folder_path(active_path())
+    rows = []
+    for r in kiosk_settings.list_session_folders(root):
+        folder = Path(r["path"])
+        try:
+            is_active = bool(active and folder.resolve() == active)
+        except OSError:
+            is_active = False
+        rows.append(
+            {
+                **r,
+                "active": is_active,
+                "h5_count": len(list(folder.glob("*.h5"))) if folder.is_dir() else 0,
+                "ts_count": len(list(folder.glob("*.ts"))) if folder.is_dir() else 0,
+            }
+        )
+    return {"sessions": rows, "data_root": str(root)}
+
+
+@app.get("/api/h5/files")
+def api_h5_files(session: str = Query(..., min_length=1)) -> dict[str, Any]:
+    try:
+        folder = h5_viewer.resolve_session_dir(data_root(), session)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    active = h5_viewer.is_active_session_dir(folder, active_path())
+    return {
+        "session": session,
+        "path": str(folder),
+        "active": active,
+        "h5": h5_viewer.list_session_h5_files(folder),
+        "loose_ts": h5_viewer.list_loose_ts(folder),
+    }
+
+
+@app.get("/api/h5/tree")
+def api_h5_tree(
+    session: str = Query(..., min_length=1),
+    file: str = Query(..., min_length=1),
+) -> dict[str, Any]:
+    path = _h5_resolve_open(session, file)
+    try:
+        tree = h5_viewer.build_tree(path)
+        parts = h5_viewer.mpegts_parts(path)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"open h5 failed: {exc}") from exc
+    return {"session": session, "file": file, "tree": tree, "mpegts_parts": parts}
+
+
+@app.get("/api/h5/node")
+def api_h5_node(
+    session: str = Query(..., min_length=1),
+    file: str = Query(..., min_length=1),
+    path: str = Query(..., min_length=1),
+) -> dict[str, Any]:
+    h5_path = _h5_resolve_open(session, file)
+    try:
+        detail = h5_viewer.node_detail(h5_path, path)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"node failed: {exc}") from exc
+    return {"session": session, "file": file, **detail}
+
+
+@app.get("/api/h5/raw")
+def api_h5_raw(
+    request: Request,
+    session: str = Query(..., min_length=1),
+    file: str = Query(..., min_length=1),
+    path: str = Query(..., min_length=1),
+) -> StreamingResponse:
+    """Stream a uint8 dataset (mpegts) with optional HTTP Range."""
+    h5_path = _h5_resolve_open(session, file)
+    try:
+        dpath = h5_viewer.normalize_dataset_path(path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not dpath.startswith("video/mpegts_"):
+        raise HTTPException(400, "raw stream only for video/mpegts_*")
+
+    h5_archive.require_h5py()
+    import h5py
+
+    try:
+        f = h5py.File(h5_path, "r")
+    except OSError as exc:
+        raise HTTPException(500, f"open h5: {exc}") from exc
+    if dpath not in f:
+        f.close()
+        raise HTTPException(404, dpath)
+    ds = f[dpath]
+    total = int(ds.shape[0]) if ds.shape else 0
+    range_hdr = request.headers.get("range") or request.headers.get("Range")
+    start, end = 0, total
+    status = 200
+    if range_hdr and range_hdr.startswith("bytes=") and total > 0:
+        spec = range_hdr[6:].split(",")[0].strip()
+        if "-" in spec:
+            a, b = spec.split("-", 1)
+            try:
+                if a == "":
+                    # suffix: last N bytes
+                    suffix = int(b)
+                    start = max(0, total - suffix)
+                    end = total
+                else:
+                    start = int(a)
+                    end = int(b) + 1 if b else total
+            except ValueError:
+                start, end = 0, total
+            start = max(0, min(start, total))
+            end = max(start, min(end, total))
+            status = 206
+
+    chunk = 8 * 1024 * 1024
+
+    def _gen() -> Iterator[bytes]:
+        try:
+            off = start
+            while off < end:
+                n = min(chunk, end - off)
+                yield bytes(ds[off : off + n])
+                off += n
+        finally:
+            f.close()
+
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(end - start),
+        "Cache-Control": "no-store",
+    }
+    if status == 206:
+        headers["Content-Range"] = f"bytes {start}-{end - 1}/{total}"
+    return StreamingResponse(
+        _gen(),
+        status_code=status,
+        media_type="video/mp2t",
+        headers=headers,
+    )
+
+
+@app.post("/api/h5/pack-now")
+def api_h5_pack_now(body: H5PackNowBody) -> JSONResponse:
+    try:
+        folder = h5_viewer.resolve_session_dir(data_root(), body.session)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    _h5_active_block(folder)
+    plan = h5_viewer.plan_pack_now(folder, force=bool(body.force))
+    queued: list[str] = []
+    skipped = 0
+    for item in plan:
+        if item.get("action") == "skip":
+            skipped += 1
+            continue
+        h5_path = Path(item["h5_path"])
+        if item.get("create_shell") and not h5_path.is_file():
+            try:
+                h5_archive.create_cam_h5(
+                    h5_path,
+                    attrs={
+                        "cam_id": item["cam_id"],
+                        "subject_id": item["subject_id"],
+                        "recording_tag": item["recording_tag"],
+                        "pack_source": "viewer_pack_now",
+                    },
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(500, f"H5 shell failed: {exc}") from exc
+        pts = Path(item["pts_path"]) if item.get("pts_path") else None
+        jid = pack_jobs.enqueue(
+            cam_id=str(item["cam_id"]),
+            folder=str(folder),
+            h5_path=h5_path,
+            part=int(item["part"]),
+            ts_path=Path(item["ts_path"]),
+            pts_path=pts if pts and pts.is_file() else None,
+            fps_summary=None,
+            attrs={
+                "cam_id": item["cam_id"],
+                "subject_id": item["subject_id"],
+                "recording_tag": item["recording_tag"],
+                "roll_reason": "pack_now",
+            },
+            pack_fn=h5_archive.pack_part,
+            subject_id=str(item["subject_id"]),
+            pack_session_sidecars=bool(item.get("pack_session_sidecars")),
+            skip_if_exists=bool(item.get("skip_if_exists")),
+        )
+        queued.append(jid)
+    return JSONResponse(
+        {
+            "ok": True,
+            "session": body.session,
+            "force": bool(body.force),
+            "queued": len(queued),
+            "skipped": skipped,
+            "job_ids": queued,
+            "pack": pack_jobs.snapshot(),
+        }
+    )
+
+
 @app.post("/session/start")
 def session_start(
     camera_ids: list[str] = Form(default=[]),
@@ -2846,7 +3652,7 @@ def api_kiosk_status() -> dict[str, Any]:
     cfg = load_config()
     root = kiosk_settings.openethomaze_root(cfg)
     tree = kiosk_settings.cam_tree(cfg)
-    git = kiosk_settings.git_status(root)
+    git = kiosk_settings.git_status(root, cam=tree)
     files = kiosk_settings.soft_bundle_files(tree)
     present = sum(1 for f in files if f["present"])
     health = storage_health(data_root())
@@ -2915,7 +3721,10 @@ def api_kiosk_usb_push(body: UsbPushBody) -> JSONResponse:
             "ok": ok_n == len(results) and bool(results),
             "pushed": ok_n,
             "total": len(results),
-            "git": kiosk_settings.git_status(kiosk_settings.openethomaze_root(cfg)),
+            "git": kiosk_settings.git_status(
+                kiosk_settings.openethomaze_root(cfg),
+                cam=kiosk_settings.cam_tree(cfg),
+            ),
             "results": results,
         }
     )
@@ -3042,16 +3851,21 @@ def health() -> dict[str, Any]:
             active = json.loads(active_path().read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             active = {"error": "unreadable"}
+    cfg = load_config()
+    roster_n = n
+    if local_uvc_runtime.is_local_uvc(cfg):
+        roster_n = sum(1 for c in online_cameras(cfg) if c.get("online"))
     return {
         "status": "ok",
-        "roster_size": n,
+        "roster_size": roster_n,
+        "capture_backend": local_uvc_runtime.capture_backend(cfg),
         "data_root": str(data_root()),
         "active": active is not None,
         "session": active,
         "capturing": capturing,
         "preview_idle": idle_prev,
         "preview_record": rec_prev,
-        "preview_transport": preview_settings(load_config()).transport,
+        "preview_transport": preview_settings(cfg).transport,
         "webrtc": webrtc_preview.webrtc_status(),
     }
 

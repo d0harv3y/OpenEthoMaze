@@ -62,14 +62,14 @@ Lower `mean_cross_animal_1nn_dist` = easier soft equate. Lower `frac_5nn_same_an
 | `prototypes_model_syllable_avganimal.csv` | D — animal-averaged prototypes |
 | `INFO_alphabet_equate_soft_shape.md` | Data dictionary |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/alphabet_equate_soft_shape.py`  
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/alphabet_equate_soft_shape.py`  
 **Plotly 3D:** `…/alphabet_equate_soft_shape_plotly3d.py`
 
 ```powershell
-uv run python scratch/nor_object_mi/alphabet_equate_soft_shape.py --layout pooled --clean
-uv run python scratch/nor_object_mi/alphabet_equate_soft_shape.py --layout per_animal --clean
-uv run python scratch/nor_object_mi/alphabet_equate_soft_shape_plotly3d.py --layout per_animal
-uv run python scratch/nor_object_mi/alphabet_equate_soft_shape_plotly3d.py --layout pooled
+uv run python moseq-mountain/nor_object_mi/alphabet_equate_soft_shape.py --layout pooled --clean
+uv run python moseq-mountain/nor_object_mi/alphabet_equate_soft_shape.py --layout per_animal --clean
+uv run python moseq-mountain/nor_object_mi/alphabet_equate_soft_shape_plotly3d.py --layout per_animal
+uv run python moseq-mountain/nor_object_mi/alphabet_equate_soft_shape_plotly3d.py --layout pooled
 ```
 
 ## Related

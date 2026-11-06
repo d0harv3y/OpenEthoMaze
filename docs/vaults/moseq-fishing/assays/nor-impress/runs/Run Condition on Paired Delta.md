@@ -48,7 +48,7 @@ Condition Kruskal on paired within-animal Δs (trial-step / session-step) — pr
 | `figures/fig_condition_q*_*.svg` | DA / Shannon agreement companions | #alphabet-bound |
 | `figures/FIGURES.md` | Full inventory | — |
 
-**Runner / slides:** `OpenEthoMaze/scratch/nor_object_mi/` — condition-on-paired-delta suite + `fig_q5_engagement_delta_slide.py`
+**Runner / slides:** `OpenEthoMaze/moseq-mountain/nor_object_mi/` — condition-on-paired-delta suite + `fig_q5_engagement_delta_slide.py`
 
 **Demote:** `simpler_first_condition_on_paired_delta_parametric/` — [[Prune Map]]
 

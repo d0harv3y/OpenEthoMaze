@@ -59,6 +59,8 @@ def default_operator_state() -> dict[str, Any]:
         # Shared token: folder {tag}-<utc>/ + files {subject}__{tag}__{cam}__pNNN
         "recording_tag": DEFAULT_RECORDING_TAG,
         "cameras": {},  # cam_id -> {subject_id, cage_id, sex, strain, notes}
+        # capture_backend=local_uvc: cam_id -> stable usb:vid_…#inst (≤max_concurrent)
+        "uvc_bindings": {},
     }
 
 
@@ -108,6 +110,14 @@ def load_operator_state(data_root: Path) -> dict[str, Any]:
     for cam_id, meta in cams_in.items():
         cams[str(cam_id)] = _normalize_cam_meta(meta if isinstance(meta, dict) else {})
     out["cameras"] = cams
+    binds_in = raw.get("uvc_bindings") if isinstance(raw.get("uvc_bindings"), dict) else {}
+    binds: dict[str, str] = {}
+    for cam_id, source_id in binds_in.items():
+        cid = str(cam_id or "").strip()
+        sid = str(source_id or "").strip()
+        if cid and sid:
+            binds[cid] = sid
+    out["uvc_bindings"] = binds
     return out
 
 
@@ -139,6 +149,15 @@ def save_operator_state(data_root: Path, state: dict[str, Any]) -> dict[str, Any
     for cam_id, meta in cams_in.items():
         cams[str(cam_id)] = _normalize_cam_meta(meta if isinstance(meta, dict) else {})
     normalized["cameras"] = cams
+    if "uvc_bindings" in state:
+        binds_in = state.get("uvc_bindings") if isinstance(state.get("uvc_bindings"), dict) else {}
+        binds: dict[str, str] = {}
+        for cam_id, source_id in binds_in.items():
+            cid = str(cam_id or "").strip()
+            sid = str(source_id or "").strip()
+            if cid and sid:
+                binds[cid] = sid
+        normalized["uvc_bindings"] = binds
     path = _state_path(data_root)
     path.parent.mkdir(parents=True, exist_ok=True)
     with _lock:

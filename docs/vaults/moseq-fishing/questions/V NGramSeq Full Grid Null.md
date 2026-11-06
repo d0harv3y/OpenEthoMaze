@@ -40,7 +40,7 @@ Honesty panel — NGramSeq-C joint. Source: [[Run NGramSeq Full Grid]].
 
 ![[fig_v_ngramseq_full_grid_null.svg]]
 
-Regen / campaign copies: `sack/.../vault_verdict_figures/` · `scratch/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
+Regen / campaign copies: `sack/.../vault_verdict_figures/` · `moseq-mountain/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
 
 ## Related
 

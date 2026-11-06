@@ -1,0 +1,1081 @@
+;
+; PFC027.INF
+;
+
+[Version]
+Signature="$CHICAGO$"
+Class=Image
+ClassGUID={6bdd1fc6-810f-11d0-bec7-08002be2092f}
+Provider=%str_INF_Provider%
+LayoutFile=Layout.inf, Layout1.inf, Layout2.inf
+DriverVer=06/25/2009,1.0.4.20
+CatalogFile.NT=PFC027.CAT
+
+[SourceDisksNames]
+1 = %str_SourceDiskName%,,,
+2 = %str_FrameSourceDiskName%,,,\Frame
+
+[SourceDisksFiles]
+SP207.AX	= 1
+SP207.INI	= 1
+TWD207.DS	= 1
+TWD207.INI	= 1
+P207USD.DLL	= 1
+AmCap.exe	= 1
+PASnap.exe	= 1
+PASnap.ico	= 1
+PFC027.SYS	= 1
+Monitor.exe	= 1
+Monitor.ini	= 1
+p00001p3.bmp	= 2
+p00001m3.bmp    = 2
+p00002p3.bmp	= 2
+p00002m3.bmp    = 2
+p00003p3.bmp	= 2
+p00003m3.bmp    = 2
+p00004p3.bmp	= 2
+p00004m3.bmp    = 2
+p00005p3.bmp	= 2
+p00005m3.bmp    = 2
+p00006p3.bmp	= 2
+p00006m3.bmp    = 2
+
+[SourceDisksFiles.x86]
+SP207.AX		= 1
+SP207.INI		= 1
+TWD207.DS		= 1
+TWD207.INI		= 1
+P207USD.DLL		= 1
+AmCap.exe		= 1
+PASnap.exe		= 1
+PASnap.ico		= 1
+Monitor.exe		= 1
+Monitor.ini		= 1
+PFC027.SYS		= 1,\WNT
+CtlStiSc.bat		= 1,\WNT
+CoInst_080213.dll	= 1,\WNT
+p00001p3.bmp		= 1,\Frame
+p00001m3.bmp    	= 1,\Frame
+p00002p3.bmp		= 1,\Frame
+p00002m3.bmp    	= 1,\Frame
+p00003p3.bmp		= 1,\Frame
+p00003m3.bmp    	= 1,\Frame
+p00004p3.bmp		= 1,\Frame
+p00004m3.bmp    	= 1,\Frame
+p00005p3.bmp		= 1,\Frame
+p00005m3.bmp    	= 1,\Frame
+p00006p3.bmp		= 1,\Frame
+p00006m3.bmp    	= 1,\Frame
+
+[SourceDisksFiles.amd64]
+SP207.AX		= 1
+SP207.INI		= 1
+TWD207.DS		= 1
+TWD207.INI		= 1
+AmCap.exe		= 1
+PASnap.exe		= 1
+PASnap.ico		= 1
+Monitor.exe		= 1
+Monitor.ini		= 1
+PFC027.SYS		= 1,\WXPAmd64
+CtlStiSc.bat		= 1,\WXPAmd64
+CoInst_080213.dll	= 1,\WXPAmd64
+p00001p3.bmp		= 1,\Frame
+p00001m3.bmp    	= 1,\Frame
+p00002p3.bmp		= 1,\Frame
+p00002m3.bmp    	= 1,\Frame
+p00003p3.bmp		= 1,\Frame
+p00003m3.bmp    	= 1,\Frame
+p00004p3.bmp		= 1,\Frame
+p00004m3.bmp    	= 1,\Frame
+p00005p3.bmp		= 1,\Frame
+p00005m3.bmp    	= 1,\Frame
+p00006p3.bmp		= 1,\Frame
+p00006m3.bmp    	= 1,\Frame
+
+[DestinationDirs]
+DefaultDestDir		=11
+
+PA20798.CopyDriver	=10,system32\drivers
+PA20798.CopyExtentUI	=11
+PA20798.CopyTwain	=10,TWAIN_32\%str_TWAIN_Dir%
+PA20798.CopySTI		=11
+PA20798.CopyApp		=10,%str_AppDir%
+PA20798.CopyFrame	=10,%str_FRAME_COPY_PATH%
+
+PA2072K.CopyDriver	=10,system32\drivers
+PA2072K.CopyExtentUI	=11
+PA2072K.CopyTwain	=10,TWAIN_32\%str_TWAIN_Dir%
+PA2072K.CopySTI		=11
+PA2072K.CopyApp		=10,%str_AppDir%
+PA2072K.CopyFrame	=10,%str_FRAME_COPY_PATH%
+
+PA207XP.CopyDriver	=10,system32\drivers
+PA207XP.CopyExtentUI	=11
+PA207XP.CopyTwain	=10,TWAIN_32\%str_TWAIN_Dir%
+PA207XP.CopyApp		=10,%str_AppDir%
+CoInstaller.XP.CopyFiles=11
+PA207XP.CopyFrame	=10,%str_FRAME_COPY_PATH%
+
+PA207Amd64.CopyDriver		=10,system32\drivers
+PA207Amd64.CopyExtentUI		=10,SysWow64
+PA207Amd64.CopyTwain		=10,TWAIN_32\%str_TWAIN_Dir%
+PA207Amd64.CopyApp		=10,%str_AppDir%
+CoInstaller.AMD64.CopyFiles	=11
+PA207Amd64.CopyFrame		=10,%str_FRAME_COPY_PATH%
+
+[ControlFlags]
+ExcludeFromSelect.ntx86=*
+ExcludeFromSelect.ntamd64=*
+
+[Manufacturer]
+%str_Manufacturer%=Company,NTX86.5.1,NTAMD64
+
+[Company]
+%str_Description%=PA207,USB\VID_093A&PID_2468
+%str_Description%=PA207,USB\VID_093A&PID_2472
+
+[Company.NTX86.5.1]
+%str_Description%=PA207.XP,USB\VID_093A&PID_2468
+%str_Description%=PA207.XP,USB\VID_093A&PID_2472
+
+[Company.NTAMD64]
+%str_Description%=PA207.AMD64,USB\VID_093A&PID_2468
+%str_Description%=PA207.AMD64,USB\VID_093A&PID_2472
+
+[PA207.XP.CoInstallers]
+AddReg		= CoInstaller.XP.AddReg
+CopyFiles	= CoInstaller.XP.CopyFiles
+
+[PA207.AMD64.CoInstallers]
+AddReg		= CoInstaller.AMD64.AddReg
+CopyFiles	= CoInstaller.AMD64.CopyFiles
+
+[CoInstaller.XP.AddReg]
+HKR,,CoInstallers32,0x10000,"CoInst_080213.DLL,CoInst"
+
+[CoInstaller.AMD64.AddReg]
+HKR,,CoInstallers32,0x10000,"CoInst_080213.DLL,CoInst"
+
+[CoInstaller.XP.CopyFiles]
+CoInst_080213.dll
+
+[CoInstaller.AMD64.CopyFiles]
+CoInst_080213.dll
+
+[CoInstallerRegistryPath]
+%str_RegistryPath_Software%
+
+[CoInstallerRunPath]
+\%str_AppDir%\CtlStiSc.bat
+
+[PA207]
+Include	 = ks.inf,kscaptur.inf,ksfilter.inf
+Needs	 = KS.Registration,KSCAPTUR.Registration
+AddReg	 = PA20798.AddRegDriver,PA207.AddRegSTI,PA207.AddRegExtentUI,PA20798.AddSoftwareKey,PA207.AddRegDefault,PA207.AddRegMultiLanguage
+CopyFiles= PA20798.CopyDriver,PA20798.CopyExtentUI,PA20798.CopyTwain,PA20798.CopyApp,PA20798.CopySTI,PA20798.CopyFrame
+SubClass=StillImage
+DeviceType=2
+DeviceSubType=1
+Capabilities=0x3
+Events=PA.USBDCam.Events
+DeviceData=PA.USBDCam.DeviceData
+ICMProfiles="sRGB Color Space Profile.icm"
+
+[PA207.NTX86]
+Include	 = ks.inf,kscaptur.inf,ksfilter.inf
+Needs	 = KS.Registration,KSCAPTUR.Registration.NT
+AddReg	 = PA2072K.AddRegDriver,PA207.AddRegSTI,PA207.AddRegExtentUI,PA2072K.AddSoftwareKey
+CopyFiles= PA2072K.CopyDriver,PA2072K.CopyExtentUI,PA2072K.CopyTwain,PA2072K.CopyApp,PA2072K.CopySTI,PA2072K.CopyFrame
+SubClass=StillImage
+DeviceType=2
+DeviceSubType=1
+Capabilities=0x3
+Events=PA.USBDCam.Events
+DeviceData=PA.USBDCam.DeviceData
+ICMProfiles="sRGB Color Space Profile.icm"
+
+[PA207.XP]
+Include	 = ks.inf,kscaptur.inf,ksfilter.inf
+Needs	 = KS.Registration,KSCAPTUR.Registration.NT
+DelReg	 = PA207.DelRegExtentUI
+AddReg	 = PA207XP.AddRegDriver,PA207.AddRegExtentUI,PA207XP.AddSoftwareKey
+CopyFiles= PA207XP.CopyDriver,PA207XP.CopyExtentUI,PA207XP.CopyTwain,PA207XP.CopyApp,PA207XP.CopyFrame
+SubClass=StillImage
+DeviceType=3
+DeviceSubType=0x1
+Capabilities=0x00000031
+DeviceData=PA.USBDCam.DeviceData.XP
+ICMProfiles="sRGB Color Space Profile.icm"
+
+[PA207.AMD64]
+Include	 = ks.inf,kscaptur.inf,ksfilter.inf
+Needs	 = KS.Registration,KSCAPTUR.Registration.NT
+AddReg	 = PA207AMD64.AddRegDriver,PA207AMD64.AddRegExtentUI,PA207AMD64.AddSoftwareKey
+CopyFiles= PA207AMD64.CopyDriver,PA207AMD64.CopyExtentUI,PA207AMD64.CopyTwain,PA207AMD64.CopyApp,PA207AMD64.CopyFrame
+SubClass=StillImage
+DeviceType=3
+DeviceSubType=0x1
+Capabilities=0x00000031
+DeviceData=PA.USBDCam.DeviceData.AMD64
+ICMProfiles="sRGB Color Space Profile.icm"
+
+[PA.USBDCam.Events]
+DeviceEvent_0=%DeviceEvent_0%,%str_StiEventGUID_0%,%VIDAPP%
+DeviceEvent_1=%DeviceEvent_1%,%str_StiEventGUID_1%,%STIAPP%
+
+[PA.USBDCam.DeviceData]
+TwainDS=%str_TW_ProductName%
+SpecialInfo=%str_TW_SpecialInfo%
+
+[PA.USBDCam.DeviceData.XP]
+Servel=local
+UI DLL=sti.dll
+UI Class ID={5d8ef5a3-ac13-11d2-a093-00c04f72dc3c}
+
+[PA.USBDCam.DeviceData.AMD64]
+Servel=local
+UI DLL=sti.dll
+UI Class ID={5d8ef5a3-ac13-11d2-a093-00c04f72dc3c}
+
+[PA207.AddRegSTI]
+HKR,,USDClass,,%str_StiUsdGUID%
+HKCR,CLSID\%str_StiUsdGUID% ,,,"SoC STI USD"
+HKCR,CLSID\%str_StiUsdGUID%\InProcServer32,,,%11%\P207USD.DLL
+HKCR,CLSID\%str_StiUsdGUID%\InProcServer32,ThreadingModel,,"Both"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\StillImage\Registered Applications",%VIDAPP%,,"%10%\%str_AppDir%\AmCap.exe /StiDevice:%1 /StiEvent:%2"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\StillImage\Registered Applications",%STIAPP%,,"%10%\%str_AppDir%\PASnap.exe /FN:C:\PA207.dat /RP:%str_RegistryPath_Software% /RN:EventCounter1"
+
+[PA20798.AddRegDriver]
+HKR,,DevLoader,,*ntkern
+HKR,,NTMPDriver,,PFC027.SYS
+HKR,,OkToHibernate,3,01
+
+[PA2072K.AddRegDriver]
+HKR,,DevLoader,,*ntkern
+HKR,,NTMPDriver,,PFC027.SYS
+
+[PA207XP.AddRegDriver]
+HKR,,DevLoader,,*ntkern
+HKR,,NTMPDriver,,PFC027.SYS
+HKR,,HardwareConfig,1,1
+HKR,,USDClass,,"{0527d1d0-88c2-11d2-82c7-00c04f8ec183}"
+
+[PA207AMD64.AddRegDriver]
+HKR,,DevLoader,,*ntkern
+HKR,,NTMPDriver,,PFC027.SYS
+HKR,,HardwareConfig,1,1
+HKR,,USDClass,,"{0527d1d0-88c2-11d2-82c7-00c04f8ec183}"
+
+[PA20798.CopyDriver]
+PFC027.SYS
+[PA2072K.CopyDriver]
+PFC027.SYS
+[PA207XP.CopyDriver]
+PFC027.SYS
+[PA207AMD64.CopyDriver]
+PFC027.SYS
+
+[PA20798.CopyExtentUI]
+SP207.AX
+SP207.INI
+[PA2072K.CopyExtentUI]
+SP207.AX
+SP207.INI
+[PA207XP.CopyExtentUI]
+SP207.AX
+SP207.INI
+[PA207AMD64.CopyExtentUI]
+SP207.AX
+SP207.INI
+
+[PA20798.CopyTwain]
+TWD207.DS
+TWD207.INI
+[PA2072K.CopyTwain]
+TWD207.DS
+TWD207.INI
+[PA207XP.CopyTwain]
+TWD207.DS
+TWD207.INI
+[PA207AMD64.CopyTwain]
+TWD207.DS
+TWD207.INI
+
+[PA20798.CopySTI]
+P207USD.DLL
+[PA2072K.CopySTI]
+P207USD.DLL
+
+[PA20798.CopyApp]
+AmCap.exe
+PASnap.exe
+PASnap.ico
+[PA2072K.CopyApp]
+AmCap.exe
+PASnap.exe
+PASnap.ico
+[PA207XP.CopyApp]
+AmCap.exe
+PASnap.exe
+PASnap.ico
+CtlStiSc.bat
+Monitor.exe
+Monitor.ini
+[PA207AMD64.CopyApp]
+AmCap.exe
+PASnap.exe
+PASnap.ico
+CtlStiSc.bat
+Monitor.exe
+Monitor.ini
+
+[PA20798.CopyFrame]
+p00001p3.bmp	
+p00001m3.bmp    
+p00002p3.bmp	
+p00002m3.bmp    
+p00003p3.bmp	
+p00003m3.bmp    
+p00004p3.bmp	
+p00004m3.bmp    
+p00005p3.bmp	
+p00005m3.bmp    
+p00006p3.bmp	
+p00006m3.bmp
+
+[PA2072K.CopyFrame]
+p00001p3.bmp	
+p00001m3.bmp    
+p00002p3.bmp	
+p00002m3.bmp    
+p00003p3.bmp	
+p00003m3.bmp    
+p00004p3.bmp	
+p00004m3.bmp    
+p00005p3.bmp	
+p00005m3.bmp    
+p00006p3.bmp	
+p00006m3.bmp  
+
+[PA207XP.CopyFrame]
+p00001p3.bmp	
+p00001m3.bmp    
+p00002p3.bmp	
+p00002m3.bmp    
+p00003p3.bmp	
+p00003m3.bmp    
+p00004p3.bmp	
+p00004m3.bmp    
+p00005p3.bmp	
+p00005m3.bmp    
+p00006p3.bmp	
+p00006m3.bmp  
+
+[PA207AMD64.CopyFrame]
+p00001p3.bmp	
+p00001m3.bmp    
+p00002p3.bmp	
+p00002m3.bmp    
+p00003p3.bmp	
+p00003m3.bmp    
+p00004p3.bmp	
+p00004m3.bmp    
+p00005p3.bmp	
+p00005m3.bmp    
+p00006p3.bmp	
+p00006m3.bmp
+
+[PA207.Interfaces]
+AddInterface=%str_KSCATEGORY_CAPTURE%,GLOBAL,PA207.Driver.Interface
+[PA207.NTx86.Interfaces]
+AddInterface=%str_KSCATEGORY_CAPTURE%,GLOBAL,PA207.Driver.Interface
+[PA207.XP.Interfaces]
+AddInterface=%str_KSCATEGORY_CAPTURE%,GLOBAL,PA207.Driver.Interface
+[PA207.AMD64.Interfaces]
+AddInterface=%str_KSCATEGORY_CAPTURE%,GLOBAL,PA207.Driver.Interface
+
+[PA207.Driver.Interface]
+AddReg=PA207.Driver.Interface.AddReg
+         
+[PA207.Driver.Interface.AddReg]
+HKR,,CLSID,,%str_ProxyVCap.CLSID%
+HKR,,FriendlyName,,%str_Description%
+HKR,,ExtensionDLL,,SP207.AX
+
+HKR,PageAliases,"{71F96464-78F3-11d0-A18C-00A0C9118956}",1,21,E8,C2,3D, 13,47, d2,11, 0xba, 0x41, 0x0, 0xa0, 0xc9, 0xd, 0x20, 0x0
+HKR,PageAliases,"{71F96465-78F3-11d0-A18C-00A0C9118956}",1,21,E8,C2,3D, 13,47, d2,11, 0xba, 0x41, 0x0, 0xa0, 0xc9, 0xd, 0x20, 0x0
+
+[PA207.NTX86.Services]
+AddService=%str_ServiceKey%,0x00000002,PA207.Service.Install
+
+[PA207.XP.Services]
+AddService=%str_ServiceKey%,0x00000002,PA207.XP.Service.Install
+
+[PA207.AMD64.Services]
+AddService=%str_ServiceKey%,0x00000002,PA207.XPAmd64.Service.Install
+
+[PA207.Service.Install]
+DisplayName   = %str_Description%
+ServiceType   = %str_SERVICE_KERNEL_DRIVER%
+StartType     = %str_SERVICE_DEMAND_START%
+ErrorControl  = %str_SERVICE_ERROR_NORMAL%
+ServiceBinary = %12%\PFC027.SYS
+AddReg        = PA207.AddRegDefault,PA207.AddRegMultiLanguage
+
+[PA207.XP.Service.Install]
+DisplayName   = %str_Description%
+ServiceType   = %str_SERVICE_KERNEL_DRIVER%
+StartType     = %str_SERVICE_DEMAND_START%
+ErrorControl  = %str_SERVICE_ERROR_NORMAL%
+ServiceBinary = %12%\PFC027.SYS
+DelReg	      = PA207.DelRegDefault
+AddReg        = PA207.AddRegDefault,PA207.AddRegMultiLanguage
+
+[PA207.XPAmd64.Service.Install]
+DisplayName   = %str_Description%
+ServiceType   = %str_SERVICE_KERNEL_DRIVER%
+StartType     = %str_SERVICE_DEMAND_START%
+ErrorControl  = %str_SERVICE_ERROR_NORMAL%
+ServiceBinary = %12%\PFC027.SYS
+AddReg        = PA207.AddRegDefault,PA207.AddRegMultiLanguage
+
+
+[PA207.DelRegExtentUI]
+HKLM,System\CurrentControlSet\Control\MediaSets\%str_SpecialPropertySetGUID%\PropertyPages
+
+
+[PA207.AddRegExtentUI]
+HKCR,CLSID\%str_SpecialPropertySetGUID%, , , %str_SpecialPropertySet%
+HKCR,CLSID\%str_SpecialPropertySetGUID%\InprocServer32, , , SP207.AX
+HKCR,CLSID\%str_SpecialPropertySetGUID%\InprocServer32, ThreadingModel, , Both
+
+HKCR,CLSID\%str_CustomPropertyPageGUID%, , , %str_CustomPropertyPage%
+HKCR,CLSID\%str_CustomPropertyPageGUID%\InprocServer32, , , SP207.AX
+HKCR,CLSID\%str_CustomPropertyPageGUID%\InprocServer32, ThreadingModel, , Both
+
+
+HKCR,CLSID\%str_CustomPropertyPageGUID2%, , , %str_CustomPropertyPage%
+HKCR,CLSID\%str_CustomPropertyPageGUID2%\InprocServer32, , , SP207.AX
+HKCR,CLSID\%str_CustomPropertyPageGUID2%\InprocServer32, ThreadingModel, , Both
+
+HKCR,CLSID\%str_FrameEffectPropertyPageGUID%, , , %str_FrameEffectPropertyPage%
+HKCR,CLSID\%str_FrameEffectPropertyPageGUID%\InprocServer32, , , SP207.AX
+HKCR,CLSID\%str_FrameEffectPropertyPageGUID%\InprocServer32, ThreadingModel, , Both
+
+HKLM,System\CurrentControlSet\Control\MediaInterfaces\%str_SpecialPropertySetGUID%, , , %str_SpecialPropertySet%
+HKLM,System\CurrentControlSet\Control\MediaInterfaces\%str_SpecialPropertySetGUID%, IID, 1, C2, 47, 80, 54, 27, FC, AF, 4E, BB, A5, 7A, 59, 73, 84, E3, 6C									
+HKLM,System\CurrentControlSet\Control\MediaSets\%str_SpecialPropertySetGUID%\PropertyPages\%str_CustomPropertyPageGUID%, , , %str_CustomPropertyPage%
+HKLM,System\CurrentControlSet\Control\MediaSets\%str_SpecialPropertySetGUID%\PropertyPages\%str_CustomPropertyPageGUID2%, , , %str_CustomPropertyPage%
+HKLM,System\CurrentControlSet\Control\MediaSets\%str_SpecialPropertySetGUID%\PropertyPages\%str_FrameEffectPropertyPageGUID%, , , %str_FrameEffectPropertyPage%
+
+[PA207AMD64.AddRegExtentUI]
+HKLM,SOFTWARE\Wow6432Node\Classes\CLSID\%str_SpecialPropertySetGUID%, , , %str_SpecialPropertySet%
+HKLM,SOFTWARE\Wow6432Node\Classes\CLSID\%str_SpecialPropertySetGUID%\InprocServer32, , , SP207.AX
+HKLM,SOFTWARE\Wow6432Node\Classes\CLSID\%str_SpecialPropertySetGUID%\InprocServer32, ThreadingModel, , Both
+
+HKLM,SOFTWARE\Wow6432Node\Classes\CLSID\%str_CustomPropertyPageGUID%, , , %str_CustomPropertyPage%
+HKLM,SOFTWARE\Wow6432Node\Classes\CLSID\%str_CustomPropertyPageGUID%\InprocServer32, , , SP207.AX
+HKLM,SOFTWARE\Wow6432Node\Classes\CLSID\%str_CustomPropertyPageGUID%\InprocServer32, ThreadingModel, , Both
+
+
+HKLM,SOFTWARE\Wow6432Node\Classes\CLSID\%str_CustomPropertyPageGUID2%, , , %str_CustomPropertyPage%
+HKLM,SOFTWARE\Wow6432Node\Classes\CLSID\%str_CustomPropertyPageGUID2%\InprocServer32, , , SP207.AX
+HKLM,SOFTWARE\Wow6432Node\Classes\CLSID\%str_CustomPropertyPageGUID2%\InprocServer32, ThreadingModel, , Both
+
+HKLM,SOFTWARE\Wow6432Node\Classes\CLSID\%str_FrameEffectPropertyPageGUID%, , , %str_FrameEffectPropertyPage%
+HKLM,SOFTWARE\Wow6432Node\Classes\CLSID\%str_FrameEffectPropertyPageGUID%\InprocServer32, , , SP207.AX
+HKLM,SOFTWARE\Wow6432Node\Classes\CLSID\%str_FrameEffectPropertyPageGUID%\InprocServer32, ThreadingModel, , Both
+
+HKLM,System\CurrentControlSet\Control\MediaInterfaces\%str_SpecialPropertySetGUID%, , , %str_SpecialPropertySet%
+HKLM,System\CurrentControlSet\Control\MediaInterfaces\%str_SpecialPropertySetGUID%, IID, 1, C2, 47, 80, 54, 27, FC, AF, 4E, BB, A5, 7A, 59, 73, 84, E3, 6C
+HKLM,System\CurrentControlSet\Control\MediaSets\%str_SpecialPropertySetGUID%\PropertyPages\%str_CustomPropertyPageGUID%, , , %str_CustomPropertyPage%
+HKLM,System\CurrentControlSet\Control\MediaSets\%str_SpecialPropertySetGUID%\PropertyPages\%str_CustomPropertyPageGUID2%, , , %str_CustomPropertyPage%
+HKLM,System\CurrentControlSet\Control\MediaSets\%str_SpecialPropertySetGUID%\PropertyPages\%str_FrameEffectPropertyPageGUID%, , , %str_FrameEffectPropertyPage%
+
+[PA20798.AddSoftwareKey]
+HKLM,"%str_RegistryPath_Software%",InterruptCounter,0x10001,0
+HKLM,"%str_RegistryPath_Software%",StatusReport,0x10001,0
+HKLM,"%str_RegistryPath_Software%",ImageArrived,0x10001,0
+HKLM,"%str_RegistryPath_Software%",EventCounter0,0x10001,0
+HKLM,"%str_RegistryPath_Software%",EventCounter1,0x10001,0
+HKLM,"%str_RegistryPath_Software%",TW_Manufacturer,,%str_TW_Manufacturer%
+HKLM,"%str_RegistryPath_Software%",TW_ProductFamily,,%str_TW_ProductFamily%
+HKLM,"%str_RegistryPath_Software%",TW_ProductName,,%str_TW_ProductName%
+HKLM,"%str_RegistryPath_Software%",TW_Version,,%str_TW_Version%
+
+[PA2072K.AddSoftwareKey]
+HKLM,"%str_RegistryPath_Software%",InterruptCounter,0x10001,0
+HKLM,"%str_RegistryPath_Software%",StatusReport,0x10001,0
+HKLM,"%str_RegistryPath_Software%",ImageArrived,0x10001,0
+HKLM,"%str_RegistryPath_Software%",EventCounter0,0x10001,0
+HKLM,"%str_RegistryPath_Software%",EventCounter1,0x10001,0
+HKLM,"%str_RegistryPath_Software%",TW_Manufacturer,,%str_TW_Manufacturer%
+HKLM,"%str_RegistryPath_Software%",TW_ProductFamily,,%str_TW_ProductFamily%
+HKLM,"%str_RegistryPath_Software%",TW_ProductName,,%str_TW_ProductName%
+HKLM,"%str_RegistryPath_Software%",TW_Version,,%str_TW_Version%
+
+[PA207XP.AddSoftwareKey]
+HKLM,"%str_RegistryPath_Software%",InterruptCounter,0x10001,0
+HKLM,"%str_RegistryPath_Software%",StatusReport,0x10001,0
+HKLM,"%str_RegistryPath_Software%",ImageArrived,0x10001,0
+HKLM,"%str_RegistryPath_Software%",EventCounter0,0x10001,0
+HKLM,"%str_RegistryPath_Software%",EventCounter1,0x10001,0
+HKLM,"%str_RegistryPath_Software%",TW_Manufacturer,,%str_TW_Manufacturer%
+HKLM,"%str_RegistryPath_Software%",TW_ProductFamily,,%str_TW_ProductFamily%
+HKLM,"%str_RegistryPath_Software%",TW_ProductName,,%str_TW_ProductName%
+HKLM,"%str_RegistryPath_Software%",TW_Version,,%str_TW_Version%
+HKLM,%RunPath%,"PAC207_Monitor",,"%10%\PixArt\PAC207\Monitor.exe"
+
+[PA207AMD64.AddSoftwareKey]
+HKLM,"Software\Wow6432Node\%str_SoftwareKey%",InterruptCounter,0x10001,0
+HKLM,"Software\Wow6432Node\%str_SoftwareKey%",StatusReport,0x10001,0
+HKLM,"Software\Wow6432Node\%str_SoftwareKey%",ImageArrived,0x10001,0
+HKLM,"Software\Wow6432Node\%str_SoftwareKey%",EventCounter0,0x10001,0
+HKLM,"Software\Wow6432Node\%str_SoftwareKey%",EventCounter1,0x10001,0
+HKLM,"Software\Wow6432Node\%str_SoftwareKey%",TW_Manufacturer,,%str_TW_Manufacturer%
+HKLM,"Software\Wow6432Node\%str_SoftwareKey%",TW_ProductFamily,,%str_TW_ProductFamily%
+HKLM,"Software\Wow6432Node\%str_SoftwareKey%",TW_ProductName,,%str_TW_ProductName%
+HKLM,"Software\Wow6432Node\%str_SoftwareKey%",TW_Version,,%str_TW_Version%
+HKLM,%RunPath%,"PAC207_Monitor",,"%10%\PixArt\PAC207\Monitor.exe"
+
+[PA207.DelRegDefault]
+HKR,%PA%
+
+[PA207.AddRegDefault]
+HKR,%PA%,B_0,0x1, \
+00,00,04,12,0D,00,6F,03,29,00,00,A0,00,A0,04,20, \
+F0,B1,10,00,06,70,A3,F8,00,00,00,00,CD,CD,CD,CD, \
+CD,CD,CD,CD,CD,CD,CD,CD,CD,CD,CD,CD,CD,CD,CD,CD, \
+CD,CD,CD,CD,CD,CD,CD,CD,CD,CD,CD,CD,CD,CD,CD,CD, \
+00,00,32,00,96,00,A2,02,AF,00,36,00
+
+HKR,%PA%,FTInitParas,0x1, \
+01,01,05,02
+
+HKR,%PA%\CustomPropertyPages,0,0x0,%str_CustomPropertyPageGUID2%
+HKR,%PA%\CustomPropertyPages,1,0x0,%str_CustomPropertyPageGUID%
+HKR,%PA%\CustomPropertyPages,2,0x0,%str_FrameEffectPropertyPageGUID%
+HKR,%PA%,GUID_CustomPropertySet,0x0,%str_CustomPropertySetGUID%
+HKR,%PA%,GUID_SpecialPropertySet,0x0,%str_SpecialPropertySetGUID%
+
+HKR,%PA%,StiEventGUID_0,0x0,%str_StiEventGUID_0%
+HKR,%PA%,StiEventGUID_1,0x0,%str_StiEventGUID_1%
+HKR,%PA%,SoftwareKey,0x0,%str_SoftwareKey%
+HKR,%PA%,RegistryPath_Software,0x0,%str_RegistryPath_Software%
+HKR,%PA%,StillImageFileFullPath,0x0,%str_StillImageFileFullPath%
+HKR,%PA%,PADSN,0x10001,16,16,04,09
+
+HKR,%PA%\Frame,PATH,0x00000000,%str_FRAME_PATH%
+HKR,%PA%\Frame,FN0001,0x00000000,"p00001"
+HKR,%PA%\Frame,FN0002,0x00000000,"p00002"
+HKR,%PA%\Frame,FN0003,0x00000000,"p00003"
+HKR,%PA%\Frame,FN0004,0x00000000,"p00004"
+HKR,%PA%\Frame,FN0005,0x00000000,"p00005"
+HKR,%PA%\Frame,FN0006,0x00000000,"p00006"
+
+HKR,%PA%,A_10,0x10001,1,1,0,0
+HKR,%PA%,A_11,0x10001,0,50,8,14
+HKR,%PA%,A_12,0x10001,3c,0,0,0
+HKR,%PA%,A_13,0x10001,0,4,0,4
+HKR,%PA%,A_14,0x10001,64,0,10,0
+HKR,%PA%,A_15,0x10001,20,0,0,0
+HKR,%PA%,A_16,0x10001,c,0,c,0
+HKR,%PA%,A_17,0x10001,12,0,8,0
+HKR,%PA%,A_18,0x10001,0,0,0,0
+HKR,%PA%,A_19,0x10001,1e,0,fa,0
+HKR,%PA%,A_20,0x10001,2,0,0,0
+HKR,%PA%,A_21,0x10001,2,0,20,1
+HKR,%PA%,A_22,0x10001,0,0,1,0
+HKR,%PA%,A_23,0x10001,c,0,2,0
+HKR,%PA%,A_24,0x10001,1e,8,16,f
+HKR,%PA%,A_25,0x10001,18,16,c,f
+HKR,%PA%,A_26,0x10001,1,1,1,1
+HKR,%PA%,A_27,0x10001,1,1,0,0
+HKR,%PA%,A_28,0x10001,8,0,8,0
+HKR,%PA%,A_29,0x10001,14,eb,5a,50
+HKR,%PA%,A_30,0x10001,50,32,0,0
+HKR,%PA%,A_31,0x10001,ff,0,80,0
+HKR,%PA%,A_32,0x10001,80,80,80,0
+HKR,%PA%,A_33,0x10001,0,0,a0,0
+HKR,%PA%,A_34,0x10001,b8,b,d0,7
+HKR,%PA%,A_35,0x10001,d0,7,d0,7
+HKR,%PA%,A_36,0x10001,b8,b,d0,7
+HKR,%PA%,A_37,0x10001,d0,7,d0,7
+HKR,%PA%,A_38,0x10001,b8,b,0,0
+HKR,%PA%,A_39,0x10001,1a,4,0,0
+HKR,%PA%,A_40,0x10001,46,0,0,0
+HKR,%PA%,A_41,0x10001,ff,0,0,0
+HKR,%PA%,A_42,0x10001,0,0,0,0
+HKR,%PA%,A_43,0x10001,0,0,20,20
+HKR,%PA%,A_44,0x10001,c0,c0,0,0
+HKR,%PA%,A_45,0x10001,2,3,10,1
+HKR,%PA%,A_46,0x10001,0,0,0,0
+HKR,%PA%,A_47,0x10001,0,0,0,0
+HKR,%PA%,A_48,0x10001,0,0,0,0
+HKR,%PA%,A_49,0x10001,0,0,0,0
+HKR,%PA%,A_50,0x10001,0,0,0,0
+HKR,%PA%,A_51,0x10001,8,1,0,0
+HKR,%PA%,A_52,0x10001,0,0,0,0
+HKR,%PA%,A_53,0x10001,0,0,0,0
+HKR,%PA%,A_54,0x10001,0,0,0,0
+HKR,%PA%,A_55,0x10001,0,0,0,0
+HKR,%PA%,A_56,0x10001,0,0,0,0
+HKR,%PA%,A_57,0x10001,0,0,0,0
+HKR,%PA%,A_58,0x10001,0,0,0,0
+HKR,%PA%,A_59,0x10001,0,0,0,0
+HKR,%PA%,A_60,0x10001,0C,0,0,0
+HKR,%PA%,A_61,0x10001,76,98,54,32
+HKR,%PA%,A_62,0x10001,10,CA,0,0
+HKR,%PA%,A_63,0x10001,0,0,0,0
+HKR,%PA%,A_64,0x10001,0,0,0,0
+HKR,%PA%,A_65,0x10001,0,0,0,0
+HKR,%PA%,A_67,0x10001,0,0,0,0
+HKR,%PA%,A_68,0x10001,0,0,0,0
+HKR,%PA%,A_69,0x10001,0,0,0,0
+HKR,%PA%,A_70,0x10001,0C,0,0,0
+HKR,%PA%,A_71,0x10001,76,98,54,32
+HKR,%PA%,A_72,0x10001,10,CA,0,0
+HKR,%PA%,A_73,0x10001,0,0,0,0
+HKR,%PA%,A_74,0x10001,0,0,0,0
+HKR,%PA%,A_75,0x10001,0,0,0,0
+HKR,%PA%,A_76,0x10001,0,0,0,0
+HKR,%PA%,A_77,0x10001,01,01,01,01
+HKR,%PA%,A_78,0x10001,0,0,fe,1
+HKR,%PA%,A_79,0x10001,7,0,7,0
+HKR,%PA%,A_80,0x10001,0,0,32,0
+HKR,%PA%,A_81,0x10001,0,0,0,0
+HKR,%PA%,A_82,0x10001,0,0,68,1
+HKR,%PA%,A_83,0x10001,a1,0,a1,0
+HKR,%PA%,A_84,0x10001,0,0,c8,0
+HKR,%PA%,A_85,0x10001,7,0,7,0
+HKR,%PA%,A_86,0x10001,0,0,C,0
+HKR,%PA%,A_87,0x10001,41,0,41,0
+HKR,%PA%,A_88,0x10001,0,0,64,0
+HKR,%PA%,A_89,0x10001,1,0,1,0
+HKR,%PA%,A_90,0x10001,1,0,0,0
+HKR,%PA%,A_91,0x10001,1,0,1,0
+HKR,%PA%,A_92,0x10001,0,0,1,0
+HKR,%PA%,A_93,0x10001,0,0,0,0
+HKR,%PA%,A_94,0x10001,0,0,1,0
+HKR,%PA%,A_95,0x10001,1,0,1,0
+HKR,%PA%,A_96,0x10001,0,0,1,0
+HKR,%PA%,A_97,0x10001,78,0,78,0
+HKR,%PA%,A_98,0x10001,0,0,ff,0
+HKR,%PA%,A_99,0x10001,0,0,0,0
+HKR,%PA%,A_100,0x10001,0,0,1,0
+HKR,%PA%,A_101,0x10001,1,0,1,0
+HKR,%PA%,A_102,0x10001,1,0,0,0
+HKR,%PA%,A_103,0x10001,0,0,0,0
+HKR,%PA%,A_104,0x10001,0,0,1,0
+HKR,%PA%,A_105,0x10001,0,0,0,0
+HKR,%PA%,A_106,0x10001,0,0,3,0
+HKR,%PA%,A_107,0x10001,0,0,0,0
+HKR,%PA%,A_108,0x10001,0,0,1,0
+HKR,%PA%,A_109,0x10001,3c,0,3c,0
+HKR,%PA%,A_110,0x10001,32,0,3c,0
+HKR,%PA%,A_111,0x10001,1,0,1,0
+HKR,%PA%,A_112,0x10001,0,0,1,0
+HKR,%PA%,A_113,0x10001,8,0,8,0
+HKR,%PA%,A_114,0x10001,1,0,8,0
+HKR,%PA%,A_115,0x10001,14,0,14,0
+HKR,%PA%,A_116,0x10001,0,0,64,0
+HKR,%PA%,A_117,0x10001,0,0,0,0
+HKR,%PA%,A_118,0x10001,0,0,2,0
+HKR,%PA%,A_119,0x10001,a0,0,a0,0
+HKR,%PA%,A_120,0x10001,40,0,ff,0
+HKR,%PA%,A_121,0x10001,80,0,80,0
+HKR,%PA%,A_122,0x10001,40,0,ff,0
+HKR,%PA%,A_123,0x10001,a0,0,a0,0
+HKR,%PA%,A_124,0x10001,40,0,ff,0
+HKR,%PA%,A_125,0x10001,0,0,0,0
+HKR,%PA%,A_126,0x10001,0,0,1,0
+HKR,%PA%,A_127,0x10001,0,0,0,0
+HKR,%PA%,A_128,0x10001,0,0,10,27
+HKR,%PA%,A_129,0x10001,0,0,0,0
+HKR,%PA%,A_130,0x10001,0,0,40,0
+HKR,%PA%,A_131,0x10001,0,0,0,0
+HKR,%PA%,A_132,0x10001,0,0,ff,0
+HKR,%PA%,A_133,0x10001,0,0,0,0
+HKR,%PA%,A_134,0x10001,0,0,ff,0
+HKR,%PA%,A_135,0x10001,1e,0,1e,0
+HKR,%PA%,A_136,0x10001,f,0,1e,0
+HKR,%PA%,A_137,0x10001,32,0,32,0
+HKR,%PA%,A_138,0x10001,0,0,64,0
+HKR,%PA%,A_139,0x10001,5,0,5,0
+HKR,%PA%,A_140,0x10001,0,0,f,0
+HKR,%PA%,A_141,0x10001,70,17,70,17
+HKR,%PA%,A_142,0x10001,b8,b,28,23
+HKR,%PA%,A_143,0x10001,0,0,0,0
+HKR,%PA%,A_144,0x10001,0,0,2,0
+HKR,%PA%,A_145,0x10001,1,0,1,0
+HKR,%PA%,A_146,0x10001,0,0,1,0
+HKR,%PA%,A_147,0x10001,0,0,0,0
+HKR,%PA%,A_148,0x10001,1,0,0,0
+HKR,%PA%,A_149,0x10001,b4,0,b4,0
+HKR,%PA%,A_150,0x10001,0,0,68,1
+HKR,%PA%,A_151,0x10001,b4,0,b4,0
+HKR,%PA%,A_152,0x10001,0,0,68,1
+HKR,%PA%,A_153,0x10001,0,0,1,0
+HKR,%PA%,A_154,0x10001,0,0,1,0
+HKR,%PA%,A_155,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_156,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_157,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_158,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_159,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_160,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_161,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_162,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_163,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_164,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_165,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_166,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_167,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_168,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_169,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_170,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_171,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_172,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_173,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_174,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_175,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_176,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_177,0x10001,cd,cd,cd,cd
+HKR,%PA%,A_178,0x10001,cd,cd,cd,cd
+
+[PA207.AddRegMultiLanguage]
+;;English 0x0409
+HKR,%PA%,A04090000,0x0,""
+HKR,%PA%,A04090001,0x0,"Image Control"
+HKR,%PA%,A04090002,0x0,"Image Mirror"
+HKR,%PA%\0409\Image_Mirror,00000001,0x0,"            On"
+HKR,%PA%\0409\Image_Mirror,01000000,0x0,"            Off"
+HKR,%PA%,A04090003,0x0,"Image Flip"
+HKR,%PA%,A04090004,0x0,"Low Light"
+HKR,%PA%,A04090005,0x0,"Brightness"
+HKR,%PA%,A04090006,0x0,"Contrast"
+HKR,%PA%,A04090007,0x0,"Gamma"
+HKR,%PA%,A04090008,0x0,"Hue"
+HKR,%PA%,A04090009,0x0,"Saturation"
+HKR,%PA%,A04090010,0x0,"Sharpness"
+HKR,%PA%,A04090011,0x0,"VGA SnapSize"
+HKR,%PA%\0409\VGA_Snap_Size,00000000,0x0,"640x480"
+HKR,%PA%\0409\VGA_Snap_Size,01000001,0x0,"800x600"
+HKR,%PA%\0409\VGA_Snap_Size,02000002,0x0,"1024x768"
+HKR,%PA%\0409\VGA_Snap_Size,03000003,0x0,"1280x960"
+HKR,%PA%\0409\VGA_Snap_Size,04000004,0x0,"1600x1200"
+HKR,%PA%,A04090012,0x0,"Auto Mode Control"
+HKR,%PA%,A04090013,0x0,"USB"
+HKR,%PA%,A04090014,0x0,"Exposure"
+HKR,%PA%,A04090015,0x0,"White Balance"
+HKR,%PA%\0409\White_Balance_Mode,00000000,0x0,"        Indoor"
+HKR,%PA%\0409\White_Balance_Mode,01000001,0x0,"       Outdoor"
+HKR,%PA%\0409\White_Balance_Mode,02000002,0x0,"  Fluorescense"
+HKR,%PA%\0409\White_Balance_Mode,03010000,0x0,"Red                                              Blue"
+HKR,%PA%,A04090016,0x0,"Red"
+HKR,%PA%,A04090017,0x0,"Green"
+HKR,%PA%,A04090018,0x0,"Blue"
+HKR,%PA%,A04090019,0x0,"Auto"
+HKR,%PA%,A04090020,0x0,"Default"
+HKR,%PA%,A04090021,0x0,"Reset"
+HKR,%PA%,A04090022,0x0,"Save"
+HKR,%PA%,A04090023,0x0,"Restore"
+HKR,%PA%,A04090024,0x0,"In/Out Door"
+HKR,%PA%\0409\AE_Stage,00000000,0x0,"Indoor"
+HKR,%PA%\0409\AE_Stage,01000001,0x0,"Outdoor"
+HKR,%PA%,A04090027,0x0,"Flicker"
+HKR,%PA%\0409\Flicker,00000050,0x0,"50 Hz"
+HKR,%PA%\0409\Flicker,01000060,0x0,"60 Hz"
+HKR,%PA%,A04090030,0x0,"Extra Control"
+HKR,%PA%,A04090031,0x0,"Backlight Compensation"
+HKR,%PA%\0409\Backlight_Compensation,00000001,0x0,"            On"
+HKR,%PA%\0409\Backlight_Compensation,01000000,0x0,"            Off"
+HKR,%PA%,A04090032,0x0,"B/W Mode"
+HKR,%PA%\0409\Black_And_White_Mode,00000000,0x0,"            On"
+HKR,%PA%\0409\Black_And_White_Mode,01000001,0x0,"            Off"
+HKR,%PA%,A04090033,0x0,"Aux LED Mode"
+HKR,%PA%\0409\AUX_LED_Mode,00000000,0x0,"Off"
+HKR,%PA%\0409\AUX_LED_Mode,01000001,0x0,"On"
+HKR,%PA%\0409\AUX_LED_Mode,02000002,0x0,"Auto"
+HKR,%PA%,A04090037,0x0,"Effect"
+HKR,%PA%,A04090038,0x0,"Frame"
+HKR,%PA%,A04090039,0x0,"Zoom"
+HKR,%PA%,A04090040,0x0,"Frame Rate"
+HKR,%PA%\0409\Frame_Rate,00000030,0x0,"  30 FPS"
+HKR,%PA%\0409\Frame_Rate,01000024,0x0,"  25 FPS"
+HKR,%PA%\0409\Frame_Rate,02000020,0x0,"  20 FPS"
+HKR,%PA%\0409\Frame_Rate,03000015,0x0,"  15 FPS"
+HKR,%PA%,A04090041,0x0,"Auto Exposure"
+HKR,%PA%\0409\Exposure_Enable,00000001,0x0,"            On"
+HKR,%PA%\0409\Exposure_Enable,01000000,0x0,"            Off"
+HKR,%PA%,A04090042,0x0,"White Balance Enable"
+HKR,%PA%\0409\White_Balance_Enable,00000001,0x0,"            On"
+HKR,%PA%\0409\White_Balance_Enable,01000000,0x0,"            Off"
+HKR,%PA%,A04090043,0x0,"Full Automatic Control"
+HKR,%PA%\0409\Effect,0000,0x00000000,"Disable"
+HKR,%PA%\0409\Effect,0001,0x00000000,"Invert"
+HKR,%PA%\0409\Effect,0002,0x00000000,"Black/White"
+HKR,%PA%\0409\Effect,0003,0x00000000,"Green Mono"
+HKR,%PA%\0409\Effect,0004,0x00000000,"Gray Scale"
+HKR,%PA%\0409\Effect,0005,0x00000000,"Blue Mono"
+HKR,%PA%\0409\Effect,0006,0x00000000,"Red Mono"
+HKR,%PA%\0409\Effect,0007,0x00000000,"Emboss"
+HKR,%PA%\0409\Effect,0008,0x00000000,"Find Edge"
+HKR,%PA%\0409\Effect,0009,0x00000000,"Mosaic"
+HKR,%PA%\0409\Effect,0010,0x00000000,"Wind"
+HKR,%PA%\0409\Effect,0011,0x00000000,"Solarize"
+HKR,%PA%\0409\Effect,0012,0x00000000,"Sepia"
+HKR,%PA%\0409\Effect,0013,0x00000000,"Bathroom"
+HKR,%PA%\0409\Effect,0014,0x00000000,"Sketch"
+HKR,%PA%\0409\Effect,0015,0x00000000,"OilPaint"
+HKR,%PA%\0409\Effect,0016,0x00000000,"DistortH"
+HKR,%PA%\0409\Effect,0017,0x00000000,"DistortV"
+HKR,%PA%\0409\Effect,0018,0x00000000,"Monitor"
+HKR,%PA%\0409\Frame,0000,0x00000000,"Disable"
+HKR,%PA%\0409\Frame,0001,0x00000000,"Flowers"
+HKR,%PA%\0409\Frame,0002,0x00000000,"Paper"
+HKR,%PA%\0409\Frame,0003,0x00000000,"Snipe"
+HKR,%PA%\0409\Frame,0004,0x00000000,"Snowman"
+HKR,%PA%\0409\Frame,0005,0x00000000,"Time Maganize"
+HKR,%PA%\0409\Frame,0006,0x00000000,"News"
+HKR,%PA%,A04090044,0x0,"Face Tracking"
+
+;;Traditional Chinese 0x0404
+HKR,%PA%,A04040000,0x0,""
+HKR,%PA%,A04040001,0x0,"影像控制"
+HKR,%PA%,A04040002,0x0,"影像水平翻轉"
+HKR,%PA%\0404\Image_Mirror,00000001,0x0,"            On"
+HKR,%PA%\0404\Image_Mirror,01000000,0x0,"            Off"
+HKR,%PA%,A04040003,0x0,"影像垂直翻轉"
+HKR,%PA%,A04040004,0x0,"低照度"
+HKR,%PA%,A04040005,0x0,"亮度"
+HKR,%PA%,A04040006,0x0,"對比"
+HKR,%PA%,A04040007,0x0,"色差補正"
+HKR,%PA%,A04040008,0x0,"色調"
+HKR,%PA%,A04040009,0x0,"彩度"
+HKR,%PA%,A04040010,0x0,"銳利度"
+HKR,%PA%,A04040011,0x0,"VGA 快照大小"
+HKR,%PA%\0404\VGA_Snap_Size,00000000,0x0,"640x480"
+HKR,%PA%\0404\VGA_Snap_Size,01000001,0x0,"800x600"
+HKR,%PA%\0404\VGA_Snap_Size,02000002,0x0,"1024x768"
+HKR,%PA%\0404\VGA_Snap_Size,03000003,0x0,"1280x960"
+HKR,%PA%\0404\VGA_Snap_Size,04000004,0x0,"1600x1200"
+HKR,%PA%,A04040012,0x0,"自動模式控制"
+HKR,%PA%,A04040013,0x0,"USB 頻寬"
+HKR,%PA%,A04040014,0x0,"曝光"
+HKR,%PA%,A04040015,0x0,"白平衡"
+HKR,%PA%\0404\White_Balance_Mode,00000000,0x0,"                室內"
+HKR,%PA%\0404\White_Balance_Mode,01000001,0x0,"                室外"
+HKR,%PA%\0404\White_Balance_Mode,02000002,0x0,"              螢光燈"
+HKR,%PA%\0404\White_Balance_Mode,03010000,0x0,"紅                                                藍"
+HKR,%PA%,A04040016,0x0,"紅"
+HKR,%PA%,A04040017,0x0,"綠"
+HKR,%PA%,A04040018,0x0,"藍"
+HKR,%PA%,A04040019,0x0,"自動"
+HKR,%PA%,A04040020,0x0,"預設值"
+HKR,%PA%,A04040021,0x0,"重設"
+HKR,%PA%,A04040022,0x0,"儲存"
+HKR,%PA%,A04040023,0x0,"回復"
+HKR,%PA%,A04040024,0x0,"室內/室外"
+HKR,%PA%\0404\AE_Stage,00000000,0x0,"室內"
+HKR,%PA%\0404\AE_Stage,01000001,0x0,"室外"
+HKR,%PA%,A04040027,0x0,"閃爍頻率"
+HKR,%PA%\0404\Flicker,00000050,0x0,"50 Hz"
+HKR,%PA%\0404\Flicker,01000060,0x0,"60 Hz"
+HKR,%PA%,A04040030,0x0,"特殊模式"
+HKR,%PA%,A04040031,0x0,"背光補償"
+HKR,%PA%\0404\Backlight_Compensation,00000001,0x0,"            On"
+HKR,%PA%\0404\Backlight_Compensation,01000000,0x0,"            Off"
+HKR,%PA%,A04040032,0x0,"黑白模式"
+HKR,%PA%\0404\Black_And_White_Mode,00000000,0x0,"            On"
+HKR,%PA%\0404\Black_And_White_Mode,01000001,0x0,"            Off"
+HKR,%PA%,A04040033,0x0,"輔助光源模式"
+HKR,%PA%\0404\AUX_LED_Mode,00000000,0x0,"關閉"
+HKR,%PA%\0404\AUX_LED_Mode,01000001,0x0,"開啟"
+HKR,%PA%\0404\AUX_LED_Mode,02000002,0x0,"自動"
+HKR,%PA%,A04040037,0x0,"Effect"
+HKR,%PA%,A04040038,0x0,"Frame"
+HKR,%PA%,A04040039,0x0,"放大"
+HKR,%PA%,A04040040,0x0,"Frame Rate"
+HKR,%PA%\0404\Frame_Rate,00000030,0x0,"  30 FPS"
+HKR,%PA%\0404\Frame_Rate,01000024,0x0,"  25 FPS"
+HKR,%PA%\0404\Frame_Rate,02000020,0x0,"  20 FPS"
+HKR,%PA%\0404\Frame_Rate,03000015,0x0,"  15 FPS"
+HKR,%PA%,A04040041,0x0,"自動曝光"
+HKR,%PA%\0404\Exposure_Enable,00000001,0x0,"            On"
+HKR,%PA%\0404\Exposure_Enable,01000000,0x0,"            Off"
+HKR,%PA%,A04040042,0x0,"自動白平衡"
+HKR,%PA%\0404\White_Balance_Enable,00000001,0x0,"            On"
+HKR,%PA%\0404\White_Balance_Enable,01000000,0x0,"            Off"
+HKR,%PA%,A04040043,0x0,"Full Automatic Control"
+HKR,%PA%\0404\Effect,0000,0x00000000,"Disable"
+HKR,%PA%\0404\Effect,0001,0x00000000,"Invert"
+HKR,%PA%\0404\Effect,0002,0x00000000,"Black/White"
+HKR,%PA%\0404\Effect,0003,0x00000000,"Green Mono"
+HKR,%PA%\0404\Effect,0004,0x00000000,"Gray Scale"
+HKR,%PA%\0404\Effect,0005,0x00000000,"Blue Mono"
+HKR,%PA%\0404\Effect,0006,0x00000000,"Red Mono"
+HKR,%PA%\0404\Effect,0007,0x00000000,"Emboss"
+HKR,%PA%\0404\Effect,0008,0x00000000,"Find Edge"
+HKR,%PA%\0404\Effect,0009,0x00000000,"Mosaic"
+HKR,%PA%\0404\Effect,0010,0x00000000,"Wind"
+HKR,%PA%\0404\Effect,0011,0x00000000,"Solarize"
+HKR,%PA%\0404\Effect,0012,0x00000000,"Sepia"
+HKR,%PA%\0404\Effect,0013,0x00000000,"Bathroom"
+HKR,%PA%\0404\Effect,0014,0x00000000,"Sketch"
+HKR,%PA%\0404\Effect,0015,0x00000000,"OilPaint"
+HKR,%PA%\0404\Effect,0016,0x00000000,"DistortH"
+HKR,%PA%\0404\Effect,0017,0x00000000,"DistortV"
+HKR,%PA%\0404\Effect,0018,0x00000000,"Monitor"
+HKR,%PA%\0404\Frame,0000,0x00000000,"Disable"
+HKR,%PA%\0404\Frame,0001,0x00000000,"Flowers"
+HKR,%PA%\0404\Frame,0002,0x00000000,"Paper"
+HKR,%PA%\0404\Frame,0003,0x00000000,"Snipe"
+HKR,%PA%\0404\Frame,0004,0x00000000,"Snowman"
+HKR,%PA%\0404\Frame,0005,0x00000000,"Time Maganize"
+HKR,%PA%\0404\Frame,0006,0x00000000,"News"
+HKR,%PA%,A04040044,0x0,"Face Tracking"
+
+;;Simplified Chinese 0x0804
+HKR,%PA%,A08040000,0x0,""
+HKR,%PA%,A08040001,0x0,"Image Control"
+HKR,%PA%,A08040002,0x0,"Image Mirror"
+HKR,%PA%\0804\Image_Mirror,00000001,0x0,"            On"
+HKR,%PA%\0804\Image_Mirror,01000000,0x0,"            Off"
+HKR,%PA%,A08040003,0x0,"Image Flip"
+HKR,%PA%,A08040004,0x0,"Low Light"
+HKR,%PA%,A08040005,0x0,"Brightness"
+HKR,%PA%,A08040006,0x0,"Contrast"
+HKR,%PA%,A08040007,0x0,"Gamma"
+HKR,%PA%,A08040008,0x0,"Hue"
+HKR,%PA%,A08040009,0x0,"Saturation"
+HKR,%PA%,A08040010,0x0,"Sharpness"
+HKR,%PA%,A08040011,0x0,"VGA SnapSize"
+HKR,%PA%\0804\VGA_Snap_Size,00000000,0x0,"640x480"
+HKR,%PA%\0804\VGA_Snap_Size,01000001,0x0,"800x600"
+HKR,%PA%\0804\VGA_Snap_Size,02000002,0x0,"1024x768"
+HKR,%PA%\0804\VGA_Snap_Size,03000003,0x0,"1280x960"
+HKR,%PA%\0804\VGA_Snap_Size,04000004,0x0,"1600x1200"
+HKR,%PA%,A08040012,0x0,"Auto Mode Control"
+HKR,%PA%,A08040013,0x0,"USB"
+HKR,%PA%,A08040014,0x0,"Exposure"
+HKR,%PA%,A08040015,0x0,"White Balance"
+HKR,%PA%\0804\White_Balance_Mode,00000000,0x0,"        Indoor"
+HKR,%PA%\0804\White_Balance_Mode,01000001,0x0,"       Outdoor"
+HKR,%PA%\0804\White_Balance_Mode,02000002,0x0,"  Fluorescense"
+HKR,%PA%\0804\White_Balance_Mode,03010000,0x0,"Red                                              Blue"
+HKR,%PA%,A08040016,0x0,"Red"
+HKR,%PA%,A08040017,0x0,"Green"
+HKR,%PA%,A08040018,0x0,"Blue"
+HKR,%PA%,A08040019,0x0,"Auto"
+HKR,%PA%,A08040020,0x0,"Default"
+HKR,%PA%,A08040021,0x0,"Reset"
+HKR,%PA%,A08040022,0x0,"Save"
+HKR,%PA%,A08040023,0x0,"Restore"
+HKR,%PA%,A08040024,0x0,"In/Out Door"
+HKR,%PA%\0804\AE_Stage,00000000,0x0,"Indoor"
+HKR,%PA%\0804\AE_Stage,01000001,0x0,"Outdoor"
+HKR,%PA%,A08040027,0x0,"Flicker"
+HKR,%PA%\0804\Flicker,00000050,0x0,"50 Hz"
+HKR,%PA%\0804\Flicker,01000060,0x0,"60 Hz"
+HKR,%PA%,A08040030,0x0,"Extra Control"
+HKR,%PA%,A08040031,0x0,"Backlight Compensation"
+HKR,%PA%\0804\Backlight_Compensation,00000001,0x0,"            On"
+HKR,%PA%\0804\Backlight_Compensation,01000000,0x0,"            Off"
+HKR,%PA%,A08040032,0x0,"B/W Mode"
+HKR,%PA%\0804\Black_And_White_Mode,00000000,0x0,"            On"
+HKR,%PA%\0804\Black_And_White_Mode,01000001,0x0,"            Off"
+HKR,%PA%,A08040033,0x0,"Aux LED Mode"
+HKR,%PA%\0804\AUX_LED_Mode,00000000,0x0,"Off"
+HKR,%PA%\0804\AUX_LED_Mode,01000001,0x0,"On"
+HKR,%PA%\0804\AUX_LED_Mode,02000002,0x0,"Auto"
+HKR,%PA%,A08040037,0x0,"Effect"
+HKR,%PA%,A08040038,0x0,"Frame"
+HKR,%PA%,A08040039,0x0,"Zoom"
+HKR,%PA%,A08040040,0x0,"Frame Rate"
+HKR,%PA%\0804\Frame_Rate,00000030,0x0,"  30 FPS"
+HKR,%PA%\0804\Frame_Rate,01000024,0x0,"  25 FPS"
+HKR,%PA%\0804\Frame_Rate,02000020,0x0,"  20 FPS"
+HKR,%PA%\0804\Frame_Rate,03000015,0x0,"  15 FPS"
+HKR,%PA%,A08040041,0x0,"Auto Exposure"
+HKR,%PA%\0804\Exposure_Enable,00000001,0x0,"            On"
+HKR,%PA%\0804\Exposure_Enable,01000000,0x0,"            Off"
+HKR,%PA%,A08040042,0x0,"White Balance Enable"
+HKR,%PA%\0804\White_Balance_Enable,00000001,0x0,"            On"
+HKR,%PA%\0804\White_Balance_Enable,01000000,0x0,"            Off"
+HKR,%PA%,A08040043,0x0,"Full Automatic Control"
+HKR,%PA%\0804\Effect,0000,0x00000000,"Disable"
+HKR,%PA%\0804\Effect,0001,0x00000000,"Invert"
+HKR,%PA%\0804\Effect,0002,0x00000000,"Black/White"
+HKR,%PA%\0804\Effect,0003,0x00000000,"Green Mono"
+HKR,%PA%\0804\Effect,0004,0x00000000,"Gray Scale"
+HKR,%PA%\0804\Effect,0005,0x00000000,"Blue Mono"
+HKR,%PA%\0804\Effect,0006,0x00000000,"Red Mono"
+HKR,%PA%\0804\Effect,0007,0x00000000,"Emboss"
+HKR,%PA%\0804\Effect,0008,0x00000000,"Find Edge"
+HKR,%PA%\0804\Effect,0009,0x00000000,"Mosaic"
+HKR,%PA%\0804\Effect,0010,0x00000000,"Wind"
+HKR,%PA%\0804\Effect,0011,0x00000000,"Solarize"
+HKR,%PA%\0804\Effect,0012,0x00000000,"Sepia"
+HKR,%PA%\0804\Effect,0013,0x00000000,"Bathroom"
+HKR,%PA%\0804\Effect,0014,0x00000000,"Sketch"
+HKR,%PA%\0804\Effect,0015,0x00000000,"OilPaint"
+HKR,%PA%\0804\Effect,0016,0x00000000,"DistortH"
+HKR,%PA%\0804\Effect,0017,0x00000000,"DistortV"
+HKR,%PA%\0804\Effect,0018,0x00000000,"Monitor"
+HKR,%PA%\0804\Frame,0000,0x00000000,"Disable"
+HKR,%PA%\0804\Frame,0001,0x00000000,"Flowers"
+HKR,%PA%\0804\Frame,0002,0x00000000,"Paper"
+HKR,%PA%\0804\Frame,0003,0x00000000,"Snipe"
+HKR,%PA%\0804\Frame,0004,0x00000000,"Snowman"
+HKR,%PA%\0804\Frame,0005,0x00000000,"Time Maganize"
+HKR,%PA%\0804\Frame,0006,0x00000000,"News"
+HKR,%PA%,A08040044,0x0,"Face Tracking"
+
+[Strings]
+str_ProxyVCap.CLSID="{17CCA71B-ECD7-11D0-B908-00A0C9223196}"
+str_KSCATEGORY_CAPTURE="{65E8773D-8F56-11D0-A3B9-00A0C9223196}"
+str_SERVICE_KERNEL_DRIVER=1
+str_SERVICE_DEMAND_START=3
+str_SERVICE_ERROR_NORMAL=1
+
+str_SpecialPropertySetGUID="{685D6D1C-D73A-4f37-B7E5-E53660311DDB}"
+str_StiUsdGUID="{72D5B36F-A205-46af-BDCB-25707467AB87}"
+str_FrameEffectPropertyPageGUID="{E657B100-C982-4774-A368-49587D913280}"
+str_FrameEffectPropertyPage="Frame/Effect Property Page"
+
+str_ServiceKey="PAC207"
+str_SoftwareKey="PixArt\PAC207"
+str_RegistryPath_Software="Software\PixArt\PAC207"
+str_StillImageFileFullPath="C:\PA207.DAT"
+str_CustomPropertySetGUID="{DD05C3D4-C25B-402b-91BE-040568C5DB10}"
+str_CustomPropertyPageGUID="{24C26D70-1AC0-4433-96B8-CA5AD1173C9F}"
+str_CustomPropertyPageGUID2="{04AB1765-317D-4a89-995D-45148D13CFD7}"
+str_StiEventGUID_0="{84FDAA8B-8C8E-4350-9E0D-C83DE5252826}"
+str_stiEventGUID_1="{A57C3E9F-B478-4a29-8E89-D8E80EB2A967}"
+str_AppDir ="PixArt\Pac207"
+str_SpecialPropertySet="WDM Special ICustomCamera Interface Handler"
+str_CustomPropertySet="WDM Custom ICustomCamera Interface Handler"
+str_CustomPropertyPage="Custom Camera Property Page"
+str_TW_Manufacturer="SoC PC-Camera Manufacturer"
+str_TW_ProductFamily="SoC PC-Camera Family"
+str_TW_ProductName="SoC PC-Camera"
+str_TW_SpecialInfo="SoC PC-Camera Information"
+str_TW_Version="1.0.1.3"
+str_TWAIN_Dir="PA207"
+str_INF_Provider="KYE SYSTEMS CORP."
+str_Provider="KYE SYSTEMS CORP."
+str_Manufacturer="KYE SYSTEMS CORP."
+str_Description="Eye 110"
+str_SourceDiskName="Eye 110 Installation Disc"
+str_FrameSourceDiskName="Frame Folder"
+DeviceEvent_0="Launch Video Application"
+DeviceEvent_1="Capture Still Image"
+VIDAPP="AmCap"
+STIAPP="PASnap"
+PA="Parameters"
+RunPath="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+
+;;Frame path
+str_FRAME_COPY_PATH="PixArt\PAC207"
+str_FRAME_PATH="\SystemRoot\PixArt\PAC207"

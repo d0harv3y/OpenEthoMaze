@@ -13,7 +13,7 @@ Wire columns stay `session` / `trial` / `condition` ([PROTOCOL-STRATA.md](PROTOC
 | Worked example export | `archive/IMPRESS/my_nor_wip/exports/nor_trial_manifest.csv` |
 
 OpenEthoMaze scratch helper (same rules, IMPRESS-named on purpose):  
-`scratch/nor_object_mi/impress_nor_boss_session.py`
+`moseq-mountain/nor_object_mi/impress_nor_boss_session.py`
 
 ## Boss day → wire `session`
 

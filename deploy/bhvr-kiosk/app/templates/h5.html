@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>H5 · bhvr-kiosk · {{ cfg.nvr_id }}</title>
+  <style>
+    :root {
+      --bg: #1a1d21;
+      --panel: #24282e;
+      --tile: #2c3138;
+      --ok: #3d8b5a;
+      --warn: #b8860b;
+      --bad: #a33;
+      --text: #e8eaed;
+      --muted: #9aa0a6;
+      --accent: #4a90d9;
+      --border: #3a424c;
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      background: var(--bg); color: var(--text);
+      height: 100vh; display: flex; flex-direction: column;
+    }
+    header {
+      display: flex; flex-wrap: wrap; align-items: center;
+      gap: 0.45rem 0.65rem; padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    h1 { font-size: 1.05rem; margin: 0; font-weight: 600; }
+    .muted { color: var(--muted); font-size: 0.78rem; }
+    a.btn, button {
+      font-size: 0.9rem; padding: 0.4rem 0.7rem;
+      border: 0; border-radius: 0.35rem; cursor: pointer;
+      background: var(--accent); color: #fff; text-decoration: none;
+      display: inline-block;
+    }
+    button.secondary, a.secondary { background: #3a4550; }
+    button.danger { background: var(--bad); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .badge {
+      font-size: 0.72rem; padding: 0.15rem 0.45rem;
+      border-radius: 0.25rem; background: #333; color: var(--muted);
+    }
+    .badge.active { background: var(--bad); color: #fff; }
+    .badge.pack { background: #5a4a20; color: #ffe08a; }
+    .layout {
+      flex: 1; min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 1.2fr) minmax(18rem, 1.4fr);
+      gap: 0;
+    }
+    .pane {
+      background: var(--panel); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; min-width: 0; min-height: 0;
+    }
+    .pane:last-child { border-right: 0; }
+    .pane h2 {
+      margin: 0; padding: 0.5rem 0.65rem; font-size: 0.82rem;
+      font-weight: 600; border-bottom: 1px solid var(--border);
+      color: var(--muted); letter-spacing: 0.03em; text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .pane-body { flex: 1; overflow: auto; padding: 0.4rem; }
+    .row {
+      padding: 0.4rem 0.5rem; border-radius: 0.3rem; cursor: pointer;
+      font-size: 0.85rem; line-height: 1.3;
+    }
+    .row:hover { background: #323840; }
+    .row.selected { background: #3a5068; }
+    .row.disabled { opacity: 0.45; cursor: not-allowed; }
+    .row .sub { display: block; color: var(--muted); font-size: 0.72rem; font-family: ui-monospace, monospace; }
+    .tree details { margin-left: 0.5rem; }
+    .tree summary { cursor: pointer; font-size: 0.85rem; padding: 0.15rem 0; }
+    .tree .ds {
+      display: block; padding: 0.2rem 0.35rem; margin: 0.1rem 0;
+      border-radius: 0.25rem; cursor: pointer; font-size: 0.82rem;
+      font-family: ui-monospace, monospace;
+    }
+    .tree .ds:hover { background: #323840; }
+    .tree .ds.selected { background: #3a5068; }
+    .tree .ds .desc { display: block; color: var(--muted); font-size: 0.7rem; font-family: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    pre.preview {
+      white-space: pre-wrap; word-break: break-word;
+      font-size: 0.75rem; background: #1a1d21; padding: 0.5rem;
+      border-radius: 0.3rem; max-height: 14rem; overflow: auto;
+    }
+    table.attrs { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    table.attrs th, table.attrs td {
+      text-align: left; padding: 0.25rem 0.35rem; border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    table.attrs th { color: var(--muted); width: 35%; font-weight: 500; }
+    .player-wrap {
+      background: #000; border-radius: 0.35rem; overflow: hidden;
+      aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;
+    }
+    .player-wrap video { width: 100%; height: 100%; object-fit: contain; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin: 0.4rem 0; }
+    select { background: #1a1d21; color: var(--text); border: 1px solid var(--border); border-radius: 0.3rem; padding: 0.3rem; }
+    .err { color: #ffb4b4; font-size: 0.8rem; padding: 0.35rem 0.5rem; }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; grid-template-rows: auto auto auto; }
+      .pane { border-right: 0; border-bottom: 1px solid var(--border); max-height: 40vh; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="btn secondary" href="/">← Console</a>
+    <h1>H5 · {{ cfg.nvr_id }}</h1>
+    <span class="muted" title="data_root">{{ data_root }}</span>
+    <span class="badge" id="pack-badge" hidden>PACK</span>
+    <div style="margin-left:auto; display:flex; gap:0.35rem; align-items:center;">
+      <button type="button" class="secondary" id="btn-pack" disabled title="Pack loose .ts into per-cam H5s">Pack now</button>
+      <button type="button" class="danger" id="btn-pack-force" disabled title="Overwrite existing mpegts parts">Force pack</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <section class="pane" aria-label="Sessions and files">
+      <h2>Sessions / files</h2>
+      <div class="pane-body" id="nav-pane">
+        <div class="muted" style="padding:0.35rem">Loading…</div>
+      </div>
+    </section>
+    <section class="pane" aria-label="Tree and attributes">
+      <h2>Tree / attrs</h2>
+      <div class="pane-body" id="tree-pane">
+        <div class="muted" style="padding:0.35rem">Select an H5 file</div>
+      </div>
+    </section>
+    <section class="pane" aria-label="Player and preview">
+      <h2>Player / preview</h2>
+      <div class="pane-body" id="play-pane">
+        <div class="toolbar">
+          <label class="muted">Part
+            <select id="part-select" disabled></select>
+          </label>
+          <button type="button" class="secondary" id="btn-play" disabled>Play</button>
+          <button type="button" class="secondary" id="btn-stop-play" disabled>Stop</button>
+        </div>
+        <div class="player-wrap"><video id="h5-video" controls muted playsinline></video></div>
+        <div id="preview-box" style="margin-top:0.5rem"></div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/static/mpegts.min.js"></script>
+  <script>
+    const qs = new URLSearchParams(location.search);
+    let sessions = [];
+    let selectedSession = qs.get("session") || "";
+    let selectedFile = qs.get("file") || "";
+    let treeData = null;
+    let mpegtsParts = [];
+    let player = null;
+    let selectedNodePath = "";
+
+    function setPackBadge(snap) {
+      const el = document.getElementById("pack-badge");
+      if (!snap || !snap.label) { el.hidden = true; return; }
+      el.hidden = false;
+      el.textContent = snap.label;
+      el.className = "badge pack";
+    }
+
+    async function pollPack() {
+      try {
+        const r = await fetch("/api/session/pack-status", { cache: "no-store" });
+        const snap = await r.json();
+        setPackBadge(snap);
+        if (snap.pending) setTimeout(pollPack, 1000);
+      } catch (_) {}
+    }
+
+    function syncQuery() {
+      const u = new URL(location.href);
+      if (selectedSession) u.searchParams.set("session", selectedSession);
+      else u.searchParams.delete("session");
+      if (selectedFile) u.searchParams.set("file", selectedFile);
+      else u.searchParams.delete("file");
+      history.replaceState(null, "", u);
+    }
+
+    function fmtBytes(n) {
+      if (n == null) return "";
+      if (n < 1024) return n + " B";
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KiB";
+      return (n / (1024 * 1024)).toFixed(1) + " MiB";
+    }
+
+    async function loadSessions() {
+      const nav = document.getElementById("nav-pane");
+      const r = await fetch("/api/h5/sessions", { cache: "no-store" });
+      const data = await r.json();
+      sessions = data.sessions || [];
+      renderNav();
+      if (selectedSession) await selectSession(selectedSession, false);
+    }
+
+    function renderNav() {
+      const nav = document.getElementById("nav-pane");
+      if (!sessions.length) {
+        nav.innerHTML = '<div class="muted" style="padding:0.35rem">No session folders under data_root</div>';
+        return;
+      }
+      const wrap = document.createElement("div");
+      for (const s of sessions) {
+        const row = document.createElement("div");
+        row.className = "row" + (s.name === selectedSession ? " selected" : "");
+        row.innerHTML =
+          (s.active ? '<span class="badge active">REC</span> ' : "") +
+          escapeHtml(s.name) +
+          '<span class="sub">' + fmtBytes(s.bytes) +
+          " · " + (s.h5_count || 0) + " h5 · " + (s.ts_count || 0) + " ts</span>";
+        row.addEventListener("click", () => selectSession(s.name, true));
+        wrap.appendChild(row);
+      }
+      const filesBox = document.createElement("div");
+      filesBox.id = "files-box";
+      filesBox.style.marginTop = "0.5rem";
+      wrap.appendChild(filesBox);
+      nav.innerHTML = "";
+      nav.appendChild(wrap);
+    }
+
+    async function selectSession(name, clearFile) {
+      selectedSession = name;
+      if (clearFile) selectedFile = "";
+      syncQuery();
+      renderNav();
+      const packBtn = document.getElementById("btn-pack");
+      const forceBtn = document.getElementById("btn-pack-force");
+      const sess = sessions.find((s) => s.name === name);
+      const blocked = !!(sess && sess.active);
+      packBtn.disabled = blocked;
+      forceBtn.disabled = blocked;
+      const box = document.getElementById("files-box");
+      if (!box) return;
+      box.innerHTML = '<div class="muted">Loading files…</div>';
+      try {
+        const r = await fetch("/api/h5/files?session=" + encodeURIComponent(name), { cache: "no-store" });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || r.statusText);
+        let html = '<div class="muted" style="margin:0.35rem 0 0.2rem">H5 files</div>';
+        if (!(data.h5 || []).length) {
+          html += '<div class="muted">None — use Pack now if loose .ts exist</div>';
+        }
+        for (const f of data.h5 || []) {
+          const sel = f.name === selectedFile ? " selected" : "";
+          const dis = data.active ? " disabled" : "";
+          html += '<div class="row' + sel + dis + '" data-file="' + escapeAttr(f.name) + '">' +
+            escapeHtml(f.name) + '<span class="sub">' + fmtBytes(f.bytes) + "</span></div>";
+        }
+        if ((data.loose_ts || []).length) {
+          html += '<div class="muted" style="margin:0.55rem 0 0.2rem">Loose .ts (' + data.loose_ts.length + ")</div>";
+          for (const t of data.loose_ts) {
+            html += '<div class="row disabled">' + escapeHtml(t.name) +
+              '<span class="sub">' + fmtBytes(t.bytes) + "</span></div>";
+          }
+        }
+        if (data.active) {
+          html = '<div class="err">Active REC session — Stop before opening H5 or Pack now.</div>' + html;
+        }
+        box.innerHTML = html;
+        box.querySelectorAll(".row[data-file]").forEach((el) => {
+          if (el.classList.contains("disabled")) return;
+          el.addEventListener("click", () => openFile(el.getAttribute("data-file")));
+        });
+        if (selectedFile && !data.active) await openFile(selectedFile);
+        else if (data.active) {
+          document.getElementById("tree-pane").innerHTML =
+            '<div class="err">Active session — H5 open blocked (grill Q14).</div>';
+        }
+      } catch (e) {
+        box.innerHTML = '<div class="err">' + escapeHtml(String(e.message || e)) + "</div>";
+      }
+    }
+
+    async function openFile(name) {
+      selectedFile = name;
+      syncQuery();
+      // Refresh file-list selection highlight without re-entering openFile.
+      const box = document.getElementById("files-box");
+      if (box) {
+        box.querySelectorAll(".row[data-file]").forEach((el) => {
+          el.classList.toggle("selected", el.getAttribute("data-file") === name);
+        });
+      }
+      const treePane = document.getElementById("tree-pane");
+      treePane.innerHTML = '<div class="muted">Loading tree…</div>';
+      stopPlayer();
+      document.getElementById("preview-box").innerHTML = "";
+      try {
+        const r = await fetch(
+          "/api/h5/tree?session=" + encodeURIComponent(selectedSession) +
+          "&file=" + encodeURIComponent(name),
+          { cache: "no-store" },
+        );
+        const data = await r.json();
+        if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+        treeData = data.tree;
+        mpegtsParts = data.mpegts_parts || [];
+        selectedNodePath = "";
+        renderTree();
+        fillPartSelect();
+      } catch (e) {
+        treePane.innerHTML = '<div class="err">' + escapeHtml(String(e.message || e)) + "</div>";
+      }
+    }
+
+    function renderTree() {
+      const pane = document.getElementById("tree-pane");
+      if (!treeData) return;
+      let html = "";
+      if (treeData.attrs && Object.keys(treeData.attrs).length) {
+        html += "<div class=\"muted\" style=\"margin-bottom:0.35rem\">Root attrs</div>";
+        html += attrsTable(treeData.attrs);
+      }
+      html += '<div class="tree" style="margin-top:0.5rem">' + renderChildren(treeData.children || []) + "</div>";
+      pane.innerHTML = html;
+      pane.querySelectorAll(".ds").forEach((el) => {
+        el.addEventListener("click", () => selectNode(el.getAttribute("data-path")));
+      });
+    }
+
+    function renderChildren(kids) {
+      let html = "";
+      for (const c of kids) {
+        if (c.type === "group") {
+          html += "<details open><summary>" + escapeHtml(c.name) +
+            (c.description ? ' <span class="muted">— ' + escapeHtml(c.description.slice(0, 60)) + "</span>" : "") +
+            "</summary>" + renderChildren(c.children || []) + "</details>";
+        } else {
+          const sel = c.path === selectedNodePath ? " selected" : "";
+          html += '<span class="ds' + sel + '" data-path="' + escapeAttr(c.path) + '">' +
+            escapeHtml(c.path) +
+            '<span class="desc">' + escapeHtml((c.description || "").slice(0, 80)) +
+            " · " + fmtBytes(c.bytes) + "</span></span>";
+        }
+      }
+      return html;
+    }
+
+    function attrsTable(attrs) {
+      let html = '<table class="attrs">';
+      for (const [k, v] of Object.entries(attrs)) {
+        let val = v;
+        if (typeof v === "object") val = JSON.stringify(v);
+        html += "<tr><th>" + escapeHtml(k) + "</th><td>" + escapeHtml(String(val)) + "</td></tr>";
+      }
+      html += "</table>";
+      return html;
+    }
+
+    async function selectNode(path) {
+      selectedNodePath = path;
+      renderTree();
+      const box = document.getElementById("preview-box");
+      box.innerHTML = '<div class="muted">Loading…</div>';
+      if (path.startsWith("video/mpegts_")) {
+        const partName = path.split("/").pop();
+        const sel = document.getElementById("part-select");
+        for (const opt of sel.options) {
+          if (opt.value === path) { sel.value = path; break; }
+        }
+        document.getElementById("btn-play").disabled = false;
+      }
+      try {
+        const r = await fetch(
+          "/api/h5/node?session=" + encodeURIComponent(selectedSession) +
+          "&file=" + encodeURIComponent(selectedFile) +
+          "&path=" + encodeURIComponent(path),
+          { cache: "no-store" },
+        );
+        const data = await r.json();
+        if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : r.statusText);
+        let html = "<div class=\"muted\">" + escapeHtml(path) + "</div>";
+        html += attrsTable(data.attrs || {});
+        const p = data.preview;
+        if (p && p.kind === "text") {
+          html += "<pre class=\"preview\">" + escapeHtml(p.text) +
+            (p.truncated ? "\n… truncated" : "") + "</pre>";
+        } else if (p && p.kind === "numeric") {
+          html += "<pre class=\"preview\">n=" + p.n + "\nhead: " +
+            escapeHtml(JSON.stringify(p.head)) +
+            (p.tail && p.tail.length ? "\ntail: " + escapeHtml(JSON.stringify(p.tail)) : "") +
+            "</pre>";
+        } else if (p && p.kind === "mpegts") {
+          html += '<div class="muted" style="margin-top:0.35rem">MPEG-TS · ' +
+            fmtBytes(p.bytes) + " — use Play</div>";
+        }
+        box.innerHTML = html;
+      } catch (e) {
+        box.innerHTML = '<div class="err">' + escapeHtml(String(e.message || e)) + "</div>";
+      }
+    }
+
+    function fillPartSelect() {
+      const sel = document.getElementById("part-select");
+      sel.innerHTML = "";
+      if (!mpegtsParts.length) {
+        sel.disabled = true;
+        document.getElementById("btn-play").disabled = true;
+        return;
+      }
+      sel.disabled = false;
+      for (const p of mpegtsParts) {
+        const opt = document.createElement("option");
+        opt.value = p.path;
+        opt.textContent = p.name + " (" + fmtBytes(p.bytes) + ")";
+        sel.appendChild(opt);
+      }
+      sel.value = mpegtsParts[0].path;
+      document.getElementById("btn-play").disabled = false;
+    }
+
+    function rawUrl(path) {
+      return "/api/h5/raw?session=" + encodeURIComponent(selectedSession) +
+        "&file=" + encodeURIComponent(selectedFile) +
+        "&path=" + encodeURIComponent(path);
+    }
+
+    function stopPlayer() {
+      const video = document.getElementById("h5-video");
+      document.getElementById("btn-stop-play").disabled = true;
+      try {
+        if (player) {
+          player.pause();
+          player.unload();
+          player.detachMediaElement();
+          player.destroy();
+        }
+      } catch (_) {}
+      player = null;
+      try { video.removeAttribute("src"); video.load(); } catch (_) {}
+    }
+
+    function playSelected() {
+      const path = document.getElementById("part-select").value;
+      if (!path) return;
+      if (typeof mpegts === "undefined") {
+        alert("mpegts.js not loaded");
+        return;
+      }
+      stopPlayer();
+      const video = document.getElementById("h5-video");
+      const url = rawUrl(path);
+      player = mpegts.createPlayer(
+        { type: "mpegts", isLive: false, hasAudio: false, url: url },
+        { enableWorker: false, enableStashBuffer: true, stashInitialSize: 384, lazyLoad: false },
+      );
+      player.attachMediaElement(video);
+      player.on(mpegts.Events.ERROR, (type, detail) => {
+        console.warn("h5 mpegts error", type, detail);
+        document.getElementById("preview-box").innerHTML =
+          '<div class="err">Player error: ' + escapeHtml(String(type) + " " + String(detail)) + "</div>";
+      });
+      player.load();
+      video.play().catch(() => {});
+      document.getElementById("btn-stop-play").disabled = false;
+      selectNode(path);
+    }
+
+    async function packNow(force) {
+      if (!selectedSession) return;
+      const label = force ? "Force pack" : "Pack now";
+      if (!confirm(label + " loose .ts in " + selectedSession + " → per-cam H5?")) return;
+      const r = await fetch("/api/h5/pack-now", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: selectedSession, force: !!force }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        alert(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+        return;
+      }
+      setPackBadge(data.pack);
+      pollPack();
+      await selectSession(selectedSession, false);
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      })[c]);
+    }
+    function escapeAttr(s) { return escapeHtml(s); }
+
+    document.getElementById("btn-play").addEventListener("click", playSelected);
+    document.getElementById("btn-stop-play").addEventListener("click", stopPlayer);
+    document.getElementById("btn-pack").addEventListener("click", () => packNow(false));
+    document.getElementById("btn-pack-force").addEventListener("click", () => packNow(true));
+    document.getElementById("part-select").addEventListener("change", () => {
+      document.getElementById("btn-play").disabled = !document.getElementById("part-select").value;
+    });
+
+    loadSessions();
+    pollPack();
+  </script>
+</body>
+</html>

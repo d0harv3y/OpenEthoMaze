@@ -60,10 +60,10 @@ Claim **kind** (`#clock-portable` vs `#alphabet-bound`) lives on H / V / report 
 | `figures/fig_….svg` | human-facing panel | #clock-portable or #alphabet-bound |
 | vault `attachments/fig_….svg` | optional Obsidian embed copy | (same) |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/<script>.py`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/<script>.py`
 ```
 
-Paths stay **portable** (`sack/…`, `OpenEthoMaze/scratch/…`). Lab absolute drives belong only in [[Campaign Roots]] footnotes if needed.
+Paths stay **portable** (`sack/…`, `OpenEthoMaze/moseq-mountain/…`). Lab absolute drives belong only in [[Campaign Roots]] footnotes if needed.
 
 ### Figures — where they live
 

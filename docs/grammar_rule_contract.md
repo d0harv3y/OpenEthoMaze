@@ -209,7 +209,7 @@ Grill decisions (2026-06-30):
 
 **Pose vs scalars:** kpMS syllable ids encode egocentric pose; bout scalars encode locomotion/blob summaries. Scalars help disambiguate speed-overlapping classes; **overlay exemplars** are required for pose-shaped distinctions (groom vs rear) when scalars agree.
 
-Prototype TUI: [`scratch/PROTOTYPE-grammar-curate/`](../scratch/PROTOTYPE-grammar-curate/README.md).
+Prototype TUI: [`moseq-mountain/PROTOTYPE-grammar-curate/`](../moseq-mountain/PROTOTYPE-grammar-curate/README.md).
 
 ## CLIs
 

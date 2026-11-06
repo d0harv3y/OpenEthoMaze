@@ -73,7 +73,7 @@ Engagement Δ × physio overview (light phase) — M×locked null. Source: [[Run
 
 ![[fig_v_engagement_physio_null_L.png]]
 
-Regen / campaign copies: `sack/.../vault_verdict_figures/` · `scratch/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
+Regen / campaign copies: `sack/.../vault_verdict_figures/` · `moseq-mountain/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
 
 ## Related
 

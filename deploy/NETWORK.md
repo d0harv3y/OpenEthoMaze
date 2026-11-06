@@ -17,7 +17,7 @@ Beacon payload: `BHVR_MQTT_BROKER <ip> <port>` — **on-demand only** (button /
 ## NVR
 
 ```bash
-sudo bash ~/deploy/bhvr-nvr/install_mosquitto.sh
+sudo bash ~/deploy/bhvr-nvr-pi4b/install_mosquitto.sh
 # mosquitto only; beacon is oneshot
 sudo systemctl start bhvr-broker-beacon   # peer test
 # or kiosk: Invite cameras
@@ -27,7 +27,7 @@ mosquitto_sub -h 127.0.0.1 -t 'bhvr/cam/+/state' -v
 ## Cam SD prep
 
 1. Imager: Lite 32-bit, pubkey, hostname `bhvr-camN`, wsu-iot.  
-2. Before eject: `deploy/bhvr-cam/sd-boot/apply-to-boot.ps1 -BootDrive X:`  
+2. Before eject: `deploy/bhvr-cam-pi0w/sd-boot/apply-to-boot.ps1 -BootDrive X:`  
 3. First boot = **slim** (scripts + units only; **no apt** — air-gap safe).  
 4. NVR **Invite cameras**.
 
@@ -163,9 +163,9 @@ Operator: **plug cable** → USB within seconds; **unplug** → WiFi after ~10�
 | Dual-home | Before unplug, roster `ips` has **both** `usb` and `wifi`; `MQTT_BROKER_WIFI` set (Invite once). |
 | Announce | Zombie USB check + bind MQTT to active iface + WiFi broker fallback (`announce_mqtt.py`). |
 | Trigger | `bhvr-cam-announce.timer` ~10 s (optional: udev/networkd hook for faster). |
-| Litmus | `deploy/bhvr-nvr/scripts/_litmus_unplug_failover.sh` — polls roster **and** ICMP; distinguishes power/WiFi drop vs MQTT stuck. |
+| Litmus | `deploy/bhvr-nvr-pi4b/scripts/_litmus_unplug_failover.sh` — polls roster **and** ICMP; distinguishes power/WiFi drop vs MQTT stuck. |
 
-Litmus (legacy): `deploy/bhvr-nvr/scripts/_litmus_mode_switch_cam0.sh`.
+Litmus (legacy): `deploy/bhvr-nvr-pi4b/scripts/_litmus_mode_switch_cam0.sh`.
 
 Hotfix announce/scripts without re-flash: [`bhvr-cam/CAM_SOFTWARE_DEPLOY.md`](bhvr-cam/CAM_SOFTWARE_DEPLOY.md)
 (SSH trust and Invite are separate). Planned kiosk menu for push-deploy / WiFi
@@ -198,14 +198,14 @@ sudo bash ~/bhvr-cam/scripts/install_usb_gadget.sh
 sudo reboot
 
 # from NVR (password or bhvr key once on cam authorized_keys)
-bash ~/deploy/bhvr-nvr/scripts/push_cam_usb0_dhcp.sh
+bash ~/deploy/bhvr-nvr-pi4b/scripts/push_cam_usb0_dhcp.sh
 # optional: admin@192.168.7.10 after first lease
 ```
 
 **NVR** (once per console):
 
 ```bash
-sudo bash ~/deploy/bhvr-nvr/scripts/install_usb_gadget_host.sh
+sudo bash ~/deploy/bhvr-nvr-pi4b/scripts/install_usb_gadget_host.sh
 # → br-bhvr @ 192.168.7.1/24 + DHCP; each cdc_ether (usb0, usb1, …) enslaved
 #    (single-iface-on-usb0 layout could not address a second gadget)
 ```

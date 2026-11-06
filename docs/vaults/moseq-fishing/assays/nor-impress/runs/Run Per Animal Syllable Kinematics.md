@@ -34,7 +34,7 @@ One row = bout × animal-local model. Full 144 × 9 (~1.22M bouts; absorb `<3`).
 | kinematics bout table | D — ADR-0005 features |
 | `INFO_syllable_kinematics.md` | Data dictionary |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/per_animal_syllable_kinematics.py --clean`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/per_animal_syllable_kinematics.py --clean`
 
 ## Related
 

@@ -36,7 +36,7 @@ Per-animal nvl-side geometry (recognition-linked spatial I); 16 Kruskal cells.
 | `INFO_side_mass.md` | Data dictionary |
 | `run_summary.json` | Knobs + pass/fail |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_side_mass.py`  
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_side_mass.py`  
 **Litmus:** `test_side_mass.py`
 
 ## Related

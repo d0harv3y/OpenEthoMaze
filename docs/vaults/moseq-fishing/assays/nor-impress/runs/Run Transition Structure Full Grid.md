@@ -36,4 +36,4 @@ Bout-transition TV + H(next\|current) at **all 12** NOR `session × trial` level
 | `transition_structure_full_grid_tests_long.csv` | I — 48 cells; 0 FDR |
 | `run_summary.json` | `pass_family_c: false` |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_transition_structure_full_grid.py`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_transition_structure_full_grid.py`

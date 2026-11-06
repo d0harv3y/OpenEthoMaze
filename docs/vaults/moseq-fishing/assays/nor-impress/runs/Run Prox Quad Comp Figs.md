@@ -44,8 +44,8 @@ Score inputs (min0 cousins): `simpler_first_quad_comp_min0/`, `simpler_first_pro
 **Runners:**
 
 ```text
-uv run python scratch/nor_object_mi/fig_prox_quad_comp_violins.py
-uv run python scratch/nor_object_mi/fig_prox_quad_comparable_dr_panels.py
+uv run python moseq-mountain/nor_object_mi/fig_prox_quad_comp_violins.py
+uv run python moseq-mountain/nor_object_mi/fig_prox_quad_comparable_dr_panels.py
 ```
 
 > [!note] Hill q=2

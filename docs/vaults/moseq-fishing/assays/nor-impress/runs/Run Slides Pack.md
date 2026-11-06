@@ -58,7 +58,7 @@ Each subpack: `INFO_slides_pack.md` + `figures/`. Keep/demote: [[Prune Map]] § 
 
 Full figure lists: each subpack `figures/FIGURES.md`.
 
-**Rebuild:** `OpenEthoMaze/scratch/nor_object_mi/*_slides_pack.py`
+**Rebuild:** `OpenEthoMaze/moseq-mountain/nor_object_mi/*_slides_pack.py`
 
 ## Related
 

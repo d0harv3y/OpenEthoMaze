@@ -7,14 +7,15 @@ Analysis/stats terms live under `docs/vocab/` — see root `GLOSSARY-MAP.md`.
 
 **NVR**:
 The lab host that runs Mosquitto, the kiosk app, and session storage (SSD).
+Pi 4 appliance tree: `deploy/bhvr-nvr-pi4b`. Future Windows host: `deploy/bhvr-nvr-win11`.
 _Avoid_: server, base station (unless talking to non-lab audiences)
 
 **Kiosk**:
-The operator UI and API on the NVR that shows the cam roster and controls sessions.
+The multi-platform operator UI/API (`deploy/bhvr-kiosk`) that shows the cam roster and controls sessions / H5.
 _Avoid_: dashboard, web UI (alone)
 
 **Cam**:
-A Pi Zero W unit that encodes cage video and announces itself to the NVR.
+A Pi Zero W unit that encodes cage video and announces itself to the NVR (`deploy/bhvr-cam-pi0w`).
 _Avoid_: node, client, edge device
 
 **Mode 1 — Wired live**:

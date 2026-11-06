@@ -40,33 +40,70 @@ WIFI_CONN_NAME = "bhvr-iot"
 
 
 def openethomaze_root(cfg: dict[str, Any]) -> Path:
-    """Root that contains ``deploy/bhvr-cam`` (grill Q18=A).
+    """Git / bundle root for version display (grill Q18=A).
 
     Prefer explicit ``cam_bundle_git_root``. Else ``$HOME/OpenEthoMaze`` when
-    that tree exists; else ``$HOME`` when ``$HOME/deploy/bhvr-cam`` is the
-    NVR deploy layout (no full OpenEthoMaze clone).
+    that tree exists; else ``$HOME`` for flat NVR layout
+    (``$HOME/bhvr-cam`` / ``bhvr-cam-pi0w``).
     """
     raw = str(cfg.get("cam_bundle_git_root") or "").strip()
     if raw:
         return Path(raw).expanduser()
     home = Path.home()
     oem = home / "OpenEthoMaze"
-    if (oem / "deploy" / "bhvr-cam").is_dir():
+    if _oem_cam_dir(oem).is_dir():
         return oem
-    if (home / "deploy" / "bhvr-cam").is_dir():
+    if (home / "bhvr-cam-pi0w").is_dir() or (home / "bhvr-cam").is_dir():
+        return home
+    if (home / "deploy" / "bhvr-cam-pi0w").is_dir() or (
+        home / "deploy" / "bhvr-cam"
+    ).is_dir():
         return home
     return oem
 
 
+def _oem_cam_dir(oem: Path) -> Path:
+    """Repo cam tree: prefer renamed ``bhvr-cam-pi0w``, else legacy ``bhvr-cam``."""
+    pi0w = oem / "deploy" / "bhvr-cam-pi0w"
+    if pi0w.is_dir():
+        return pi0w
+    return oem / "deploy" / "bhvr-cam"
+
+
 def cam_tree(cfg: dict[str, Any]) -> Path:
-    return openethomaze_root(cfg) / "deploy" / "bhvr-cam"
+    """Cam soft-push source tree.
+
+    Order: ``cam_bundle_path`` → ``$HOME/bhvr-cam-pi0w`` → ``$HOME/bhvr-cam`` →
+    OpenEthoMaze ``deploy/bhvr-cam-pi0w`` (or legacy ``bhvr-cam``).
+    """
+    raw = str(cfg.get("cam_bundle_path") or "").strip()
+    if raw:
+        return Path(raw).expanduser()
+    home = Path.home()
+    for flat in (home / "bhvr-cam-pi0w", home / "bhvr-cam"):
+        if flat.is_dir():
+            return flat
+    root = openethomaze_root(cfg)
+    nested = _oem_cam_dir(root)
+    if nested.is_dir():
+        return nested
+    for legacy in (
+        home / "deploy" / "bhvr-cam-pi0w",
+        home / "deploy" / "bhvr-cam",
+    ):
+        if legacy.is_dir():
+            return legacy
+    if str(cfg.get("cam_bundle_git_root") or "").strip():
+        return nested
+    return home / "bhvr-cam-pi0w"
 
 
-def git_status(repo: Path) -> dict[str, Any]:
+def git_status(repo: Path, *, cam: Path | None = None) -> dict[str, Any]:
     """Return version info for UI (grill Q19=A — dirty OK)."""
+    cam_path = cam if cam is not None else (repo / "deploy" / "bhvr-cam")
     out: dict[str, Any] = {
         "root": str(repo),
-        "cam_tree": str(repo / "deploy" / "bhvr-cam"),
+        "cam_tree": str(cam_path),
         "ok": False,
         "sha": "",
         "describe": "",
@@ -74,9 +111,9 @@ def git_status(repo: Path) -> dict[str, Any]:
         "error": "",
     }
     if not (repo / ".git").exists() and not (repo / ".git").is_file():
-        # Allow worktree / missing clone
-        if not (repo / "deploy" / "bhvr-cam").is_dir():
-            out["error"] = f"missing OpenEthoMaze tree at {repo}"
+        # Allow worktree / missing clone / flat ~/bhvr-cam
+        if not cam_path.is_dir():
+            out["error"] = f"missing cam tree at {cam_path}"
             return out
         out["ok"] = True
         out["describe"] = "no-git"

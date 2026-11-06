@@ -37,7 +37,7 @@ Fixed-budget pair MI + bigram richness at `NOR_TX` × `nvl_obj` (M=108, seed 7);
 | `INFO_ngram_seq.md` | Data dictionary |
 | `run_summary.json` | `pass_family_a: false` |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_ngram_seq.py`  
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_ngram_seq.py`  
 **Lib / litmus:** `ngram_structure.py`, `test_ngram_structure.py`
 
 ### Cross-campaign exploratory

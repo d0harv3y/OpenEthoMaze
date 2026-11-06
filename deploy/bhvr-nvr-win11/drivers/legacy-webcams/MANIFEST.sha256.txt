@@ -1,0 +1,15 @@
+# SHA256 of offline driver zips (re-verify after copy)
+# Generated for OpenEthoMaze deploy/bhvr-nvr-win11/drivers/legacy-webcams
+f7061776fb86908cbed0f6ab81262d13c16eaca10cbd099e98052f6aed26178c  vimicro_0ac8_301b\ZC0301-301-4-328-07.zip  (778545 bytes)
+a7a2c8686c7a257b76cebf6c97abbf31f335c313ac2a40f2a12a9fa347a51904  pixart_093a_2468\Eye110_Windows.zip  (1934408 bytes)
+
+# Key INF/SYS (extracted)
+965e3223ae395abd411ed2ef6015874503ff960d8627fe627b003ba3452823b4  pixart_093a_2468\pkg\WNT\PFC027.sys  (618112 bytes)
+81432082e62d43b46baa4580377453c17bc1dec2671957e3a5024890e28f30c6  pixart_093a_2468\pkg\WXPAmd64\PFC027.sys  (686592 bytes)
+b1510d39ed2dbff3b7982e54142a430138d46263152bfd9ef021e82489645aaa  pixart_093a_2468\pkg\pfc027.cat  (20037 bytes)
+59f8b3ac622146676032c5590a3e40812d015cb42683736e67b966346321345d  pixart_093a_2468\pkg\PFC027.inf  (39748 bytes)
+a8473fd68651d34c89542a59f442cf690fac1a7c42e798cf41ac2cb11269e01b  pixart_093a_2468\pkg\PFC027.sys  (619264 bytes)
+c54ee576ecb39af18ba005f924ac8c8995134a5624a448e692907a0c886638ea  vimicro_0ac8_301b\usbvm31b.cat  (14790 bytes)
+137f5756b26cd2b144c9be6e982fc55c5b77be3bddbd4505fa00b40511fd5927  vimicro_0ac8_301b\usbvm31b.inf  (35576 bytes)
+e6d1951efc8a00ca09f871acfae382b45b74c6e148c841c698ebb6d54a50a344  vimicro_0ac8_301b\usbVM31b.sys  (1471104 bytes)
+6bde9f4d92779a2adb6303eb017ed97d5767fcfbfb63e581bc67beadbd4ccc78  vimicro_0ac8_301b\VM31bx64.sys  (1495936 bytes)

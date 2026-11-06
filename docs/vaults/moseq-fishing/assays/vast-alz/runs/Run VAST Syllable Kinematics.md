@@ -33,7 +33,7 @@ Pose join from VAST legacy H5 (`animal → session → trial`). Ladder step per 
 | kinematics bout table | D — ADR-0005 features |
 | INFO next to folder | Data dictionary |
 
-**Runner:** `OpenEthoMaze/scratch/vast_moseq/regen_paramscan2026_kinematics.py` (also `regen_syllable_bout_kinematics.py`)
+**Runner:** `OpenEthoMaze/moseq-mountain/vast_moseq/regen_paramscan2026_kinematics.py` (also `regen_syllable_bout_kinematics.py`)
 
 ## Related
 

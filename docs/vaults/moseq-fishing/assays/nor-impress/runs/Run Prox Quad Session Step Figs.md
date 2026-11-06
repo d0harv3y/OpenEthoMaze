@@ -50,8 +50,8 @@ Within-animal paired Δ of fam / nvl / DR composition scalars across protocol se
 **Runner:**
 
 ```text
-uv run python scratch/nor_object_mi/fig_prox_quad_session_step_comp_violins.py --campaign cohort
-uv run python scratch/nor_object_mi/fig_prox_quad_session_step_comp_violins.py --campaign per_animal
+uv run python moseq-mountain/nor_object_mi/fig_prox_quad_session_step_comp_violins.py --campaign cohort
+uv run python moseq-mountain/nor_object_mi/fig_prox_quad_session_step_comp_violins.py --campaign per_animal
 ```
 
 ## Related

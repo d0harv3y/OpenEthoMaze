@@ -30,7 +30,7 @@ tags:
 | `time_prox_tests_long.csv` | TimeProx-A |
 | `INFO_prox_comp_per_scalar.md` | dictionary |
 
-**Runner:** `scratch/nor_object_mi/simpler_first_prox_comp.py --per-scalar-families`
+**Runner:** `moseq-mountain/nor_object_mi/simpler_first_prox_comp.py --per-scalar-families`
 
 ## Related
 

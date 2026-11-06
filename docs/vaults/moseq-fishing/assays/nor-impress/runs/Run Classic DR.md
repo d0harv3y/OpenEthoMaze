@@ -34,7 +34,7 @@ Classic investigation-time discrimination ratio (DR) (nose/forelimb-style export
 | `classic_dr_*` / `object_prox_dr_tx` tables | D / I — classic + prox DR by session × sex |
 | `INFO_classic_dr.md` | Data dictionary |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/` — classic-dr suite
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/` — classic-dr suite
 
 ## Related
 

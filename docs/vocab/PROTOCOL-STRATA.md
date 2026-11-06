@@ -86,7 +86,7 @@ H5 paths remain `/{animal}/{session}/{trial}` conceptually; **campaign B does no
 **Done**
 
 - `datas/curatedbehavior`: NOR long (`treatment group`/`phase layer`/`condition layer` → `condition`/`session`/`trial`; object tokens); sofia (`TX`/`phase`/`condition` → `condition`/`session`/`trial`); EHRAM metrics + pilot; PD `TX`→`condition` (+ `PD_condition_assignments.csv`); VAST trial_summary `treatment`→`condition`, `iti_wait`→`wait`; mistrial drop `phase`; legacy manifest `tx`→`condition` / drop `phase`.
-- OEM `scratch/nor_object_mi` module stems: `_tx_`→`_condition_`, `phase_paired`→`session_paired`.
+- OEM `moseq-mountain/nor_object_mi` module stems: `_tx_`→`_condition_`, `phase_paired`→`session_paired`.
 - Sack `_nor_object_mi` artifact file stems + `INFO_*.md` / small CSV cell strings (`novel_obj`→`nvl_obj`, grain `phase`→`session`, etc.).
 - OEM stimulus MI + behavior-token dictionaries/contracts: `interval` + `condition`; token-summarize CSV column `interval`.
 - Vocab `STATS.md` / `CONTEXT.md` / `INTERPRET.md` grain examples aligned.

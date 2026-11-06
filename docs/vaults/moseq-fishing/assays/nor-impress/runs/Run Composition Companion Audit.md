@@ -43,4 +43,4 @@ Re-declare BH on pre-selected session-step / Shannon-level cells already compute
 | `…/simpler_first_condition_on_paired_delta/condition_consensus_animal_session_tests_long.csv` | Session-step consensus Kruskal |
 | `…/slides_pack/shannon/shannon_level_kruskal.csv` | Shannon level consensus |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_composition_companion_audit.py`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_composition_companion_audit.py`

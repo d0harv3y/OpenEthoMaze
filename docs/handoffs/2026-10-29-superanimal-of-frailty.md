@@ -25,7 +25,7 @@ Call the Skill tool for these as needed:
 |-------|------|
 | `obsidian-markdown` | Editing vault notes / wikilinks |
 | `data-dictionary` | When a frailty run folder + `INFO_*.md` exists |
-| `investigation` | If scaffolding a frailty / SuperAnimal integration investigation under `scratch/` |
+| `investigation` | If scaffolding a frailty / SuperAnimal integration investigation under `moseq-mountain/` |
 | `composition-vocab` context via OEM `docs/vocab/` | Any stats / grain / D vs I wording (read `CONTEXT.md`, `STATS.md`, `FORMULAS.md`) |
 | `handoff` | Further session boundaries |
 
@@ -48,7 +48,7 @@ Open folder as vault → start at DLC Index. Prefer linking/copying claim-facing
 
 ### Smoke run (already executed on faster machine)
 
-- Script: `DeepLabCut/scratch/smoke0.py`
+- Script: `DeepLabCut/moseq-mountain/smoke0.py`
 - Outputs: `D:\DeepLabCut\out_superanimal_smoke\`
 - Model: `superanimal_topviewmouse` + `hrnet_w32` + `fasterrcnn_resnet50_fpn_v2`
 - `video_adapt=False`, `max_individuals=1`
@@ -64,7 +64,7 @@ Open folder as vault → start at DLC Index. Prefer linking/copying claim-facing
 ### Related but separate tracks
 
 - **B-KinD** (`C:\Users\admin\code\BKinD`): animal-crop SLEAP prep scripts/config; circular ROI was a dead end for LEDs/rim; animal-centric crop preferred for SSL pose discovery. Not the frailty root.
-- **lightly SSL-notes vault**: `lightly/scratch/docs/SSL-notes` — keep SSL there; pose factory comparison (SLEAP vs B-KinD vs DLC) can cross-link.
+- **lightly SSL-notes vault**: `lightly/moseq-mountain/docs/SSL-notes` — keep SSL there; pose factory comparison (SLEAP vs B-KinD vs DLC) can cross-link.
 - OEM already has related research notes: `docs/research/gait_analysis.md`, `docs/research/rodent_brief_pause_ethology.md` — useful for frailty kinematics / immobility conflations; **no dedicated frailty module yet**.
 
 ## Decisions / facts locked in conversation
@@ -97,7 +97,7 @@ Roadmap now treats SuperAnimal TopViewMouse as the **primary pose estimator for 
 ## Quick commands (reference)
 
 ```python
-# DeepLabCut/scratch/smoke0.py pattern
+# DeepLabCut/moseq-mountain/smoke0.py pattern
 deeplabcut.video_inference_superanimal(
     videos=[...],
     "superanimal_topviewmouse",

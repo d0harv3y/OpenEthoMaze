@@ -36,7 +36,7 @@ Does `condition` modulate BL→TX object-prox occupancy Δ on `nvl_obj`? 4 Krusk
 | `INFO_occupancy_session_delta.md` | Data dictionary |
 | `run_summary.json` | Knobs + pass/fail |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_occupancy_session_delta.py`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_occupancy_session_delta.py`
 
 ## Related
 

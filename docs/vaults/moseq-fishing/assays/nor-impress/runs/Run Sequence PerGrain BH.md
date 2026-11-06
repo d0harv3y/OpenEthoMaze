@@ -40,7 +40,7 @@ Re-apply Benjamini–Hochberg (**BH**) **per grain** (m=4: sex × 2 metrics) on 
 | `*_expanded_per_grain_*.csv` | Optional B-panel companion |
 | `run_summary.json` | Pass counts |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_sequence_per_grain_bh.py`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_sequence_per_grain_bh.py`
 
 ## Outcome (primary full grid)
 

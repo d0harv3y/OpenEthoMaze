@@ -34,7 +34,7 @@ Bout counts / duration ECDFs / median-duration heatmaps across the anatomical pa
 | descriptives tables / figures | D |
 | INFO next to folder | Data dictionary |
 
-**Runner:** `OpenEthoMaze/scratch/vast_moseq/regen_paramscan2026_descriptives.py` (also `regen_syllable_descriptives.py`)
+**Runner:** `OpenEthoMaze/moseq-mountain/vast_moseq/regen_paramscan2026_descriptives.py` (also `regen_syllable_descriptives.py`)
 
 ## Related
 

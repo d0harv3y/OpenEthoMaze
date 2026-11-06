@@ -327,6 +327,7 @@
     </span>
     <span class="badge honesty" id="honesty-badge" hidden>REC* disk can beat LIVE fps</span>
     <div class="actions" style="margin-left:auto">
+      <a class="secondary" href="/h5" style="display:inline-block;text-decoration:none;padding:0.45rem 0.75rem;border-radius:0.35rem;background:#3a4550;color:#fff;font-size:0.95rem">H5</a>
       <button type="button" class="secondary" id="btn-session-settings">Session settings</button>
       <button type="button" class="secondary" id="btn-kiosk-settings">Kiosk settings</button>
       <button type="button" id="btn-start-session">Start</button>
@@ -464,6 +465,17 @@
       </div>
       <p class="muted" id="session-estimate">—</p>
       <p class="muted"><code id="session-data-root">{{ data_root }}</code></p>
+      <div id="uvc-bind-block" {% if capture_backend != 'local_uvc' %}hidden{% endif %}>
+        <hr style="border:0;border-top:1px solid var(--menu-border);margin:0.85rem 0" />
+        <label class="field">Local UVC bindings (≤4; USB may refuse 4-up)</label>
+        <p class="muted">Stable <code>usb:vid_…#inst</code> → cam_id. Reload page after Apply.</p>
+        <div id="uvc-bind-rows"></div>
+        <div class="modal-actions" style="justify-content:flex-start;margin-top:0.35rem">
+          <button type="button" class="secondary" id="btn-uvc-refresh">Refresh sources</button>
+          <button type="button" id="btn-uvc-apply">Apply UVC bindings</button>
+        </div>
+        <div class="err" id="uvc-bind-err" hidden></div>
+      </div>
       <div class="err" id="session-err" hidden></div>
       <div class="modal-actions">
         <button type="button" class="secondary" data-close="modal-session">Close</button>
@@ -606,6 +618,7 @@
     const PREVIEW_TRANSPORT = "{{ preview_transport }}";
     const PREVIEW_WIDTH = {{ preview_width | default(640) }};
     const PREVIEW_HEIGHT = {{ preview_height | default(480) }};
+    const CAPTURE_BACKEND = "{{ capture_backend | default('pi_ssh') }}";
     const SPECIES_DEFAULT = "{{ cfg.species_default }}";
     const ALL_CAMS = {{ cameras | tojson }};
     let sessionActive = {{ 'true' if active else 'false' }};
@@ -1441,6 +1454,8 @@
     }
 
     function effectiveTransport(camId) {
+      // local_uvc LIVE v1 is always HTTP MPEG-TS (idle publisher or REC tee).
+      if (CAPTURE_BACKEND === "local_uvc") return "mpegts";
       // Only cams owned by the science session use the capture tee (mpegts).
       // Other online cams keep idle WHEP — forcing mpegts globally caused 400s.
       const inRec = !!camId && recordingCamIds().includes(camId);
@@ -1546,6 +1561,7 @@
       liveSessions.set(camId, { abort, mpegtsPlayer: null, rtcPc: null, whepReader: null, jmuxer: null, fpsTimer: null });
       setFocusBadge(camId);
       setLivePhase(camId, "connecting");
+      // local_uvc LIVE v1: same mpegts.js path (idle publisher or REC tee).
       runPreview(camId, tile, video, abort.signal).catch((err) => {
         if (abort.signal.aborted) return;
         console.warn("preview failed", err);
@@ -1617,8 +1633,8 @@
     }
 
     function autoStartOnlineLives() {
-      // Attach browser WHEP only — publishers should already be up (or whep/start
-      // is idempotent per cam). Stagger to avoid 4× offer storms (grill B3/B6).
+      // Attach browser LIVE (WHEP / mpegts / local_uvc idle publisher).
+      // Stagger to avoid offer/dshow storms (grill B3/B6; USB isoch ≤3).
       cancelAutoStartTimers();
       const ids = [...document.querySelectorAll('.tile[data-cam-id][data-online="1"]')]
         .map((t) => t.getAttribute("data-cam-id"))
@@ -1629,6 +1645,79 @@
         }, LIVE_AUTOSTART_DELAY0_MS + i * LIVE_AUTOSTART_STRIDE_MS);
         autoStartTimers.push(t);
       });
+    }
+
+    async function loadUvcBindUi() {
+      const block = document.getElementById("uvc-bind-block");
+      const rows = document.getElementById("uvc-bind-rows");
+      const err = document.getElementById("uvc-bind-err");
+      if (!block || block.hidden || !rows) return;
+      if (err) { err.hidden = true; err.textContent = ""; }
+      try {
+        const r = await fetch("/api/uvc/sources", { cache: "no-store" });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+        const binds = data.bindings || {};
+        const srcs = data.sources || [];
+        const maxN = data.max_concurrent || 4;
+        const existing = Object.entries(binds);
+        while (existing.length < maxN) existing.push(["desk" + existing.length, ""]);
+        rows.innerHTML = "";
+        existing.slice(0, maxN).forEach(([cid, sid], i) => {
+          const wrap = document.createElement("div");
+          wrap.className = "row";
+          wrap.style.marginTop = "0.35rem";
+          wrap.innerHTML =
+            '<div><label class="field">cam_id</label>' +
+            '<input class="uvc-cam-id" value="' + (cid || ("desk" + i)) + '" /></div>' +
+            '<div><label class="field">source</label>' +
+            '<select class="uvc-source"></select></div>';
+          const sel = wrap.querySelector("select.uvc-source");
+          const opt0 = document.createElement("option");
+          opt0.value = "";
+          opt0.textContent = "(none)";
+          sel.appendChild(opt0);
+          srcs.forEach((s) => {
+            const o = document.createElement("option");
+            o.value = s.source_id;
+            o.textContent = (s.label || "UVC") + " · " + s.source_id;
+            if (s.source_id === sid) o.selected = true;
+            sel.appendChild(o);
+          });
+          rows.appendChild(wrap);
+        });
+      } catch (e) {
+        if (err) {
+          err.hidden = false;
+          err.textContent = String(e.message || e);
+        }
+      }
+    }
+
+    async function applyUvcBindings() {
+      const err = document.getElementById("uvc-bind-err");
+      if (err) { err.hidden = true; err.textContent = ""; }
+      const bindings = {};
+      document.querySelectorAll("#uvc-bind-rows .row").forEach((row) => {
+        const cid = (row.querySelector(".uvc-cam-id")?.value || "").trim();
+        const sid = (row.querySelector(".uvc-source")?.value || "").trim();
+        if (cid && sid) bindings[cid] = sid;
+      });
+      try {
+        const r = await fetch("/api/uvc/bindings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bindings }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+        location.reload();
+      } catch (e) {
+        if (err) {
+          err.hidden = false;
+          err.textContent = String(e.message || e);
+        }
+      }
     }
 
     async function waitCaptureBytes(camId, minBytes, budgetMs) {
@@ -2089,10 +2178,14 @@
         const apply = document.getElementById("btn-session-apply");
         if (apply) apply.disabled = !!data.recording;
         openModal("modal-session");
+        if (CAPTURE_BACKEND === "local_uvc") loadUvcBindUi();
       } catch (e) {
         alert("Failed to load session settings: " + e.message);
       }
     }
+
+    document.getElementById("btn-uvc-refresh")?.addEventListener("click", () => loadUvcBindUi());
+    document.getElementById("btn-uvc-apply")?.addEventListener("click", () => applyUvcBindings());
 
     document.getElementById("btn-session-apply").addEventListener("click", async () => {
       const err = document.getElementById("session-err");
@@ -2146,9 +2239,18 @@
       camMetaTarget = camId;
       document.getElementById("cam-meta-id").textContent = camId;
       document.getElementById("cam-meta-err").hidden = true;
+      // Open immediately — don't wait behind UVC snapshot threadpool queue.
+      document.getElementById("c_subject_id").value = "";
+      document.getElementById("c_subject_id").disabled = false;
+      document.getElementById("c_sex").value = "U";
+      document.getElementById("c_cage_id").value = "";
+      document.getElementById("c_strain").value = "";
+      document.getElementById("c_notes").value = "";
+      openModal("modal-cam-meta");
       try {
         const r = await fetch("/api/cams/" + encodeURIComponent(camId) + "/meta");
         const data = await r.json();
+        if (camMetaTarget !== camId) return;
         const m = data.meta || {};
         document.getElementById("c_subject_id").value = m.subject_id || "";
         document.getElementById("c_subject_id").disabled = !!data.subject_frozen;
@@ -2156,9 +2258,12 @@
         document.getElementById("c_cage_id").value = m.cage_id || "";
         document.getElementById("c_strain").value = m.strain || "";
         document.getElementById("c_notes").value = m.notes || "";
-        openModal("modal-cam-meta");
       } catch (e) {
-        alert("Failed to load cam meta: " + e.message);
+        const err = document.getElementById("cam-meta-err");
+        if (err) {
+          err.textContent = "load failed: " + (e.message || e);
+          err.hidden = false;
+        }
       }
     }
 
@@ -2249,7 +2354,7 @@
       dirty.hidden = !g.dirty;
       document.getElementById("ks-soft-line").textContent =
         "soft set " + (data.soft_present || 0) + "/" + (data.soft_total || 0) +
-        " files under deploy/bhvr-cam";
+        " files under bhvr-cam";
       const box = document.getElementById("ks-push-cams");
       box.innerHTML = "";
       const elig = data.eligible || [];

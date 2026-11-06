@@ -135,6 +135,7 @@ def pack_part(
     cam_id: str | None = None,
     subject_id: str | None = None,
     pack_session_sidecars: bool = False,
+    skip_if_exists: bool = False,
 ) -> dict[str, Any]:
     """Append ``video/mpegts_NNN`` (+ pts) and fold part/session sidecars into H5.
 
@@ -144,6 +145,9 @@ def pack_part(
     When ``pack_session_sidecars``: also fold cam ``*_env.jsonl``,
     ``.{cam}_pts_full.pts``, and session ``stop_log.json`` (attr only; leave
     loose stop_log for operators).
+
+    ``skip_if_exists`` (Pack now default): if ``mpegts_NNN`` already present,
+    return ok/skipped without deleting loose files (Force clears this flag).
     """
     require_h5py()
     h5_path = Path(h5_path)
@@ -165,6 +169,17 @@ def pack_part(
     with h5py.File(h5_path, "a") as f:
         video = f.require_group("video")
         logs = f.require_group("logs")
+        if skip_if_exists and name in video:
+            log.append(f"skip existing {name}")
+            return {
+                "ok": True,
+                "skipped": True,
+                "part": int(part),
+                "bytes": int(video[name].shape[0]),
+                "h5": str(h5_path),
+                "dataset": name,
+                "log": log,
+            }
         if name in video:
             del video[name]
         ds = video.create_dataset(

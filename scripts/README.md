@@ -52,6 +52,9 @@ Per [docs/rescue_plan.md](../docs/rescue_plan.md) § Scripts classification.
 | **Maintained (shim)** | `sleap_nn_batch_inference.py` | Batch SLEAP-NN (`--extra sleap`) |
 | **Maintained (shim)** | `of_floor_quad.py` | Per-video open-field floor quadrilateral + review images |
 | **Maintained (shim)** | `of_mask_video.py` | Zero pixels outside the pose zone around one floor quadrilateral. Default scale 1.8; `--scale` overrides |
+| **Maintained (shim)** | `of_overlay_pose.py` | Paint SuperAnimal HDF5 keypoints onto a raw or wide-mask mp4 |
+| **Maintained (shim)** | `of_overlay_metrics.py` | Pose overlay plus running Parks/Whitehead 7 counters (eye QC) |
+| **Maintained (shim)** | `of_feature_table.py` | Parks/Whitehead OF frailty scalars (7 video items + thigmotaxis; px until scale) |
 | **Demo** | `demos/langfuse_demo.py` → `maze-langfuse-demo` | Langfuse trace demo; not for production pipelines |
 | **Frozen** | `archive/**` | Legacy one-offs; do not extend or install |
 

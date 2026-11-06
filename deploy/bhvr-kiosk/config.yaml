@@ -1,0 +1,36 @@
+# Copy to deploy/bhvr-kiosk/config.yaml for Win11+local UVC desk use.
+# Requires ffmpeg on PATH. data_root must be writable.
+
+nvr_id: bhvr-win11
+data_root: D:/bhvr-data
+species_default: test
+
+capture_backend: local_uvc
+local_uvc:
+  max_concurrent: 4
+  width: 640
+  height: 480
+  fps: 30
+  video_bitrate: 2000k
+  # vid_filter: "1871"
+
+default_profile: lite
+profiles:
+  - standard
+  - lite
+
+record:
+  soft_fps: 20
+  bitrate_kbps: 1500
+
+# MQTT unused when capture_backend=local_uvc
+mqtt:
+  host: 127.0.0.1
+  port: 1883
+  topic: bhvr/cam/+/state
+  stale_after_s: 180
+
+owned_camera_ids: []
+
+preview:
+  transport: mpegts

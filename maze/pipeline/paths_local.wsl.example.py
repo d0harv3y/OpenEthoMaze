@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 
 # Primary discovery root(s) — Windows D: as /mnt/d/ in WSL.
-DATA_DIR = Path("/mnt/d/scratch/vibration maze")
+DATA_DIR = Path("/mnt/d/moseq-mountain/vibration maze")
 DATA_DIRS: list[Path] = [DATA_DIR]
 
 # Optional consolidated pipeline HDF5 (same mount translation).

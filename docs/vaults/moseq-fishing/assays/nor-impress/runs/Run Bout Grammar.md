@@ -36,7 +36,7 @@ Per-animal novel-prox visit grammar (counts / durations) at r = 0.10 m; 24 Krusk
 | `INFO_bout_grammar.md` | Data dictionary |
 | `run_summary.json` | Knobs + pass/fail |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_bout_grammar.py`  
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_bout_grammar.py`  
 **Litmus:** `test_bout_grammar.py`
 
 ## Related

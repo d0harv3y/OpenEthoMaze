@@ -49,7 +49,7 @@ Locked ladder TransStruct-A honesty panel (cross-campaign does not overturn this
 
 ![[fig_v_transstruct_null.svg]]
 
-Regen / campaign copies: `sack/.../vault_verdict_figures/` · `scratch/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
+Regen / campaign copies: `sack/.../vault_verdict_figures/` · `moseq-mountain/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
 
 ## Related
 

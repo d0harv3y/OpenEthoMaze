@@ -33,9 +33,9 @@ Tunables: `config.yaml` → `preview:` (`transport`, `udp_port`, `width`, `fps_i
 
 ```bash
 # from laptop (example)
-scp -r deploy/bhvr-kiosk deploy/bhvr-nvr admin@bhvr-nvr0:~/deploy/
+scp -r deploy/bhvr-kiosk deploy/bhvr-nvr-pi4b admin@bhvr-nvr0:~/deploy/
 ssh admin@bhvr-nvr0
-sudo bash ~/deploy/bhvr-nvr/scripts/install_kiosk.sh ~/deploy/bhvr-kiosk
+sudo bash ~/deploy/bhvr-nvr-pi4b/scripts/install_kiosk.sh ~/deploy/bhvr-kiosk
 ```
 
 Then authorize the printed NVR pubkey on each cam. Cams need `rpicam-vid`
@@ -54,12 +54,14 @@ uvicorn app.main:app --host 127.0.0.1 --port 8080
 
 `config.example.yaml` → `config.yaml`. Set `ssh_identity_file` to the NVR key.
 
+**Win11 local USB:** set `capture_backend: local_uvc` (see `../bhvr-nvr-win11/config.kiosk.example.yaml`). Skips MQTT; bind up to `local_uvc.max_concurrent` (default/soft 4) in Session settings — USB may still refuse 4-up on one uplink. LIVE v1: mpegts.js tiles via idle dshow→MPEG-TS publisher; REC tees the same TS bytes.
+
 ## Pairing
 
 Invite → MQTT roster → Start session. See `../NETWORK.md`.
 
 | Action | Doc |
 |--------|-----|
-| SSH trust (NVR key on cam) | [`../bhvr-cam/ssh/README.md`](../bhvr-cam/ssh/README.md) |
-| Cam software deploy | [`../bhvr-cam/CAM_SOFTWARE_DEPLOY.md`](../bhvr-cam/CAM_SOFTWARE_DEPLOY.md) |
+| SSH trust (NVR key on cam) | [`../bhvr-cam-pi0w/ssh/README.md`](../bhvr-cam-pi0w/ssh/README.md) |
+| Cam software deploy | [`../bhvr-cam-pi0w/CAM_SOFTWARE_DEPLOY.md`](../bhvr-cam-pi0w/CAM_SOFTWARE_DEPLOY.md) |
 | Session vs planned Kiosk settings | [`SETTINGS_GRILL.md`](SETTINGS_GRILL.md) |

@@ -85,7 +85,7 @@ Condition consensus animal lattice — novelty-step empty among FDR hits. Source
 
 ![[fig_v_recognition_lattice_condition_consensus.svg]]
 
-Regen / campaign copies: `sack/.../vault_verdict_figures/` · `scratch/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
+Regen / campaign copies: `sack/.../vault_verdict_figures/` · `moseq-mountain/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
 
 ## Related
 

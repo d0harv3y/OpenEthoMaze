@@ -31,13 +31,22 @@
 			"path": "D:/Open Field - mp4"
 		},
 		{
-			"path": "D:/DeepLabCut"
-		},
-		{
 			"path": "D:/Open Field - masked"
 		},
 		{
 			"path": "D:/Open Field - superanimal"
+		},
+		{
+			"path": "../DeepLabCut"
+		},
+		{
+			"path": "D:/bhvr-data"
+		},
+		{
+			"path": "../DLCAnalyzer"
+		},
+		{
+			"path": "../lightly"
 		}
 	],
 	"settings": {}

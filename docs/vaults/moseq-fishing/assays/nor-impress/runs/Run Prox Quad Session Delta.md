@@ -43,7 +43,7 @@ Within-animal session-step Δ on `nvl_obj` for Quad/Prox DR cousins, time twins,
 | `INFO_prox_quad_session_delta.md` | dictionary |
 | `run_summary.json` | knobs |
 
-**Runner:** `scratch/nor_object_mi/simpler_first_prox_quad_session_delta.py`
+**Runner:** `moseq-mountain/nor_object_mi/simpler_first_prox_quad_session_delta.py`
 
 ## Related
 

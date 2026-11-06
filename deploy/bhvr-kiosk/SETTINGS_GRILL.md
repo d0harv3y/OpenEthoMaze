@@ -5,6 +5,7 @@ Do not contradict without a new grill round.
 - **Session / layout / H5:** confirmed 2026-10-22; H5 pack + chunk roll built 2026-10-30; optional H5 + recording tag 2026-10-30
 - **Kiosk settings menu:** confirmed 2026-10-23 (Rounds 1–4)
 - **Related — LIVE / REC lifecycle (phases, promote, anti-thrash):** [LIVE_REC_PROTOCOL_GRILL.md](LIVE_REC_PROTOCOL_GRILL.md) (separate grill; do not merge)
+- **Related — in-kiosk H5 viewer:** [H5_VIEWER_GRILL.md](H5_VIEWER_GRILL.md) (browse/play packed session H5s; separate grill)
 
 ## Layout & chrome
 
@@ -60,13 +61,13 @@ Header button **Kiosk settings** — NVR-wide / fleet ops.
 | **Network backup** | On-demand CIFS copy of selected sessions | See § Backup |
 | **Data root** | Absolute archive root (SSD swap) | See § Data root |
 
-Doc: [`../bhvr-cam/CAM_SOFTWARE_DEPLOY.md`](../bhvr-cam/CAM_SOFTWARE_DEPLOY.md). Not Invite, not SSH trust, not SD bake.
+Doc: [`../bhvr-cam-pi0w/CAM_SOFTWARE_DEPLOY.md`](../bhvr-cam-pi0w/CAM_SOFTWARE_DEPLOY.md). Not Invite, not SSH trust, not SD bake.
 
 ### USB push
 
 - **Targets:** ONLINE · USB + BatchMode SSH litmus OK; this NVR’s `id_ed25519_bhvr` only; checklist (all eligible checked by default) + per-cam log.
 - **Contents (soft fleet set):** firstboot scripts/units — announce, find-broker, clean-broker-override, HTU reader + sample timer/units, record helper, broker-listen unit, announce timer/units, USB **gadget files/units as files only**. Not OS/debs. Not a full gadget reinstall mid-push.
-- **Source tree:** git checkout of **OpenEthoMaze** on the NVR (one repo — `deploy/bhvr-cam` is a folder, not a nested git). Default `$HOME/OpenEthoMaze` with config override. Version = `git describe` / short SHA; **dirty OK** with warning.
+- **Source tree:** git checkout of **OpenEthoMaze** on the NVR (one repo — `deploy/bhvr-cam-pi0w` is a folder, not a nested git). Default `$HOME/OpenEthoMaze` with config override. Version = `git describe` / short SHA; **dirty OK** with warning.
 - **Cam sudo:** firstboot `/etc/sudoers.d/bhvr-cam` NOPASSWD for `tee` / `chmod` / `mkdir` / `cp` / `systemctl` (extend if missing on older images).
 - **Deferred:** separate **Repair USB** (run gadget install / bounce) — not part of Push.
 
@@ -91,7 +92,7 @@ Doc: [`../bhvr-cam/CAM_SOFTWARE_DEPLOY.md`](../bhvr-cam/CAM_SOFTWARE_DEPLOY.md).
 ### NVR privileges
 
 - Kiosk backend needs scoped NOPASSWD/sudoers for Apply actions (`nmcli`, CIFS mount/umount, tee config, restart kiosk unit) — mirror cam appliance model. Do **not** run whole kiosk as root.
-- **Embedded Chromium** (still TODO) does not change the privilege model; it only changes display chrome. Prefer wired/USB admin path when applying NVR Wi‑Fi from an embedded session.
+- **Embedded Chromium:** [EMBEDDED_GRILL.md](EMBEDDED_GRILL.md) — does not change the privilege model; it only changes display chrome. Prefer wired/USB admin path when applying NVR Wi‑Fi from an embedded session.
 
 ### Out of scope (Kiosk settings menu)
 

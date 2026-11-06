@@ -47,7 +47,7 @@ Exclusive DR from 0.10 m fam/nvl prox windows; Wilcoxon vs 0; Kruskal by conditi
 | `figures/fig_object_prox_condition_kruskal.svg` | Condition Kruskal panels | #clock-portable |
 | `figures/FIGURES.md` | Full inventory | — |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_object_prox.py`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_object_prox.py`
 
 ## Related
 

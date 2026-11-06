@@ -13,7 +13,7 @@ A generalizable, task-portable **ethogram**: produce interpretable **Behavior** 
 - Glossary: [`maze/kpms/behavior_ethogram/CONTEXT.md`](../../maze/kpms/behavior_ethogram/CONTEXT.md); map: [`CONTEXT-MAP.md`](../../CONTEXT-MAP.md)
 - ADRs: [`docs/adr/0001`](../adr/0001-behavior-producer-agnostic-target.md) (producer-agnostic Behavior), [`0002`](../adr/0002-is-moving-anchor-independent-speed.md) (independent-speed anchor), [`0003`](../adr/0003-bsoid-resolver-gate-and-boundary.md) (B-SOiD env gate), [`0004`](../adr/0004-producer-seam-is-file-artifact.md) (producer seam = file artifact)
 - Artifact schema: [`docs/behavior_labeling_contract.md`](../behavior_labeling_contract.md), [`docs/bout_feature_contract.md`](../bout_feature_contract.md), [`docs/grammar_rule_contract.md`](../grammar_rule_contract.md)
-- Superseded pre-grill plan (do not cite): `scratch/archive/behavior_ethogram_2026-06-24_pre-grill/` (+ its `SUPERSEDED.md`)
+- Superseded pre-grill plan (do not cite): `moseq-mountain/archive/behavior_ethogram_2026-06-24_pre-grill/` (+ its `SUPERSEDED.md`)
 
 ## Slice plan
 
@@ -40,7 +40,7 @@ A generalizable, task-portable **ethogram**: produce interpretable **Behavior** 
 
 ## Open items
 
-- Stray `scratch/2026-06-24-compile-bout-features-empty/diagnose.py` — not archived (user wasn't asked); fold into `scratch/archive/` if desired.
+- Stray `moseq-mountain/2026-06-24-compile-bout-features-empty/diagnose.py` — not archived (user wasn't asked); fold into `moseq-mountain/archive/` if desired.
 - **ADR-0005 candidate (not written):** "syllable identity encoded as physical embedding, never raw id/one-hot" rationale (Q5). Offer to the user.
 - `my_todo.txt` has the older manual command sequences (compile-bout-features → cluster → fit-arhmm) — these are the *current Option-D substrate*, to be modified in S2, not archived.
 

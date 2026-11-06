@@ -35,7 +35,7 @@ Prototype kinematics + HDBSCAN `cluster_id` remap. Cluster ids are **fit-local**
 | prototype / cluster tables | D — HDBSCAN remap |
 | `INFO_syllable_signatures.md` | Data dictionary |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/` — syllable-signatures suite
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/` — syllable-signatures suite
 
 ## Related
 

@@ -36,4 +36,4 @@ Fixed-budget pair MI / bigram richness at six expanded grains (parallel to Trans
 | `ngram_seq_expanded_tests_long.csv` | I — 24 cells; 0 FDR |
 | `run_summary.json` | `pass_family_b: false` |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_ngram_seq_expanded.py`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_ngram_seq_expanded.py`

@@ -36,4 +36,4 @@ Fixed-budget pair MI / bigram richness at **all 12** NOR level grains; 48-cell B
 | `ngram_seq_full_grid_tests_long.csv` | I — 48 cells; 0 FDR |
 | `run_summary.json` | `pass_family_c: false` |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_ngram_seq_full_grid.py`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_ngram_seq_full_grid.py`

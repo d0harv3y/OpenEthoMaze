@@ -33,7 +33,7 @@ tags:
 | kinematics bout table | D — ADR-0005 features |
 | `INFO_syllable_kinematics.md` | Data dictionary |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/` — syllable-kinematics suite
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/` — syllable-kinematics suite
 
 ## Related
 

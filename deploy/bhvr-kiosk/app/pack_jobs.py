@@ -81,6 +81,7 @@ def enqueue(
     pack_fn: Callable[..., dict[str, Any]],
     subject_id: str | None = None,
     pack_session_sidecars: bool = True,
+    skip_if_exists: bool = False,
 ) -> str:
     """Queue one final-part pack. ``pack_fn`` is ``h5_archive.pack_part``."""
     job_id = uuid.uuid4().hex[:12]
@@ -94,6 +95,7 @@ def enqueue(
         "status": "pending",
         "error": "",
         "bytes": None,
+        "skipped": False,
         "created_at": time.time(),
         "finished_at": None,
     }
@@ -118,6 +120,7 @@ def enqueue(
                 cam_id=cam_id,
                 subject_id=subject_id or str(attrs.get("subject_id") or ""),
                 pack_session_sidecars=pack_session_sidecars,
+                skip_if_exists=skip_if_exists,
             )
             ok = bool(result.get("ok"))
             with _lock:
@@ -127,6 +130,7 @@ def enqueue(
                 cur["status"] = "ok" if ok else "fail"
                 cur["error"] = "" if ok else str(result.get("error") or "pack failed")
                 cur["bytes"] = result.get("bytes")
+                cur["skipped"] = bool(result.get("skipped"))
                 cur["finished_at"] = time.time()
         except Exception as exc:  # noqa: BLE001
             with _lock:

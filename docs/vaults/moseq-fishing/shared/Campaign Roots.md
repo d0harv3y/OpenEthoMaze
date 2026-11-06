@@ -20,7 +20,7 @@ tags:
 | Per-animal paramscan             | `sack/datas/impress/nor_per_animal_paramscan/` — see [[Run Per Animal Paramscan]]; Qs: [[H Alphabet Equating]], [[V TransStruct Cross-Campaign]] |
 | Behavior × physio                | `sack/crosscorr/` — see [[Run Crosscorr Spearman]]                                                                                               |
 | NOR geometry H5                  | `sack/datas/impress/my_NOR_results.h5`                                                                                                           |
-| Runners                          | `OpenEthoMaze/scratch/nor_object_mi/`                                                                                                            |
+| Runners                          | `OpenEthoMaze/moseq-mountain/nor_object_mi/`                                                                                                            |
 
 Wire: `session` / `trial` / `condition` — see PROTOCOL-STRATA. Boss `NOR1`… map: NOR-IMPRESS-BOSS-SESSION-MAP.
 
@@ -92,7 +92,7 @@ Under `…/moseq_251017/_nor_object_mi/`. Paths owned by Runs per [[Artifact Lin
 | Paramscan2026 campaign          | `D:\az-sd-vast_paramscan2026\`                                                                         |
 | Pose H5                         | `D:\az-sd-vast_paramscan2026\vast_results_legacy.h5`                                                   |
 | Ladder arts                     | `_syllable_descriptives/`, `_syllable_bout_kinematics/`, `_syllable_signatures/`, `_da_trial_windows/` |
-| Runners                         | `OpenEthoMaze/scratch/vast_moseq/` (DA primitives shared with `nor_object_mi`)                         |
+| Runners                         | `OpenEthoMaze/moseq-mountain/vast_moseq/` (DA primitives shared with `nor_object_mi`)                         |
 | Older VAST ensemble (different) | `sack/…/AZ-SD-VAST-moseq/` — not this campaign                                                         |
 
 Wire: `session` / trial windows / `trial_step` / `session_step`; animal strata `strain` × `tx` × `sex`. See [[VAST Alz Index]].

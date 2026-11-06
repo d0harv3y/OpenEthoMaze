@@ -118,8 +118,8 @@ uv run python -c "import jax; print(jax.devices())"
 export MAZE_DATA_ROOT=/mnt/d/scratch   # if using env resolver
 
 uv run maze-kpms-fit \
-  --project-dir /mnt/d/scratch/kpms/anatomical \
-  --manifest-csv /mnt/d/scratch/trial_manifest.csv \
+  --project-dir /mnt/d/moseq-mountain/kpms/anatomical \
+  --manifest-csv /mnt/d/moseq-mountain/trial_manifest.csv \
   --max-trials 50 \
   --pose-stream anatomical   # after T4c
 ```
@@ -133,7 +133,7 @@ Repeat for `--pose-stream blob` and `fused` only after T4a/T4b — **3× fit cos
 | Windows | WSL |
 |---------|-----|
 | `C:\Users\admin\code\OpenEthoMaze` | `/mnt/c/Users/admin/code/OpenEthoMaze` |
-| `D:\scratch\trials.h5` | `/mnt/d/scratch/trials.h5` |
+| `D:\scratch\trials.h5` | `/mnt/d/moseq-mountain/trials.h5` |
 | `D:\work sack\vibration maze` | `/mnt/d/work sack/vibration maze` |
 
 Manifest CSVs used for WSL fit should use **WSL paths** or **relative paths** from a declared `--data-root` (implement in T2c if not done).

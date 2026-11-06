@@ -36,8 +36,8 @@ tags:
 | `scores/per_model_per_animal.csv` | exemplar rescored panel |
 | `INFO_dr_framed_deck_exemplar.md` | dictionary |
 
-**Runner:** `scratch/nor_object_mi/simpler_first_dr_framed_deck_boards.py`  
-**PPT builder:** `scratch/nor_object_mi/build_dr_framed_motion_seq_deck.ps1`
+**Runner:** `moseq-mountain/nor_object_mi/simpler_first_dr_framed_deck_boards.py`  
+**PPT builder:** `moseq-mountain/nor_object_mi/build_dr_framed_motion_seq_deck.ps1`
 
 ## Headline associations (computed)
 

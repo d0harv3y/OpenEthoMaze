@@ -37,8 +37,8 @@ Paired Δp on **trial-steps** (within `session`, pair `trial_window`) and **sess
 | `INFO_da.md` | Data dictionary |
 
 **Runners:**
-- `OpenEthoMaze/scratch/vast_moseq/regen_da_trial_windows.py` — tables
-- `OpenEthoMaze/scratch/vast_moseq/fig_da_trial_windows.py` — volcanos
+- `OpenEthoMaze/moseq-mountain/vast_moseq/regen_da_trial_windows.py` — tables
+- `OpenEthoMaze/moseq-mountain/vast_moseq/fig_da_trial_windows.py` — volcanos
 - strat helper: `vast_da_strat.py`
 
 ## Related

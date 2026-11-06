@@ -37,7 +37,7 @@ Per-animal bout-transition law at `NOR_TX` × `nvl_obj`: P(next \| current) → 
 | `INFO_transition_structure.md` | Data dictionary |
 | `run_summary.json` | `pass_family_a: false` |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_transition_structure.py`  
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_transition_structure.py`  
 **Lib / litmus:** `transition_structure.py`, `test_transition_structure.py`
 
 ### Exploratory cousins (not locks)

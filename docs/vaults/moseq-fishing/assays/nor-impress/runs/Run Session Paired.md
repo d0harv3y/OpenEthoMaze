@@ -47,7 +47,7 @@ Within-animal **session-steps** (e.g. BL→TX, condition→REC): scalars (`frac_
 | `figures/fig_session_paired_*` | Full slide deck | mixed |
 | vault `attachments/fig_v_session_step_cluster_kruskal.svg` | Verdict embed | #alphabet-bound |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/` — session-paired suite + `fig_simpler_first_session_paired.py`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/` — session-paired suite + `fig_simpler_first_session_paired.py`
 
 ## Related
 

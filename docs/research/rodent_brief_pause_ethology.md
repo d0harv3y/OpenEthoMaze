@@ -20,7 +20,7 @@ Evidence is **moderate for existence of the motif**, **thin for a single shared 
 
 ## What “our cluster 13” is (local context)
 
-In this repo, **cluster 13** is an HDBSCAN `cluster_id=13` over kpMS syllable prototypes, labeled **pause/still-like**, described as **long, slow, crooked bouts**. It appears as a treatment-pooled differential abundance (DA) winner on the NOR_TX novelty step; analyses live under `scratch/nor_object_mi/` (e.g. `cluster13_condition_delta.py`, crowd movies of sampled bouts). This note does **not** re-derive that DA claim — it only maps the motif to external ethology.
+In this repo, **cluster 13** is an HDBSCAN `cluster_id=13` over kpMS syllable prototypes, labeled **pause/still-like**, described as **long, slow, crooked bouts**. It appears as a treatment-pooled differential abundance (DA) winner on the NOR_TX novelty step; analyses live under `moseq-mountain/nor_object_mi/` (e.g. `cluster13_condition_delta.py`, crowd movies of sampled bouts). This note does **not** re-derive that DA claim — it only maps the motif to external ethology.
 
 ---
 
@@ -148,7 +148,7 @@ For OpenEthoMaze NOR_TX work:
    - Goñi-Erro **0.5–2 s** natural motor arrests
    - Pack/Fisher **≥40 s** continuous immobility (video sleep proxy — *not* brief pause)
 
-**Bottom line for ethology write-ups:** cite MoSeq pause syllables + Koide pausing for **what it looks like**; cite Goñi-Erro / Kramer for **what it might mean**; cite Pack/Fisher + microsleep reviews only to **bound** sleep-pressure alternatives (duration/context), not as synonymy; keep NOR and SD functional claims **provisional** until object-aligned bout analyses (already in `scratch/nor_object_mi/`) are tied to crowd-movie QC and bout-length cuts.
+**Bottom line for ethology write-ups:** cite MoSeq pause syllables + Koide pausing for **what it looks like**; cite Goñi-Erro / Kramer for **what it might mean**; cite Pack/Fisher + microsleep reviews only to **bound** sleep-pressure alternatives (duration/context), not as synonymy; keep NOR and SD functional claims **provisional** until object-aligned bout analyses (already in `moseq-mountain/nor_object_mi/`) are tied to crowd-movie QC and bout-length cuts.
 
 ---
 

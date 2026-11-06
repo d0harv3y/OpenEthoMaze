@@ -48,7 +48,7 @@ Alphabet DA (frame-share / bout weighting) and cluster-mapped condition Kruskal.
 | `fig_cluster_condition_kruskal_overview.svg` | Cluster Kruskal overview | #alphabet-bound |
 | vault `attachments/fig_v_composition_step_*` | Verdict embeds | #alphabet-bound |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/` — simpler-first DA suite + `fig_simpler_first_da.py`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/` — simpler-first DA suite + `fig_simpler_first_da.py`
 
 **Demote:** `simpler_first_da_bout_count/` · `simpler_first_nested_da/` — [[Prune Map]]
 

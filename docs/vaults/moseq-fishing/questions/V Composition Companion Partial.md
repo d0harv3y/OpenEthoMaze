@@ -49,7 +49,7 @@ Companion-B Shannon at NOR_REC3hr × no_obj (M hit / F miss).
 
 ![[fig_v_composition_companion_b.svg]]
 
-Regen / campaign copies: `sack/.../vault_verdict_figures/` · `scratch/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
+Regen / campaign copies: `sack/.../vault_verdict_figures/` · `moseq-mountain/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
 
 ## Related
 

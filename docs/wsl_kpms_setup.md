@@ -83,8 +83,8 @@ Manifest CSV paths used for fit must be valid **inside WSL** (`/mnt/d/...` not `
 ```bash
 cd /mnt/c/Users/admin/code/OpenEthoMaze
 uv run maze-kpms-fit \
-  --project-dir /mnt/d/scratch/kpms/anatomical \
-  --manifest-csv /mnt/d/scratch/trial_manifest.csv \
+  --project-dir /mnt/d/moseq-mountain/kpms/anatomical \
+  --manifest-csv /mnt/d/moseq-mountain/trial_manifest.csv \
   --max-trials 50
 ```
 
@@ -178,7 +178,7 @@ uv run maze-kpms-apply \
 
 If a recording key already exists, apply fails for that key (by design). Skip or drop those rows from the filter.
 
-Ensemble comparison plan: [scratch/kpms_ensemble_compare/README.md](../scratch/kpms_ensemble_compare/README.md).
+Ensemble comparison plan: [moseq-mountain/kpms_ensemble_compare/README.md](../moseq-mountain/kpms_ensemble_compare/README.md).
 
 ---
 

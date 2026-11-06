@@ -26,10 +26,7 @@ On each part pack (roll + Stop): delete loose after verify.
 `.capture_pids.json` stays session-local (not folded).
 
 ### In-kiosk H5 viewer (myhdf5-class)
-Goal: browse `data_root` session H5s without leaving the kiosk — tree of groups/datasets/attrs (like [myhdf5](https://myhdf5.hdfgroup.org/)), plus **per-cam video playback** of packed `video/mpegts_*` via a streaming extract endpoint → existing mpegts.js player.
-Likely stack: FastAPI list/stat + chunked dataset read; UI modal or `/h5` page; h5py server-side (not h5wasm in Chromium unless we want offline-only). Video path is the high value; full spreadsheet UI is optional.
-- **Related settings / H5 / fleet:** [SETTINGS_GRILL.md](SETTINGS_GRILL.md) — do not merge lifecycle into that doc.
-- **Order:** Round B (visible phases + retry) → Round A (promote without reload).
+Moved to dedicated grill: [H5_VIEWER_GRILL.md](H5_VIEWER_GRILL.md) (Round 1 open). Do not merge into this lifecycle doc.
 
 ## Scope in
 

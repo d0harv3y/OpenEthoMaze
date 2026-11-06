@@ -34,7 +34,7 @@ Honesty panel — TransStruct-PerGrain (m=4 within each grain). Source: [[Run Se
 
 ![[fig_v_transstruct_pergrain_null.svg]]
 
-Regen / campaign copies: `sack/.../vault_verdict_figures/` · `scratch/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
+Regen / campaign copies: `sack/.../vault_verdict_figures/` · `moseq-mountain/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
 
 ## Related
 

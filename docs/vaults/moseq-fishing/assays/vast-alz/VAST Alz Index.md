@@ -14,7 +14,7 @@ tags:
 
 In-repo claim map for **VAST** (virtual air-stream / vibration maze; Gerstner Alz cohort) + anatomical kpMS paramscan.
 
-**Parallel to** [[NOR IMPRESS Index]] — separate assay / animal strata / protocol ladder. Same ladder pattern ([[Simpler-First Ladder Pattern]]), VAST runners in `scratch/vast_moseq/` (shared DA primitives live in `scratch/nor_object_mi/`).
+**Parallel to** [[NOR IMPRESS Index]] — separate assay / animal strata / protocol ladder. Same ladder pattern ([[Simpler-First Ladder Pattern]]), VAST runners in `moseq-mountain/vast_moseq/` (shared DA primitives live in `moseq-mountain/nor_object_mi/`).
 
 **Campaign root:** `D:\az-sd-vast_paramscan2026\` (see [[Campaign Roots]]). Pose H5: `vast_results_legacy.h5`.
 

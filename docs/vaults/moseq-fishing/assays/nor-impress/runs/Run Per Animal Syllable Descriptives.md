@@ -42,7 +42,7 @@ Median bout duration heatmaps: y = animal×κ₂, x = within-model frequency ran
 | `figures/fig_median_bout_dur_sex-{F,M}_tx-{noSD,GHSD,RBSD}_ss-{50,75,100}.svg` | 18 accent QC heatmaps | #alphabet-bound |
 | `figures/FIGURES.md` | Full inventory | — |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/per_animal_descriptives_qc.py`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/per_animal_descriptives_qc.py`
 
 ## Related
 

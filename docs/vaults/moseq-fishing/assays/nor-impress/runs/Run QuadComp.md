@@ -42,7 +42,7 @@ Object-assigned arena quadrants (`fam_quad` / `nvl_quad` / `other`) → syllable
 | `INFO_quad_comp.md` | Data dictionary |
 | `run_summary.json` | Knobs + pass/fail |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_quad_comp.py`  
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_quad_comp.py`  
 **Litmus:** `test_quad_comp.py`
 
 ## Related

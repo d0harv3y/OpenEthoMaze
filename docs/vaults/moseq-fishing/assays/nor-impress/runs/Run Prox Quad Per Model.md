@@ -31,7 +31,7 @@ Secondary alphabet board after portable `cluster_id`. BH within each model; cons
 | `per_model_per_animal.csv` | animal × model × session — composition panel + DR |
 | `INFO_prox_quad_per_model.md` | dictionary |
 
-**Runner:** `scratch/nor_object_mi/simpler_first_prox_quad_per_model.py`
+**Runner:** `moseq-mountain/nor_object_mi/simpler_first_prox_quad_per_model.py`
 
 ## Related
 

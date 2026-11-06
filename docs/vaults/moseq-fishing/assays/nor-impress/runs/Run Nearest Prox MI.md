@@ -39,7 +39,7 @@ Mutual information between syllable stream and nearest-object proximity stratum.
 | `mi_stratum_tests_long.csv` | I — `hit_fdr05` none; sparse uncorrected at BL/REC11 F |
 | `INFO_nearest_prox_mi.md` | Data dictionary |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/` — nearest-prox-MI suite
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/` — nearest-prox-MI suite
 
 ## Related
 

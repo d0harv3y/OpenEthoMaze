@@ -112,6 +112,9 @@ maze-export-syllable-grammar-labeling = "maze.cli.export_syllable_grammar_labeli
 maze-calibrate-locomotion-tiers = "maze.cli.calibrate_locomotion_tiers:main"
 maze-of-floor-quad = "maze.cli.of_floor_quad:main"
 maze-of-mask-video = "maze.cli.of_mask_video:main"
+maze-of-overlay-pose = "maze.cli.of_overlay_pose:main"
+maze-of-overlay-metrics = "maze.cli.of_overlay_metrics:main"
+maze-of-feature-table = "maze.cli.of_feature_table:main"
 maze-block-ethogram-exports = "maze.cli.block_ethogram_exports:main"
 maze-build-is-moving-anchor = "maze.cli.build_is_moving_anchor:main"
 maze-evaluate-behavior-producers = "maze.cli.evaluate_behavior_producers:main"
@@ -140,11 +143,11 @@ packages = ["maze"]
 
 [tool.ruff]
 line-length = 180
-extend-exclude = ["scripts/archive"]
+extend-exclude = ["scripts/archive", "moseq-mountain"]
 
 [tool.black]
 line-length = 180
-extend-exclude = "/(scripts\\/archive)/"
+extend-exclude = "/(scripts\\/archive|moseq-mountain)/"
 
 # Dead-code finder (optional dev dependency). From ORM/: ``uv run vulture``
 # CLI flags override these settings. Lower min_confidence for more hits (more false positives).
@@ -154,12 +157,13 @@ exclude = ["tests/", "scripts/archive/"]
 min_confidence = 80
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "of_rear_classifier/tests"]
 # Frozen ethogram-phase tests need scripts not on path; do not collect.
 norecursedirs = [".*", "archive", "build", "dist"]
 # "tests" on path so pytest_plugins can load controller.local_service.fixtures (see root conftest.py).
 # Do not use tests.* — a dependency installs a top-level "tests" package in site-packages.
-pythonpath = ["tests", "."]
+# of_rear_classifier/ is the outer pilot root; its inner package must be on path.
+pythonpath = ["tests", ".", "of_rear_classifier"]
 markers = [
     "llm_integration: optional discover test requiring MAZE_LLM_GGUF and local-service extra",
     "yolo_integration: optional detect test requiring MAZE_YOLO_WEIGHTS and local-service extra",

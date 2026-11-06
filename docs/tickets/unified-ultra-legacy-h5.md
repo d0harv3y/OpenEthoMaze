@@ -8,7 +8,7 @@
 
 ## Problem
 
-Legacy cohorts live in several old H5 shapes (controller results, `vast_results_legacy`, EHRAM imports, NOR/kpMS sidecars, ele copies, …). Live `maze/` and `scratch/` analysis now assume the **current** protocol ladder and animal strata:
+Legacy cohorts live in several old H5 shapes (controller results, `vast_results_legacy`, EHRAM imports, NOR/kpMS sidecars, ele copies, …). Live `maze/` and `moseq-mountain/` analysis now assume the **current** protocol ladder and animal strata:
 
 | Wire | Role |
 |------|------|

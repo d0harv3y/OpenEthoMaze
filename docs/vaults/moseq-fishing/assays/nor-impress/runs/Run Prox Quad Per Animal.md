@@ -43,7 +43,7 @@ Score object-stratified Shannon / richness / Hill q=2 DR (Quad + Prox) on each o
 | `compare_spearman_across_alphabets.csv` | ρ vs cluster / cohort raw |
 | `run_summary.json` | knobs |
 
-**Runner (scores):** `scratch/nor_object_mi/simpler_first_prox_quad_per_animal.py`
+**Runner (scores):** `moseq-mountain/nor_object_mi/simpler_first_prox_quad_per_animal.py`
 
 ### Figures — level (consensus + per-cell)
 
@@ -56,7 +56,7 @@ Score object-stratified Shannon / richness / Hill q=2 DR (Quad + Prox) on each o
 | `figures/fig_per_model_{quad,prox}_{shannon,richness,hill2}_kruskal_heatmap.*` | y = paramscan cell | #alphabet-bound |
 | `kruskal_consensus_*.csv` / `long_consensus_*.csv` | long tables for figures | D/I exploratory |
 
-**Runner:** `scratch/nor_object_mi/fig_prox_quad_per_animal_comp_violins.py`
+**Runner:** `moseq-mountain/nor_object_mi/fig_prox_quad_per_animal_comp_violins.py`
 
 ### Figures — session-step
 
@@ -68,7 +68,7 @@ Score object-stratified Shannon / richness / Hill q=2 DR (Quad + Prox) on each o
 | `figures/fig_consensus_*_session_step_kruskal_heatmap.*` | Kruskal on Δ ~ condition | #alphabet-bound |
 | `figures/fig_per_model_*_session_step_kruskal_heatmap.*` | per-cell heatmaps | #alphabet-bound |
 
-**Runner:** `scratch/nor_object_mi/fig_prox_quad_session_step_comp_violins.py --campaign per_animal`
+**Runner:** `moseq-mountain/nor_object_mi/fig_prox_quad_session_step_comp_violins.py --campaign per_animal`
 
 **n thinning (session-step):** REC sessions are cohort subsets; `contrast_eligible` (N=10) required at both endpoints; pair intersection shrinks n below the 144/72/36 headline board.
 

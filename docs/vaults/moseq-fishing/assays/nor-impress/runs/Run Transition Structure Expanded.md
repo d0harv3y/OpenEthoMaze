@@ -36,4 +36,4 @@ Same scalars as TransStruct-A at six expanded grains (incl. `NOR_TX` × `full_se
 | `transition_structure_expanded_tests_long.csv` | I — 24 cells; 0 FDR |
 | `run_summary.json` | `pass_family_b: false` |
 
-**Runner:** `OpenEthoMaze/scratch/nor_object_mi/simpler_first_transition_structure_expanded.py`
+**Runner:** `OpenEthoMaze/moseq-mountain/nor_object_mi/simpler_first_transition_structure_expanded.py`

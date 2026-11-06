@@ -25,7 +25,7 @@ instead of run-to-run cousin links — do not mix strata across assays.
 5. **Claim tests** — pre-declared families with BH (Kruskal rank primary);
    honesty passes record pass/fail per family.
 
-Runners: `scratch/nor_object_mi/` (NOR), `scratch/vast_moseq/` (VAST; shared
+Runners: `moseq-mountain/nor_object_mi/` (NOR), `moseq-mountain/vast_moseq/` (VAST; shared
 DA primitives live in the NOR folder).
 
 ## Per-assay wire (not interchangeable)

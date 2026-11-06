@@ -46,7 +46,7 @@ Already exhausted without new runners:
 ### A. Per-animal quadrant / side-mass (primary ask)
 
 - Grain: `animal × session × nvl_obj` (sex-stratified Kruskal by `condition`).  
-- Align like heatmaps: fam-left via rot180 (`scratch/nor_object_mi/syllable_spatial_heatmap.py` already has arena bbox / rot180 / fam–nvl loci).  
+- Align like heatmaps: fam-left via rot180 (`moseq-mountain/nor_object_mi/syllable_spatial_heatmap.py` already has arena bbox / rot180 / fam–nvl loci).  
 - Candidate scalars (pick **few**, declare family before testing):
   - fraction of session (or near-object) frames in **nvl-side** half / quadrant  
   - dwell seconds or frame share in nvl vs fam quadrant  
@@ -71,16 +71,16 @@ Already exhausted without new runners:
 ## Suggested first build step
 
 1. Write a short **score contract** in vault (`Q5` or new `Run …` stub): formula, grain, family size, hit rule.  
-2. Implement runner under `scratch/nor_object_mi/` (pattern: `simpler_first_object_prox.py` + INFO skill).  
+2. Implement runner under `moseq-mountain/nor_object_mi/` (pattern: `simpler_first_object_prox.py` + INFO skill).  
 3. Run on `moseq_251017`; write honesty note; update Index / Q5 / Prune.  
 4. Only if FDR locks: optional engagement-companion slide; then physio follow-up on **that** scalar.
 
 ## Code / artifact hooks
 
-- Spatial alignment helpers: `scratch/nor_object_mi/syllable_spatial_heatmap.py`  
-- Fam/nvl roles: `scratch/nor_object_mi/fam_nvl.py`  
-- Object-prox precedent (metrics + Kruskal + consensus): `scratch/nor_object_mi/simpler_first_object_prox.py`  
-- Engagement slide (side claim only): `scratch/nor_object_mi/fig_q5_engagement_delta_slide.py` → vault `attachments/fig_q5_engagement_delta_nor_tx_{m,f}.svg`  
+- Spatial alignment helpers: `moseq-mountain/nor_object_mi/syllable_spatial_heatmap.py`  
+- Fam/nvl roles: `moseq-mountain/nor_object_mi/fam_nvl.py`  
+- Object-prox precedent (metrics + Kruskal + consensus): `moseq-mountain/nor_object_mi/simpler_first_object_prox.py`  
+- Engagement slide (side claim only): `moseq-mountain/nor_object_mi/fig_q5_engagement_delta_slide.py` → vault `attachments/fig_q5_engagement_delta_nor_tx_{m,f}.svg`  
 - Install: `uv sync` / extras per `AGENTS.md` — do not ad-hoc pip  
 
 ## Suggested skills (next agent)

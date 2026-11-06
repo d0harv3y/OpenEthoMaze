@@ -133,7 +133,7 @@ def preview_settings(
 
 
 def mediamtx_whep_url(settings: PreviewSettings, cam_id: str) -> str:
-    """WHEP URL for MQTT cam id path (see deploy/bhvr-nvr/mediamtx/mediamtx.yml)."""
+    """WHEP URL for MQTT cam id path (see deploy/bhvr-nvr-pi4b/mediamtx/mediamtx.yml)."""
     return f"{settings.mediamtx_http}/{cam_id.strip()}/whep"
 
 

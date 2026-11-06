@@ -111,7 +111,7 @@ Object-prox occupancy Kruskal (consensus) — Family A near-miss zone, 0 FDR. So
 
 ![[fig_v_candidate_lattice_occupancy.svg]]
 
-Regen / campaign copies: `sack/.../vault_verdict_figures/` · `scratch/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
+Regen / campaign copies: `sack/.../vault_verdict_figures/` · `moseq-mountain/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
 
 ## Related
 

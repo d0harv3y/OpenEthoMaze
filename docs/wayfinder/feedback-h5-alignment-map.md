@@ -8,7 +8,7 @@ Label: `wayfinder:map`
 
 ## Notes
 
-- Investigation: `scratch/2026-07-08-feedback-h5-integration/README.md`
+- Investigation: `moseq-mountain/2026-07-08-feedback-h5-integration/README.md`
 - Skills: TDD for alignment lib; run `maze-align-feedback-h5` on cohort after merge
 - Controller acquisition (`recording.py`) already writes aligned tables; fix targets legacy import + pipeline run + migration
 

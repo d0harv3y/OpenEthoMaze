@@ -15,9 +15,19 @@ from app.kiosk_settings import (
 
 def test_openethomaze_root_override() -> None:
     assert openethomaze_root({"cam_bundle_git_root": "/opt/OEM"}) == Path("/opt/OEM")
+    # No on-disk tree → legacy nested name (pi0w preferred only when present).
     assert cam_tree({"cam_bundle_git_root": "/opt/OEM"}) == Path(
         "/opt/OEM/deploy/bhvr-cam"
     )
+
+
+def test_cam_tree_prefers_pi0w_in_oem(tmp_path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    oem = home / "OpenEthoMaze"
+    (oem / "deploy" / "bhvr-cam-pi0w").mkdir(parents=True)
+    (oem / "deploy" / "bhvr-cam").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    assert cam_tree({}) == oem / "deploy" / "bhvr-cam-pi0w"
 
 
 def test_openethomaze_root_home_deploy_fallback(tmp_path, monkeypatch) -> None:
@@ -26,6 +36,15 @@ def test_openethomaze_root_home_deploy_fallback(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
     assert openethomaze_root({}) == home
     assert cam_tree({}) == home / "deploy" / "bhvr-cam"
+
+
+def test_cam_tree_prefers_flat_home(tmp_path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    (home / "bhvr-cam").mkdir(parents=True)
+    (home / "deploy" / "bhvr-cam").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    assert openethomaze_root({}) == home
+    assert cam_tree({}) == home / "bhvr-cam"
 
 
 def test_eligible_usb_cams_filters() -> None:

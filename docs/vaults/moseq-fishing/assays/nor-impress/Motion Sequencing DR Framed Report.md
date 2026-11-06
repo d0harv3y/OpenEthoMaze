@@ -89,5 +89,5 @@ Grain for A/D: animal × `NOR_TX` × `nvl_obj` (eligible). Source arts: [[Run DR
 **Regen PPTX** (PowerShell COM):
 
 ```powershell
-powershell -File scratch/nor_object_mi/build_dr_framed_motion_seq_deck.ps1
+powershell -File moseq-mountain/nor_object_mi/build_dr_framed_motion_seq_deck.ps1
 ```

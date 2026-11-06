@@ -79,7 +79,7 @@ Physio × NOR overview heatmap at NOR_TX / light — sparse locomotorish hits, n
 
 ![[fig_v_dr_physio_null_nor_tx_L.png]]
 
-Regen / campaign copies: `sack/.../vault_verdict_figures/` · `scratch/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
+Regen / campaign copies: `sack/.../vault_verdict_figures/` · `moseq-mountain/nor_object_mi/fig_vault_verdict_panels.py` · vault `attachments/`.
 
 ## Related
 

@@ -29,7 +29,7 @@ tags:
 | `prox_level_tests_long.csv` | ProxLevel-A 0/8 FDR (confirmatory) |
 | `INFO_prox_comp.md` | dictionary |
 
-**Runner:** `scratch/nor_object_mi/simpler_first_prox_comp.py`
+**Runner:** `moseq-mountain/nor_object_mi/simpler_first_prox_comp.py`
 
 ## Related
 
