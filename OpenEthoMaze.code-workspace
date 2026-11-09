@@ -28,15 +28,6 @@
 			"path": "D:/sack"
 		},
 		{
-			"path": "D:/Open Field - mp4"
-		},
-		{
-			"path": "D:/Open Field - masked"
-		},
-		{
-			"path": "D:/Open Field - superanimal"
-		},
-		{
 			"path": "../DeepLabCut"
 		},
 		{
@@ -47,6 +38,9 @@
 		},
 		{
 			"path": "../lightly"
+		},
+		{
+			"path": "D:/Open Field Frailty"
 		}
 	],
 	"settings": {}

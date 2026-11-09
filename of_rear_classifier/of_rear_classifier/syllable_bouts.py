@@ -52,7 +52,9 @@ def bouts_from_syllable_sequence(
                 "label": "",
             }
         )
-    return pd.DataFrame(rows, columns=list(BOUT_COLUMNS))
+    out = pd.DataFrame(rows, columns=list(BOUT_COLUMNS))
+    out["label"] = out["label"].astype(str)
+    return out
 
 
 def load_bout_table(path: Path | str) -> pd.DataFrame:
@@ -62,6 +64,13 @@ def load_bout_table(path: Path | str) -> pd.DataFrame:
         raise KeyError(f"{path}: missing columns {missing}")
     if "label" not in df.columns:
         df["label"] = ""
+    # Empty CSV label cells become float64 NaN — coerce before string assign in the labeler.
+    # Do not treat the class name "None" as missing; only real empties / NaN tokens.
+    raw = df["label"]
+    as_str = raw.astype("string")
+    missing = as_str.isna() | as_str.isin(["", "nan", "NaN", "<NA>"])
+    df["label"] = as_str.fillna("").astype(str)
+    df.loc[missing, "label"] = ""
     if "n_frames" not in df.columns:
         df["n_frames"] = df["t1_frame"].astype(int) - df["t0_frame"].astype(int) + 1
     return df
@@ -74,7 +83,11 @@ def save_bout_table(df: pd.DataFrame, path: Path | str) -> None:
 
 def bouts_to_sturman_intervals(df: pd.DataFrame, *, fps: float, video_id: str) -> pd.DataFrame:
     """Labeled bouts → Sturman-like interval CSV (seconds)."""
-    lab = df[df["label"].astype(str).str.len() > 0].copy()
+    labels = df["label"].astype(str).str.strip()
+    # "None" is a valid Sturman class; only drop empties / NaN stringification.
+    keep = labels.ne("") & ~labels.isin({"nan", "NaN", "<NA>", "<na>"})
+    lab = df.loc[keep].copy()
+    lab["label"] = labels.loc[keep]
     out = pd.DataFrame(
         {
             "Experimenter": "human",

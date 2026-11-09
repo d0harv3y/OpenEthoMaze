@@ -119,6 +119,20 @@ def predict_classes(model, x: np.ndarray, *, device: str | None = None) -> np.nd
     return np.asarray(CLASS_NAMES)[pred]
 
 
+def predict_proba(model, x: np.ndarray, *, device: str | None = None) -> np.ndarray:
+    """Softmax probabilities ``(N, n_classes)`` in ``CLASS_NAMES`` order."""
+    import torch
+    from torch.nn import functional as F
+
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    dev = torch.device(device)
+    model.eval()
+    with torch.no_grad():
+        logits = model(torch.from_numpy(np.asarray(x, dtype=np.float32)).to(dev))
+        return F.softmax(logits, dim=1).cpu().numpy()
+
+
 def features_to_window_xy(
     features_z: np.ndarray,
     frame_labels: np.ndarray,

@@ -1,0 +1,45 @@
+{
+  "n_rows": 6,
+  "mean_frame_acc": 0.43129541077051464,
+  "mean_frame_acc_beh_only": 0.43129541077051464,
+  "by_experimenter": {
+    "Furkan": {
+      "mean_frame_acc": 0.47625187662136304,
+      "mean_frame_acc_beh_only": 0.47625187662136304,
+      "n": 2
+    },
+    "Jin": {
+      "mean_frame_acc": 0.41434183059923313,
+      "mean_frame_acc_beh_only": 0.41434183059923313,
+      "n": 2
+    },
+    "Oliver": {
+      "mean_frame_acc": 0.4032925250909476,
+      "mean_frame_acc_beh_only": 0.4032925250909476,
+      "n": 2
+    }
+  },
+  "by_video": {
+    "Test 10": {
+      "mean_frame_acc": 0.3869552283206901,
+      "mean_frame_acc_beh_only": 0.3869552283206901,
+      "n": 3
+    },
+    "Test 42": {
+      "mean_frame_acc": 0.47563559322033894,
+      "mean_frame_acc_beh_only": 0.47563559322033894,
+      "n": 3
+    }
+  },
+  "davis_videos": [
+    "Test 10",
+    "Test 42"
+  ],
+  "davis_scorer": "DOH",
+  "class_names": [
+    "None",
+    "Supported",
+    "Unsupported",
+    "Grooming"
+  ]
+}

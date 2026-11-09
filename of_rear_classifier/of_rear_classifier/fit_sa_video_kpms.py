@@ -106,7 +106,9 @@ def fit_sa_video(
     explained = np.cumsum(pca.explained_variance_ratio_)
     n90 = int(np.searchsorted(explained, 0.9) + 1)
     # Floor at 4: OF PCA often hits 90% by dim 2 (mostly centroid), which underfits syllables.
-    latent_dim = cfg.latent_dim if cfg.latent_dim is not None else min(max(n90, 4), 8)
+    # Cap scales with skeleton size (was 8 for 9-kp; 12 for Sturman 13-kp).
+    _latent_cap = min(12, max(4, coords.shape[1] - 1))
+    latent_dim = cfg.latent_dim if cfg.latent_dim is not None else min(max(n90, 4), _latent_cap)
     kpms.update_config(str(project_dir), latent_dim=int(latent_dim))
     print(f"[{recording_id}] latent_dim={latent_dim} (90% var ~{n90})", flush=True)
 

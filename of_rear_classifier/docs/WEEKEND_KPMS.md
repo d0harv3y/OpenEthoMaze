@@ -10,22 +10,37 @@ boundaries for human labeling, not a shared ethogram.
 OEM `maze-kpms-fit` expects maze SLEAP anatomy (`STANDARD_NODE_NAMES`). This OF
 path stays under `of_rear_classifier/` until promoted.
 
-## Layout (D:\ ↔ H:\ mirror)
+## Layout
 
-| Role | This machine | Other PC |
-|------|--------------|----------|
-| SA pose H5 | `D:\Open Field - superanimal\` | `H:\Open Field - superanimal\` |
-| MP4 | `D:\Open Field - mp4\` | `H:\Open Field - mp4\` |
-| Per-video kpMS out | `D:\Open Field - kpms_sa_per_video\` | `H:\Open Field - kpms_sa_per_video\` |
+Canonical root on this box (videos + pose + kpMS moved here):
 
-This box currently has a **subset** of SA H5s (incl. Test 10). Full cohort lives
-on the other machine under `H:\`.
+`D:\Open Field Frailty\`
 
-## Skeleton (9 keypoints)
+| Role | Path |
+|------|------|
+| MP4 | `D:\Open Field Frailty\Open Field - mp4\` |
+| SA pose H5 | `D:\Open Field Frailty\Open Field - superanimal\` |
+| Per-video kpMS (9-kp, legacy) | `D:\Open Field Frailty\Open Field - kpms_sa_per_video\` |
+| Per-video kpMS (**13-kp**, Sturman set) | `D:\Open Field Frailty\Open Field - kpms_sa13_per_video\` |
 
-`nose, left_ear, right_ear, neck, mouse_center, left_hip, right_hip, tail_base, tail_end`
+Other PC historically used `H:\Open Field - …` (same folder names). Legacy 9-kp
+cohort: **253** `syllable_bouts.csv`. **Re-fit with 13-kp into a new out-root**
+so DOH labels on the 9-kp bout tables stay intact.
 
-Anterior / posterior for heading: `nose` / `tail_base`.
+## Skeleton (13 keypoints — same as Sturman ReLU)
+
+Source: `parts_map.SA_TVM_PARTS` / `sa_kpms_skeleton.SA_KPMS_BODY_PARTS`
+
+```
+nose, head_midpoint, neck, mouse_center,
+left_midside, right_midside, left_hip, right_hip,
+left_ear, right_ear, tail_base, tail2, tail_end
+```
+
+Added vs legacy 9-kp: `head_midpoint`, `left_midside`, `right_midside`, `tail2`.
+
+Anterior / posterior for heading: `nose` / `tail_base`. Edges follow Sturman
+S1–S10 length segments (+ ear spokes).
 
 ## Defaults
 
@@ -35,7 +50,7 @@ Anterior / posterior for heading: `nose` / `tail_base`.
 | `full_iters` | 50 | Stage 2 full SLDS |
 | `kappa_ar` | 1e8 | Stage-1 stickiness |
 | `kappa_full` | 1e4 | Stage-2 bout-length dial |
-| `latent_dim` | auto | PCA ≈90% var, capped at 8 |
+| `latent_dim` | auto | PCA ≈90% var, floor 4, cap ≈K−1 (≤12 for 13-kp) |
 | device | CPU / JAX | `parallel_message_passing=False` |
 | noise_calibration | skipped | uses config defaults (batch-safe) |
 
@@ -77,9 +92,84 @@ uv run --extra kpms python of_rear_classifier/scripts/fit_sa_cohort_kpms_cpu.py 
 
 # Labeler (matplotlib — OEM opencv is often GUI:NONE)
 uv run python of_rear_classifier/scripts/label_syllable_bouts.py `
-  --video "D:\Open Field - mp4\Test 10.mp4" `
-  --bouts "D:\Open Field - kpms_sa_per_video\Test 10\model\syllable_bouts.csv"
+  --video "D:\Open Field Frailty\Open Field - mp4\Test 10.mp4" `
+  --bouts "D:\Open Field Frailty\Open Field - kpms_sa_per_video\Test 10\model\syllable_bouts.csv" `
+  --export-intervals "D:\Open Field Frailty\Open Field - kpms_sa_per_video\Test 10\model\sturman_intervals.csv"
 ```
+
+## Re-fit — 13-kp Sturman skeleton (this box)
+
+Writes a **new** tree so legacy 9-kp projects + DOH labels stay readable.
+
+```powershell
+cd C:\Users\admin\code\OpenEthoMaze
+# once: uv sync --extra kpms
+
+# smoke one short video first
+uv run --extra kpms python of_rear_classifier/scripts/fit_sa_cohort_kpms_cpu.py `
+  --h5-dir "D:\Open Field Frailty\Open Field - superanimal" `
+  --out-root "D:\Open Field Frailty\Open Field - kpms_sa13_per_video" `
+  --only "Test 10" `
+  --ar-iters 10 `
+  --full-iters 10 `
+  --save-every 10 `
+  --no-skip-existing
+
+# labeling set (then expand / full cohort)
+uv run --extra kpms python of_rear_classifier/scripts/fit_sa_cohort_kpms_cpu.py `
+  --h5-dir "D:\Open Field Frailty\Open Field - superanimal" `
+  --out-root "D:\Open Field Frailty\Open Field - kpms_sa13_per_video" `
+  --only "Test 10" "Test 42" "Test 77" "Test 111" "Test 222" `
+  --ar-iters 50 `
+  --full-iters 50 `
+  --save-every 25 `
+  --workers 8
+```
+
+Syllable ids / bout tables are **not** comparable to the 9-kp run — re-label on
+the new `syllable_bouts.csv` (or keep DOH 9-kp labels only for the old transfer
+study).
+
+## Goal B labeling (next)
+
+**Chosen set (pseudo-random):** Tests **42, 77, 111, 222** (all have mp4 +
+`syllable_bouts.csv`). Optional warm-up: short **Test 10**.
+
+Do **not** label every bout (~900–1200 each). Scrub + mark clear intervals.
+
+```powershell
+cd C:\Users\admin\code\OpenEthoMaze
+# once: uv sync --extra gui    # PySide6 (user runs install)
+
+$id = 42   # then 77, 111, 222
+uv run python of_rear_classifier/scripts/label_syllable_bouts.py `
+  --video "D:\Open Field Frailty\Open Field - mp4\Test $id.mp4" `
+  --bouts "D:\Open Field Frailty\Open Field - kpms_sa13_per_video\Test $id\model\syllable_bouts.csv" `
+  --scorer YourInitials
+```
+
+Or launch with **no args** → file pickers + scorer dialog.
+
+**App UI (PySide6):** on-screen keymap · **overview + detail** timeline
+(whole-session navigator with yellow viewport box; detail shows ~45 s by
+default — wheel pan, Ctrl+wheel zoom) · Open video / Open bouts · scorer box.
+Space plays the active bout (buttons cannot steal it).
+
+| Key | Action |
+|-----|--------|
+| `1`/`2`/`3`/`0`/`n` | Supported / Unsupported / Grooming / None |
+| `a`/`d` | prev / next bout |
+| `space` | play bout |
+| `[` / `]` | manual start / end frame (for rear split across 2 syllables) |
+| `c` / `Esc` | clear pending manual range (**Esc does not quit**) |
+| `s` | save · `e` export Sturman intervals · `q` quit |
+
+Per-scorer files (collaborator-safe):  
+`…\Test N\model\labels\<scorer>.csv`  
+plus `…\labels\<scorer>_sturman_intervals.csv` on `e`.
+
+**Workflow tip:** scrub hypnogram; for a rear that spans two kpMS syllables set
+`[` at true onset, `]` at offset, then `1`/`2`. Leave uncertain unlabeled.
 
 ## Full cohort — other PC (H:\)
 

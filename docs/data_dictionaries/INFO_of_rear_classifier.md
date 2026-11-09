@@ -63,7 +63,7 @@ flowchart LR
 | Goal | Needs from human | Needs from code |
 |------|------------------|-----------------|
 | A | — | ✓ `run_sturman_loocv.py` + `runs/sturman_loocv/` |
-| B | Full (or pilot) SA H5 path; GPU host for weekend kpMS; then label syllable bouts in the OpenCV tool (Supported / Unsupported / Grooming / None) | SA→npz export + syllable labeler ✓; kpMS fit/apply on GPU host; apply Sturman MLP vs those labels |
+| B | Davis bout labels (Tests **10, 42**, scorer DOH) | SA features + `run_davis_transfer.py` ✓ — Sturman Jin/Furkan/Oliver → Davis; see `of_rear_classifier/runs/davis_transfer/` |
 | C | Label budget + FI definition (Supported-only vs +Unsupported); second rater subset | Train/fine-tune on Davis; feature-table columns; retire proxy for FI |
 | D | Multi-rater protocol + time | Same stack; agreement stats |
 
@@ -320,11 +320,39 @@ validation and **not** Parks FI lock.
 
 ---
 
+## Goal B — Davis transfer (2026-11-09)
+
+Train each Sturman annotator MLP on **all** OFT videos; apply to Davis SA-TVM
+Tests **10** + **42** vs scorer **DOH** interval labels.
+
+Command: `uv run --extra sleap python of_rear_classifier/scripts/run_davis_transfer.py`
+
+Artifacts: `of_rear_classifier/runs/davis_transfer/` (`transfer_metrics.csv`,
+`summary.json`, per-video `pred_*.csv`).
+
+### Frame accuracy on DOH-covered frames (mean)
+
+| Source model | Test 10 | Test 42 | mean |
+|--------------|--------:|--------:|-----:|
+| Furkan | 0.451 | 0.502 | **0.476** |
+| Jin | 0.359 | 0.470 | 0.414 |
+| Oliver | 0.351 | 0.455 | 0.403 |
+| **All** | | | **0.431** |
+
+Sturman in-domain LOOCV was ~0.85 — **zero-shot Davis transfer is weak**
+(~chance-to-modest). Furkan is least bad; Supported *time* for Furkan on
+Test 42 is close (pred 187 s vs DOH 190 s) but counts/frame labels still drift.
+
+**Claim type:** validation (domain check) — transfer alone is **not** enough
+for FI `rear_ml_*`; expect Goal C fine-tune / train-on-Davis.
+
+---
+
 ## Still missing before Parks #7 lock
 
 | Item | Goal | Role |
 |------|------|------|
-| Davis bout labels (small) | B | Transfer sanity |
+| ~~Davis bout labels (small)~~ | B | ✓ Tests 10+42 DOH; transfer scored |
 | Davis bout labels (cohort) + FI definition | C | FI-usable `rear_ml_*` |
 | Drop geometric `rear_proxy_*` from FI path | C | Avoid two competing #7s |
 | Multi-rater dense protocol | D | Optional gold standard |
@@ -337,6 +365,7 @@ validation and **not** Parks FI lock.
   ≈ 0.75–0.90 vs matching annotator.
 - **Metamorphic (unit):** `of_rear_classifier/tests` — feature dim, z-score P
   flags, centered window 682-D, toy angles.
-- **Validation:** human agreement on Davis OF sample — still open.
+- **Validation (Goal B):** Sturman→Davis frame acc ~0.43 vs DOH (Furkan ~0.48);
+  not FI-ready.
 
 Overlay eye-check remains **validation** support only.

@@ -66,26 +66,18 @@ Needs torch (`--extra sleap` or lab). See INFO for numbers.
 Ladder (full text in INFO): **A** Sturman LOOCV ✓ → **B** Davis transfer (2–5
 labeled vids) → **C** FI `rear_ml_*` → **D** optional multi-rater dense.
 
-Goal A complete. Goal B: **per-video CPU kpMS** (no shared alphabet) + matplotlib
-labeler — see [docs/WEEKEND_KPMS.md](docs/WEEKEND_KPMS.md). Full SA H5 cohort on
-`H:\` (mirrors `D:\`); pilot Test 10 locally first.
+Goal A complete. Goal B: per-video CPU kpMS ✓ + **labeler app** (hypnogram,
+manual `[`/`]` ranges, per-scorer CSVs for collaborators) — see
+[docs/WEEKEND_KPMS.md](docs/WEEKEND_KPMS.md). Data root:
+`D:\Open Field Frailty\`. Goal B set: Tests **42, 77, 111, 222**.
 
 ```powershell
-# Per-video CPU fit (pilot: Test 10, short iters)
-uv run --extra kpms python of_rear_classifier/scripts/fit_sa_cohort_kpms_cpu.py `
-  --h5-dir "D:\Open Field - superanimal" `
-  --out-root "D:\Open Field - kpms_sa_per_video" `
-  --only "Test 10" --ar-iters 10 --full-iters 10 --save-every 10
-
-# Labeler (matplotlib; OEM opencv is often GUI:NONE)
+# Labeler app (PySide6 — needs: uv sync --extra gui)
 uv run python of_rear_classifier/scripts/label_syllable_bouts.py `
-  --video "D:\Open Field - mp4\Test 10.mp4" `
-  --bouts "D:\Open Field - kpms_sa_per_video\Test 10\model\syllable_bouts.csv"
+  --video "D:\Open Field Frailty\Open Field - mp4\Test 42.mp4" `
+  --bouts "D:\Open Field Frailty\Open Field - kpms_sa_per_video\Test 42\model\syllable_bouts.csv" `
+  --scorer YourInitials
 
-# Full cohort on other PC (after commit/pull) — 128 GB: start --workers 8–12
-uv run --extra kpms python of_rear_classifier/scripts/fit_sa_cohort_kpms_cpu.py `
-  --h5-dir "H:\Open Field - superanimal" `
-  --out-root "H:\Open Field - kpms_sa_per_video" `
-  --workers 12
+# Writes: …\model\labels\<scorer>.csv  (+ Sturman export on key e)
 ```
 
