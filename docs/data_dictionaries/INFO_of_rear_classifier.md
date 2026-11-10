@@ -64,7 +64,7 @@ flowchart LR
 |------|------------------|-----------------|
 | A | — | ✓ `run_sturman_loocv.py` + `runs/sturman_loocv/` |
 | B | Davis bout labels (Tests **10, 42**, scorer DOH) | SA features + `run_davis_transfer.py` ✓ — Sturman Jin/Furkan/Oliver → Davis; see `of_rear_classifier/runs/davis_transfer/` |
-| C | Label budget + FI definition (Supported-only vs +Unsupported); second rater subset | Train/fine-tune on Davis; feature-table columns; retire proxy for FI |
+| C | Label budget + FI definition (Supported-only vs +Unsupported); second rater subset | Train/fine-tune on Davis; optional **all-raters pooled MLP** / light ensemble init; feature-table columns; retire proxy for FI |
 | D | Multi-rater protocol + time | Same stack; agreement stats |
 
 **kpMS note:** syllable start/stop is the **preferred Goal B labeling UX** (not frame scrubbing). Classifier input stays skeleton→window→MLP unless we change the recipe. Runbook: [`of_rear_classifier/docs/WEEKEND_KPMS.md`](../../of_rear_classifier/docs/WEEKEND_KPMS.md). Tools: `export_sa_for_kpms.py`, `label_syllable_bouts.py`.
@@ -342,6 +342,13 @@ Artifacts: `of_rear_classifier/runs/davis_transfer/` (`transfer_metrics.csv`,
 Sturman in-domain LOOCV was ~0.85 — **zero-shot Davis transfer is weak**
 (~chance-to-modest). Furkan is least bad; Supported *time* for Furkan on
 Test 42 is close (pred 187 s vs DOH 190 s) but counts/frame labels still drift.
+
+**HITL strip (a):** hard **majority vote** over Jin/Furkan/Oliver frame preds
+→ `pred_<video>_majority.csv` (`mlp_ensemble.py`); labeler auto-loads majority
+first. Cohort predict: `--videos all` (labels optional). Tie-break → Furkan.
+
+**Goal C init (b, later):** one **all-raters pooled** Sturman MLP and/or light
+softmax ensemble as fine-tune init — not required for HITL labeling.
 
 **Claim type:** validation (domain check) — transfer alone is **not** enough
 for FI `rear_ml_*`; expect Goal C fine-tune / train-on-Davis.

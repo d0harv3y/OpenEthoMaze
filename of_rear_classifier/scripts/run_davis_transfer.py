@@ -1,4 +1,9 @@
-"""Goal B: Sturman Jin/Furkan/Oliver MLP → Davis SA videos vs local scorer labels."""
+"""Goal B: Sturman Jin/Furkan/Oliver MLP → Davis SA videos (+ HITL majority vote).
+
+Predict-only cohort (no Davis labels required)::
+
+    uv run --extra sleap python of_rear_classifier/scripts/run_davis_transfer.py --videos all
+"""
 
 from __future__ import annotations
 
@@ -10,7 +15,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from of_rear_classifier.davis_transfer import run_davis_transfer
+from of_rear_classifier.davis_transfer import discover_davis_video_ids, run_davis_transfer
 from of_rear_classifier.sturman_loocv import EXPERIMENTERS
 
 
@@ -36,7 +41,12 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=Path(r"D:\DeepLabCut\of_frailty\floor_quads\floor_quads.csv"),
     )
-    p.add_argument("--videos", type=str, default="Test 10,Test 42")
+    p.add_argument(
+        "--videos",
+        type=str,
+        default="Test 10,Test 42",
+        help='comma list, or "all" for every *superanimal*.h5 under --sa-h5-dir',
+    )
     p.add_argument("--davis-scorer", type=str, default="DOH")
     p.add_argument(
         "--out-dir",
@@ -51,8 +61,22 @@ def main(argv: list[str] | None = None) -> int:
         type=str,
         default=",".join(EXPERIMENTERS),
     )
+    p.add_argument(
+        "--no-skip-existing",
+        action="store_true",
+        help="re-score videos even if pred_*.csv already exist",
+    )
+    p.add_argument(
+        "--no-majority",
+        action="store_true",
+        help="do not write pred_<video>_majority.csv",
+    )
     args = p.parse_args(argv)
-    videos = [s.strip() for s in args.videos.split(",") if s.strip()]
+    if args.videos.strip().lower() == "all":
+        videos = discover_davis_video_ids(args.sa_h5_dir)
+        print(f"discovered {len(videos)} Davis videos under {args.sa_h5_dir}", flush=True)
+    else:
+        videos = [s.strip() for s in args.videos.split(",") if s.strip()]
     exps = tuple(s.strip() for s in args.experimenters.split(",") if s.strip())
     run_davis_transfer(
         oft_root=args.oft_root,
@@ -66,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
         epochs=args.epochs,
         batch_size=args.batch_size,
         device=args.device,
+        skip_existing=not args.no_skip_existing,
+        write_majority=not args.no_majority,
     )
     return 0
 

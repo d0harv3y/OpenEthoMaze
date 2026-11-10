@@ -23,9 +23,12 @@ def discover_mlp_pred(
     video_id: str,
     *,
     pred_dir: Path | str | None = None,
-    preferred: tuple[str, ...] = ("Furkan", "Jin", "Oliver"),
+    preferred: tuple[str, ...] = ("majority", "Furkan", "Jin", "Oliver"),
 ) -> Path | None:
-    """Find ``pred_<video>_<Experimenter>.csv`` (spaces OK in video id)."""
+    """Find ``pred_<video>_<tag>.csv`` (spaces OK in video id).
+
+    Default preference: HITL **majority** vote, then Furkan (best solo transfer).
+    """
     root = Path(pred_dir) if pred_dir else _DEFAULT_PRED_DIR
     if not root.is_dir():
         return None
@@ -33,7 +36,7 @@ def discover_mlp_pred(
         cand = root / f"pred_{video_id}_{exp}.csv"
         if cand.is_file():
             return cand
-    # any match for this video
+    # any match for this video (skip partial y_* side columns files — none)
     hits = sorted(root.glob(f"pred_{video_id}_*.csv"))
     return hits[0] if hits else None
 

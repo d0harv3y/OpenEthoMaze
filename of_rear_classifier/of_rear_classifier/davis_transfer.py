@@ -4,6 +4,9 @@ Trains **one model per Sturman experimenter** (Jin / Furkan / Oliver) on **all**
 Sturman OFT videos, then scores each model on Davis videos (e.g. Test 10, 42)
 against a local scorer CSV (``model/labels/<scorer>.csv``).
 
+Also supports **cohort predict** (no Davis labels): write per-rater
+``pred_*.csv`` + HITL **majority-vote** ``pred_<video>_majority.csv``.
+
 Claim type: **validation** (domain transfer), not LOOCV verification.
 """
 
@@ -18,8 +21,14 @@ import numpy as np
 import pandas as pd
 
 from of_rear_classifier.bout import avgbool, bout_count, bout_time_s
+from of_rear_classifier.fit_sa_video_kpms import discover_sa_h5s, stem_from_sa_h5
 from of_rear_classifier.label_store import load_labels
 from of_rear_classifier.labels import CLASS_NAMES, DEFAULT_CLASS, load_sturman_oft_labels
+from of_rear_classifier.mlp_ensemble import (
+    ENSEMBLE_NAME,
+    build_majority_pred_csv,
+    majority_paths_for_video,
+)
 from of_rear_classifier.sa_features import load_sa_video_features
 from of_rear_classifier.sturman_dlc import (
     DEFAULT_CUT_END,
@@ -96,6 +105,11 @@ def discover_sa_h5(h5_dir: Path, video_id: str) -> Path:
     return hits[0]
 
 
+def discover_davis_video_ids(sa_h5_dir: Path | str) -> list[str]:
+    """All recording ids under an SA-TVM H5 folder (``Test N_superanimal…``)."""
+    return [stem_from_sa_h5(p) for p in discover_sa_h5s(sa_h5_dir)]
+
+
 def default_labels_csv(kpms_root: Path, video_id: str, scorer: str) -> Path:
     return Path(kpms_root) / video_id / "model" / "labels" / f"{scorer}.csv"
 
@@ -118,6 +132,8 @@ def run_davis_transfer(
     device: str | None = None,
     seed: int = 0,
     avgbool_window: int = 10,
+    skip_existing: bool = True,
+    write_majority: bool = True,
 ) -> pd.DataFrame:
     oft_root = Path(oft_root)
     out_dir = Path(out_dir)
@@ -185,19 +201,38 @@ def run_davis_transfer(
     # --- Davis videos ---
     w = int(integration_window)
     rows: list[TransferRow] = []
-    for video_id in davis_videos:
+    n_vid = len(davis_videos)
+    for vi, video_id in enumerate(davis_videos, start=1):
+        existing = majority_paths_for_video(out_dir, video_id, experimenters=experimenters)
+        if skip_existing and existing is not None:
+            maj_path = out_dir / f"pred_{video_id}_{ENSEMBLE_NAME}.csv"
+            if write_majority and not maj_path.is_file():
+                build_majority_pred_csv(existing, out_path=maj_path)
+                print(
+                    f"\n[{vi}/{n_vid}] Davis {video_id}: raters exist — majority → {maj_path.name}",
+                    flush=True,
+                )
+            else:
+                print(f"\n[{vi}/{n_vid}] Davis {video_id}: preds exist — skip", flush=True)
+            continue
+
         h5 = discover_sa_h5(sa_h5_dir, video_id)
-        print(f"\nDavis {video_id}: loading {h5.name}…", flush=True)
+        print(f"\n[{vi}/{n_vid}] Davis {video_id}: loading {h5.name}…", flush=True)
         feat_z, meta = load_sa_video_features(h5, quad_csv=quad_csv, video_stem=video_id)
         n_frames = int(meta["n_frames"])
         fps = float(fps_davis) if fps_davis else _guess_fps(video_id)
 
         lab_path = default_labels_csv(kpms_root, video_id, davis_scorer)
-        davis_lab = load_labels(lab_path, scorer=davis_scorer)
-        y_true_full, covered = paint_davis_frame_labels(davis_lab, n_frames=n_frames)
+        if lab_path.is_file():
+            davis_lab = load_labels(lab_path, scorer=davis_scorer)
+            y_true_full, covered = paint_davis_frame_labels(davis_lab, n_frames=n_frames)
+            lab_note = f"from {lab_path.name}"
+        else:
+            y_true_full = np.full(n_frames, DEFAULT_CLASS, dtype=object)
+            covered = np.zeros(n_frames, dtype=bool)
+            lab_note = "no Davis labels (predict-only)"
         print(
-            f"  T={n_frames} fps≈{fps:.2f} labeled_frames={int(covered.sum())} "
-            f"from {lab_path.name}",
+            f"  T={n_frames} fps≈{fps:.2f} labeled_frames={int(covered.sum())} {lab_note}",
             flush=True,
         )
 
@@ -207,23 +242,39 @@ def run_davis_transfer(
         )
         covered_win = covered[w : n_frames - w]
         assert y_win is not None and len(y_win) == len(covered_win)
+        centers = np.arange(w, n_frames - w)
 
         for exp, model in models.items():
             fold_t0 = time.perf_counter()
             pred_all = predict_classes(model, x_all, device=device)
             proba_all = predict_proba(model, x_all, device=device)
-            # Eval only on human-covered centers
+
+            # Framewise pred + softmax for labeler import (always write).
+            pred_path = out_dir / f"pred_{video_id}_{exp}.csv"
+            out = {
+                "frame": centers,
+                "y_true": np.asarray(y_win, dtype=str),
+                "y_pred": np.asarray(pred_all, dtype=str),
+                "covered": covered_win.astype(int),
+            }
+            for name, idx in CLASS_TO_IDX.items():
+                out[f"p_{name}"] = proba_all[:, idx]
+            pd.DataFrame(out).to_csv(pred_path, index=False, quoting=1)
+
             mask = covered_win
             if not np.any(mask):
-                print(f"  [{exp}] no covered frames — skip", flush=True)
+                print(
+                    f"  [{exp}] wrote {pred_path.name} (no covered frames — no metrics)",
+                    flush=True,
+                )
                 continue
+
             pred = pred_all[mask]
             y_te = y_win[mask]
             frame_acc = float(np.mean(pred == y_te))
             beh = y_te != DEFAULT_CLASS
             frame_acc_beh = float(np.mean(pred[beh] == y_te[beh])) if np.any(beh) else float("nan")
 
-            # Bout metrics on full windowed stream (human paint; uncovered=None)
             bout = _bout_metrics(pred_all, y_win, fps=fps, avgbool_window=avgbool_window)
             row = TransferRow(
                 experimenter=exp,
@@ -246,26 +297,23 @@ def run_davis_transfer(
                 flush=True,
             )
 
-            # Framewise pred + softmax for labeler import (quote "None" for pandas).
-            pred_path = out_dir / f"pred_{video_id}_{exp}.csv"
-            centers = np.arange(w, n_frames - w)
-            out = {
-                "frame": centers,
-                "y_true": np.asarray(y_win, dtype=str),
-                "y_pred": np.asarray(pred_all, dtype=str),
-                "covered": covered_win.astype(int),
-            }
-            for name, idx in CLASS_TO_IDX.items():
-                out[f"p_{name}"] = proba_all[:, idx]
-            pd.DataFrame(out).to_csv(pred_path, index=False, quoting=1)
+        if write_majority:
+            paths = majority_paths_for_video(out_dir, video_id, experimenters=experimenters)
+            if paths is not None:
+                maj_path = out_dir / f"pred_{video_id}_{ENSEMBLE_NAME}.csv"
+                build_majority_pred_csv(paths, out_path=maj_path)
+                print(f"  majority → {maj_path.name}", flush=True)
 
     df = pd.DataFrame([asdict(r) for r in rows])
     metrics_path = out_dir / "transfer_metrics.csv"
     df.to_csv(metrics_path, index=False)
     summary = _summarize(df)
     summary["davis_videos"] = list(davis_videos)
+    summary["n_davis_videos"] = int(len(davis_videos))
     summary["davis_scorer"] = davis_scorer
     summary["class_names"] = list(CLASS_NAMES)
+    summary["majority_ensemble"] = bool(write_majority)
+    summary["skip_existing"] = bool(skip_existing)
     summary_path = out_dir / "summary.json"
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2), flush=True)
