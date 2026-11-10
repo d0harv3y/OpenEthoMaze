@@ -10,6 +10,10 @@ logs/
 my_todo*.txt
 teach/
 
+# Package-local analysis / model run artifacts (preds, metrics, ethograms).
+# Do not ignore docs/vaults/**/runs/ — those are Obsidian Run notes.
+of_rear_classifier/runs/
+
 # Python bytecode / extensions
 __pycache__/
 *.py[cod]
