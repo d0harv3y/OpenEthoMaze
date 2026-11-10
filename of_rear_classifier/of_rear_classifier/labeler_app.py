@@ -110,16 +110,35 @@ _HELP = (
     "[ ] manual range · c/Esc clear  |  s save · e export · q quit"
 )
 
-_DEFAULT_VIDEO_DIR = Path(r"D:\Open Field Frailty\Open Field - mp4")
-_DEFAULT_KPMS_ROOT = Path(r"D:\Open Field Frailty\Open Field - kpms_sa13_per_video")
-
-_DEFAULT_SA_ROOT = Path(r"D:\Open Field Frailty\Open Field - superanimal")
-_DEFAULT_MLP_PRED_DIR = Path(__file__).resolve().parents[1] / "runs" / "davis_transfer"
+# Layout (sibling folders under the Frailty data root):
+#   <root>/Open Field - mp4/Test N.mp4
+#   <root>/Open Field - kpms_sa13_per_video/Test N/model/syllable_bouts.csv
+#   <root>/Open Field - superanimal/Test N_superanimal_….h5
+#   <root>/base_transfer_pred/pred_Test N_majority.csv
+#
+# When a video is open, <root> = video.parent.parent (sibling of the mp4 folder).
+# Fallback root is only for empty file-picker starts before a video is chosen.
+_FALLBACK_DATA_ROOT = Path(r"D:\Open Field Frailty")
+_SIBLING_MP4 = "Open Field - mp4"
+_SIBLING_KPMS = "Open Field - kpms_sa13_per_video"
+_SIBLING_SA = "Open Field - superanimal"
+_SIBLING_MLP_PRED = "base_transfer_pred"
 
 # Default detail window ≈ 45 s (readable bout structure without crushing the session).
 _DEFAULT_VIEW_SEC = 45.0
 _MIN_VIEW_FRAMES = 90
 _MAX_VIEW_FRAC = 1.0
+
+
+def _data_root_from_video(video: Path | None) -> Path:
+    """Frailty root = parent of the mp4 folder (…/Open Field Frailty)."""
+    if video is not None:
+        return Path(video).resolve().parent.parent
+    return _FALLBACK_DATA_ROOT
+
+
+def _sibling_dir(video: Path | None, name: str) -> Path:
+    return _data_root_from_video(video) / name
 
 
 def _rgb_to_qpixmap(rgb: np.ndarray) -> QPixmap:
@@ -146,15 +165,20 @@ def _downsample_span(src_1xt3: np.ndarray, t0: int, t1: int, width: int, height:
 
 
 def _guess_bouts_for_video(video: Path) -> Path | None:
-    cand = _DEFAULT_KPMS_ROOT / video.stem / "model" / "syllable_bouts.csv"
+    cand = _sibling_dir(video, _SIBLING_KPMS) / video.stem / "model" / "syllable_bouts.csv"
     return cand if cand.is_file() else None
 
 
 def _guess_sa_h5_for_video(video: Path) -> Path | None:
-    if not _DEFAULT_SA_ROOT.is_dir():
+    sa_root = _sibling_dir(video, _SIBLING_SA)
+    if not sa_root.is_dir():
         return None
-    hits = sorted(_DEFAULT_SA_ROOT.glob(f"{video.stem}_superanimal*.h5"))
+    hits = sorted(sa_root.glob(f"{video.stem}_superanimal*.h5"))
     return hits[0] if hits else None
+
+
+def _mlp_pred_dir_for_video(video: Path | None) -> Path:
+    return _sibling_dir(video, _SIBLING_MLP_PRED)
 
 
 def _draw_pose_overlay(
@@ -524,10 +548,11 @@ class SyllableLabelerWindow(QMainWindow):
 
     def bootstrap(self) -> bool:
         if self.video_path is None or not self.video_path.is_file():
+            mp4_start = _sibling_dir(None, _SIBLING_MP4)
             path, _ = QFileDialog.getOpenFileName(
                 self,
                 "Open OF video",
-                str(_DEFAULT_VIDEO_DIR if _DEFAULT_VIDEO_DIR.is_dir() else Path.home()),
+                str(mp4_start if mp4_start.is_dir() else Path.home()),
                 "Video (*.mp4 *.avi *.mkv);;All (*.*)",
             )
             if not path:
@@ -535,7 +560,8 @@ class SyllableLabelerWindow(QMainWindow):
             self.video_path = Path(path)
         if self.bouts_path is None or not self.bouts_path.is_file():
             guess = _guess_bouts_for_video(self.video_path)
-            start = str(guess.parent) if guess else str(_DEFAULT_KPMS_ROOT)
+            kpms_root = _sibling_dir(self.video_path, _SIBLING_KPMS)
+            start = str(guess.parent) if guess else str(kpms_root if kpms_root.is_dir() else Path.home())
             path, _ = QFileDialog.getOpenFileName(
                 self,
                 "Open syllable_bouts.csv",
@@ -616,7 +642,9 @@ class SyllableLabelerWindow(QMainWindow):
     def _try_autoload_mlp(self) -> None:
         path = self._mlp_pred_arg
         if path is None and self._auto_load_mlp and self.video_id:
-            path = discover_mlp_pred(self.video_id, pred_dir=_DEFAULT_MLP_PRED_DIR)
+            path = discover_mlp_pred(
+                self.video_id, pred_dir=_mlp_pred_dir_for_video(self.video_path)
+            )
         if path is not None and path.is_file():
             self.load_mlp_pred(path)
         else:
@@ -636,7 +664,8 @@ class SyllableLabelerWindow(QMainWindow):
         self.refresh()
 
     def _pick_mlp_pred(self) -> None:
-        start = str(_DEFAULT_MLP_PRED_DIR if _DEFAULT_MLP_PRED_DIR.is_dir() else Path.home())
+        pred_dir = _mlp_pred_dir_for_video(self.video_path)
+        start = str(pred_dir if pred_dir.is_dir() else Path.home())
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Open MLP pred CSV",
@@ -658,10 +687,11 @@ class SyllableLabelerWindow(QMainWindow):
         if self.pose_h5_path is None or not self.pose_h5_path.is_file():
             self.pose_h5_path = _guess_sa_h5_for_video(self.video_path)
         if self.pose_h5_path is None or not self.pose_h5_path.is_file():
+            sa_root = _sibling_dir(self.video_path, _SIBLING_SA)
             path, _ = QFileDialog.getOpenFileName(
                 self,
                 "Open SuperAnimal pose H5 for overlay",
-                str(_DEFAULT_SA_ROOT if _DEFAULT_SA_ROOT.is_dir() else Path.home()),
+                str(sa_root if sa_root.is_dir() else Path.home()),
                 "H5 (*.h5);;All (*.*)",
             )
             if not path:
@@ -1027,7 +1057,11 @@ class SyllableLabelerWindow(QMainWindow):
     # ----- file / scorer -----
 
     def _pick_video(self) -> None:
-        start = str(self.video_path.parent) if self.video_path else str(_DEFAULT_VIDEO_DIR)
+        if self.video_path:
+            start = str(self.video_path.parent)
+        else:
+            mp4 = _sibling_dir(None, _SIBLING_MP4)
+            start = str(mp4 if mp4.is_dir() else Path.home())
         path, _ = QFileDialog.getOpenFileName(self, "Open OF video", start, "Video (*.mp4 *.avi *.mkv);;All (*.*)")
         if not path:
             return
@@ -1045,7 +1079,11 @@ class SyllableLabelerWindow(QMainWindow):
             QMessageBox.critical(self, "Load failed", str(exc))
 
     def _pick_bouts(self) -> None:
-        start = str(self.bouts_path.parent) if self.bouts_path else str(_DEFAULT_KPMS_ROOT)
+        if self.bouts_path:
+            start = str(self.bouts_path.parent)
+        else:
+            kpms = _sibling_dir(self.video_path, _SIBLING_KPMS)
+            start = str(kpms if kpms.is_dir() else Path.home())
         path, _ = QFileDialog.getOpenFileName(self, "Open syllable_bouts.csv", start, "CSV (*.csv);;All (*.*)")
         if not path:
             return

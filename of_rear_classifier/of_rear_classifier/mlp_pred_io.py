@@ -8,7 +8,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-_DEFAULT_PRED_DIR = Path(__file__).resolve().parents[1] / "runs" / "davis_transfer"
+# Fallback only when callers omit pred_dir (labeler passes sibling base_transfer_pred).
+_DEFAULT_PRED_DIR = Path(r"D:\Open Field Frailty\base_transfer_pred")
 
 CLASS_NAMES = ("None", "Supported", "Unsupported", "Grooming")
 
