@@ -1,7 +1,11 @@
 """Launch the OF rearing syllable labeler app (Goal B / multi-scorer).
 
-PySide6 UI (``uv sync --extra gui``). With no args: file pickers + scorer
-dialog. Per-scorer labels → ``model/labels/<scorer>.csv``.
+PySide6 UI (``uv sync --extra gui``).
+
+No args: pick a video under ``<root>/Open Field - mp4``, then auto-discover
+``<root>/Open Field - kpms_sa13_per_video/<stem>/model/syllable_bouts.csv`` and
+HITL MLP ``<root>/base_transfer_pred/pred_<stem>_majority.csv`` (scorer dialog
+still shown). Per-scorer labels → ``model/labels/<scorer>.csv``.
 
 Manual ``[`` / ``]`` frame ranges cover rearing split across two kpMS syllables.
 """
@@ -31,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
         "--mlp-pred",
         type=Path,
         default=None,
-        help="pred_<video>_<Experimenter>.csv (default: auto from runs/davis_transfer)",
+        help="pred_<video>_*.csv (default: auto from <data-root>/base_transfer_pred)",
     )
     p.add_argument("--no-auto-mlp", action="store_true", help="do not auto-load MLP pred CSV")
     args = p.parse_args(argv)

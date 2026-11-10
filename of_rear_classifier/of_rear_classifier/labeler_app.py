@@ -558,22 +558,24 @@ class SyllableLabelerWindow(QMainWindow):
             if not path:
                 return False
             self.video_path = Path(path)
+        if self.video_id is None and self.video_path is not None:
+            self.video_id = self.video_path.stem
         if self.bouts_path is None or not self.bouts_path.is_file():
             guess = _guess_bouts_for_video(self.video_path)
-            kpms_root = _sibling_dir(self.video_path, _SIBLING_KPMS)
-            start = str(guess.parent) if guess else str(kpms_root if kpms_root.is_dir() else Path.home())
-            path, _ = QFileDialog.getOpenFileName(
-                self,
-                "Open syllable_bouts.csv",
-                start,
-                "CSV (*.csv);;All (*.*)",
-            )
-            if not path:
-                if guess is not None:
-                    self.bouts_path = guess
-                else:
-                    return False
+            if guess is not None:
+                self.bouts_path = guess
+                print(f"auto bouts → {guess}", flush=True)
             else:
+                kpms_root = _sibling_dir(self.video_path, _SIBLING_KPMS)
+                start = str(kpms_root if kpms_root.is_dir() else Path.home())
+                path, _ = QFileDialog.getOpenFileName(
+                    self,
+                    "Open syllable_bouts.csv (sibling kpms not found)",
+                    start,
+                    "CSV (*.csv);;All (*.*)",
+                )
+                if not path:
+                    return False
                 self.bouts_path = Path(path)
         if not self.scorer:
             name, ok = QInputDialog.getText(self, "Scorer", "Initials / name for this session:", text="scorer")
@@ -584,8 +586,6 @@ class SyllableLabelerWindow(QMainWindow):
         self.labels_path = default_labels_path(self.bouts_path, self.scorer)
         if self.export_path is None:
             self.export_path = self.bouts_path.parent / "labels" / f"{self.scorer}_sturman_intervals.csv"
-        if self.video_id is None:
-            self.video_id = self.video_path.stem
         try:
             self._load_session()
         except Exception as exc:  # noqa: BLE001
@@ -648,6 +648,12 @@ class SyllableLabelerWindow(QMainWindow):
         if path is not None and path.is_file():
             self.load_mlp_pred(path)
         else:
+            pred_dir = _mlp_pred_dir_for_video(self.video_path)
+            print(
+                f"MLP pred not found under {pred_dir} for {self.video_id!r} "
+                f"(expected pred_{self.video_id}_majority.csv)",
+                flush=True,
+            )
             self._clear_mlp()
 
     def load_mlp_pred(self, path: Path | str) -> None:
